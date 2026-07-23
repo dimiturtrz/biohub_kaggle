@@ -45,6 +45,29 @@ wrong successors. The classical LoG, for all it misses, places what it finds at 
 maximum. Two caveats keep this tentative: the bracket floor and this sweep are different video samples
 (not a matched A/B), and the detector saw only 2000 untuned steps.
 
+## The matched A/B: jitter confirmed
+
+Running the classical detector through the *same* pipeline on the *same* four fold-0 videos closes the
+loop the recall/score gap opened:
+
+| detector (both + NN linker) | node budget | end-to-end score |
+|---|---|---|
+| classical LoG | 33.4 k / 106 k = **0.32×** | **0.570** |
+| learned U-Net @ 1.0× | 106 k | ~0.46 |
+| learned U-Net @ 0.5× (sweep) | 53 k | 0.24–0.30 |
+
+The classical detector *cannot even reach* 1.0× — `peak_local_max` runs out of separated maxima at ~0.32×
+— yet at that budget it scores **higher than the learned detector at any budget**. The learned detector
+won recall (`3ws`) and still loses the tracking score everywhere. There is only one consistent
+explanation: the classical detector's fewer detections sit on stable intensity maxima that link cleanly,
+while the learned detector's extra, higher-recall detections have centres that wander frame to frame, so
+the one-to-one linker pairs them wrongly. Higher recall, worse edges.
+
+One confound kept honest: the two are not at a matched node count (the classical can't reach 1.0×), and
+under-detection carries a small node-count bonus. But the learned detector at its *closest* budget (0.5×)
+scores 0.24–0.30 against the classical's 0.57 at 0.32× — the gap is far too large to be the bonus. The
+mechanism is detection *stability*, not operating point.
+
 ## What to do with it
 
 - **`sct` is met:** the curve, the operating point (1.0), and the finding that the bonus does not survive
