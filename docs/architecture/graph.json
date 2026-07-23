@@ -313,135 +313,135 @@
       "weight": 1
     },
     {
-      "kind": "references",
-      "source": "core.metrics.divisions.DivisionCounts",
-      "target": "core.data.tracks.TrackGraph",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "core.metrics.divisions.DivisionCounts",
-      "target": "core.metrics.divisions.DivisionCounts",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "core.metrics.divisions.DivisionCounts",
-      "target": "core.metrics.matching.DistanceMatcher",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "core.metrics.divisions.DivisionCounts.of",
-      "target": "core.data.tracks.Adjacency.of",
-      "weight": 1
-    },
-    {
-      "kind": "construct",
-      "source": "core.metrics.divisions.DivisionCounts.of",
-      "target": "core.metrics.divisions._ScoredPair",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "core.metrics.divisions.DivisionCounts.of",
-      "target": "core.metrics.divisions._ScoredPair.fork_verdicts",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "core.metrics.divisions.DivisionCounts.of",
-      "target": "core.metrics.divisions._ScoredPair.local_candidates",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "core.metrics.divisions.DivisionCounts.of",
-      "target": "core.metrics.divisions._ScoredPair.maximum_matching",
-      "weight": 1
-    },
-    {
       "kind": "holds",
-      "source": "core.metrics.divisions._ScoredPair",
+      "source": "core.metrics.divisions.DivisionScoring",
       "target": "core.data.tracks.Adjacency",
       "weight": 1
     },
     {
       "kind": "holds",
-      "source": "core.metrics.divisions._ScoredPair",
+      "source": "core.metrics.divisions.DivisionScoring",
       "target": "core.data.tracks.TrackGraph",
       "weight": 1
     },
     {
+      "kind": "references",
+      "source": "core.metrics.divisions.DivisionScoring",
+      "target": "core.metrics.divisions.DivisionCounts",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "core.metrics.divisions.DivisionScoring",
+      "target": "core.metrics.divisions.DivisionScoring",
+      "weight": 1
+    },
+    {
       "kind": "holds",
-      "source": "core.metrics.divisions._ScoredPair",
+      "source": "core.metrics.divisions.DivisionScoring",
       "target": "core.metrics.matching.DistanceMatcher",
       "weight": 1
     },
     {
       "kind": "construct",
-      "source": "core.metrics.divisions._ScoredPair._division_window",
+      "source": "core.metrics.divisions.DivisionScoring._division_window",
       "target": "core.data.tracks.TrackGraph",
       "weight": 1
     },
     {
       "kind": "calls",
-      "source": "core.metrics.divisions._ScoredPair._division_window",
+      "source": "core.metrics.divisions.DivisionScoring._division_window",
       "target": "core.data.tracks.TrackGraph.edge_rows",
       "weight": 1
     },
     {
       "kind": "calls",
-      "source": "core.metrics.divisions._ScoredPair._local_topology_holds",
-      "target": "core.metrics.divisions._ScoredPair.maximum_matching",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "core.metrics.divisions._ScoredPair.fork_verdicts",
+      "source": "core.metrics.divisions.DivisionScoring._fork_verdicts",
       "target": "core.data.tracks.Adjacency.components",
       "weight": 1
     },
     {
       "kind": "calls",
-      "source": "core.metrics.divisions._ScoredPair.fork_verdicts",
+      "source": "core.metrics.divisions.DivisionScoring._fork_verdicts",
       "target": "core.data.tracks.Adjacency.dividing_rows",
       "weight": 1
     },
     {
       "kind": "calls",
-      "source": "core.metrics.divisions._ScoredPair.fork_verdicts",
-      "target": "core.metrics.divisions._ScoredPair._branch_component",
+      "source": "core.metrics.divisions.DivisionScoring._fork_verdicts",
+      "target": "core.metrics.divisions.DivisionScoring._branch_component",
       "weight": 1
     },
     {
       "kind": "calls",
-      "source": "core.metrics.divisions._ScoredPair.fork_verdicts",
+      "source": "core.metrics.divisions.DivisionScoring._fork_verdicts",
       "target": "core.metrics.matching.DistanceMatcher.match",
       "weight": 1
     },
     {
       "kind": "calls",
-      "source": "core.metrics.divisions._ScoredPair.local_candidates",
-      "target": "core.metrics.divisions._ScoredPair._division_window",
+      "source": "core.metrics.divisions.DivisionScoring._local_candidates",
+      "target": "core.metrics.divisions.DivisionScoring._division_window",
       "weight": 1
     },
     {
       "kind": "calls",
-      "source": "core.metrics.divisions._ScoredPair.local_candidates",
-      "target": "core.metrics.divisions._ScoredPair._local_topology_holds",
+      "source": "core.metrics.divisions.DivisionScoring._local_candidates",
+      "target": "core.metrics.divisions.DivisionScoring._local_topology_holds",
       "weight": 1
     },
     {
       "kind": "calls",
-      "source": "core.metrics.divisions._ScoredPair.local_candidates",
-      "target": "core.metrics.divisions._ScoredPair._rows_matching",
+      "source": "core.metrics.divisions.DivisionScoring._local_candidates",
+      "target": "core.metrics.divisions.DivisionScoring._rows_matching",
       "weight": 1
     },
     {
       "kind": "calls",
-      "source": "core.metrics.divisions._ScoredPair.local_candidates",
+      "source": "core.metrics.divisions.DivisionScoring._local_candidates",
       "target": "core.metrics.matching.DistanceMatcher.match",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions.DivisionScoring._local_topology_holds",
+      "target": "core.metrics.divisions.DivisionScoring._maximum_matching",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions.DivisionScoring.counts",
+      "target": "core.data.tracks.Adjacency.dividing_rows",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "core.metrics.divisions.DivisionScoring.counts",
+      "target": "core.metrics.divisions.DivisionCounts",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions.DivisionScoring.counts",
+      "target": "core.metrics.divisions.DivisionScoring._fork_verdicts",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions.DivisionScoring.counts",
+      "target": "core.metrics.divisions.DivisionScoring._local_candidates",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions.DivisionScoring.counts",
+      "target": "core.metrics.divisions.DivisionScoring._maximum_matching",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions.DivisionScoring.of",
+      "target": "core.data.tracks.Adjacency.of",
       "weight": 1
     },
     {
@@ -639,7 +639,7 @@
     {
       "kind": "calls",
       "source": "core.metrics.score.VideoMetrics.of",
-      "target": "core.metrics.divisions.DivisionCounts.of",
+      "target": "core.metrics.divisions.DivisionScoring.of",
       "weight": 1
     },
     {
@@ -902,8 +902,8 @@
     },
     {
       "descendants": 0,
-      "id": "core.metrics.divisions._ScoredPair",
-      "label": "_ScoredPair",
+      "id": "core.metrics.divisions.DivisionScoring",
+      "label": "DivisionScoring",
       "level": "class",
       "parent": "core.metrics.divisions",
       "role": "satellite"
@@ -1214,66 +1214,74 @@
     },
     {
       "descendants": 0,
-      "id": "core.metrics.divisions.DivisionCounts.of",
-      "label": "of",
-      "level": "method",
-      "parent": "core.metrics.divisions.DivisionCounts",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "core.metrics.divisions._ScoredPair._branch_component",
+      "id": "core.metrics.divisions.DivisionScoring._branch_component",
       "label": "_branch_component",
       "level": "method",
-      "parent": "core.metrics.divisions._ScoredPair",
+      "parent": "core.metrics.divisions.DivisionScoring",
       "role": null
     },
     {
       "descendants": 0,
-      "id": "core.metrics.divisions._ScoredPair._division_window",
+      "id": "core.metrics.divisions.DivisionScoring._division_window",
       "label": "_division_window",
       "level": "method",
-      "parent": "core.metrics.divisions._ScoredPair",
+      "parent": "core.metrics.divisions.DivisionScoring",
       "role": null
     },
     {
       "descendants": 0,
-      "id": "core.metrics.divisions._ScoredPair._local_topology_holds",
+      "id": "core.metrics.divisions.DivisionScoring._fork_verdicts",
+      "label": "_fork_verdicts",
+      "level": "method",
+      "parent": "core.metrics.divisions.DivisionScoring",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.divisions.DivisionScoring._local_candidates",
+      "label": "_local_candidates",
+      "level": "method",
+      "parent": "core.metrics.divisions.DivisionScoring",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.divisions.DivisionScoring._local_topology_holds",
       "label": "_local_topology_holds",
       "level": "method",
-      "parent": "core.metrics.divisions._ScoredPair",
+      "parent": "core.metrics.divisions.DivisionScoring",
       "role": null
     },
     {
       "descendants": 0,
-      "id": "core.metrics.divisions._ScoredPair._rows_matching",
+      "id": "core.metrics.divisions.DivisionScoring._maximum_matching",
+      "label": "_maximum_matching",
+      "level": "method",
+      "parent": "core.metrics.divisions.DivisionScoring",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.divisions.DivisionScoring._rows_matching",
       "label": "_rows_matching",
       "level": "method",
-      "parent": "core.metrics.divisions._ScoredPair",
+      "parent": "core.metrics.divisions.DivisionScoring",
       "role": null
     },
     {
       "descendants": 0,
-      "id": "core.metrics.divisions._ScoredPair.fork_verdicts",
-      "label": "fork_verdicts",
+      "id": "core.metrics.divisions.DivisionScoring.counts",
+      "label": "counts",
       "level": "method",
-      "parent": "core.metrics.divisions._ScoredPair",
+      "parent": "core.metrics.divisions.DivisionScoring",
       "role": null
     },
     {
       "descendants": 0,
-      "id": "core.metrics.divisions._ScoredPair.local_candidates",
-      "label": "local_candidates",
+      "id": "core.metrics.divisions.DivisionScoring.of",
+      "label": "of",
       "level": "method",
-      "parent": "core.metrics.divisions._ScoredPair",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "core.metrics.divisions._ScoredPair.maximum_matching",
-      "label": "maximum_matching",
-      "level": "method",
-      "parent": "core.metrics.divisions._ScoredPair",
+      "parent": "core.metrics.divisions.DivisionScoring",
       "role": null
     },
     {
