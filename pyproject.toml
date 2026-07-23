@@ -14,6 +14,7 @@ dependencies = [
     "jaxtyping",   # Float[Tensor,"B C H W"] shape/dtype annotations — inert at runtime without a checker (no prod cost)
     "beartype",    # the runtime checker jaxtyping delegates to; wrap as @shapecheck in your types module (see devtools/README)
     "pydantic>=2",
+    "scipy>=1.18.0",
 ]
 
 [project.optional-dependencies]
@@ -48,7 +49,9 @@ python_classes = []
 # transitive (DEP003) imports. noxfile.py imports the `nox` runner (invoked via uvx, deliberately not a
 # project dep) so it's excluded from the scan.
 [tool.deptry]
-extend_exclude = ["noxfile.py"]
+# `tools/oracle` runs under a separate venv holding the organizers' package (see tools/oracle/README.md);
+# its imports are deliberately not project deps.
+extend_exclude = ["noxfile.py", "tools/oracle"]
 
 # deptry does not scan tests/ (its default exclude), so DEP002 (declared-but-unused) fires for anything
 # only exercised by the test suite or by tooling. PERMANENT ignores (never imported in scanned source by

@@ -1,0 +1,1424 @@
+{
+ "backward_and_skip": {
+  "division_fn": 1,
+  "division_fp": 2,
+  "division_tp": 0,
+  "edge_fn": 0,
+  "edge_fp": 0,
+  "edge_tp": 3,
+  "num_pred_nodes": 4
+ },
+ "crowded_0": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 34,
+  "edge_fp": 27,
+  "edge_tp": 16,
+  "num_pred_nodes": 54
+ },
+ "crowded_1": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 1,
+  "edge_fp": 0,
+  "edge_tp": 2,
+  "num_pred_nodes": 4
+ },
+ "crowded_10": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 49,
+  "edge_fp": 46,
+  "edge_tp": 11,
+  "num_pred_nodes": 72
+ },
+ "crowded_11": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 6,
+  "edge_fp": 6,
+  "edge_tp": 10,
+  "num_pred_nodes": 24
+ },
+ "crowded_12": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 29,
+  "edge_fp": 30,
+  "edge_tp": 6,
+  "num_pred_nodes": 72
+ },
+ "crowded_13": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 28,
+  "edge_fp": 26,
+  "edge_tp": 7,
+  "num_pred_nodes": 48
+ },
+ "crowded_14": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 51,
+  "edge_fp": 30,
+  "edge_tp": 14,
+  "num_pred_nodes": 60
+ },
+ "crowded_15": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 9,
+  "edge_fp": 3,
+  "edge_tp": 1,
+  "num_pred_nodes": 6
+ },
+ "crowded_16": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 2,
+  "edge_fp": 1,
+  "edge_tp": 4,
+  "num_pred_nodes": 8
+ },
+ "crowded_17": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 22,
+  "edge_fp": 21,
+  "edge_tp": 11,
+  "num_pred_nodes": 44
+ },
+ "crowded_18": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 5,
+  "edge_fp": 6,
+  "edge_tp": 1,
+  "num_pred_nodes": 12
+ },
+ "crowded_19": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 18,
+  "edge_fp": 2,
+  "edge_tp": 2,
+  "num_pred_nodes": 6
+ },
+ "crowded_2": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 21,
+  "edge_fp": 22,
+  "edge_tp": 9,
+  "num_pred_nodes": 44
+ },
+ "crowded_20": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 3,
+  "edge_fp": 5,
+  "edge_tp": 1,
+  "num_pred_nodes": 36
+ },
+ "crowded_21": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 21,
+  "edge_fp": 23,
+  "edge_tp": 6,
+  "num_pred_nodes": 48
+ },
+ "crowded_22": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 17,
+  "edge_fp": 11,
+  "edge_tp": 1,
+  "num_pred_nodes": 20
+ },
+ "crowded_23": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 1,
+  "edge_fp": 2,
+  "edge_tp": 3,
+  "num_pred_nodes": 27
+ },
+ "crowded_24": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 54,
+  "edge_fp": 32,
+  "edge_tp": 6,
+  "num_pred_nodes": 48
+ },
+ "crowded_25": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 23,
+  "edge_fp": 14,
+  "edge_tp": 3,
+  "num_pred_nodes": 33
+ },
+ "crowded_26": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 15,
+  "edge_fp": 18,
+  "edge_tp": 5,
+  "num_pred_nodes": 54
+ },
+ "crowded_27": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 25,
+  "edge_fp": 28,
+  "edge_tp": 8,
+  "num_pred_nodes": 52
+ },
+ "crowded_28": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 4,
+  "edge_fp": 7,
+  "edge_tp": 0,
+  "num_pred_nodes": 18
+ },
+ "crowded_29": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 0,
+  "edge_fp": 0,
+  "edge_tp": 2,
+  "num_pred_nodes": 14
+ },
+ "crowded_3": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 5,
+  "edge_fp": 8,
+  "edge_tp": 0,
+  "num_pred_nodes": 26
+ },
+ "crowded_30": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 49,
+  "edge_fp": 26,
+  "edge_tp": 6,
+  "num_pred_nodes": 42
+ },
+ "crowded_31": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 28,
+  "edge_fp": 26,
+  "edge_tp": 7,
+  "num_pred_nodes": 78
+ },
+ "crowded_32": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 13,
+  "edge_fp": 2,
+  "edge_tp": 0,
+  "num_pred_nodes": 4
+ },
+ "crowded_33": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 19,
+  "edge_fp": 17,
+  "edge_tp": 5,
+  "num_pred_nodes": 45
+ },
+ "crowded_34": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 48,
+  "edge_fp": 27,
+  "edge_tp": 4,
+  "num_pred_nodes": 40
+ },
+ "crowded_35": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 32,
+  "edge_fp": 24,
+  "edge_tp": 4,
+  "num_pred_nodes": 44
+ },
+ "crowded_36": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 9,
+  "edge_fp": 3,
+  "edge_tp": 1,
+  "num_pred_nodes": 8
+ },
+ "crowded_37": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 2,
+  "edge_fp": 3,
+  "edge_tp": 0,
+  "num_pred_nodes": 22
+ },
+ "crowded_38": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 2,
+  "edge_fp": 4,
+  "edge_tp": 6,
+  "num_pred_nodes": 30
+ },
+ "crowded_39": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 6,
+  "edge_fp": 3,
+  "edge_tp": 0,
+  "num_pred_nodes": 6
+ },
+ "crowded_4": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 2,
+  "edge_fp": 4,
+  "edge_tp": 4,
+  "num_pred_nodes": 20
+ },
+ "crowded_40": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 11,
+  "edge_fp": 2,
+  "edge_tp": 0,
+  "num_pred_nodes": 4
+ },
+ "crowded_41": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 24,
+  "edge_fp": 4,
+  "edge_tp": 3,
+  "num_pred_nodes": 16
+ },
+ "crowded_42": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 7,
+  "edge_fp": 9,
+  "edge_tp": 2,
+  "num_pred_nodes": 32
+ },
+ "crowded_43": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 16,
+  "edge_fp": 24,
+  "edge_tp": 2,
+  "num_pred_nodes": 52
+ },
+ "crowded_44": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 0,
+  "edge_fp": 0,
+  "edge_tp": 3,
+  "num_pred_nodes": 6
+ },
+ "crowded_45": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 0,
+  "edge_fp": 0,
+  "edge_tp": 2,
+  "num_pred_nodes": 10
+ },
+ "crowded_46": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 6,
+  "edge_fp": 3,
+  "edge_tp": 3,
+  "num_pred_nodes": 12
+ },
+ "crowded_47": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 30,
+  "edge_fp": 30,
+  "edge_tp": 9,
+  "num_pred_nodes": 52
+ },
+ "crowded_48": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 16,
+  "edge_fp": 10,
+  "edge_tp": 6,
+  "num_pred_nodes": 24
+ },
+ "crowded_49": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 13,
+  "edge_fp": 18,
+  "edge_tp": 5,
+  "num_pred_nodes": 32
+ },
+ "crowded_5": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 6,
+  "edge_fp": 10,
+  "edge_tp": 3,
+  "num_pred_nodes": 44
+ },
+ "crowded_50": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 24,
+  "edge_fp": 7,
+  "edge_tp": 4,
+  "num_pred_nodes": 15
+ },
+ "crowded_51": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 1,
+  "edge_fp": 2,
+  "edge_tp": 1,
+  "num_pred_nodes": 24
+ },
+ "crowded_52": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 10,
+  "edge_fp": 19,
+  "edge_tp": 5,
+  "num_pred_nodes": 48
+ },
+ "crowded_53": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 23,
+  "edge_fp": 3,
+  "edge_tp": 1,
+  "num_pred_nodes": 6
+ },
+ "crowded_54": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 13,
+  "edge_fp": 9,
+  "edge_tp": 0,
+  "num_pred_nodes": 20
+ },
+ "crowded_55": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 12,
+  "edge_fp": 11,
+  "edge_tp": 1,
+  "num_pred_nodes": 26
+ },
+ "crowded_56": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 47,
+  "edge_fp": 12,
+  "edge_tp": 3,
+  "num_pred_nodes": 18
+ },
+ "crowded_57": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 12,
+  "edge_fp": 18,
+  "edge_tp": 4,
+  "num_pred_nodes": 39
+ },
+ "crowded_58": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 9,
+  "edge_fp": 4,
+  "edge_tp": 0,
+  "num_pred_nodes": 8
+ },
+ "crowded_59": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 8,
+  "edge_fp": 7,
+  "edge_tp": 2,
+  "num_pred_nodes": 33
+ },
+ "crowded_6": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 5,
+  "edge_fp": 8,
+  "edge_tp": 1,
+  "num_pred_nodes": 21
+ },
+ "crowded_7": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 26,
+  "edge_fp": 5,
+  "edge_tp": 4,
+  "num_pred_nodes": 12
+ },
+ "crowded_8": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 1,
+  "edge_fp": 2,
+  "edge_tp": 3,
+  "num_pred_nodes": 26
+ },
+ "crowded_9": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 18,
+  "edge_fp": 24,
+  "edge_tp": 12,
+  "num_pred_nodes": 52
+ },
+ "dividing_0": {
+  "division_fn": 2,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 10,
+  "edge_fp": 3,
+  "edge_tp": 0,
+  "num_pred_nodes": 6
+ },
+ "dividing_1": {
+  "division_fn": 2,
+  "division_fp": 0,
+  "division_tp": 1,
+  "edge_fn": 14,
+  "edge_fp": 3,
+  "edge_tp": 3,
+  "num_pred_nodes": 7
+ },
+ "dividing_10": {
+  "division_fn": 2,
+  "division_fp": 0,
+  "division_tp": 1,
+  "edge_fn": 21,
+  "edge_fp": 5,
+  "edge_tp": 1,
+  "num_pred_nodes": 7
+ },
+ "dividing_11": {
+  "division_fn": 2,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 6,
+  "edge_fp": 0,
+  "edge_tp": 2,
+  "num_pred_nodes": 3
+ },
+ "dividing_12": {
+  "division_fn": 2,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 14,
+  "edge_fp": 1,
+  "edge_tp": 1,
+  "num_pred_nodes": 12
+ },
+ "dividing_13": {
+  "division_fn": 1,
+  "division_fp": 1,
+  "division_tp": 1,
+  "edge_fn": 12,
+  "edge_fp": 7,
+  "edge_tp": 7,
+  "num_pred_nodes": 33
+ },
+ "dividing_14": {
+  "division_fn": 4,
+  "division_fp": 1,
+  "division_tp": 0,
+  "edge_fn": 17,
+  "edge_fp": 3,
+  "edge_tp": 3,
+  "num_pred_nodes": 7
+ },
+ "dividing_15": {
+  "division_fn": 1,
+  "division_fp": 1,
+  "division_tp": 2,
+  "edge_fn": 12,
+  "edge_fp": 8,
+  "edge_tp": 3,
+  "num_pred_nodes": 18
+ },
+ "dividing_16": {
+  "division_fn": 1,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 6,
+  "edge_fp": 4,
+  "edge_tp": 1,
+  "num_pred_nodes": 32
+ },
+ "dividing_17": {
+  "division_fn": 2,
+  "division_fp": 2,
+  "division_tp": 0,
+  "edge_fn": 7,
+  "edge_fp": 6,
+  "edge_tp": 4,
+  "num_pred_nodes": 12
+ },
+ "dividing_18": {
+  "division_fn": 1,
+  "division_fp": 1,
+  "division_tp": 0,
+  "edge_fn": 5,
+  "edge_fp": 10,
+  "edge_tp": 1,
+  "num_pred_nodes": 30
+ },
+ "dividing_19": {
+  "division_fn": 3,
+  "division_fp": 3,
+  "division_tp": 0,
+  "edge_fn": 17,
+  "edge_fp": 11,
+  "edge_tp": 4,
+  "num_pred_nodes": 27
+ },
+ "dividing_2": {
+  "division_fn": 3,
+  "division_fp": 1,
+  "division_tp": 0,
+  "edge_fn": 19,
+  "edge_fp": 5,
+  "edge_tp": 3,
+  "num_pred_nodes": 13
+ },
+ "dividing_20": {
+  "division_fn": 1,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 4,
+  "edge_fp": 4,
+  "edge_tp": 1,
+  "num_pred_nodes": 25
+ },
+ "dividing_21": {
+  "division_fn": 1,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 7,
+  "edge_fp": 0,
+  "edge_tp": 0,
+  "num_pred_nodes": 15
+ },
+ "dividing_22": {
+  "division_fn": 4,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 21,
+  "edge_fp": 1,
+  "edge_tp": 2,
+  "num_pred_nodes": 4
+ },
+ "dividing_23": {
+  "division_fn": 3,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 16,
+  "edge_fp": 2,
+  "edge_tp": 1,
+  "num_pred_nodes": 4
+ },
+ "dividing_24": {
+  "division_fn": 2,
+  "division_fp": 1,
+  "division_tp": 1,
+  "edge_fn": 10,
+  "edge_fp": 6,
+  "edge_tp": 2,
+  "num_pred_nodes": 12
+ },
+ "dividing_25": {
+  "division_fn": 2,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 8,
+  "edge_fp": 1,
+  "edge_tp": 0,
+  "num_pred_nodes": 4
+ },
+ "dividing_26": {
+  "division_fn": 3,
+  "division_fp": 2,
+  "division_tp": 1,
+  "edge_fn": 21,
+  "edge_fp": 12,
+  "edge_tp": 7,
+  "num_pred_nodes": 27
+ },
+ "dividing_27": {
+  "division_fn": 2,
+  "division_fp": 0,
+  "division_tp": 1,
+  "edge_fn": 14,
+  "edge_fp": 4,
+  "edge_tp": 4,
+  "num_pred_nodes": 10
+ },
+ "dividing_28": {
+  "division_fn": 3,
+  "division_fp": 1,
+  "division_tp": 0,
+  "edge_fn": 22,
+  "edge_fp": 4,
+  "edge_tp": 3,
+  "num_pred_nodes": 8
+ },
+ "dividing_29": {
+  "division_fn": 1,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 2,
+  "edge_fp": 0,
+  "edge_tp": 2,
+  "num_pred_nodes": 14
+ },
+ "dividing_3": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 1,
+  "edge_fn": 2,
+  "edge_fp": 1,
+  "edge_tp": 2,
+  "num_pred_nodes": 7
+ },
+ "dividing_30": {
+  "division_fn": 2,
+  "division_fp": 0,
+  "division_tp": 1,
+  "edge_fn": 22,
+  "edge_fp": 5,
+  "edge_tp": 2,
+  "num_pred_nodes": 10
+ },
+ "dividing_31": {
+  "division_fn": 3,
+  "division_fp": 2,
+  "division_tp": 0,
+  "edge_fn": 16,
+  "edge_fp": 12,
+  "edge_tp": 11,
+  "num_pred_nodes": 26
+ },
+ "dividing_32": {
+  "division_fn": 2,
+  "division_fp": 1,
+  "division_tp": 0,
+  "edge_fn": 9,
+  "edge_fp": 1,
+  "edge_tp": 4,
+  "num_pred_nodes": 20
+ },
+ "dividing_33": {
+  "division_fn": 2,
+  "division_fp": 1,
+  "division_tp": 0,
+  "edge_fn": 10,
+  "edge_fp": 3,
+  "edge_tp": 1,
+  "num_pred_nodes": 26
+ },
+ "dividing_34": {
+  "division_fn": 1,
+  "division_fp": 1,
+  "division_tp": 1,
+  "edge_fn": 4,
+  "edge_fp": 4,
+  "edge_tp": 8,
+  "num_pred_nodes": 21
+ },
+ "dividing_35": {
+  "division_fn": 4,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 16,
+  "edge_fp": 0,
+  "edge_tp": 0,
+  "num_pred_nodes": 4
+ },
+ "dividing_36": {
+  "division_fn": 3,
+  "division_fp": 2,
+  "division_tp": 0,
+  "edge_fn": 20,
+  "edge_fp": 7,
+  "edge_tp": 6,
+  "num_pred_nodes": 23
+ },
+ "dividing_37": {
+  "division_fn": 3,
+  "division_fp": 0,
+  "division_tp": 1,
+  "edge_fn": 25,
+  "edge_fp": 1,
+  "edge_tp": 5,
+  "num_pred_nodes": 7
+ },
+ "dividing_38": {
+  "division_fn": 3,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 14,
+  "edge_fp": 0,
+  "edge_tp": 3,
+  "num_pred_nodes": 4
+ },
+ "dividing_39": {
+  "division_fn": 4,
+  "division_fp": 2,
+  "division_tp": 0,
+  "edge_fn": 14,
+  "edge_fp": 8,
+  "edge_tp": 2,
+  "num_pred_nodes": 13
+ },
+ "dividing_4": {
+  "division_fn": 3,
+  "division_fp": 2,
+  "division_tp": 0,
+  "edge_fn": 19,
+  "edge_fp": 11,
+  "edge_tp": 9,
+  "num_pred_nodes": 29
+ },
+ "dividing_40": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 1,
+  "edge_fn": 2,
+  "edge_fp": 1,
+  "edge_tp": 5,
+  "num_pred_nodes": 23
+ },
+ "dividing_41": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 1,
+  "edge_fn": 2,
+  "edge_fp": 2,
+  "edge_tp": 4,
+  "num_pred_nodes": 7
+ },
+ "dividing_42": {
+  "division_fn": 3,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 17,
+  "edge_fp": 2,
+  "edge_tp": 1,
+  "num_pred_nodes": 4
+ },
+ "dividing_43": {
+  "division_fn": 0,
+  "division_fp": 1,
+  "division_tp": 1,
+  "edge_fn": 2,
+  "edge_fp": 4,
+  "edge_tp": 4,
+  "num_pred_nodes": 23
+ },
+ "dividing_44": {
+  "division_fn": 2,
+  "division_fp": 1,
+  "division_tp": 0,
+  "edge_fn": 10,
+  "edge_fp": 2,
+  "edge_tp": 3,
+  "num_pred_nodes": 7
+ },
+ "dividing_45": {
+  "division_fn": 1,
+  "division_fp": 1,
+  "division_tp": 0,
+  "edge_fn": 7,
+  "edge_fp": 2,
+  "edge_tp": 1,
+  "num_pred_nodes": 36
+ },
+ "dividing_46": {
+  "division_fn": 3,
+  "division_fp": 1,
+  "division_tp": 0,
+  "edge_fn": 16,
+  "edge_fp": 5,
+  "edge_tp": 1,
+  "num_pred_nodes": 13
+ },
+ "dividing_47": {
+  "division_fn": 2,
+  "division_fp": 1,
+  "division_tp": 0,
+  "edge_fn": 14,
+  "edge_fp": 7,
+  "edge_tp": 1,
+  "num_pred_nodes": 27
+ },
+ "dividing_48": {
+  "division_fn": 1,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 2,
+  "edge_fp": 2,
+  "edge_tp": 3,
+  "num_pred_nodes": 19
+ },
+ "dividing_49": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 1,
+  "edge_fn": 5,
+  "edge_fp": 2,
+  "edge_tp": 5,
+  "num_pred_nodes": 11
+ },
+ "dividing_5": {
+  "division_fn": 3,
+  "division_fp": 1,
+  "division_tp": 1,
+  "edge_fn": 24,
+  "edge_fp": 12,
+  "edge_tp": 12,
+  "num_pred_nodes": 39
+ },
+ "dividing_50": {
+  "division_fn": 1,
+  "division_fp": 0,
+  "division_tp": 3,
+  "edge_fn": 7,
+  "edge_fp": 3,
+  "edge_tp": 9,
+  "num_pred_nodes": 15
+ },
+ "dividing_51": {
+  "division_fn": 4,
+  "division_fp": 1,
+  "division_tp": 0,
+  "edge_fn": 14,
+  "edge_fp": 5,
+  "edge_tp": 2,
+  "num_pred_nodes": 15
+ },
+ "dividing_52": {
+  "division_fn": 1,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 7,
+  "edge_fp": 0,
+  "edge_tp": 0,
+  "num_pred_nodes": 8
+ },
+ "dividing_53": {
+  "division_fn": 1,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 9,
+  "edge_fp": 0,
+  "edge_tp": 0,
+  "num_pred_nodes": 9
+ },
+ "dividing_54": {
+  "division_fn": 2,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 7,
+  "edge_fp": 1,
+  "edge_tp": 1,
+  "num_pred_nodes": 3
+ },
+ "dividing_55": {
+  "division_fn": 1,
+  "division_fp": 1,
+  "division_tp": 1,
+  "edge_fn": 7,
+  "edge_fp": 4,
+  "edge_tp": 4,
+  "num_pred_nodes": 14
+ },
+ "dividing_56": {
+  "division_fn": 1,
+  "division_fp": 1,
+  "division_tp": 0,
+  "edge_fn": 8,
+  "edge_fp": 3,
+  "edge_tp": 1,
+  "num_pred_nodes": 34
+ },
+ "dividing_57": {
+  "division_fn": 2,
+  "division_fp": 2,
+  "division_tp": 0,
+  "edge_fn": 5,
+  "edge_fp": 6,
+  "edge_tp": 5,
+  "num_pred_nodes": 23
+ },
+ "dividing_58": {
+  "division_fn": 1,
+  "division_fp": 0,
+  "division_tp": 1,
+  "edge_fn": 10,
+  "edge_fp": 2,
+  "edge_tp": 5,
+  "num_pred_nodes": 9
+ },
+ "dividing_59": {
+  "division_fn": 3,
+  "division_fp": 1,
+  "division_tp": 0,
+  "edge_fn": 22,
+  "edge_fp": 5,
+  "edge_tp": 0,
+  "num_pred_nodes": 8
+ },
+ "dividing_6": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 1,
+  "edge_fn": 1,
+  "edge_fp": 2,
+  "edge_tp": 4,
+  "num_pred_nodes": 25
+ },
+ "dividing_60": {
+  "division_fn": 2,
+  "division_fp": 2,
+  "division_tp": 1,
+  "edge_fn": 6,
+  "edge_fp": 4,
+  "edge_tp": 6,
+  "num_pred_nodes": 18
+ },
+ "dividing_61": {
+  "division_fn": 3,
+  "division_fp": 1,
+  "division_tp": 1,
+  "edge_fn": 12,
+  "edge_fp": 3,
+  "edge_tp": 4,
+  "num_pred_nodes": 12
+ },
+ "dividing_62": {
+  "division_fn": 2,
+  "division_fp": 2,
+  "division_tp": 0,
+  "edge_fn": 13,
+  "edge_fp": 6,
+  "edge_tp": 4,
+  "num_pred_nodes": 34
+ },
+ "dividing_63": {
+  "division_fn": 1,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 3,
+  "edge_fp": 1,
+  "edge_tp": 1,
+  "num_pred_nodes": 3
+ },
+ "dividing_64": {
+  "division_fn": 2,
+  "division_fp": 1,
+  "division_tp": 0,
+  "edge_fn": 15,
+  "edge_fp": 6,
+  "edge_tp": 3,
+  "num_pred_nodes": 10
+ },
+ "dividing_65": {
+  "division_fn": 2,
+  "division_fp": 1,
+  "division_tp": 0,
+  "edge_fn": 10,
+  "edge_fp": 1,
+  "edge_tp": 4,
+  "num_pred_nodes": 9
+ },
+ "dividing_66": {
+  "division_fn": 3,
+  "division_fp": 1,
+  "division_tp": 0,
+  "edge_fn": 13,
+  "edge_fp": 1,
+  "edge_tp": 3,
+  "num_pred_nodes": 7
+ },
+ "dividing_67": {
+  "division_fn": 4,
+  "division_fp": 2,
+  "division_tp": 0,
+  "edge_fn": 27,
+  "edge_fp": 10,
+  "edge_tp": 4,
+  "num_pred_nodes": 21
+ },
+ "dividing_68": {
+  "division_fn": 4,
+  "division_fp": 1,
+  "division_tp": 0,
+  "edge_fn": 32,
+  "edge_fp": 7,
+  "edge_tp": 3,
+  "num_pred_nodes": 11
+ },
+ "dividing_69": {
+  "division_fn": 2,
+  "division_fp": 1,
+  "division_tp": 0,
+  "edge_fn": 8,
+  "edge_fp": 5,
+  "edge_tp": 3,
+  "num_pred_nodes": 27
+ },
+ "dividing_7": {
+  "division_fn": 1,
+  "division_fp": 1,
+  "division_tp": 0,
+  "edge_fn": 1,
+  "edge_fp": 2,
+  "edge_tp": 3,
+  "num_pred_nodes": 15
+ },
+ "dividing_70": {
+  "division_fn": 4,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 23,
+  "edge_fp": 0,
+  "edge_tp": 0,
+  "num_pred_nodes": 10
+ },
+ "dividing_71": {
+  "division_fn": 3,
+  "division_fp": 1,
+  "division_tp": 1,
+  "edge_fn": 31,
+  "edge_fp": 6,
+  "edge_tp": 6,
+  "num_pred_nodes": 20
+ },
+ "dividing_72": {
+  "division_fn": 4,
+  "division_fp": 2,
+  "division_tp": 0,
+  "edge_fn": 29,
+  "edge_fp": 15,
+  "edge_tp": 9,
+  "num_pred_nodes": 27
+ },
+ "dividing_73": {
+  "division_fn": 3,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 23,
+  "edge_fp": 4,
+  "edge_tp": 4,
+  "num_pred_nodes": 13
+ },
+ "dividing_74": {
+  "division_fn": 1,
+  "division_fp": 0,
+  "division_tp": 2,
+  "edge_fn": 9,
+  "edge_fp": 5,
+  "edge_tp": 12,
+  "num_pred_nodes": 25
+ },
+ "dividing_75": {
+  "division_fn": 2,
+  "division_fp": 2,
+  "division_tp": 1,
+  "edge_fn": 6,
+  "edge_fp": 7,
+  "edge_tp": 6,
+  "num_pred_nodes": 18
+ },
+ "dividing_76": {
+  "division_fn": 1,
+  "division_fp": 0,
+  "division_tp": 1,
+  "edge_fn": 4,
+  "edge_fp": 2,
+  "edge_tp": 4,
+  "num_pred_nodes": 16
+ },
+ "dividing_77": {
+  "division_fn": 4,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 20,
+  "edge_fp": 4,
+  "edge_tp": 2,
+  "num_pred_nodes": 17
+ },
+ "dividing_78": {
+  "division_fn": 2,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 14,
+  "edge_fp": 1,
+  "edge_tp": 1,
+  "num_pred_nodes": 5
+ },
+ "dividing_79": {
+  "division_fn": 4,
+  "division_fp": 3,
+  "division_tp": 0,
+  "edge_fn": 13,
+  "edge_fp": 7,
+  "edge_tp": 3,
+  "num_pred_nodes": 13
+ },
+ "dividing_8": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 1,
+  "edge_fn": 2,
+  "edge_fp": 1,
+  "edge_tp": 2,
+  "num_pred_nodes": 4
+ },
+ "dividing_9": {
+  "division_fn": 3,
+  "division_fp": 1,
+  "division_tp": 0,
+  "edge_fn": 18,
+  "edge_fp": 4,
+  "edge_tp": 3,
+  "num_pred_nodes": 8
+ },
+ "duplicate_edges": {
+  "division_fn": 0,
+  "division_fp": 1,
+  "division_tp": 1,
+  "edge_fn": 0,
+  "edge_fp": 0,
+  "edge_tp": 3,
+  "num_pred_nodes": 4
+ },
+ "empty_pred": {
+  "division_fn": 1,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 3,
+  "edge_fp": 0,
+  "edge_tp": 0,
+  "num_pred_nodes": 0
+ },
+ "free_edges_in_unannotated_tissue": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 1,
+  "edge_fn": 0,
+  "edge_fp": 0,
+  "edge_tp": 3,
+  "num_pred_nodes": 6
+ },
+ "merge_onto_one_gt_edge": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 1,
+  "edge_fn": 0,
+  "edge_fp": 0,
+  "edge_tp": 3,
+  "num_pred_nodes": 6
+ },
+ "no_gt_edges": {
+  "division_fn": 0,
+  "division_fp": 1,
+  "division_tp": 0,
+  "edge_fn": 0,
+  "edge_fp": 0,
+  "edge_tp": 0,
+  "num_pred_nodes": 4
+ },
+ "over_out_degree": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 1,
+  "edge_fn": 0,
+  "edge_fp": 0,
+  "edge_tp": 3,
+  "num_pred_nodes": 6
+ },
+ "perfect": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 1,
+  "edge_fn": 0,
+  "edge_fp": 0,
+  "edge_tp": 3,
+  "num_pred_nodes": 4
+ },
+ "random_0": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 3,
+  "edge_fp": 1,
+  "edge_tp": 12,
+  "num_pred_nodes": 18
+ },
+ "random_1": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 10,
+  "edge_fp": 4,
+  "edge_tp": 5,
+  "num_pred_nodes": 18
+ },
+ "random_2": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 24,
+  "edge_fp": 6,
+  "edge_tp": 1,
+  "num_pred_nodes": 30
+ },
+ "random_3": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 39,
+  "edge_fp": 5,
+  "edge_tp": 1,
+  "num_pred_nodes": 24
+ },
+ "random_4": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 18,
+  "edge_fp": 11,
+  "edge_tp": 2,
+  "num_pred_nodes": 48
+ },
+ "random_5": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 49,
+  "edge_fp": 11,
+  "edge_tp": 1,
+  "num_pred_nodes": 60
+ },
+ "random_6": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 7,
+  "edge_fp": 4,
+  "edge_tp": 3,
+  "num_pred_nodes": 36
+ },
+ "random_7": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 26,
+  "edge_fp": 1,
+  "edge_tp": 4,
+  "num_pred_nodes": 12
+ },
+ "random_8": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 54,
+  "edge_fp": 15,
+  "edge_tp": 6,
+  "num_pred_nodes": 72
+ },
+ "random_9": {
+  "division_fn": 0,
+  "division_fp": 0,
+  "division_tp": 0,
+  "edge_fn": 5,
+  "edge_fp": 0,
+  "edge_tp": 0,
+  "num_pred_nodes": 6
+ }
+}

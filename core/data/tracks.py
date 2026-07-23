@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import TypedDict, cast
 
 import numpy as np
+import scipy.sparse as sp
 import zarr
 from jaxtyping import Float, Int
 
@@ -70,6 +71,63 @@ class TrackGraph:
         """Row index of each node id. Ids are arbitrary sparse integers, so this is a search, not indexing."""
         order = np.argsort(self.node_ids)
         return order[np.searchsorted(self.node_ids, ids, sorter=order)]
+
+    def edge_rows(self) -> Int[np.ndarray, "e 2"]:
+        """The edges as row indices rather than node ids, so they can index the node arrays directly."""
+        return self.rows_of(self.edges.reshape(-1)).reshape(-1, 2)
+
+
+@dataclass(frozen=True)
+class Adjacency:
+    """Neighbour lookup over a track graph, in row space.
+
+    Duplicate edges are kept rather than collapsed: the metric treats a node with two identical outgoing
+    links as a fork, so degrees have to count links, not distinct neighbours.
+    """
+
+    edges: Int[np.ndarray, "e 2"]
+    successors: dict[int, tuple[int, ...]]
+    predecessors: dict[int, tuple[int, ...]]
+    out_degrees: Int[np.ndarray, "n"]
+    in_degrees: Int[np.ndarray, "n"]
+
+    @classmethod
+    def of(cls, graph: TrackGraph) -> "Adjacency":
+        """Index a graph's links in both directions."""
+        edges = graph.edge_rows()
+        count = len(graph.node_ids)
+        return cls(
+            edges=edges,
+            successors=cls._grouped(edges[:, 0], edges[:, 1], count),
+            predecessors=cls._grouped(edges[:, 1], edges[:, 0], count),
+            out_degrees=np.bincount(edges[:, 0], minlength=count),
+            in_degrees=np.bincount(edges[:, 1], minlength=count),
+        )
+
+    def dividing_rows(self) -> Int[np.ndarray, "d"]:
+        """Rows with at least two outgoing links — what the metric treats as a fork."""
+        return np.flatnonzero(self.out_degrees >= _DIVISION_OUT_DEGREE)
+
+    def components(self) -> Int[np.ndarray, "n"]:
+        """A weakly-connected-component label per row: which lineage fragment each node belongs to."""
+        count = len(self.out_degrees)
+        links = sp.coo_array(
+            (np.ones(len(self.edges)), (self.edges[:, 0], self.edges[:, 1])),
+            shape=(count, count),
+        )
+        return sp.csgraph.connected_components(links, directed=False)[1]
+
+    @staticmethod
+    def _grouped(
+        origin: Int[np.ndarray, "e"],
+        destination: Int[np.ndarray, "e"],
+        count: int,
+    ) -> dict[int, tuple[int, ...]]:
+        """Group each row's link endpoints, in edge order."""
+        grouped: dict[int, list[int]] = {row: [] for row in range(count)}
+        for source, target in zip(origin.tolist(), destination.tolist(), strict=True):
+            grouped[source].append(target)
+        return {row: tuple(targets) for row, targets in grouped.items()}
 
 
 @dataclass(frozen=True)

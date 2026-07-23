@@ -44,11 +44,17 @@ Metric source: [royerlab/kaggle-cell-tracking-competition `metrics.md`](https://
 **Three consequences the metric forces, all non-obvious** (verified against the organizers'
 `src/tracking_cellmot/metrics.py`, not just the prose spec):
 
-1. *The node-count ratio is signed and uncapped above.* `total_node_ratio = (N_pred − N_total)/N_total`
-   with only a `max(0, …)` clamp, so predicting **fewer** nodes than the estimated true count pushes
-   the multiplier above 1 and inflates the Jaccard — up to ×1.1. Detecting every cell earns ×1.0.
-   The incentive is a high-precision detector run deliberately below the true cell count, not maximal
-   recall. Caveat: a missed GT node is a full edge FN, which outweighs the ≤10 % bonus.
+1. *Links in unannotated tissue are free, and the node count is the only thing that isn't.* A predicted
+   edge enters the tally only when an endpoint matches a GT node the annotation continues through
+   (`pred_valid = out_valid | in_valid`, `metrics.py:193`); with ~94 % of cells unannotated, most
+   spurious links cost nothing. The node-count ratio `(N_pred − N_total)/N_total` is signed and clamped
+   only from below, so it is the **sole** over-prediction penalty, at 0.1 per unit.
+   That fixes the operating point: overshooting by a fraction `f` costs `0.1·f` while the detections it
+   buys earn their full recall, so the useful point sits **at or slightly above** `N_total`.
+   Undershooting pays the same `0.1·f` as a bonus but loses roughly `f` of the Jaccard outright, since
+   every unfound node takes its links with it as FNs — a losing trade. *(This replaces an earlier
+   reading here that the ≤×1.1 bonus favoured a deliberately under-counting detector; the bonus is real
+   but is dominated by the edge FNs it causes.)*
 2. *Motion is the size of the matching tolerance.* 2.1 % of true links move more than 7 µm per
    timepoint (median 1.82, p99 8.38). A 7 µm-radius nearest-neighbour linker is capped near 0.98
    before model quality enters, and the linker's search radius must exceed the matcher's cutoff.
@@ -93,8 +99,9 @@ closing) from measured error decomposition, not from guesswork.
   public download ships only 4 test videos, which suggests a hidden rerun test set — **unverified**;
   the API endpoints reachable with the current OAuth scope do not expose the rules.
 - Prize structure — unverified.
-- Where does `N_pred / N_total` actually maximise the score? The under-prediction bonus is arithmetic
-  on the formula so far, not an experiment — sweep it once a detector exists.
+- Where does `N_pred / N_total` actually maximise the score? The argument above is arithmetic on the
+  formula, not an experiment — sweep it once a detector exists. Now cheap to answer: the evaluator is
+  local and verified (`biohub_kaggle-92j`).
 - Does the test split contain divisions at all? `summarise()` drops the division term entirely when
   none are present anywhere, which would make the score pure adjusted edge Jaccard.
 - Inter-cell spacing at a timepoint is still unmeasured — the GT is too sparse to give it (often one

@@ -47,3 +47,6 @@ htmlcov/
 
 # jscpd (node) — pulled transiently by npx for the duplication gate
 node_modules/
+
+# Isolated venv holding the organizers' package, used only to regenerate metric fixtures.
+/.oracle/

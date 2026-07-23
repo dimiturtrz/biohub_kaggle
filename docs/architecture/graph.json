@@ -37,6 +37,66 @@
       "weight": 1
     },
     {
+      "kind": "import",
+      "source": "core.metrics.divisions",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "core.metrics.divisions",
+      "target": "core.metrics.matching",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "core.metrics.edges",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "core.metrics.edges",
+      "target": "core.metrics.matching",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "core.metrics.matching",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "core.metrics.matching",
+      "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "core.metrics.score",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "core.metrics.score",
+      "target": "core.metrics.divisions",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "core.metrics.score",
+      "target": "core.metrics.edges",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "core.metrics.score",
+      "target": "core.metrics.matching",
+      "weight": 1
+    },
+    {
       "kind": "references",
       "source": "celltrack.explore.DatasetSurvey",
       "target": "celltrack.explore.VideoSummary",
@@ -116,6 +176,24 @@
     },
     {
       "kind": "references",
+      "source": "core.data.tracks.Adjacency",
+      "target": "core.data.tracks.Adjacency",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "core.data.tracks.Adjacency",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.data.tracks.Adjacency.of",
+      "target": "core.data.tracks.TrackGraph.edge_rows",
+      "weight": 1
+    },
+    {
+      "kind": "references",
       "source": "core.data.tracks.AnnotatedTracks",
       "target": "core.data.tracks.AnnotatedTracks",
       "weight": 1
@@ -142,6 +220,12 @@
       "kind": "references",
       "source": "core.data.tracks.TrackGraph",
       "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.data.tracks.TrackGraph.edge_rows",
+      "target": "core.data.tracks.TrackGraph.rows_of",
       "weight": 1
     },
     {
@@ -230,6 +314,348 @@
     },
     {
       "kind": "references",
+      "source": "core.metrics.divisions.DivisionCounts",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "core.metrics.divisions.DivisionCounts",
+      "target": "core.metrics.divisions.DivisionCounts",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "core.metrics.divisions.DivisionCounts",
+      "target": "core.metrics.matching.DistanceMatcher",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions.DivisionCounts.of",
+      "target": "core.data.tracks.Adjacency.of",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "core.metrics.divisions.DivisionCounts.of",
+      "target": "core.metrics.divisions._ScoredPair",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions.DivisionCounts.of",
+      "target": "core.metrics.divisions._ScoredPair.fork_verdicts",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions.DivisionCounts.of",
+      "target": "core.metrics.divisions._ScoredPair.local_candidates",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions.DivisionCounts.of",
+      "target": "core.metrics.divisions._ScoredPair.maximum_matching",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "core.metrics.divisions._ScoredPair",
+      "target": "core.data.tracks.Adjacency",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "core.metrics.divisions._ScoredPair",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "core.metrics.divisions._ScoredPair",
+      "target": "core.metrics.matching.DistanceMatcher",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "core.metrics.divisions._ScoredPair._division_window",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions._ScoredPair._division_window",
+      "target": "core.data.tracks.TrackGraph.edge_rows",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions._ScoredPair._local_topology_holds",
+      "target": "core.metrics.divisions._ScoredPair.maximum_matching",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions._ScoredPair.fork_verdicts",
+      "target": "core.data.tracks.Adjacency.components",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions._ScoredPair.fork_verdicts",
+      "target": "core.data.tracks.Adjacency.dividing_rows",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions._ScoredPair.fork_verdicts",
+      "target": "core.metrics.divisions._ScoredPair._branch_component",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions._ScoredPair.fork_verdicts",
+      "target": "core.metrics.matching.DistanceMatcher.match",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions._ScoredPair.local_candidates",
+      "target": "core.metrics.divisions._ScoredPair._division_window",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions._ScoredPair.local_candidates",
+      "target": "core.metrics.divisions._ScoredPair._local_topology_holds",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions._ScoredPair.local_candidates",
+      "target": "core.metrics.divisions._ScoredPair._rows_matching",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions._ScoredPair.local_candidates",
+      "target": "core.metrics.matching.DistanceMatcher.match",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "core.metrics.edges.EdgeCounts",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "core.metrics.edges.EdgeCounts",
+      "target": "core.metrics.edges.EdgeCounts",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "core.metrics.edges.EdgeCounts",
+      "target": "core.metrics.matching.NodeMatching",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.edges.EdgeCounts._countable",
+      "target": "core.data.tracks.TrackGraph.edge_rows",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.edges.EdgeCounts._countable",
+      "target": "core.metrics.edges.EdgeCounts._through_an_annotated_node",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.edges.EdgeCounts._lands_on_an_annotated_link",
+      "target": "core.data.tracks.TrackGraph.edge_rows",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.edges.EdgeCounts._repaired",
+      "target": "core.data.tracks.TrackGraph.edge_rows",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.edges.EdgeCounts._spans_one_timepoint",
+      "target": "core.data.tracks.TrackGraph.timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.edges.EdgeCounts.of",
+      "target": "core.data.tracks.TrackGraph.edge_rows",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "core.metrics.matching.DistanceMatcher",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "core.metrics.matching.DistanceMatcher",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "core.metrics.matching.DistanceMatcher",
+      "target": "core.metrics.matching.NodeMatching",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.matching.DistanceMatcher._assign",
+      "target": "core.metrics.matching.DistanceMatcher._assign_without_full_cover",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.matching.DistanceMatcher._assign_without_full_cover",
+      "target": "core.metrics.matching.DistanceMatcher._pad_gaps",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.matching.DistanceMatcher.match",
+      "target": "core.data.tracks.TrackGraph.positions",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.matching.DistanceMatcher.match",
+      "target": "core.data.tracks.TrackGraph.timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.matching.DistanceMatcher.match",
+      "target": "core.geometry.Spacing.to_micrometres",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.matching.DistanceMatcher.match",
+      "target": "core.metrics.matching.DistanceMatcher._assign",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "core.metrics.matching.DistanceMatcher.match",
+      "target": "core.metrics.matching.NodeMatching",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.matching.NodeMatching.matched_count",
+      "target": "core.metrics.matching.NodeMatching.is_matched",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "core.metrics.score.SplitScore",
+      "target": "core.metrics.score.SplitScore",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "core.metrics.score.SplitScore",
+      "target": "core.metrics.score.VideoMetrics",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "core.metrics.score.SplitScore.of",
+      "target": "core.metrics.divisions.DivisionCounts",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.score.SplitScore.of",
+      "target": "core.metrics.divisions.DivisionCounts.jaccard",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "core.metrics.score.VideoMetrics",
+      "target": "core.data.tracks.AnnotatedTracks",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "core.metrics.score.VideoMetrics",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "core.metrics.score.VideoMetrics",
+      "target": "core.metrics.divisions.DivisionCounts",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "core.metrics.score.VideoMetrics",
+      "target": "core.metrics.edges.EdgeCounts",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "core.metrics.score.VideoMetrics",
+      "target": "core.metrics.matching.DistanceMatcher",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "core.metrics.score.VideoMetrics",
+      "target": "core.metrics.score.VideoMetrics",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.score.VideoMetrics.adjusted_edge_jaccard",
+      "target": "core.metrics.edges.EdgeCounts.jaccard",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.score.VideoMetrics.adjusted_edge_jaccard",
+      "target": "core.metrics.score.VideoMetrics.total_node_ratio",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.score.VideoMetrics.of",
+      "target": "core.metrics.divisions.DivisionCounts.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.score.VideoMetrics.of",
+      "target": "core.metrics.edges.EdgeCounts.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.score.VideoMetrics.of",
+      "target": "core.metrics.matching.DistanceMatcher.match",
+      "weight": 1
+    },
+    {
+      "kind": "references",
       "source": "core.paths.DataRoot",
       "target": "core.paths.DataRoot",
       "weight": 1
@@ -259,7 +685,7 @@
       "role": null
     },
     {
-      "descendants": 6,
+      "descendants": 11,
       "id": "core",
       "label": "core",
       "level": "module",
@@ -307,6 +733,46 @@
       "role": null
     },
     {
+      "descendants": 4,
+      "id": "core.metrics",
+      "label": "metrics",
+      "level": "module",
+      "parent": "core",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.divisions",
+      "label": "divisions",
+      "level": "module",
+      "parent": "core.metrics",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.edges",
+      "label": "edges",
+      "level": "module",
+      "parent": "core.metrics",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.matching",
+      "label": "matching",
+      "level": "module",
+      "parent": "core.metrics",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.score",
+      "label": "score",
+      "level": "module",
+      "parent": "core.metrics",
+      "role": null
+    },
+    {
       "descendants": 0,
       "id": "core.paths",
       "label": "paths",
@@ -336,6 +802,14 @@
       "label": "Submission",
       "level": "class",
       "parent": "core.data.submission",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.tracks.Adjacency",
+      "label": "Adjacency",
+      "level": "class",
+      "parent": "core.data.tracks",
       "role": "satellite"
     },
     {
@@ -420,6 +894,62 @@
     },
     {
       "descendants": 0,
+      "id": "core.metrics.divisions.DivisionCounts",
+      "label": "DivisionCounts",
+      "level": "class",
+      "parent": "core.metrics.divisions",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.divisions._ScoredPair",
+      "label": "_ScoredPair",
+      "level": "class",
+      "parent": "core.metrics.divisions",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.edges.EdgeCounts",
+      "label": "EdgeCounts",
+      "level": "class",
+      "parent": "core.metrics.edges",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.matching.DistanceMatcher",
+      "label": "DistanceMatcher",
+      "level": "class",
+      "parent": "core.metrics.matching",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.matching.NodeMatching",
+      "label": "NodeMatching",
+      "level": "class",
+      "parent": "core.metrics.matching",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.score.SplitScore",
+      "label": "SplitScore",
+      "level": "class",
+      "parent": "core.metrics.score",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.score.VideoMetrics",
+      "label": "VideoMetrics",
+      "level": "class",
+      "parent": "core.metrics.score",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
       "id": "core.paths.DataRoot",
       "label": "DataRoot",
       "level": "class",
@@ -492,6 +1022,38 @@
     },
     {
       "descendants": 0,
+      "id": "core.data.tracks.Adjacency._grouped",
+      "label": "_grouped",
+      "level": "method",
+      "parent": "core.data.tracks.Adjacency",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.tracks.Adjacency.components",
+      "label": "components",
+      "level": "method",
+      "parent": "core.data.tracks.Adjacency",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.tracks.Adjacency.dividing_rows",
+      "label": "dividing_rows",
+      "level": "method",
+      "parent": "core.data.tracks.Adjacency",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.tracks.Adjacency.of",
+      "label": "of",
+      "level": "method",
+      "parent": "core.data.tracks.Adjacency",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "core.data.tracks.AnnotatedTracks.annotated_fraction",
       "label": "annotated_fraction",
       "level": "method",
@@ -510,6 +1072,14 @@
       "descendants": 0,
       "id": "core.data.tracks.TrackGraph.division_parents",
       "label": "division_parents",
+      "level": "method",
+      "parent": "core.data.tracks.TrackGraph",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.tracks.TrackGraph.edge_rows",
+      "label": "edge_rows",
       "level": "method",
       "parent": "core.data.tracks.TrackGraph",
       "role": null
@@ -632,6 +1202,246 @@
       "label": "to_voxels",
       "level": "method",
       "parent": "core.geometry.Spacing",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.divisions.DivisionCounts.jaccard",
+      "label": "jaccard",
+      "level": "method",
+      "parent": "core.metrics.divisions.DivisionCounts",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.divisions.DivisionCounts.of",
+      "label": "of",
+      "level": "method",
+      "parent": "core.metrics.divisions.DivisionCounts",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.divisions._ScoredPair._branch_component",
+      "label": "_branch_component",
+      "level": "method",
+      "parent": "core.metrics.divisions._ScoredPair",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.divisions._ScoredPair._division_window",
+      "label": "_division_window",
+      "level": "method",
+      "parent": "core.metrics.divisions._ScoredPair",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.divisions._ScoredPair._local_topology_holds",
+      "label": "_local_topology_holds",
+      "level": "method",
+      "parent": "core.metrics.divisions._ScoredPair",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.divisions._ScoredPair._rows_matching",
+      "label": "_rows_matching",
+      "level": "method",
+      "parent": "core.metrics.divisions._ScoredPair",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.divisions._ScoredPair.fork_verdicts",
+      "label": "fork_verdicts",
+      "level": "method",
+      "parent": "core.metrics.divisions._ScoredPair",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.divisions._ScoredPair.local_candidates",
+      "label": "local_candidates",
+      "level": "method",
+      "parent": "core.metrics.divisions._ScoredPair",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.divisions._ScoredPair.maximum_matching",
+      "label": "maximum_matching",
+      "level": "method",
+      "parent": "core.metrics.divisions._ScoredPair",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.edges.EdgeCounts._capped_out_degree",
+      "label": "_capped_out_degree",
+      "level": "method",
+      "parent": "core.metrics.edges.EdgeCounts",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.edges.EdgeCounts._collapsed_merges",
+      "label": "_collapsed_merges",
+      "level": "method",
+      "parent": "core.metrics.edges.EdgeCounts",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.edges.EdgeCounts._countable",
+      "label": "_countable",
+      "level": "method",
+      "parent": "core.metrics.edges.EdgeCounts",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.edges.EdgeCounts._lands_on_an_annotated_link",
+      "label": "_lands_on_an_annotated_link",
+      "level": "method",
+      "parent": "core.metrics.edges.EdgeCounts",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.edges.EdgeCounts._repaired",
+      "label": "_repaired",
+      "level": "method",
+      "parent": "core.metrics.edges.EdgeCounts",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.edges.EdgeCounts._spans_one_timepoint",
+      "label": "_spans_one_timepoint",
+      "level": "method",
+      "parent": "core.metrics.edges.EdgeCounts",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.edges.EdgeCounts._through_an_annotated_node",
+      "label": "_through_an_annotated_node",
+      "level": "method",
+      "parent": "core.metrics.edges.EdgeCounts",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.edges.EdgeCounts.jaccard",
+      "label": "jaccard",
+      "level": "method",
+      "parent": "core.metrics.edges.EdgeCounts",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.edges.EdgeCounts.of",
+      "label": "of",
+      "level": "method",
+      "parent": "core.metrics.edges.EdgeCounts",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.edges.EdgeCounts.weight",
+      "label": "weight",
+      "level": "method",
+      "parent": "core.metrics.edges.EdgeCounts",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.matching.DistanceMatcher._assign",
+      "label": "_assign",
+      "level": "method",
+      "parent": "core.metrics.matching.DistanceMatcher",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.matching.DistanceMatcher._assign_without_full_cover",
+      "label": "_assign_without_full_cover",
+      "level": "method",
+      "parent": "core.metrics.matching.DistanceMatcher",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.matching.DistanceMatcher._pad_gaps",
+      "label": "_pad_gaps",
+      "level": "method",
+      "parent": "core.metrics.matching.DistanceMatcher",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.matching.DistanceMatcher.match",
+      "label": "match",
+      "level": "method",
+      "parent": "core.metrics.matching.DistanceMatcher",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.matching.NodeMatching.is_matched",
+      "label": "is_matched",
+      "level": "method",
+      "parent": "core.metrics.matching.NodeMatching",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.matching.NodeMatching.matched_count",
+      "label": "matched_count",
+      "level": "method",
+      "parent": "core.metrics.matching.NodeMatching",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.score.SplitScore._weighted_mean",
+      "label": "_weighted_mean",
+      "level": "method",
+      "parent": "core.metrics.score.SplitScore",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.score.SplitScore.of",
+      "label": "of",
+      "level": "method",
+      "parent": "core.metrics.score.SplitScore",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.score.VideoMetrics.adjusted_edge_jaccard",
+      "label": "adjusted_edge_jaccard",
+      "level": "method",
+      "parent": "core.metrics.score.VideoMetrics",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.score.VideoMetrics.of",
+      "label": "of",
+      "level": "method",
+      "parent": "core.metrics.score.VideoMetrics",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.score.VideoMetrics.total_node_ratio",
+      "label": "total_node_ratio",
+      "level": "method",
+      "parent": "core.metrics.score.VideoMetrics",
       "role": null
     },
     {
