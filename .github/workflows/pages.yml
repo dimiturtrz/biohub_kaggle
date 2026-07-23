@@ -1,0 +1,76 @@
+name: pages
+
+# Publish the archmap interactive architecture viewer to GitHub Pages (opt-in: `archviz_pages`) as ONE site
+# with staged views (one repo = one Pages site, so every view lives under it):
+#   /architecture/         = main  (stable, reviewed)
+#   /architecture/preview/ = dev   (always-latest working branch, skipped if there is no dev branch)
+#   /                      -> redirects to /architecture/
+# archmap regenerates docs/architecture/ (graph.json + the self-contained index.html viewer) from the current
+# import graph. graph.json is ALSO committed (the diffable erosion signal); index.html is rebuilt here, not
+# committed (see .gitignore). Deploys from `main` (the github-pages environment is branch-protected to the
+# default branch); each main build ALSO rebuilds the dev preview so it tracks dev. This is the SOLE-owner
+# case: the repo has no other Pages deployer, so this workflow owns the root redirect. A repo that ALREADY
+# deploys Pages should NOT enable archviz_pages -> instead fold the archmap build into its existing workflow
+# as a /architecture/ subpath (see README: "Compose archmap into an existing Pages site"). Enable once in repo
+# Settings -> Pages -> Source = "GitHub Actions".
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Least-privilege scopes the Pages deploy needs.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One publish at a time; never cancel an in-flight deploy.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0            # need origin/dev too, to build the preview
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      # /architecture/ = main (the checked-out default branch). The committed graph.json is the diff-truth;
+      # the ~700KB viewer shell is built fresh here rather than committed.
+      - name: Build main architecture
+        run: |
+          uv sync --extra devtools
+          uv run --extra devtools python -m devtools.graph.archmap core celltrack
+          mkdir -p "$GITHUB_WORKSPACE/_site/architecture"
+          cp docs/architecture/graph.json docs/architecture/index.html "$GITHUB_WORKSPACE/_site/architecture/"
+      # /architecture/preview/ = dev. Extract dev's tree, rebuild archmap there so the preview tracks dev.
+      # Guarded: a repo with no dev branch skips the preview cleanly rather than failing the deploy.
+      - name: Build dev architecture preview
+        run: |
+          if git rev-parse --verify --quiet origin/dev >/dev/null; then
+            rm -rf /tmp/devbuild && mkdir -p /tmp/devbuild
+            git archive origin/dev | tar -x -C /tmp/devbuild
+            cd /tmp/devbuild
+            uv sync --extra devtools
+            uv run --extra devtools python -m devtools.graph.archmap core celltrack
+            mkdir -p "$GITHUB_WORKSPACE/_site/architecture/preview"
+            cp docs/architecture/graph.json docs/architecture/index.html "$GITHUB_WORKSPACE/_site/architecture/preview/"
+          else
+            echo "no dev branch -> skipping /architecture/preview/"
+          fi
+      # root redirect so the Pages site URL itself resolves to the stable view
+      - name: Root redirect -> /architecture/
+        run: printf '<!doctype html><meta http-equiv="refresh" content="0; url=./architecture/">\n' > "$GITHUB_WORKSPACE/_site/index.html"
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
