@@ -8,6 +8,9 @@ version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
     "numpy",
+    "zarr>=3",     # the competition ships OME-Zarr v3 images and GEFF (zarr-backed) track graphs
+    "polars",      # submission/statistics tables
+    "pyyaml",      # paths.yaml — the one machine-local config
     "jaxtyping",   # Float[Tensor,"B C H W"] shape/dtype annotations — inert at runtime without a checker (no prod cost)
     "beartype",    # the runtime checker jaxtyping delegates to; wrap as @shapecheck in your types module (see devtools/README)
     "pydantic>=2",
@@ -54,7 +57,7 @@ extend_exclude = ["noxfile.py"]
 # (numpy/jaxtyping/beartype/pydantic) — they read as unused until you import them.
 [tool.deptry.per_rule_ignores]
 # >>> LOCAL-SLOT: deptry-unused — PRUNE a starter once you wire it (keep pytest/pytest-cov/sdlc-devtools)
-DEP002 = ["pytest", "pytest-cov", "sdlc-devtools", "numpy", "jaxtyping", "beartype", "pydantic"]
+DEP002 = ["pytest", "pytest-cov", "sdlc-devtools", "beartype", "pydantic"]
 # <<< LOCAL-SLOT: deptry-unused
 
 [tool.ruff]
@@ -126,7 +129,7 @@ python-version = "3.12"
 # pyrefly's front-end models only partially; if one surfaces a type error, add its module here or suppress
 # at the line with `# pyrefly: ignore[<code>]`.
 # >>> LOCAL-SLOT: pyrefly-ignore-imports — this repo's untyped-dependency modules (treated as Any)
-ignore-missing-imports = []
+ignore-missing-imports = ["yaml", "zarr"]
 # <<< LOCAL-SLOT: pyrefly-ignore-imports
 
 # Tests inject unannotated fixture params (pytest fills them) — mirror the ruff `tests/**` carve-out so the

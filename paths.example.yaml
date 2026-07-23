@@ -1,0 +1,4 @@
+# Copy to paths.yaml (gitignored — machine-specific absolute paths).
+# One data root. Competition download unzips under <data>/raw/biohub_cell_tracking/{train,test};
+# <data>/processed/ is auto-created.
+data: /path/to/data/volumetric/microscopy
