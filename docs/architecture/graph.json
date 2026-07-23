@@ -146,6 +146,84 @@
     },
     {
       "kind": "import",
+      "source": "celltrack.training.crops",
+      "target": "celltrack.training.targets",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.crops",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.crops",
+      "target": "core.data.video",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.crops",
+      "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.dataset",
+      "target": "celltrack.training.crops",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.dataset",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.dataset",
+      "target": "core.data.video",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.dataset",
+      "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.loop",
+      "target": "celltrack.training.crops",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.loop",
+      "target": "celltrack.training.dataset",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.loop",
+      "target": "celltrack.training.loss",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.loop",
+      "target": "celltrack.training.model",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.targets",
+      "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "core.data.submission",
       "target": "core.data.tracks",
       "weight": 1
@@ -818,6 +896,216 @@
     },
     {
       "kind": "references",
+      "source": "celltrack.training.crops.CropSampler",
+      "target": "celltrack.training.crops.TrainingCrop",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.crops.CropSampler",
+      "target": "core.data.tracks.AnnotatedTracks",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.crops.CropSampler",
+      "target": "core.data.video.CellVideo",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.crops.CropSampler",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.crops.CropSampler.sample",
+      "target": "celltrack.training.crops.CropSampler._centres_in_crop",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.crops.CropSampler.sample",
+      "target": "celltrack.training.crops.CropSampler._crop",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.crops.CropSampler.sample",
+      "target": "celltrack.training.crops.CropSampler._crop_origin",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.crops.CropSampler.sample",
+      "target": "celltrack.training.crops.CropSampler._window_timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.crops.CropSampler.sample",
+      "target": "celltrack.training.crops.TrainingCrop",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.crops.CropSampler.sample",
+      "target": "celltrack.training.targets.DetectionTarget.build",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.crops.CropSampler.sample",
+      "target": "core.data.video.CellVideo.frame",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.training.dataset.AnnotatedVideo",
+      "target": "core.data.tracks.AnnotatedTracks",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.training.dataset.AnnotatedVideo",
+      "target": "core.data.video.CellVideo",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.training.dataset.AnnotatedVideo",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.training.dataset.CropDataset",
+      "target": "celltrack.training.crops.CropSampler",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.training.dataset.CropDataset",
+      "target": "celltrack.training.dataset.AnnotatedVideo",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.dataset.CropDataset.__getitem__",
+      "target": "celltrack.training.crops.CropSampler.sample",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.loop.DetectionTrainer",
+      "target": "celltrack.training.dataset.AnnotatedVideo",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.training.loop.DetectionTrainer",
+      "target": "celltrack.training.loop.TrainingConfig",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.loop.DetectionTrainer",
+      "target": "celltrack.training.loop.TrainingRun",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.loop.DetectionTrainer",
+      "target": "celltrack.training.loss.MaskedDetectionLoss",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.loop.DetectionTrainer",
+      "target": "celltrack.training.model.DetectionUNet",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.loop.DetectionTrainer._loader",
+      "target": "celltrack.training.crops.CropSampler",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.loop.DetectionTrainer._loader",
+      "target": "celltrack.training.dataset.CropDataset",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.loop.DetectionTrainer.train",
+      "target": "celltrack.training.loop.DetectionTrainer._experiment",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.loop.DetectionTrainer.train",
+      "target": "celltrack.training.loop.DetectionTrainer._loader",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.loop.DetectionTrainer.train",
+      "target": "celltrack.training.loop.DetectionTrainer._step",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.loop.DetectionTrainer.train",
+      "target": "celltrack.training.loop.TrainingRun",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.loop.DetectionTrainer.train",
+      "target": "celltrack.training.loss.MaskedDetectionLoss",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.loop.DetectionTrainer.train",
+      "target": "celltrack.training.model.DetectionUNet",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.training.loop.TrainingRun",
+      "target": "celltrack.training.model.DetectionUNet",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.model.DetectionUNet.__init__",
+      "target": "celltrack.training.model.DetectionUNet._conv_block",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.targets.DetectionTarget",
+      "target": "celltrack.training.targets.DetectionTarget",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.targets.DetectionTarget",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.targets.DetectionTarget.build",
+      "target": "core.geometry.Spacing.anisotropic_radius",
+      "weight": 1
+    },
+    {
+      "kind": "references",
       "source": "core.data.split.AcquisitionFolds",
       "target": "core.data.split.VideoSplit",
       "weight": 1
@@ -1395,7 +1683,7 @@
   ],
   "nodes": [
     {
-      "descendants": 5,
+      "descendants": 12,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -1440,6 +1728,62 @@
       "label": "submit",
       "level": "module",
       "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 6,
+      "id": "celltrack.training",
+      "label": "training",
+      "level": "module",
+      "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.crops",
+      "label": "crops",
+      "level": "module",
+      "parent": "celltrack.training",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.dataset",
+      "label": "dataset",
+      "level": "module",
+      "parent": "celltrack.training",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.loop",
+      "label": "loop",
+      "level": "module",
+      "parent": "celltrack.training",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.loss",
+      "label": "loss",
+      "level": "module",
+      "parent": "celltrack.training",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.model",
+      "label": "model",
+      "level": "module",
+      "parent": "celltrack.training",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.targets",
+      "label": "targets",
+      "level": "module",
+      "parent": "celltrack.training",
       "role": null
     },
     {
@@ -1632,6 +1976,86 @@
       "label": "TestPredictor",
       "level": "class",
       "parent": "celltrack.submit",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.crops.CropSampler",
+      "label": "CropSampler",
+      "level": "class",
+      "parent": "celltrack.training.crops",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.crops.TrainingCrop",
+      "label": "TrainingCrop",
+      "level": "class",
+      "parent": "celltrack.training.crops",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.dataset.AnnotatedVideo",
+      "label": "AnnotatedVideo",
+      "level": "class",
+      "parent": "celltrack.training.dataset",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.dataset.CropDataset",
+      "label": "CropDataset",
+      "level": "class",
+      "parent": "celltrack.training.dataset",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.loop.DetectionTrainer",
+      "label": "DetectionTrainer",
+      "level": "class",
+      "parent": "celltrack.training.loop",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.loop.TrainingConfig",
+      "label": "TrainingConfig",
+      "level": "class",
+      "parent": "celltrack.training.loop",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.loop.TrainingRun",
+      "label": "TrainingRun",
+      "level": "class",
+      "parent": "celltrack.training.loop",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.loss.MaskedDetectionLoss",
+      "label": "MaskedDetectionLoss",
+      "level": "class",
+      "parent": "celltrack.training.loss",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.model.DetectionUNet",
+      "label": "DetectionUNet",
+      "level": "class",
+      "parent": "celltrack.training.model",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.targets.DetectionTarget",
+      "label": "DetectionTarget",
+      "level": "class",
+      "parent": "celltrack.training.targets",
       "role": "satellite"
     },
     {
@@ -2024,6 +2448,158 @@
       "label": "submission",
       "level": "method",
       "parent": "celltrack.submit.TestPredictor",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.crops.CropSampler._centres_in_crop",
+      "label": "_centres_in_crop",
+      "level": "method",
+      "parent": "celltrack.training.crops.CropSampler",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.crops.CropSampler._crop",
+      "label": "_crop",
+      "level": "method",
+      "parent": "celltrack.training.crops.CropSampler",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.crops.CropSampler._crop_origin",
+      "label": "_crop_origin",
+      "level": "method",
+      "parent": "celltrack.training.crops.CropSampler",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.crops.CropSampler._window_timepoints",
+      "label": "_window_timepoints",
+      "level": "method",
+      "parent": "celltrack.training.crops.CropSampler",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.crops.CropSampler.sample",
+      "label": "sample",
+      "level": "method",
+      "parent": "celltrack.training.crops.CropSampler",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.dataset.CropDataset.__getitem__",
+      "label": "__getitem__",
+      "level": "method",
+      "parent": "celltrack.training.dataset.CropDataset",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.dataset.CropDataset.__init__",
+      "label": "__init__",
+      "level": "method",
+      "parent": "celltrack.training.dataset.CropDataset",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.dataset.CropDataset.__len__",
+      "label": "__len__",
+      "level": "method",
+      "parent": "celltrack.training.dataset.CropDataset",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.loop.DetectionTrainer._experiment",
+      "label": "_experiment",
+      "level": "method",
+      "parent": "celltrack.training.loop.DetectionTrainer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.loop.DetectionTrainer._loader",
+      "label": "_loader",
+      "level": "method",
+      "parent": "celltrack.training.loop.DetectionTrainer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.loop.DetectionTrainer._step",
+      "label": "_step",
+      "level": "method",
+      "parent": "celltrack.training.loop.DetectionTrainer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.loop.DetectionTrainer.train",
+      "label": "train",
+      "level": "method",
+      "parent": "celltrack.training.loop.DetectionTrainer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.loss.MaskedDetectionLoss.forward",
+      "label": "forward",
+      "level": "method",
+      "parent": "celltrack.training.loss.MaskedDetectionLoss",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.model.DetectionUNet.__init__",
+      "label": "__init__",
+      "level": "method",
+      "parent": "celltrack.training.model.DetectionUNet",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.model.DetectionUNet._conv_block",
+      "label": "_conv_block",
+      "level": "method",
+      "parent": "celltrack.training.model.DetectionUNet",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.model.DetectionUNet.forward",
+      "label": "forward",
+      "level": "method",
+      "parent": "celltrack.training.model.DetectionUNet",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.targets.DetectionTarget._gaussian_peaks",
+      "label": "_gaussian_peaks",
+      "level": "method",
+      "parent": "celltrack.training.targets.DetectionTarget",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.targets.DetectionTarget.build",
+      "label": "build",
+      "level": "method",
+      "parent": "celltrack.training.targets.DetectionTarget",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.targets.DetectionTarget.supervised_fraction",
+      "label": "supervised_fraction",
+      "level": "method",
+      "parent": "celltrack.training.targets.DetectionTarget",
       "role": null
     },
     {

@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 import zarr
 
-from core.data.tracks import TrackGraph
+from core.data.tracks import AnnotatedTracks, TrackGraph
 
 SPACING = (1.0, 1.625, 0.40625, 0.40625)
 QUANTILES = {"0.001": 10.0, "0.999": 210.0}
@@ -60,6 +60,17 @@ def dataset_root(tmp_path: Path) -> Path:
         _write_geff(train / f"{prefix}_0000abcd.geff")
         _write_video(test / f"{prefix}_0000ef01.zarr")
     return tmp_path
+
+
+@pytest.fixture
+def in_bounds_tracks() -> AnnotatedTracks:
+    """A GEFF-shaped annotation whose cells sit inside the tiny `video_store` volume (Z=2, Y=4, X=4)."""
+    graph = TrackGraph(
+        node_ids=np.array([1, 2]),
+        coordinates=np.array([[0, 1, 2, 2], [1, 1, 2, 2]]),
+        edges=np.array([[1, 2]]),
+    )
+    return AnnotatedTracks(graph=graph, estimated_node_count=20)
 
 
 @pytest.fixture
