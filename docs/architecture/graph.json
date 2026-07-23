@@ -985,9 +985,9 @@
       "weight": 1
     },
     {
-      "kind": "construct",
+      "kind": "calls",
       "source": "celltrack.detection_eval.DetectionComparison.from_checkpoint",
-      "target": "celltrack.training.model.DetectionUNet",
+      "target": "celltrack.training.model.DetectionUNet.from_checkpoint",
       "weight": 1
     },
     {
@@ -1249,9 +1249,9 @@
       "weight": 1
     },
     {
-      "kind": "construct",
+      "kind": "calls",
       "source": "celltrack.operating_point.OperatingPointSweep.from_checkpoint",
-      "target": "celltrack.training.model.DetectionUNet",
+      "target": "celltrack.training.model.DetectionUNet.from_checkpoint",
       "weight": 1
     },
     {
@@ -1623,6 +1623,18 @@
     {
       "kind": "holds",
       "source": "celltrack.training.loop.TrainingRun",
+      "target": "celltrack.training.model.DetectionUNet",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.model.DetectionUNet",
+      "target": "celltrack.training.model.Checkpoint",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.model.DetectionUNet",
       "target": "celltrack.training.model.DetectionUNet",
       "weight": 1
     },
@@ -3336,6 +3348,14 @@
       "descendants": 0,
       "id": "celltrack.training.model.DetectionUNet.forward",
       "label": "forward",
+      "level": "method",
+      "parent": "celltrack.training.model.DetectionUNet",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.model.DetectionUNet.from_checkpoint",
+      "label": "from_checkpoint",
       "level": "method",
       "parent": "celltrack.training.model.DetectionUNet",
       "role": null
