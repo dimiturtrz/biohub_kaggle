@@ -152,6 +152,24 @@
     },
     {
       "kind": "import",
+      "source": "celltrack.division_linking",
+      "target": "celltrack.linking",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.division_linking",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.division_linking",
+      "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "celltrack.explore",
       "target": "core.data.tracks",
       "weight": 1
@@ -1000,6 +1018,84 @@
       "kind": "holds",
       "source": "celltrack.detection_eval.RecallComparison",
       "target": "core.metrics.recall.DetectionRecall",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.division_linking.DivisionAwareLinker",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.division_linking.DivisionAwareLinker",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.division_linking.DivisionAwareLinker._child_counts",
+      "target": "core.data.tracks.TrackGraph.rows_of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.division_linking.DivisionAwareLinker._division_edges",
+      "target": "celltrack.division_linking.DivisionAwareLinker._child_counts",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.division_linking.DivisionAwareLinker._division_edges",
+      "target": "celltrack.division_linking.DivisionAwareLinker._divisions_between",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.division_linking.DivisionAwareLinker._division_edges",
+      "target": "core.data.tracks.TrackGraph.positions",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.division_linking.DivisionAwareLinker._division_edges",
+      "target": "core.data.tracks.TrackGraph.rows_of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.division_linking.DivisionAwareLinker._division_edges",
+      "target": "core.data.tracks.TrackGraph.timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.division_linking.DivisionAwareLinker._division_edges",
+      "target": "core.geometry.Spacing.to_micrometres",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.division_linking.DivisionAwareLinker.link",
+      "target": "celltrack.division_linking.DivisionAwareLinker._division_edges",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.division_linking.DivisionAwareLinker.link",
+      "target": "celltrack.linking.NearestNeighbourLinker",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.division_linking.DivisionAwareLinker.link",
+      "target": "celltrack.linking.NearestNeighbourLinker.link",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.division_linking.DivisionAwareLinker.link",
+      "target": "core.data.tracks.TrackGraph",
       "weight": 1
     },
     {
@@ -2265,7 +2361,7 @@
   ],
   "nodes": [
     {
-      "descendants": 17,
+      "descendants": 18,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -2292,6 +2388,14 @@
       "descendants": 0,
       "id": "celltrack.detection_eval",
       "label": "detection_eval",
+      "level": "module",
+      "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.division_linking",
+      "label": "division_linking",
       "level": "module",
       "parent": "celltrack",
       "role": null
@@ -2574,6 +2678,14 @@
       "label": "RecallComparison",
       "level": "class",
       "parent": "celltrack.detection_eval",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.division_linking.DivisionAwareLinker",
+      "label": "DivisionAwareLinker",
+      "level": "class",
+      "parent": "celltrack.division_linking",
       "role": "satellite"
     },
     {
@@ -3078,6 +3190,38 @@
       "label": "report",
       "level": "method",
       "parent": "celltrack.detection_eval.DetectionComparison",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.division_linking.DivisionAwareLinker._child_counts",
+      "label": "_child_counts",
+      "level": "method",
+      "parent": "celltrack.division_linking.DivisionAwareLinker",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.division_linking.DivisionAwareLinker._division_edges",
+      "label": "_division_edges",
+      "level": "method",
+      "parent": "celltrack.division_linking.DivisionAwareLinker",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.division_linking.DivisionAwareLinker._divisions_between",
+      "label": "_divisions_between",
+      "level": "method",
+      "parent": "celltrack.division_linking.DivisionAwareLinker",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.division_linking.DivisionAwareLinker.link",
+      "label": "link",
+      "level": "method",
+      "parent": "celltrack.division_linking.DivisionAwareLinker",
       "role": null
     },
     {
