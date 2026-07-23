@@ -13,10 +13,8 @@ QUANTILES = {"0.001": 10.0, "0.999": 210.0}
 SHAPE = (3, 2, 4, 4)
 
 
-@pytest.fixture
-def video_store(tmp_path: Path) -> Path:
-    """A tiny `(T, Z, Y, X)` OME-Zarr with the same metadata layout the competition ships."""
-    store = tmp_path / "aaaa_00000001.zarr"
+def _write_video(store: Path) -> Path:
+    """Create one tiny OME-Zarr with the metadata layout the competition ships."""
     group = zarr.open_group(store, mode="w")
     frames = group.create_array("0", shape=SHAPE, dtype="uint16", chunks=(1, *SHAPE[1:]))
     frames[:] = np.arange(np.prod(SHAPE), dtype=np.uint16).reshape(SHAPE)
@@ -27,10 +25,8 @@ def video_store(tmp_path: Path) -> Path:
     return store
 
 
-@pytest.fixture
-def geff_store(tmp_path: Path) -> Path:
-    """A GEFF store holding one dividing lineage: node 100 at t=0 splits into 200 and 300 at t=1."""
-    store = tmp_path / "aaaa_00000001.geff"
+def _write_geff(store: Path) -> Path:
+    """Create one GEFF store: node 100 at t=0 splits into 200 and 300 at t=1."""
     group = zarr.open_group(store, mode="w")
     group.create_array("nodes/ids", shape=(3,), dtype="int64")[:] = [100, 200, 300]
     for axis, values in (("t", [0, 1, 1]), ("z", [0, 0, 1]), ("y", [0, 4, 0]), ("x", [0, 0, 4])):
@@ -38,6 +34,29 @@ def geff_store(tmp_path: Path) -> Path:
     group.create_array("edges/ids", shape=(2, 2), dtype="int64")[:] = [[100, 200], [100, 300]]
     group.attrs["geff"] = {"extra": {"estimated_number_of_nodes": 30}}
     return store
+
+
+@pytest.fixture
+def video_store(tmp_path: Path) -> Path:
+    """A tiny `(T, Z, Y, X)` OME-Zarr with the same metadata layout the competition ships."""
+    return _write_video(tmp_path / "aaaa_00000001.zarr")
+
+
+@pytest.fixture
+def geff_store(tmp_path: Path) -> Path:
+    """A GEFF store holding one dividing lineage: node 100 at t=0 splits into 200 and 300 at t=1."""
+    return _write_geff(tmp_path / "aaaa_00000001.geff")
+
+
+@pytest.fixture
+def dataset_root(tmp_path: Path) -> Path:
+    """A minimal data root: one train video of each acquisition, each with its GEFF, laid out for DataRoot."""
+    train = tmp_path / "raw" / "biohub_cell_tracking" / "train"
+    train.mkdir(parents=True)
+    for prefix in ("44b6", "6bba"):
+        _write_video(train / f"{prefix}_0000abcd.zarr")
+        _write_geff(train / f"{prefix}_0000abcd.geff")
+    return tmp_path
 
 
 @pytest.fixture

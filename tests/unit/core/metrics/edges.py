@@ -38,6 +38,16 @@ def test_weight():
     assert EdgeCounts(tp=2, fp=1, fn=1).weight() == 4
 
 
+def test_pooled():
+    """Pooling sums the counts, so a Jaccard over the pool micro-averages rather than averaging Jaccards."""
+    pooled = EdgeCounts.pooled([EdgeCounts(tp=2, fp=1, fn=1), EdgeCounts(tp=3, fp=0, fn=2)])
+    assert pooled == EdgeCounts(tp=5, fp=1, fn=3)
+
+
+def test_pooled_of_nothing():
+    assert EdgeCounts.pooled([]) == EdgeCounts(tp=0, fp=0, fn=0)
+
+
 def test_edge_counts_of():
     truth = graph_of(TRACK, LINKS)
     assert counted(truth, truth) == EdgeCounts(tp=2, fp=0, fn=0)

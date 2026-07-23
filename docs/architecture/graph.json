@@ -2,6 +2,54 @@
   "edges": [
     {
       "kind": "import",
+      "source": "celltrack.bracket",
+      "target": "celltrack.linking",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.bracket",
+      "target": "core.data.split",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.bracket",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.bracket",
+      "target": "core.data.video",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.bracket",
+      "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.bracket",
+      "target": "core.metrics.edges",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.bracket",
+      "target": "core.metrics.matching",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.bracket",
+      "target": "core.paths",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "celltrack.explore",
       "target": "core.data.tracks",
       "weight": 1
@@ -16,6 +64,18 @@
       "kind": "import",
       "source": "celltrack.explore",
       "target": "core.paths",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.linking",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.linking",
+      "target": "core.geometry",
       "weight": 1
     },
     {
@@ -97,6 +157,168 @@
       "weight": 1
     },
     {
+      "kind": "holds",
+      "source": "celltrack.bracket.BracketResult",
+      "target": "core.metrics.edges.EdgeCounts",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.bracket.BracketResult.edge_jaccard",
+      "target": "core.metrics.edges.EdgeCounts.jaccard",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.bracket.BracketResult.report",
+      "target": "celltrack.bracket.BracketResult.edge_jaccard",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.bracket.Ceiling",
+      "target": "celltrack.bracket.BracketResult",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.bracket.Ceiling",
+      "target": "celltrack.bracket.Ceiling",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.bracket.Ceiling",
+      "target": "celltrack.linking.Linker",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.bracket.Ceiling",
+      "target": "core.data.tracks.AnnotatedTracks",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.bracket.Ceiling",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.bracket.Ceiling",
+      "target": "core.metrics.matching.DistanceMatcher",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.bracket.Ceiling.over",
+      "target": "celltrack.bracket.BracketResult",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.bracket.Ceiling.over",
+      "target": "celltrack.linking.Linker.link",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.bracket.Ceiling.over",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.bracket.Ceiling.over",
+      "target": "core.metrics.edges.EdgeCounts.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.bracket.Ceiling.over",
+      "target": "core.metrics.edges.EdgeCounts.pooled",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.bracket.Ceiling.over",
+      "target": "core.metrics.matching.DistanceMatcher.match",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.bracket.Ceiling.with_gate",
+      "target": "celltrack.linking.NearestNeighbourLinker",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.bracket.Ceiling.with_gate",
+      "target": "core.metrics.matching.DistanceMatcher",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.bracket.ValidationFold",
+      "target": "celltrack.bracket.ValidationFold",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.bracket.ValidationFold",
+      "target": "core.data.tracks.AnnotatedTracks",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.bracket.ValidationFold",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.bracket.ValidationFold",
+      "target": "core.paths.DataRoot",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.bracket.ValidationFold.load",
+      "target": "core.data.split.AcquisitionFolds",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.bracket.ValidationFold.load",
+      "target": "core.data.split.AcquisitionFolds.split",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.bracket.ValidationFold.load",
+      "target": "core.data.tracks.AnnotatedTracks.from_geff",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.bracket.ValidationFold.load",
+      "target": "core.paths.DataRoot.track_store",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.bracket.ValidationFold.load",
+      "target": "core.paths.DataRoot.videos",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.bracket.ValidationFold.spacing",
+      "target": "core.data.video.CellVideo.from_ome_zarr",
+      "weight": 1
+    },
+    {
       "kind": "references",
       "source": "celltrack.explore.DatasetSurvey",
       "target": "celltrack.explore.VideoSummary",
@@ -142,6 +364,54 @@
       "kind": "calls",
       "source": "celltrack.explore.DatasetSurvey.summarise",
       "target": "core.paths.DataRoot.track_store",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.linking.Linker",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.linking.NearestNeighbourLinker",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.linking.NearestNeighbourLinker",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.linking.NearestNeighbourLinker.link",
+      "target": "celltrack.linking.NearestNeighbourLinker._assign",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.linking.NearestNeighbourLinker.link",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.linking.NearestNeighbourLinker.link",
+      "target": "core.data.tracks.TrackGraph.positions",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.linking.NearestNeighbourLinker.link",
+      "target": "core.data.tracks.TrackGraph.timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.linking.NearestNeighbourLinker.link",
+      "target": "core.geometry.Spacing.to_micrometres",
       "weight": 1
     },
     {
@@ -705,7 +975,7 @@
   ],
   "nodes": [
     {
-      "descendants": 1,
+      "descendants": 3,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -714,8 +984,24 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.bracket",
+      "label": "bracket",
+      "level": "module",
+      "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.explore",
       "label": "explore",
+      "level": "module",
+      "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.linking",
+      "label": "linking",
       "level": "module",
       "parent": "celltrack",
       "role": null
@@ -826,6 +1112,30 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.bracket.BracketResult",
+      "label": "BracketResult",
+      "level": "class",
+      "parent": "celltrack.bracket",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.bracket.Ceiling",
+      "label": "Ceiling",
+      "level": "class",
+      "parent": "celltrack.bracket",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.bracket.ValidationFold",
+      "label": "ValidationFold",
+      "level": "class",
+      "parent": "celltrack.bracket",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.explore.DatasetSurvey",
       "label": "DatasetSurvey",
       "level": "class",
@@ -838,6 +1148,22 @@
       "label": "VideoSummary",
       "level": "class",
       "parent": "celltrack.explore",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.linking.Linker",
+      "label": "Linker",
+      "level": "class",
+      "parent": "celltrack.linking",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.linking.NearestNeighbourLinker",
+      "label": "NearestNeighbourLinker",
+      "level": "class",
+      "parent": "celltrack.linking",
       "role": "satellite"
     },
     {
@@ -1018,6 +1344,54 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.bracket.BracketResult.edge_jaccard",
+      "label": "edge_jaccard",
+      "level": "method",
+      "parent": "celltrack.bracket.BracketResult",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.bracket.BracketResult.report",
+      "label": "report",
+      "level": "method",
+      "parent": "celltrack.bracket.BracketResult",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.bracket.Ceiling.over",
+      "label": "over",
+      "level": "method",
+      "parent": "celltrack.bracket.Ceiling",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.bracket.Ceiling.with_gate",
+      "label": "with_gate",
+      "level": "method",
+      "parent": "celltrack.bracket.Ceiling",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.bracket.ValidationFold.load",
+      "label": "load",
+      "level": "method",
+      "parent": "celltrack.bracket.ValidationFold",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.bracket.ValidationFold.spacing",
+      "label": "spacing",
+      "level": "method",
+      "parent": "celltrack.bracket.ValidationFold",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.explore.DatasetSurvey.__init__",
       "label": "__init__",
       "level": "method",
@@ -1038,6 +1412,30 @@
       "label": "summarise",
       "level": "method",
       "parent": "celltrack.explore.DatasetSurvey",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.linking.Linker.link",
+      "label": "link",
+      "level": "method",
+      "parent": "celltrack.linking.Linker",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.linking.NearestNeighbourLinker._assign",
+      "label": "_assign",
+      "level": "method",
+      "parent": "celltrack.linking.NearestNeighbourLinker",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.linking.NearestNeighbourLinker.link",
+      "label": "link",
+      "level": "method",
+      "parent": "celltrack.linking.NearestNeighbourLinker",
       "role": null
     },
     {
@@ -1460,6 +1858,14 @@
       "descendants": 0,
       "id": "core.metrics.edges.EdgeCounts.of",
       "label": "of",
+      "level": "method",
+      "parent": "core.metrics.edges.EdgeCounts",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.edges.EdgeCounts.pooled",
+      "label": "pooled",
       "level": "method",
       "parent": "core.metrics.edges.EdgeCounts",
       "role": null

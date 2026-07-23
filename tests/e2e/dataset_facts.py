@@ -9,9 +9,12 @@ from pathlib import Path
 
 import pytest
 
+from celltrack.bracket import Ceiling, ValidationFold
 from core.data.split import AcquisitionFolds
 from core.data.tracks import AnnotatedTracks
 from core.paths import DataRoot
+
+CEILING_FLOOR = 0.97
 
 CONFIG = Path(__file__).parents[2] / "paths.yaml"
 TRAIN_VIDEOS = 199
@@ -46,3 +49,11 @@ def test_the_annotation_totals_are_what_the_split_assumes():
     root = data_root()
     tracks = [AnnotatedTracks.from_geff(root.track_store(video)) for video in root.videos("train")]
     assert sum(len(entry.graph.node_ids) for entry in tracks) == ANNOTATED_NODES
+
+
+def test_the_linking_ceiling_is_near_perfect():
+    """Linking ground-truth nodes recovers almost every edge, so detection, not linking, is the budget."""
+    fold = ValidationFold.load(data_root(), fold=0)
+    ceiling = Ceiling.with_gate(fold.spacing, gate_um=15.0).over(fold.annotations)
+    assert ceiling.edge_jaccard() > CEILING_FLOOR
+    assert ceiling.predicted_nodes == ceiling.annotated_nodes

@@ -12,6 +12,7 @@ skip or reverse a timepoint are dropped, several links landing on one ground-tru
 first, and a node may keep at most the two children a division allows.
 """
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 import numpy as np
@@ -46,6 +47,14 @@ class EdgeCounts:
         recovered = int(links[_MATCHED].sum())
         countable = int(cls._countable(links, truth).sum())
         return cls(tp=recovered, fp=countable - recovered, fn=annotated_links - recovered)
+
+    @classmethod
+    def pooled(cls, counts: Iterable["EdgeCounts"]) -> "EdgeCounts":
+        """Sum counts across videos, so their Jaccard micro-averages the way the leaderboard does."""
+        summed = cls(tp=0, fp=0, fn=0)
+        for count in counts:
+            summed = cls(tp=summed.tp + count.tp, fp=summed.fp + count.fp, fn=summed.fn + count.fn)
+        return summed
 
     def jaccard(self) -> float:
         """`TP / (TP + FP + FN)`, or NaN when the ground truth and the prediction are both empty."""
