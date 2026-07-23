@@ -1,0 +1,686 @@
+{
+  "edges": [
+    {
+      "kind": "import",
+      "source": "celltrack.explore",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.explore",
+      "target": "core.data.video",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.explore",
+      "target": "core.paths",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "core.data.submission",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "core.data.tracks",
+      "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "core.data.video",
+      "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.explore.DatasetSurvey",
+      "target": "celltrack.explore.VideoSummary",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.explore.DatasetSurvey",
+      "target": "core.paths.DataRoot",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.explore.DatasetSurvey.run",
+      "target": "celltrack.explore.DatasetSurvey.summarise",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.explore.DatasetSurvey.run",
+      "target": "core.paths.DataRoot.videos",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.explore.DatasetSurvey.summarise",
+      "target": "celltrack.explore.VideoSummary",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.explore.DatasetSurvey.summarise",
+      "target": "core.data.tracks.AnnotatedTracks.from_geff",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.explore.DatasetSurvey.summarise",
+      "target": "core.data.video.CellVideo.from_ome_zarr",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.explore.DatasetSurvey.summarise",
+      "target": "core.paths.DataRoot.track_store",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "core.data.submission.Submission",
+      "target": "core.data.submission.Submission",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "core.data.submission.Submission",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "core.data.submission.Submission._video_graph",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.data.submission.Submission.to_frame",
+      "target": "core.data.submission.Submission._video_rows",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.data.submission.Submission.write_csv",
+      "target": "core.data.submission.Submission.to_frame",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "core.data.tracks.AnnotatedTracks",
+      "target": "core.data.tracks.AnnotatedTracks",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "core.data.tracks.AnnotatedTracks",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "core.data.tracks.AnnotatedTracks.from_geff",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "core.data.tracks.GeffAttributes",
+      "target": "core.data.tracks.GeffExtra",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "core.data.tracks.TrackGraph",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.data.tracks.TrackGraph.link_displacements",
+      "target": "core.data.tracks.TrackGraph.positions",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.data.tracks.TrackGraph.link_displacements",
+      "target": "core.data.tracks.TrackGraph.rows_of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.data.tracks.TrackGraph.link_displacements",
+      "target": "core.data.tracks.TrackGraph.timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.data.tracks.TrackGraph.link_displacements",
+      "target": "core.geometry.Spacing.to_micrometres",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "core.data.video.CellVideo",
+      "target": "core.data.video.CellVideo",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "core.data.video.CellVideo",
+      "target": "core.data.video.IntensityQuantiles",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "core.data.video.CellVideo",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "core.data.video.CellVideo.from_ome_zarr",
+      "target": "core.data.video.IntensityQuantiles",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "core.data.video.CellVideo.from_ome_zarr",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.data.video.IntensityQuantiles.normalise",
+      "target": "core.data.video.IntensityQuantiles.robust_range",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "core.data.video.Multiscale",
+      "target": "core.data.video.ScaleTransformation",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.geometry.Spacing.anisotropic_radius",
+      "target": "core.geometry.Spacing.as_array",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.geometry.Spacing.to_micrometres",
+      "target": "core.geometry.Spacing.as_array",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.geometry.Spacing.to_voxels",
+      "target": "core.geometry.Spacing.as_array",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "core.paths.DataRoot",
+      "target": "core.paths.DataRoot",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.paths.DataRoot.videos",
+      "target": "core.paths.DataRoot.raw",
+      "weight": 1
+    }
+  ],
+  "nodes": [
+    {
+      "descendants": 1,
+      "id": "celltrack",
+      "label": "celltrack",
+      "level": "module",
+      "parent": null,
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.explore",
+      "label": "explore",
+      "level": "module",
+      "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 6,
+      "id": "core",
+      "label": "core",
+      "level": "module",
+      "parent": null,
+      "role": null
+    },
+    {
+      "descendants": 3,
+      "id": "core.data",
+      "label": "data",
+      "level": "module",
+      "parent": "core",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.submission",
+      "label": "submission",
+      "level": "module",
+      "parent": "core.data",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.tracks",
+      "label": "tracks",
+      "level": "module",
+      "parent": "core.data",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.video",
+      "label": "video",
+      "level": "module",
+      "parent": "core.data",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.geometry",
+      "label": "geometry",
+      "level": "module",
+      "parent": "core",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.paths",
+      "label": "paths",
+      "level": "module",
+      "parent": "core",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.explore.DatasetSurvey",
+      "label": "DatasetSurvey",
+      "level": "class",
+      "parent": "celltrack.explore",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.explore.VideoSummary",
+      "label": "VideoSummary",
+      "level": "class",
+      "parent": "celltrack.explore",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.submission.Submission",
+      "label": "Submission",
+      "level": "class",
+      "parent": "core.data.submission",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.tracks.AnnotatedTracks",
+      "label": "AnnotatedTracks",
+      "level": "class",
+      "parent": "core.data.tracks",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.tracks.GeffAttributes",
+      "label": "GeffAttributes",
+      "level": "class",
+      "parent": "core.data.tracks",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.tracks.GeffExtra",
+      "label": "GeffExtra",
+      "level": "class",
+      "parent": "core.data.tracks",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.tracks.TrackGraph",
+      "label": "TrackGraph",
+      "level": "class",
+      "parent": "core.data.tracks",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.video.CellVideo",
+      "label": "CellVideo",
+      "level": "class",
+      "parent": "core.data.video",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.video.ImageStatistics",
+      "label": "ImageStatistics",
+      "level": "class",
+      "parent": "core.data.video",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.video.IntensityQuantiles",
+      "label": "IntensityQuantiles",
+      "level": "class",
+      "parent": "core.data.video",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.video.Multiscale",
+      "label": "Multiscale",
+      "level": "class",
+      "parent": "core.data.video",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.video.ScaleTransformation",
+      "label": "ScaleTransformation",
+      "level": "class",
+      "parent": "core.data.video",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "core.geometry.Spacing",
+      "label": "Spacing",
+      "level": "class",
+      "parent": "core.geometry",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "core.paths.DataRoot",
+      "label": "DataRoot",
+      "level": "class",
+      "parent": "core.paths",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.explore.DatasetSurvey.__init__",
+      "label": "__init__",
+      "level": "method",
+      "parent": "celltrack.explore.DatasetSurvey",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.explore.DatasetSurvey.run",
+      "label": "run",
+      "level": "method",
+      "parent": "celltrack.explore.DatasetSurvey",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.explore.DatasetSurvey.summarise",
+      "label": "summarise",
+      "level": "method",
+      "parent": "celltrack.explore.DatasetSurvey",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.submission.Submission._video_graph",
+      "label": "_video_graph",
+      "level": "method",
+      "parent": "core.data.submission.Submission",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.submission.Submission._video_rows",
+      "label": "_video_rows",
+      "level": "method",
+      "parent": "core.data.submission.Submission",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.submission.Submission.read_csv",
+      "label": "read_csv",
+      "level": "method",
+      "parent": "core.data.submission.Submission",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.submission.Submission.to_frame",
+      "label": "to_frame",
+      "level": "method",
+      "parent": "core.data.submission.Submission",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.submission.Submission.write_csv",
+      "label": "write_csv",
+      "level": "method",
+      "parent": "core.data.submission.Submission",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.tracks.AnnotatedTracks.annotated_fraction",
+      "label": "annotated_fraction",
+      "level": "method",
+      "parent": "core.data.tracks.AnnotatedTracks",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.tracks.AnnotatedTracks.from_geff",
+      "label": "from_geff",
+      "level": "method",
+      "parent": "core.data.tracks.AnnotatedTracks",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.tracks.TrackGraph.division_parents",
+      "label": "division_parents",
+      "level": "method",
+      "parent": "core.data.tracks.TrackGraph",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.tracks.TrackGraph.link_displacements",
+      "label": "link_displacements",
+      "level": "method",
+      "parent": "core.data.tracks.TrackGraph",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.tracks.TrackGraph.positions",
+      "label": "positions",
+      "level": "method",
+      "parent": "core.data.tracks.TrackGraph",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.tracks.TrackGraph.rows_of",
+      "label": "rows_of",
+      "level": "method",
+      "parent": "core.data.tracks.TrackGraph",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.tracks.TrackGraph.timepoints",
+      "label": "timepoints",
+      "level": "method",
+      "parent": "core.data.tracks.TrackGraph",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.video.CellVideo.__init__",
+      "label": "__init__",
+      "level": "method",
+      "parent": "core.data.video.CellVideo",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.video.CellVideo.frame",
+      "label": "frame",
+      "level": "method",
+      "parent": "core.data.video.CellVideo",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.video.CellVideo.from_ome_zarr",
+      "label": "from_ome_zarr",
+      "level": "method",
+      "parent": "core.data.video.CellVideo",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.video.CellVideo.timepoint_count",
+      "label": "timepoint_count",
+      "level": "method",
+      "parent": "core.data.video.CellVideo",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.video.CellVideo.volume_shape",
+      "label": "volume_shape",
+      "level": "method",
+      "parent": "core.data.video.CellVideo",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.video.IntensityQuantiles.normalise",
+      "label": "normalise",
+      "level": "method",
+      "parent": "core.data.video.IntensityQuantiles",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.video.IntensityQuantiles.robust_range",
+      "label": "robust_range",
+      "level": "method",
+      "parent": "core.data.video.IntensityQuantiles",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.geometry.Spacing.anisotropic_radius",
+      "label": "anisotropic_radius",
+      "level": "method",
+      "parent": "core.geometry.Spacing",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.geometry.Spacing.as_array",
+      "label": "as_array",
+      "level": "method",
+      "parent": "core.geometry.Spacing",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.geometry.Spacing.to_micrometres",
+      "label": "to_micrometres",
+      "level": "method",
+      "parent": "core.geometry.Spacing",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.geometry.Spacing.to_voxels",
+      "label": "to_voxels",
+      "level": "method",
+      "parent": "core.geometry.Spacing",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.paths.DataRoot.__init__",
+      "label": "__init__",
+      "level": "method",
+      "parent": "core.paths.DataRoot",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.paths.DataRoot.from_config",
+      "label": "from_config",
+      "level": "method",
+      "parent": "core.paths.DataRoot",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.paths.DataRoot.processed",
+      "label": "processed",
+      "level": "method",
+      "parent": "core.paths.DataRoot",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.paths.DataRoot.raw",
+      "label": "raw",
+      "level": "method",
+      "parent": "core.paths.DataRoot",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.paths.DataRoot.track_store",
+      "label": "track_store",
+      "level": "method",
+      "parent": "core.paths.DataRoot",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.paths.DataRoot.videos",
+      "label": "videos",
+      "level": "method",
+      "parent": "core.paths.DataRoot",
+      "role": null
+    }
+  ]
+}
