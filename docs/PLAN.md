@@ -95,11 +95,12 @@ closing) from measured error decomposition, not from guesswork.
 
 ## Open questions
 
-- ~~Is this a code competition or a file-submission competition?~~ **SETTLED (wy1): code competition.**
-  File upload via the API 400s even for the official `sample_submission.csv` with rules accepted; the
-  page is tagged "Research Code Competition". Submission is a notebook/script kernel run against a hidden
-  test set, with a runtime cap. Every submission — including the model's — goes through a kernel
-  (`biohub_kaggle`-scoped follow-up bead). Prize $60,000; deadline 2026-09-29.
+- ~~Is this a code competition or a file-submission competition?~~ **SETTLED (wy1): file submission works,
+  three ways — Notebook, MCP, or File Upload.** The page is tagged "Research Code Competition" and the
+  legacy `kaggle competitions submit` CLI endpoint 400s (deprecated for this comp, even for the official
+  `sample_submission.csv`), which briefly looked like a code-only competition — it is not. Programmatic
+  submission goes through the Kaggle **MCP** server (`https://www.kaggle.com/mcp`, Bearer-token auth) or a
+  notebook kernel; the web UI takes a plain CSV. 5 submissions/day. Prize $60,000; deadline 2026-09-29.
 - Where does `N_pred / N_total` actually maximise the score? The argument above is arithmetic on the
   formula, not an experiment — sweep it once a detector exists. Now cheap to answer: the evaluator is
   local and verified (`biohub_kaggle-92j`).

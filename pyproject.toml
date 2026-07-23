@@ -16,6 +16,7 @@ dependencies = [
     "pydantic>=2",
     "scipy>=1.18.0",
     "scikit-image>=0.26.0",
+    "torch>=2.11.0",
 ]
 
 [project.optional-dependencies]
@@ -29,6 +30,9 @@ devtools = ["sdlc-devtools @ git+https://github.com/dimiturtrz/sdlc-scaffold.git
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
+
+[[tool.uv.index]]
+url = "https://download.pytorch.org/whl/cu128"
 
 [tool.setuptools.packages.find]
 include = ["core*", "celltrack*"]
