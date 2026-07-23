@@ -7,11 +7,14 @@ magnitude in annotation density, which is why validation is stratified by prefix
 
 from pathlib import Path
 
+import numpy as np
+import polars as pl
 import pytest
 
 from celltrack.bracket import Ceiling, ValidationFold
 from core.data.split import AcquisitionFolds
-from core.data.tracks import AnnotatedTracks
+from core.data.submission import Submission
+from core.data.tracks import AnnotatedTracks, TrackGraph
 from core.paths import DataRoot
 
 CEILING_FLOOR = 0.97
@@ -21,6 +24,7 @@ TRAIN_VIDEOS = 199
 TEST_VIDEOS = 4
 PREFIX_COUNTS = {"44b6": 71, "6bba": 128}
 ANNOTATED_NODES = 133318
+_SAMPLE_SUBMISSION = "sample_submission.csv"
 
 
 def data_root() -> DataRoot:
@@ -56,3 +60,20 @@ def test_the_linking_ceiling_is_near_perfect():
     fold = ValidationFold.load(data_root(), fold=0)
     ceiling = Ceiling.with_gate(fold.spacing, gate_um=15.0).over(fold.annotations)
     assert ceiling.edge_jaccard() > CEILING_FLOOR
+
+
+def test_our_submission_matches_the_official_format():
+    """Our flattened submission is column- and dtype-identical to the competition's sample — the convention holds."""
+    root = data_root()
+    sample_path = root.videos("test")[0].parent.parent / _SAMPLE_SUBMISSION
+    if not sample_path.exists():
+        pytest.skip("sample_submission.csv is not present")
+    sample = pl.read_csv(sample_path)
+    graph = TrackGraph(
+        node_ids=np.array([0, 1, 2]),
+        coordinates=np.array([[t, 0, 0, 0] for t in range(3)]),
+        edges=np.array([[0, 1], [1, 2]]),
+    )
+    ours = Submission(graphs={"44b6_0113de3b": graph}).to_frame()
+    assert ours.columns == sample.columns
+    assert ours.dtypes == sample.dtypes
