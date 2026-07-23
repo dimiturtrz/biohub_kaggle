@@ -25,6 +25,7 @@ class TrainingConfig:
     size: tuple[int, int, int] = (16, 64, 64)
     scale_um: float = 4.0
     width: int = 16
+    strides: tuple[tuple[int, int, int], ...] = ((2, 2, 2),)
     steps: int = 200
     batch: int = 2
     learning_rate: float = 1e-3
@@ -50,7 +51,9 @@ class DetectionTrainer:
     def train(self, sources: list[AnnotatedVideo]) -> TrainingRun:
         """Sample crops, step the U-Net under the masked loss, and log each step to MLflow."""
         loader = self._loader(sources)
-        model = DetectionUNet(window=self.config.window, width=self.config.width).to(self.config.device)
+        model = DetectionUNet(window=self.config.window, width=self.config.width, strides=self.config.strides).to(
+            self.config.device
+        )
         optimiser = torch.optim.Adam(model.parameters(), lr=self.config.learning_rate)
         criterion = MaskedDetectionLoss()
 
