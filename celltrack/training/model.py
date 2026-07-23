@@ -10,11 +10,21 @@ structural choice and are passed in, not hard-coded, so the harness can stay sha
 the detector goes deep and anisotropy-aware.
 """
 
-from typing import override
+from typing import TypedDict, override
 
 import torch
 from jaxtyping import Float
 from torch import Tensor, nn
+
+
+class Checkpoint(TypedDict):
+    """A saved detector: its weights and the structure needed to rebuild the network around them."""
+
+    state_dict: dict[str, Tensor]
+    strides: list[list[int]]
+    window: int
+    width: int
+
 
 # Anisotropy is 4x, so pooling y/x twice (2*2) before touching z equalises the physical voxel; deeper
 # levels then pool all three axes. This is the detector's default depth.
@@ -50,6 +60,14 @@ class DetectionUNet(nn.Module):
             self._conv_block(2 * level_channels[level], level_channels[level]) for level in range(levels)
         )
         self.head = nn.Conv3d(width, 1, kernel_size=1)
+
+    @classmethod
+    def from_checkpoint(cls, checkpoint: Checkpoint) -> "DetectionUNet":
+        """Rebuild the network from a saved checkpoint's structure and load its weights."""
+        strides = tuple((stride[0], stride[1], stride[2]) for stride in checkpoint["strides"])
+        model = cls(window=int(checkpoint["window"]), width=int(checkpoint["width"]), strides=strides)
+        model.load_state_dict(checkpoint["state_dict"])
+        return model
 
     @override
     def forward(self, frames: Float[Tensor, "b t z y x"]) -> Float[Tensor, "b z y x"]:

@@ -1,6 +1,14 @@
 import torch
 
-from celltrack.training.model import ANISOTROPIC_STRIDES, DetectionUNet
+from celltrack.training.model import ANISOTROPIC_STRIDES, Checkpoint, DetectionUNet
+
+
+def test_from_checkpoint():
+    """A checkpoint rebuilds the same architecture and restores its weights."""
+    original = DetectionUNet(window=1, width=4, strides=((2, 2, 2),))
+    checkpoint = Checkpoint(state_dict=original.state_dict(), strides=[[2, 2, 2]], window=1, width=4)
+    rebuilt = DetectionUNet.from_checkpoint(checkpoint)
+    assert torch.equal(rebuilt.head.weight, original.head.weight)
 
 
 def test_forward():

@@ -10,16 +10,15 @@ import argparse
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TypedDict, cast
+from typing import cast
 
 import torch
-from torch import Tensor
 
 from celltrack.bracket import ValidationFold
 from celltrack.detection import CELL_SCALE_UM, HIGH, LOW, BlobDetector
 from celltrack.inference import LearnedDetector
 from celltrack.peaks import PeakExtractor
-from celltrack.training.model import DetectionUNet
+from celltrack.training.model import Checkpoint, DetectionUNet
 from core.data.split import AcquisitionFolds
 from core.data.tracks import AnnotatedTracks
 from core.data.video import CellVideo
@@ -33,15 +32,6 @@ _DATASET = "biohub_cell_tracking"
 _WEIGHTS = "detector.pt"
 
 logger = logging.getLogger(__name__)
-
-
-class Checkpoint(TypedDict):
-    """A saved detector: its weights and the structure needed to rebuild the network around them."""
-
-    state_dict: dict[str, Tensor]
-    strides: list[list[int]]
-    window: int
-    width: int
 
 
 @dataclass(frozen=True)
@@ -64,9 +54,7 @@ class DetectionComparison:
     @classmethod
     def from_checkpoint(cls, spacing: Spacing, checkpoint: Checkpoint, device: str) -> "DetectionComparison":
         """Build the classical and checkpoint-loaded learned detectors, sharing the anisotropic peak-picker."""
-        strides = tuple((stride[0], stride[1], stride[2]) for stride in checkpoint["strides"])
-        model = DetectionUNet(window=int(checkpoint["window"]), width=int(checkpoint["width"]), strides=strides)
-        model.load_state_dict(checkpoint["state_dict"])
+        model = DetectionUNet.from_checkpoint(checkpoint)
         peaks = PeakExtractor(spacing=spacing, scale_um=CELL_SCALE_UM)
         return cls(
             classical=BlobDetector(spacing=spacing),
