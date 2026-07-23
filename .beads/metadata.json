@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "biohub_kaggle",
+  "project_id": "22b22900-231d-4006-ae05-7430be8b89c8"
+}
