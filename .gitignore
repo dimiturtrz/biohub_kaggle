@@ -50,3 +50,6 @@ node_modules/
 
 # Isolated venv holding the organizers' package, used only to regenerate metric fixtures.
 /.oracle/
+
+# Transient tool output from local gate runs.
+*.log
