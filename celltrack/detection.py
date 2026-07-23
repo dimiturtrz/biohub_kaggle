@@ -18,8 +18,8 @@ from dataclasses import dataclass
 import numpy as np
 from jaxtyping import Float, Int
 from scipy.ndimage import gaussian_laplace
-from skimage.feature import peak_local_max
 
+from celltrack.peaks import PeakExtractor
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
 
@@ -69,6 +69,4 @@ class BlobDetector:
 
     def centres(self, response: Float[np.ndarray, "z y x"], keep: int) -> Int[np.ndarray, "k 3"]:
         """The `keep` strongest suppressed maxima of a response, as `(z, y, x)` voxel indices."""
-        radius = np.ceil(self.spacing.anisotropic_radius(self.scale_um)).astype(int)
-        footprint = np.ones(2 * radius + 1, dtype=bool)
-        return peak_local_max(response, footprint=footprint, num_peaks=keep).astype(np.int64)
+        return PeakExtractor(self.spacing, self.scale_um).centres(response, keep)
