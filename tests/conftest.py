@@ -50,12 +50,15 @@ def geff_store(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def dataset_root(tmp_path: Path) -> Path:
-    """A minimal data root: one train video of each acquisition, each with its GEFF, laid out for DataRoot."""
-    train = tmp_path / "raw" / "biohub_cell_tracking" / "train"
+    """A minimal data root: one video of each acquisition in train (with GEFF) and test, laid out for DataRoot."""
+    competition = tmp_path / "raw" / "biohub_cell_tracking"
+    train, test = competition / "train", competition / "test"
     train.mkdir(parents=True)
+    test.mkdir(parents=True)
     for prefix in ("44b6", "6bba"):
         _write_video(train / f"{prefix}_0000abcd.zarr")
         _write_geff(train / f"{prefix}_0000abcd.geff")
+        _write_video(test / f"{prefix}_0000ef01.zarr")
     return tmp_path
 
 
