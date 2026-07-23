@@ -95,10 +95,11 @@ closing) from measured error decomposition, not from guesswork.
 
 ## Open questions
 
-- Is this a code competition (notebook rerun, runtime cap) or a file-submission competition? The
-  public download ships only 4 test videos, which suggests a hidden rerun test set — **unverified**;
-  the API endpoints reachable with the current OAuth scope do not expose the rules.
-- Prize structure — unverified.
+- ~~Is this a code competition or a file-submission competition?~~ **SETTLED (wy1): code competition.**
+  File upload via the API 400s even for the official `sample_submission.csv` with rules accepted; the
+  page is tagged "Research Code Competition". Submission is a notebook/script kernel run against a hidden
+  test set, with a runtime cap. Every submission — including the model's — goes through a kernel
+  (`biohub_kaggle`-scoped follow-up bead). Prize $60,000; deadline 2026-09-29.
 - Where does `N_pred / N_total` actually maximise the score? The argument above is arithmetic on the
   formula, not an experiment — sweep it once a detector exists. Now cheap to answer: the evaluator is
   local and verified (`biohub_kaggle-92j`).
