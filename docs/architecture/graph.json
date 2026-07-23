@@ -146,6 +146,42 @@
     },
     {
       "kind": "references",
+      "source": "core.data.split.AcquisitionFolds",
+      "target": "core.data.split.VideoSplit",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.data.split.AcquisitionFolds._fold_members",
+      "target": "core.data.split.AcquisitionFolds.by_prefix",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.data.split.AcquisitionFolds.by_prefix",
+      "target": "core.data.split.AcquisitionFolds.prefix_of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.data.split.AcquisitionFolds.split",
+      "target": "core.data.split.AcquisitionFolds._fold_members",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "core.data.split.AcquisitionFolds.split",
+      "target": "core.data.split.VideoSplit",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.data.split.VideoSplit.validation_by_prefix",
+      "target": "core.data.split.AcquisitionFolds.by_prefix",
+      "weight": 1
+    },
+    {
+      "kind": "references",
       "source": "core.data.submission.Submission",
       "target": "core.data.submission.Submission",
       "weight": 1
@@ -685,7 +721,7 @@
       "role": null
     },
     {
-      "descendants": 11,
+      "descendants": 12,
       "id": "core",
       "label": "core",
       "level": "module",
@@ -693,11 +729,19 @@
       "role": null
     },
     {
-      "descendants": 3,
+      "descendants": 4,
       "id": "core.data",
       "label": "data",
       "level": "module",
       "parent": "core",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.split",
+      "label": "split",
+      "level": "module",
+      "parent": "core.data",
       "role": null
     },
     {
@@ -794,6 +838,22 @@
       "label": "VideoSummary",
       "level": "class",
       "parent": "celltrack.explore",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.split.AcquisitionFolds",
+      "label": "AcquisitionFolds",
+      "level": "class",
+      "parent": "core.data.split",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.split.VideoSplit",
+      "label": "VideoSplit",
+      "level": "class",
+      "parent": "core.data.split",
       "role": "satellite"
     },
     {
@@ -978,6 +1038,54 @@
       "label": "summarise",
       "level": "method",
       "parent": "celltrack.explore.DatasetSurvey",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.split.AcquisitionFolds._fold_members",
+      "label": "_fold_members",
+      "level": "method",
+      "parent": "core.data.split.AcquisitionFolds",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.split.AcquisitionFolds.by_prefix",
+      "label": "by_prefix",
+      "level": "method",
+      "parent": "core.data.split.AcquisitionFolds",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.split.AcquisitionFolds.prefix_of",
+      "label": "prefix_of",
+      "level": "method",
+      "parent": "core.data.split.AcquisitionFolds",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.split.AcquisitionFolds.rank_of",
+      "label": "rank_of",
+      "level": "method",
+      "parent": "core.data.split.AcquisitionFolds",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.split.AcquisitionFolds.split",
+      "label": "split",
+      "level": "method",
+      "parent": "core.data.split.AcquisitionFolds",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.split.VideoSplit.validation_by_prefix",
+      "label": "validation_by_prefix",
+      "level": "method",
+      "parent": "core.data.split.VideoSplit",
       "role": null
     },
     {
