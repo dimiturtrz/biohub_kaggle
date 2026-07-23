@@ -15,7 +15,6 @@ dependencies = [
     "beartype",    # the runtime checker jaxtyping delegates to; wrap as @shapecheck in your types module (see devtools/README)
     "pydantic>=2",
     "scipy>=1.18.0",
-    "scikit-image>=0.26.0",
     "torch>=2.11.0",
     "mlflow>=3.14.0",
 ]
