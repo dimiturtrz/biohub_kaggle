@@ -56,6 +56,13 @@ def test_edge_rows(graph: TrackGraph):
     assert graph.edge_rows().tolist() == [[0, 1]]
 
 
+def test_without_edges(graph: TrackGraph):
+    """Dropping the links keeps the nodes — the shape a detector hands the linker."""
+    edgeless = graph.without_edges()
+    assert edgeless.node_ids.tolist() == graph.node_ids.tolist()
+    assert edgeless.edges.shape == (0, 2)
+
+
 def forked() -> TrackGraph:
     return TrackGraph(
         node_ids=np.array([5, 6, 7, 8]),

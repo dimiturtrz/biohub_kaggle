@@ -76,6 +76,10 @@ class TrackGraph:
         """The edges as row indices rather than node ids, so they can index the node arrays directly."""
         return self.rows_of(self.edges.reshape(-1)).reshape(-1, 2)
 
+    def without_edges(self) -> "TrackGraph":
+        """The same nodes with their links dropped — what a detector hands a linker."""
+        return TrackGraph(node_ids=self.node_ids, coordinates=self.coordinates, edges=self.edges[:0])
+
 
 @dataclass(frozen=True)
 class Adjacency:

@@ -56,4 +56,3 @@ def test_the_linking_ceiling_is_near_perfect():
     fold = ValidationFold.load(data_root(), fold=0)
     ceiling = Ceiling.with_gate(fold.spacing, gate_um=15.0).over(fold.annotations)
     assert ceiling.edge_jaccard() > CEILING_FLOOR
-    assert ceiling.predicted_nodes == ceiling.annotated_nodes

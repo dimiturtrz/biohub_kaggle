@@ -1,5 +1,6 @@
 """Reading one 3D+time light-sheet video from its OME-Zarr store."""
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TypedDict, cast
@@ -94,3 +95,12 @@ class CellVideo:
     def frame(self, timepoint: int) -> UInt16[np.ndarray, "z y x"]:
         """One timepoint as a volume — a whole chunk, so this is a single decompress."""
         return np.asarray(self._frames[timepoint])
+
+    def normalised_frames(self, low: float, high: float) -> Iterator[Float[np.ndarray, "z y x"]]:
+        """Every timepoint in turn, clipped to the shipped quantiles — one decompress held at a time.
+
+        A generator rather than a list: a full acquisition is a hundred volumes, too much to hold at once,
+        and a detector consumes them one by one.
+        """
+        for timepoint in range(self.timepoint_count):
+            yield self.quantiles.normalise(self.frame(timepoint), low, high)
