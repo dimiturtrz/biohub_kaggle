@@ -1809,12 +1809,6 @@
     {
       "kind": "calls",
       "source": "celltrack.training.crops.CropSampler.sample",
-      "target": "celltrack.training.crops.CropSampler._crop",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.crops.CropSampler.sample",
       "target": "celltrack.training.crops.CropSampler._crop_origin",
       "weight": 1
     },
@@ -1822,6 +1816,12 @@
       "kind": "calls",
       "source": "celltrack.training.crops.CropSampler.sample",
       "target": "celltrack.training.crops.CropSampler._flip",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.crops.CropSampler.sample",
+      "target": "celltrack.training.crops.CropSampler._intensity",
       "weight": 1
     },
     {
@@ -1845,7 +1845,7 @@
     {
       "kind": "calls",
       "source": "celltrack.training.crops.CropSampler.sample",
-      "target": "core.data.video.CellVideo.frame",
+      "target": "core.data.video.CellVideo.window",
       "weight": 1
     },
     {
@@ -3862,6 +3862,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.training.classification_loss.MaskedBCEClassificationLoss.__init__",
+      "label": "__init__",
+      "level": "method",
+      "parent": "celltrack.training.classification_loss.MaskedBCEClassificationLoss",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.training.classification_loss.MaskedBCEClassificationLoss.forward",
       "label": "forward",
       "level": "method",
@@ -3878,14 +3886,6 @@
     },
     {
       "descendants": 0,
-      "id": "celltrack.training.crops.CropSampler._crop",
-      "label": "_crop",
-      "level": "method",
-      "parent": "celltrack.training.crops.CropSampler",
-      "role": null
-    },
-    {
-      "descendants": 0,
       "id": "celltrack.training.crops.CropSampler._crop_origin",
       "label": "_crop_origin",
       "level": "method",
@@ -3896,6 +3896,14 @@
       "descendants": 0,
       "id": "celltrack.training.crops.CropSampler._flip",
       "label": "_flip",
+      "level": "method",
+      "parent": "celltrack.training.crops.CropSampler",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.crops.CropSampler._intensity",
+      "label": "_intensity",
       "level": "method",
       "parent": "celltrack.training.crops.CropSampler",
       "role": null
@@ -4304,6 +4312,14 @@
       "descendants": 0,
       "id": "core.data.video.CellVideo.volume_shape",
       "label": "volume_shape",
+      "level": "method",
+      "parent": "core.data.video.CellVideo",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.video.CellVideo.window",
+      "label": "window",
       "level": "method",
       "parent": "core.data.video.CellVideo",
       "role": null
