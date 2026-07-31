@@ -27,8 +27,8 @@ uv run python kaggle/build_kit.py \
 #    corrupts the temp upload filename when -p contains "/")
 cd kaggle && kaggle datasets version -p kit -m "<message>"
 
-# 3. push + run the kernel  (metadata file must be named kernel-metadata.json)
-cd kaggle && kaggle kernels push -p kernels
+# 3. push + run a kernel  (one method per subdir; metadata file must be named kernel-metadata.json)
+cd kaggle && kaggle kernels push -p kernels/celltrack-pilkwang-motion
 
 # 4. watch it, then submit its output to the competition
 kaggle kernels status dimiturnt/celltrack-aug8k-nn
@@ -42,8 +42,12 @@ Named for the method, `celltrack-<detector>-<linker>` — a different detector o
 kernel, not a new version of an existing one. The version history of one slug is the same method retrained
 or re-tuned; the slug itself says which method it is.
 
-- `kernels/celltrack-aug8k-nn.py` — aug-recipe width-16 U-Net (`detector_bce_aug_8k.pt`) → NN linker →
-  short-track → linefit.
+Each kernel is a subdir `kernels/<slug>/` holding `<slug>.py` + its `kernel-metadata.json`.
+
+- `celltrack-pilkwang-motion` — pilkwang's public TemporalUNet3D detector (mounted from the support pack,
+  no wheels) → our MotionHungarianLinker → short-track → linefit. Fold-0 local ~0.93.
+- `celltrack-aug8k-nn` — our aug-recipe width-16 U-Net (`detector_bce_aug_8k.pt`) → NN linker → short-track
+  → linefit. Fold-0 local 0.472.
 - The classical baseline (`dimiturnt/celltrack-classical-submit`, LoG detector → NN linker, scored **0.427**)
   is the proven reference for the path.
 
