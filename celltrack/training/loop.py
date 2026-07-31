@@ -27,6 +27,9 @@ logger = logging.getLogger(__name__)
 _PREFETCH_FACTOR = 2
 # How often the loop reports throughput — often enough to see a data stall early, rarely enough not to spam.
 _LOG_EVERY = 50
+# Gradient-norm clip: a bigger model under fp16 autocast can let a gradient spike explode the weights into
+# NaN (seen at width 64 around step 12k); clipping the global norm keeps the step bounded and stable.
+_MAX_GRAD_NORM = 1.0
 
 
 @dataclass(frozen=True)
@@ -135,6 +138,8 @@ class DetectionTrainer:
             loss: torch.Tensor = self.criterion(model(frames), heatmap, mask)
         optimiser.zero_grad(set_to_none=True)
         scaler.scale(loss).backward()
+        scaler.unscale_(optimiser)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), _MAX_GRAD_NORM)
         scaler.step(optimiser)
         scaler.update()
         return float(loss.detach())
