@@ -10,15 +10,10 @@ Two mounts: the pilkwang support pack (their model code + weights) and celltrack
 """
 
 import glob
-import json
 import os
+import subprocess
 import sys
 from pathlib import Path
-
-import numpy as np
-import torch
-import torch.nn.functional as F
-import zarr
 
 _INPUTS = os.listdir("/kaggle/input")
 print("INPUT DIRS:", _INPUTS, flush=True)
@@ -26,8 +21,21 @@ print("INPUT DIRS:", _INPUTS, flush=True)
 _PACK = next(p for p in glob.glob("/kaggle/input/*") if "support-pack" in p)
 _KIT = next(p for p in glob.glob("/kaggle/input/*") if glob.glob(f"{p}/**/celltrack/motion_linking.py", recursive=True))
 _MARKER = next(m for m in glob.glob(f"{_KIT}/**/celltrack/motion_linking.py", recursive=True))
+
+# The detector is pure torch, but celltrack (zarr/jaxtyping/beartype/numcodecs) needs the kit's offline wheels.
+_WHEELS = sorted(glob.glob(f"{_KIT}/**/*.whl", recursive=True))
+print("WHEELS:", [os.path.basename(w) for w in _WHEELS], flush=True)
+subprocess.run([sys.executable, "-m", "pip", "install", "--no-index", "--no-deps", *_WHEELS], check=True)
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(_MARKER)))
 sys.path.insert(0, str(Path(_PACK) / "repo" / "src"))
+
+import json  # noqa: E402
+
+import numpy as np  # noqa: E402
+import torch  # noqa: E402
+import torch.nn.functional as F  # noqa: E402
+import zarr  # noqa: E402
 
 from tracking_cellmot.models import TemporalUNet3D  # noqa: E402
 
