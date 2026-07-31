@@ -14,6 +14,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")  # ease T4 fragmentation OOM
+
 print("INPUT DIRS:", os.listdir("/kaggle/input"), flush=True)
 
 _KITS = [d for d in glob.glob("/kaggle/input/*") if "competition" not in os.path.basename(d)]
@@ -40,7 +42,7 @@ from core.data.submission import Submission  # noqa: E402
 from core.data.video import CellVideo  # noqa: E402
 
 _COMP = "/kaggle/input/competitions/biohub-cell-tracking-during-development"
-_THRESHOLD, _GATE_UM, _BATCH = 0.8, 10.0, 8
+_THRESHOLD, _GATE_UM, _BATCH = 0.8, 10.0, 2  # T4 has ~15 GB; full-frame volumes cap the timepoint batch
 _DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
