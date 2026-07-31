@@ -47,6 +47,7 @@ def main() -> None:
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--batch", type=int, default=8)
     parser.add_argument("--no-amp", action="store_true")
+    parser.add_argument("--neg-weight", type=float, default=1.0)
     parser.add_argument("--save", action="store_true")
     arguments = parser.parse_args()
 
@@ -70,7 +71,11 @@ def main() -> None:
         batch=arguments.batch,
         amp=not arguments.no_amp,
     )
-    criterion: torch.nn.Module = _OBJECTIVES[arguments.objective]()
+    criterion: torch.nn.Module = (
+        MaskedBCEClassificationLoss(negative_weight=arguments.neg_weight)
+        if arguments.objective == "bce"
+        else MaskedDetectionLoss()
+    )
     logger.info(
         "train: %d videos, %d steps on %s, strides=%s, objective=%s",
         len(sources),
