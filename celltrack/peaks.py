@@ -8,10 +8,11 @@ mode a classification detector is read out with). The neighbourhood is a physica
 axis in voxels, so on the 4x-anisotropic grid it reaches four times as far in y and x as in z, and two
 peaks closer than a cell cannot both survive.
 
-Suppression is a strided-1 max pool: `response == max_pool(response)` marks every local maximum in one
-pass, and it runs on the extractor's device — handed a response already on the GPU (the learned detector's
-logits) it never leaves, so the whole read-out is GPU-resident with only the final short coordinate list
-copied back. That both keeps the RTX busy on large volumes and holds under a competition kernel's time cap.
+Suppression is a strided-1 max pool on the extractor's device: `response == max_pool(response)` marks every
+local maximum in one GPU pass. A flat region equals its own max everywhere, though, so that mask alone turns
+a saturated blob into thousands of "maxima"; the mask is then reduced on the host by connected-component
+labelling to one centre — the strongest voxel — per plateau. The heavy pooling stays on the RTX; only the
+small boolean mask crosses to the CPU for the labelling, which holds under a competition kernel's time cap.
 """
 
 from dataclasses import dataclass
@@ -19,10 +20,15 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 from jaxtyping import Float, Int
+from scipy import ndimage
 from torch import Tensor
 from torch.nn import functional
 
 from core.geometry import Spacing
+
+# Full 26-connectivity: a plateau is one blob however its voxels touch, so face-, edge-, and corner-adjacent
+# maxima all collapse into a single component rather than splitting into several centres.
+_PLATEAU_CONNECTIVITY = np.ones((3, 3, 3), dtype=np.int64)
 
 _Response = Float[np.ndarray, "z y x"] | Float[Tensor, "z y x"]
 
@@ -56,11 +62,24 @@ class PeakExtractor:
     def _local_maxima(
         self, volume: Float[Tensor, "1 1 z y x"], floor: float
     ) -> tuple[Int[Tensor, "k 3"], Float[Tensor, "k"]]:
-        """Coordinates and values of every voxel equal to its anisotropic-neighbourhood max and above `floor`."""
+        """One centre per connected plateau of maxima above `floor` — the max-value voxel of each component.
+
+        `volume == max_pool(volume)` marks every voxel of a *flat* region as a maximum, so a saturated detector
+        (large plateaus at probability one) would emit tens of thousands of "peaks" for a single blob, exploding
+        the linker's pairwise cost matrix. Collapsing each connected component of maxima to its single
+        strongest voxel recovers one centre per cell whatever the response looks like.
+        """
         radius = np.ceil(self.spacing.anisotropic_radius(self.scale_um)).astype(int)
         kernel = tuple(int(2 * axis + 1) for axis in radius)
         padding = tuple(int(axis) for axis in radius)
         pooled = functional.max_pool3d(volume, kernel_size=kernel, stride=1, padding=padding)
         is_peak = ((volume == pooled) & (volume > floor))[0, 0]
-        coordinates = torch.nonzero(is_peak)
-        return coordinates, volume[0, 0][is_peak]
+        values = volume[0, 0].detach().cpu().numpy()
+        labels, count = ndimage.label(is_peak.cpu().numpy(), structure=_PLATEAU_CONNECTIVITY)
+        if count == 0:
+            return torch.empty((0, 3), dtype=torch.long), torch.empty((0,))
+        positions = np.asarray(
+            ndimage.maximum_position(values, labels, np.arange(1, count + 1)), dtype=np.int64
+        ).reshape(-1, 3)
+        peaks = torch.from_numpy(positions)
+        return peaks, torch.from_numpy(values[positions[:, 0], positions[:, 1], positions[:, 2]])

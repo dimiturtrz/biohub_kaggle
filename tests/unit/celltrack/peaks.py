@@ -22,6 +22,13 @@ def test_above_threshold():
     assert EXTRACTOR.above_threshold(response, threshold=0.5).tolist() == [[4, 4, 4]]
 
 
+def test_above_threshold_collapses_a_plateau_to_one_centre():
+    """A flat plateau of equal maxima is one blob, not a field of peaks — it collapses to a single centre."""
+    response = np.zeros((16, 16, 16))
+    response[4:8, 4:8, 4:8] = 1.0
+    assert len(EXTRACTOR.above_threshold(response, threshold=0.5)) == 1
+
+
 def test_centres_suppresses_a_neighbour_within_a_cell():
     """Two maxima closer than the cell scale cannot both survive — the weaker is suppressed."""
     response = np.zeros((16, 16, 16))
