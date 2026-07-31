@@ -44,6 +44,9 @@ def main() -> None:
     parser.add_argument("--anisotropic", action="store_true")
     parser.add_argument("--objective", choices=sorted(_OBJECTIVES), default="mse")
     parser.add_argument("--weights", type=str, default=_WEIGHTS)
+    parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--batch", type=int, default=8)
+    parser.add_argument("--no-amp", action="store_true")
     parser.add_argument("--save", action="store_true")
     arguments = parser.parse_args()
 
@@ -59,7 +62,14 @@ def main() -> None:
         for video in root.videos("train")[: arguments.videos]
     ]
     strides = ANISOTROPIC_STRIDES if arguments.anisotropic else ((2, 2, 2),)
-    config = TrainingConfig(steps=arguments.steps, device=arguments.device, strides=strides)
+    config = TrainingConfig(
+        steps=arguments.steps,
+        device=arguments.device,
+        strides=strides,
+        num_workers=arguments.workers,
+        batch=arguments.batch,
+        amp=not arguments.no_amp,
+    )
     criterion: torch.nn.Module = _OBJECTIVES[arguments.objective]()
     logger.info(
         "train: %d videos, %d steps on %s, strides=%s, objective=%s",

@@ -1,8 +1,12 @@
 """The training loop: crops in, a detection U-Net out, masked loss and MLflow along the way.
 
-Deliberately small and explicit — it exists to prove the harness runs end to end (sample, forward, masked
-loss, step, log), not to train a competitive model. The production training schedule belongs with the
-detection model; what this fixes is that the mask actually gates the gradient and the run is observable.
+The loop is built so the GPU never waits on the CPU. Crops are expensive to make — each decompresses whole
+timepoint chunks from the zarr store — so they are sampled by a pool of DataLoader workers that prefetch the
+next batches while the network trains on the current one. Host-to-device copies are pinned and non-blocking,
+the forward and loss run under autocast so the RTX's tensor cores do the matmuls in half precision (a
+gradient scaler keeps the small-magnitude gradients from underflowing), and the optimiser zeroes gradients
+without materialising them. On CPU — the smoke and the unit tests — autocast and the scaler disable
+themselves and the worker pool collapses to synchronous sampling, so the same loop runs unchanged.
 """
 
 from dataclasses import dataclass, field
@@ -16,10 +20,12 @@ from celltrack.training.dataset import AnnotatedVideo, CropDataset, _Item
 from celltrack.training.loss import MaskedDetectionLoss
 from celltrack.training.model import DetectionUNet
 
+_PREFETCH_FACTOR = 2
+
 
 @dataclass(frozen=True)
 class TrainingConfig:
-    """Everything a smoke run needs, kept in one object rather than a long argument list."""
+    """Everything a run needs, kept in one object rather than a long argument list."""
 
     window: int = 3
     size: tuple[int, int, int] = (16, 64, 64)
@@ -31,7 +37,17 @@ class TrainingConfig:
     learning_rate: float = 1e-3
     seed: int = 0
     device: str = "cpu"
+    num_workers: int = 0
+    amp: bool = True
     experiment: str = "detection-smoke"
+
+    def device_type(self) -> str:
+        """The autocast/scaler device family — `cuda` or `cpu`."""
+        return "cuda" if self.device.startswith("cuda") else "cpu"
+
+    def mixed_precision(self) -> bool:
+        """Whether autocast and the gradient scaler are actually active (only ever on CUDA)."""
+        return self.amp and self.device_type() == "cuda"
 
 
 @dataclass(frozen=True)
@@ -56,34 +72,48 @@ class DetectionTrainer:
             self.config.device
         )
         optimiser = torch.optim.Adam(model.parameters(), lr=self.config.learning_rate)
+        scaler = torch.amp.GradScaler(self.config.device_type(), enabled=self.config.mixed_precision())
 
         losses: list[float] = []
         with mlflow.start_run(experiment_id=self._experiment()):
             mlflow.log_params({"steps": self.config.steps, "window": self.config.window, "width": self.config.width})
             for batch in loader:
-                loss = self._step(model, optimiser, batch)
+                loss = self._step(model, optimiser, scaler, batch)
                 losses.append(loss)
                 mlflow.log_metric("loss", loss, step=len(losses))
         return TrainingRun(model=model, losses=losses)
 
     def _loader(self, sources: list[AnnotatedVideo]) -> "DataLoader[_Item]":
-        """A loader that streams `steps` batches of freshly sampled crops."""
+        """A loader whose worker pool prefetches freshly sampled crops so the GPU never waits on the CPU."""
         sampler = CropSampler(window=self.config.window, size=self.config.size, scale_um=self.config.scale_um)
         dataset = CropDataset(sources, sampler, steps=self.config.steps * self.config.batch, seed=self.config.seed)
-        return DataLoader(dataset, batch_size=self.config.batch)
+        pin = self.config.device_type() == "cuda"
+        if self.config.num_workers > 0:
+            return DataLoader(
+                dataset,
+                batch_size=self.config.batch,
+                num_workers=self.config.num_workers,
+                pin_memory=pin,
+                persistent_workers=True,
+                prefetch_factor=_PREFETCH_FACTOR,
+            )
+        return DataLoader(dataset, batch_size=self.config.batch, pin_memory=pin)
 
     def _step(
         self,
         model: DetectionUNet,
         optimiser: torch.optim.Optimizer,
+        scaler: torch.amp.GradScaler,
         batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor],
     ) -> float:
         """One optimisation step over a (frames, heatmap, mask) batch; returns the scalar masked loss."""
-        frames, heatmap, mask = (tensor.to(self.config.device) for tensor in batch)
-        loss = self.criterion(model(frames), heatmap, mask)
-        optimiser.zero_grad()
-        loss.backward()
-        optimiser.step()
+        frames, heatmap, mask = (tensor.to(self.config.device, non_blocking=True) for tensor in batch)
+        with torch.autocast(device_type=self.config.device_type(), enabled=self.config.mixed_precision()):
+            loss: torch.Tensor = self.criterion(model(frames), heatmap, mask)
+        optimiser.zero_grad(set_to_none=True)
+        scaler.scale(loss).backward()
+        scaler.step(optimiser)
+        scaler.update()
         return float(loss.detach())
 
     def _experiment(self) -> str:
