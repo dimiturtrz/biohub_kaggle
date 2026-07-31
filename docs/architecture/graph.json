@@ -2071,6 +2071,24 @@
       "weight": 1
     },
     {
+      "kind": "references",
+      "source": "core.data.split.StratifiedSplit",
+      "target": "core.data.split.DatasetSplit",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.data.split.StratifiedSplit.partition",
+      "target": "core.data.split.AcquisitionFolds.by_prefix",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "core.data.split.StratifiedSplit.partition",
+      "target": "core.data.split.DatasetSplit",
+      "weight": 1
+    },
+    {
       "kind": "calls",
       "source": "core.data.split.VideoSplit.validation_by_prefix",
       "target": "core.data.split.AcquisitionFolds.by_prefix",
@@ -3228,6 +3246,22 @@
     },
     {
       "descendants": 0,
+      "id": "core.data.split.DatasetSplit",
+      "label": "DatasetSplit",
+      "level": "class",
+      "parent": "core.data.split",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.split.StratifiedSplit",
+      "label": "StratifiedSplit",
+      "level": "class",
+      "parent": "core.data.split",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
       "id": "core.data.split.VideoSplit",
       "label": "VideoSplit",
       "level": "class",
@@ -4128,6 +4162,14 @@
       "label": "split",
       "level": "method",
       "parent": "core.data.split.AcquisitionFolds",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.data.split.StratifiedSplit.partition",
+      "label": "partition",
+      "level": "method",
+      "parent": "core.data.split.StratifiedSplit",
       "role": null
     },
     {
