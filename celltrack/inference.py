@@ -4,6 +4,12 @@ The learned counterpart of the classical `BlobDetector`: instead of a Laplacian-
 the trained network on each timepoint's temporal window, then recovers centres from the predicted response
 with the *same* anisotropic non-maximum suppression the classical detector uses.
 
+The whole read-out stays on the GPU. Timepoints are pushed through the network in batches, the sigmoid is
+taken on the device, and each probability volume is handed to the peak-picker still on the device — nothing
+round-trips to host memory until the final short list of coordinates. That keeps the RTX saturated instead
+of stalling on per-frame transfers, and is what lets a full video be detected inside a competition kernel's
+time cap.
+
 Two readouts share that network. A fixed node budget (`detect`) keeps the strongest `keep` maxima — the
 mode used to compare detectors at a matched count. A probability threshold (`detect_above`) keeps every
 maximum whose predicted probability clears a high bar, letting the count *emerge*: this is how a
@@ -11,11 +17,13 @@ classification-trained detector is meant to run, trading recall for the precisio
 stable, confident centres and lands the node count in the metric's under-prediction sweet spot.
 """
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 
 import numpy as np
 import torch
 from jaxtyping import Float, Int
+from torch import Tensor
 
 from celltrack.peaks import PeakExtractor
 from celltrack.training.model import DetectionUNet
@@ -23,34 +31,40 @@ from core.data.tracks import TrackGraph
 from core.data.video import CellVideo
 
 _LOW, _HIGH = 0.001, 0.999
+_DEFAULT_BATCH = 4
 
 
 @dataclass(frozen=True)
 class LearnedDetector:
-    """A trained detection network plus the shared peak-picker, run over full frames."""
+    """A trained detection network plus the shared peak-picker, run over full frames on the GPU."""
 
     model: DetectionUNet
     peaks: PeakExtractor
     window: int
     device: str = "cpu"
+    batch: int = _DEFAULT_BATCH
 
     def detect(self, video: CellVideo, keep: int) -> TrackGraph:
         """Detect the `keep` strongest centres across a video, evenly split over its timepoints."""
         per_frame = max(1, round(keep / video.timepoint_count))
-        frames = list(video.normalised_frames(_LOW, _HIGH))
-        return self._graph(
-            [self.peaks.centres(self._heatmap(frames, timepoint), per_frame) for timepoint in range(len(frames))]
-        )
+        return self._graph([self.peaks.centres(response, per_frame) for response in self._responses(video)])
 
     def detect_above(self, video: CellVideo, probability_threshold: float) -> TrackGraph:
         """Detect every centre whose predicted probability exceeds the threshold — the node count emerges."""
-        frames = list(video.normalised_frames(_LOW, _HIGH))
         return self._graph(
-            [
-                self.peaks.above_threshold(self._probability(frames, timepoint), probability_threshold)
-                for timepoint in range(len(frames))
-            ]
+            [self.peaks.above_threshold(response, probability_threshold) for response in self._responses(video)]
         )
+
+    def _responses(self, video: CellVideo) -> Iterator[Float[Tensor, "z y x"]]:
+        """Each timepoint's probability volume, on the device, from batched forward passes over the video."""
+        frames = list(video.normalised_frames(_LOW, _HIGH))
+        windows = [self._window(frames, timepoint) for timepoint in range(len(frames))]
+        for start in range(0, len(windows), self.batch):
+            batch = torch.from_numpy(np.stack(windows[start : start + self.batch])).to(self.device)
+            with torch.no_grad():
+                probabilities = torch.sigmoid(self.model(batch))
+            for index in range(probabilities.shape[0]):
+                yield probabilities[index]
 
     def _graph(self, per_frame_centres: list[Int[np.ndarray, "k 3"]]) -> TrackGraph:
         """Stack per-timepoint `(z, y, x)` centres into a `(t, z, y, x)` edgeless track graph."""
@@ -64,18 +78,6 @@ class LearnedDetector:
             coordinates=stacked,
             edges=np.empty((0, 2), dtype=np.int64),
         )
-
-    def _probability(self, frames: list[Float[np.ndarray, "z y x"]], timepoint: int) -> Float[np.ndarray, "z y x"]:
-        """The network's per-voxel cell probability — its logits passed through a sigmoid."""
-        return torch.sigmoid(torch.from_numpy(self._heatmap(frames, timepoint))).numpy()
-
-    def _heatmap(self, frames: list[Float[np.ndarray, "z y x"]], timepoint: int) -> Float[np.ndarray, "z y x"]:
-        """The network's cellness logits for one timepoint, from the temporal window centred on it."""
-        window = self._window(frames, timepoint)
-        batch = torch.from_numpy(window).unsqueeze(0).to(self.device)
-        with torch.no_grad():
-            prediction = self.model(batch)
-        return prediction.squeeze(0).cpu().numpy()
 
     def _window(self, frames: list[Float[np.ndarray, "z y x"]], timepoint: int) -> Float[np.ndarray, "t z y x"]:
         """A `window`-frame stack centred on a timepoint, clamped to the video's ends."""
