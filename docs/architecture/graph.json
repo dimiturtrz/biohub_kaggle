@@ -1736,6 +1736,12 @@
     },
     {
       "kind": "calls",
+      "source": "celltrack.training.crops.CropSampler._crop_origin",
+      "target": "celltrack.training.crops.CropSampler._jitter",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
       "source": "celltrack.training.crops.CropSampler.sample",
       "target": "celltrack.training.crops.CropSampler._centres_in_crop",
       "weight": 1
@@ -1750,6 +1756,12 @@
       "kind": "calls",
       "source": "celltrack.training.crops.CropSampler.sample",
       "target": "celltrack.training.crops.CropSampler._crop_origin",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.crops.CropSampler.sample",
+      "target": "celltrack.training.crops.CropSampler._flip",
       "weight": 1
     },
     {
@@ -3754,6 +3766,22 @@
       "descendants": 0,
       "id": "celltrack.training.crops.CropSampler._crop_origin",
       "label": "_crop_origin",
+      "level": "method",
+      "parent": "celltrack.training.crops.CropSampler",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.crops.CropSampler._flip",
+      "label": "_flip",
+      "level": "method",
+      "parent": "celltrack.training.crops.CropSampler",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.crops.CropSampler._jitter",
+      "label": "_jitter",
       "level": "method",
       "parent": "celltrack.training.crops.CropSampler",
       "role": null
