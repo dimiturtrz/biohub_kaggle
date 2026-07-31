@@ -96,6 +96,19 @@ class CellVideo:
         """One timepoint as a volume — a whole chunk, so this is a single decompress."""
         return np.asarray(self._frames[timepoint])
 
+    def window(
+        self, timepoint: int, origin: tuple[int, int, int], size: tuple[int, int, int]
+    ) -> UInt16[np.ndarray, "z y x"]:
+        """A sub-volume at `origin` of the given `size` — a zarr slice, so only the overlapping chunks decompress.
+
+        Training samples small crops, and reading a whole timepoint to keep a crop-sized box wastes almost all
+        of the decompress. Slicing the array directly lets zarr fetch just the chunks the box touches — the win
+        that a crop-sized re-chunking of the store turns into a small read instead of a whole-plane one.
+        """
+        z, y, x = origin
+        dz, dy, dx = size
+        return np.asarray(self._frames[timepoint, z : z + dz, y : y + dy, x : x + dx])
+
     def normalised_frames(self, low: float, high: float) -> Iterator[Float[np.ndarray, "z y x"]]:
         """Every timepoint in turn, clipped to the shipped quantiles — one decompress held at a time.
 

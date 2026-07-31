@@ -63,9 +63,8 @@ class CropSampler:
         timepoints = self._window_timepoints(int(anchor[0]), video.timepoint_count)
         origin = self._crop_origin(anchor[1:], video.volume_shape, rng)
         middle = timepoints[len(timepoints) // 2]
-        frames = np.stack(
-            [self._crop(video.quantiles.normalise(video.frame(t), _LOW, _HIGH), origin) for t in timepoints]
-        )
+        box = (int(origin[0]), int(origin[1]), int(origin[2]))
+        frames = np.stack([video.quantiles.normalise(video.window(t, box, self.size), _LOW, _HIGH) for t in timepoints])
         centres = self._centres_in_crop(coordinates, middle, origin)
         if self.augment:
             frames, centres = self._flip(frames, centres, rng)
@@ -103,11 +102,6 @@ class CropSampler:
             return np.zeros(3, dtype=np.int64)
         reach = np.asarray(self.size) // _JITTER_FRACTION
         return rng.integers(-reach, reach + 1)
-
-    def _crop(self, volume: Float[np.ndarray, "z y x"], origin: Int[np.ndarray, "3"]) -> Float[np.ndarray, "z y x"]:
-        """Extract the fixed-size box at an origin."""
-        window = tuple(slice(int(o), int(o) + s) for o, s in zip(origin, self.size, strict=True))
-        return volume[window]
 
     def _flip(
         self, frames: Float[np.ndarray, "t z y x"], centres: Int[np.ndarray, "k 3"], rng: np.random.Generator

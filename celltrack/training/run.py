@@ -47,7 +47,8 @@ def main() -> None:
     parser.add_argument("--objective", choices=sorted(_OBJECTIVES), default="mse")
     parser.add_argument("--weights", type=str, default=_WEIGHTS)
     parser.add_argument("--width", type=int, default=16)
-    parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--workers", type=int, default=16)
+    parser.add_argument("--rechunked", action="store_true", help="read crop-sized re-chunked stores (tools/rechunk.py)")
     parser.add_argument("--batch", type=int, default=8)
     parser.add_argument("--no-amp", action="store_true")
     parser.add_argument("--label-smoothing", type=float, default=0.0)
@@ -59,9 +60,10 @@ def main() -> None:
 
     train_videos = AcquisitionFolds().split(root.videos("train"), arguments.fold).train
     limit = arguments.videos or len(train_videos)
+    rechunked = root.processed(_DATASET) / "rechunked"
     sources = [
         AnnotatedVideo(
-            video=(cell := CellVideo.from_ome_zarr(video)),
+            video=(cell := CellVideo.from_ome_zarr(rechunked / video.name if arguments.rechunked else video)),
             tracks=AnnotatedTracks.from_geff(root.track_store(video)),
             spacing=cell.spacing,
         )

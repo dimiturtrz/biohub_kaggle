@@ -248,6 +248,12 @@
     },
     {
       "kind": "import",
+      "source": "celltrack.linefit_smoother",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "celltrack.linking",
       "target": "core.data.tracks",
       "weight": 1
@@ -340,6 +346,12 @@
       "kind": "import",
       "source": "celltrack.peaks",
       "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.short_track_filter",
+      "target": "core.data.tracks",
       "weight": 1
     },
     {
@@ -1352,6 +1364,30 @@
     },
     {
       "kind": "references",
+      "source": "celltrack.linefit_smoother.LinefitSmoother",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.linefit_smoother.LinefitSmoother.transform",
+      "target": "celltrack.linefit_smoother.LinefitSmoother._rounded",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.linefit_smoother.LinefitSmoother.transform",
+      "target": "core.data.tracks.Adjacency.of",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.linefit_smoother.LinefitSmoother.transform",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "references",
       "source": "celltrack.linking.Linker",
       "target": "core.data.tracks.TrackGraph",
       "weight": 1
@@ -1552,6 +1588,30 @@
       "kind": "calls",
       "source": "celltrack.peaks.PeakExtractor.centres",
       "target": "celltrack.peaks.PeakExtractor._volume",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.short_track_filter.ShortTrackFilter",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.short_track_filter.ShortTrackFilter.transform",
+      "target": "core.data.tracks.Adjacency.of",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.short_track_filter.ShortTrackFilter.transform",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.short_track_filter.ShortTrackFilter.transform",
+      "target": "core.data.tracks.TrackGraph.edge_rows",
       "weight": 1
     },
     {
@@ -1888,6 +1948,12 @@
       "kind": "calls",
       "source": "celltrack.training.loop.DetectionTrainer.train",
       "target": "celltrack.training.loop.DetectionTrainer._loader",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.loop.DetectionTrainer.train",
+      "target": "celltrack.training.loop.DetectionTrainer._log_throughput",
       "weight": 1
     },
     {
@@ -2571,7 +2637,7 @@
   ],
   "nodes": [
     {
-      "descendants": 21,
+      "descendants": 23,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -2644,6 +2710,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.linefit_smoother",
+      "label": "linefit_smoother",
+      "level": "module",
+      "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.linking",
       "label": "linking",
       "level": "module",
@@ -2662,6 +2736,14 @@
       "descendants": 0,
       "id": "celltrack.peaks",
       "label": "peaks",
+      "level": "module",
+      "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.short_track_filter",
+      "label": "short_track_filter",
       "level": "module",
       "parent": "celltrack",
       "role": null
@@ -2964,6 +3046,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.linefit_smoother.LinefitSmoother",
+      "label": "LinefitSmoother",
+      "level": "class",
+      "parent": "celltrack.linefit_smoother",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.linking.Linker",
       "label": "Linker",
       "level": "class",
@@ -3000,6 +3090,14 @@
       "label": "PeakExtractor",
       "level": "class",
       "parent": "celltrack.peaks",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.short_track_filter.ShortTrackFilter",
+      "label": "ShortTrackFilter",
+      "level": "class",
+      "parent": "celltrack.short_track_filter",
       "role": "satellite"
     },
     {
@@ -3620,6 +3718,22 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.linefit_smoother.LinefitSmoother._rounded",
+      "label": "_rounded",
+      "level": "method",
+      "parent": "celltrack.linefit_smoother.LinefitSmoother",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.linefit_smoother.LinefitSmoother.transform",
+      "label": "transform",
+      "level": "method",
+      "parent": "celltrack.linefit_smoother.LinefitSmoother",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.linking.Linker.link",
       "label": "link",
       "level": "method",
@@ -3696,6 +3810,14 @@
       "label": "centres",
       "level": "method",
       "parent": "celltrack.peaks.PeakExtractor",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.short_track_filter.ShortTrackFilter.transform",
+      "label": "transform",
+      "level": "method",
+      "parent": "celltrack.short_track_filter.ShortTrackFilter",
       "role": null
     },
     {
@@ -3838,6 +3960,14 @@
       "descendants": 0,
       "id": "celltrack.training.loop.DetectionTrainer._loader",
       "label": "_loader",
+      "level": "method",
+      "parent": "celltrack.training.loop.DetectionTrainer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.loop.DetectionTrainer._log_throughput",
+      "label": "_log_throughput",
       "level": "method",
       "parent": "celltrack.training.loop.DetectionTrainer",
       "role": null

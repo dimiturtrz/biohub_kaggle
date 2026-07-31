@@ -27,6 +27,14 @@ def test_frame(video_store: Path):
     assert frame[0, 0, 0] == 32
 
 
+def test_window(video_store: Path):
+    """A window is the sub-volume at an origin — the same voxels a full-frame crop would keep."""
+    video = CellVideo.from_ome_zarr(video_store)
+    window = video.window(1, origin=(0, 1, 1), size=(2, 2, 2))
+    assert window.shape == (2, 2, 2)
+    assert window.tolist() == video.frame(1)[0:2, 1:3, 1:3].tolist()
+
+
 def test_normalised_frames(video_store: Path):
     """Every timepoint is yielded once, each clipped to [0, 1] by the shipped quantiles."""
     frames = list(CellVideo.from_ome_zarr(video_store).normalised_frames(0.001, 0.999))
