@@ -32,7 +32,7 @@ sys.path.insert(0, str(Path(_PACK) / "repo" / "src"))
 from tracking_cellmot.models import TemporalUNet3D  # noqa: E402
 
 from celltrack.linefit_smoother import LinefitSmoother  # noqa: E402
-from celltrack.linkers import LinkerConfig  # noqa: E402
+from celltrack.motion_linking import MotionHungarianLinker  # noqa: E402
 from celltrack.short_track_filter import ShortTrackFilter  # noqa: E402
 from core.data.submission import Submission  # noqa: E402
 from core.data.tracks import TrackGraph  # noqa: E402
@@ -111,7 +111,7 @@ def main() -> None:
     for path in tests:
         with torch.no_grad():
             detections, spacing = _detections(model, path)
-        linker = LinkerConfig(name="motion").build(spacing)
+        linker = MotionHungarianLinker(spacing=spacing, tight_gate_um=6.0, loose_gate_um=10.0)
         graph = smooth.transform(short.transform(linker.link(detections)))
         name = os.path.basename(path)[: -len(".zarr")]
         graphs[name] = graph
