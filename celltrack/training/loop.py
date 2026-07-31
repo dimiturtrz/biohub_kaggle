@@ -20,7 +20,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from celltrack.training.crops import CropSampler
-from celltrack.training.dataset import AnnotatedVideo, CropDataset, _Item
+from celltrack.training.dataset import AnnotatedVideo, CropDataset, DensitySampling, _Item
 from celltrack.training.loss import MaskedDetectionLoss
 from celltrack.training.model import DetectionUNet
 
@@ -51,6 +51,7 @@ class TrainingConfig:
     num_workers: int = 0
     amp: bool = True
     background_fraction: float = 0.0
+    density_stratified: bool = False
     experiment: str = "detection-smoke"
 
     def device_type(self) -> str:
@@ -130,7 +131,10 @@ class DetectionTrainer:
             scale_um=self.config.scale_um,
             background_fraction=self.config.background_fraction,
         )
-        dataset = CropDataset(sources, sampler, steps=self.config.steps * self.config.batch, seed=self.config.seed)
+        weights = DensitySampling(self.config.density_stratified).weights(sources)
+        dataset = CropDataset(
+            sources, sampler, steps=self.config.steps * self.config.batch, seed=self.config.seed, weights=weights
+        )
         pin = self.config.device_type() == "cuda"
         if self.config.num_workers > 0:
             return DataLoader(
