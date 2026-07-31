@@ -31,16 +31,21 @@ cd kaggle && kaggle datasets version -p kit -m "<message>"
 cd kaggle && kaggle kernels push -p kernels
 
 # 4. watch it, then submit its output to the competition
-kaggle kernels status dimiturnt/celltrack-learned-submit
-kaggle kernels output dimiturnt/celltrack-learned-submit -p /tmp/out   # sanity-check submission.csv
+kaggle kernels status dimiturnt/celltrack-aug8k-nn
+kaggle kernels output dimiturnt/celltrack-aug8k-nn -p /tmp/out   # sanity-check submission.csv
 # submit the completed kernel version on the competition's "Submit" page (code-competition flow)
 ```
 
 ## Kernels
 
-- `kernels/celltrack-learned-submit.py` — U-Net detector → NN linker → short-track → linefit.
-- The classical baseline (`dimiturnt/celltrack-classical-submit`, LoG detector, scored **0.427**) is the
-  proven reference for the path.
+Named for the method, `celltrack-<detector>-<linker>` — a different detector or linker is a different
+kernel, not a new version of an existing one. The version history of one slug is the same method retrained
+or re-tuned; the slug itself says which method it is.
+
+- `kernels/celltrack-aug8k-nn.py` — aug-recipe width-16 U-Net (`detector_bce_aug_8k.pt`) → NN linker →
+  short-track → linefit.
+- The classical baseline (`dimiturnt/celltrack-classical-submit`, LoG detector → NN linker, scored **0.427**)
+  is the proven reference for the path.
 
 ## Gotchas that cost real time
 

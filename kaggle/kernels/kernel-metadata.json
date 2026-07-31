@@ -1,7 +1,7 @@
 {
-  "id": "dimiturnt/celltrack-learned-submit",
-  "title": "celltrack-learned-submit",
-  "code_file": "celltrack-learned-submit.py",
+  "id": "dimiturnt/celltrack-aug8k-nn",
+  "title": "celltrack-aug8k-nn",
+  "code_file": "celltrack-aug8k-nn.py",
   "language": "python",
   "kernel_type": "script",
   "is_private": true,

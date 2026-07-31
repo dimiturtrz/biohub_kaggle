@@ -1,4 +1,8 @@
-"""Learned-detector submission kernel: U-Net detect + NN link + post-proc on the mounted test set.
+"""Submission kernel — aug8k detector + NN linker: U-Net detect + NN link + post-proc on the test set.
+
+Named for its method (`celltrack-<detector>-<linker>`): the aug-recipe width-16 U-Net trained 8k steps
+(`detector_bce_aug_8k.pt`) read out by threshold, linked nearest-neighbour. A different detector or linker is
+a different kernel with its own method name, not a new version of this one.
 
 Thin orchestration only — the whole pipeline is imported from the celltrack-kit dataset (no code duplicated),
 its extra dependencies come from the wheels in the same kit (internet is off in a code competition), and the
