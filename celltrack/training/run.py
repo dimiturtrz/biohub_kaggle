@@ -13,8 +13,10 @@ from pathlib import Path
 import mlflow
 import torch
 
+from celltrack.training.classification_loss import MaskedBCEClassificationLoss
 from celltrack.training.dataset import AnnotatedVideo
 from celltrack.training.loop import DetectionTrainer, TrainingConfig
+from celltrack.training.loss import MaskedDetectionLoss
 from celltrack.training.model import ANISOTROPIC_STRIDES
 from core.data.tracks import AnnotatedTracks
 from core.data.video import CellVideo
@@ -23,6 +25,11 @@ from core.paths import DataRoot
 _CONFIG = Path(__file__).parents[2] / "paths.yaml"
 _DATASET = "biohub_cell_tracking"
 _WEIGHTS = "detector.pt"
+
+_OBJECTIVES: dict[str, "type[MaskedDetectionLoss] | type[MaskedBCEClassificationLoss]"] = {
+    "mse": MaskedDetectionLoss,
+    "bce": MaskedBCEClassificationLoss,
+}
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +42,8 @@ def main() -> None:
     parser.add_argument("--steps", type=int, default=300)
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--anisotropic", action="store_true")
+    parser.add_argument("--objective", choices=sorted(_OBJECTIVES), default="mse")
+    parser.add_argument("--weights", type=str, default=_WEIGHTS)
     parser.add_argument("--save", action="store_true")
     arguments = parser.parse_args()
 
@@ -51,12 +60,20 @@ def main() -> None:
     ]
     strides = ANISOTROPIC_STRIDES if arguments.anisotropic else ((2, 2, 2),)
     config = TrainingConfig(steps=arguments.steps, device=arguments.device, strides=strides)
-    logger.info("train: %d videos, %d steps on %s, strides=%s", len(sources), arguments.steps, config.device, strides)
+    criterion: torch.nn.Module = _OBJECTIVES[arguments.objective]()
+    logger.info(
+        "train: %d videos, %d steps on %s, strides=%s, objective=%s",
+        len(sources),
+        arguments.steps,
+        config.device,
+        strides,
+        arguments.objective,
+    )
 
-    run = DetectionTrainer(config).train(sources)
+    run = DetectionTrainer(config, criterion=criterion).train(sources)
     logger.info("first loss %.4f -> last loss %.4f", run.losses[0], run.losses[-1])
     if arguments.save:
-        destination = root.processed(_DATASET) / _WEIGHTS
+        destination = root.processed(_DATASET) / arguments.weights
         torch.save(
             {
                 "state_dict": run.model.state_dict(),

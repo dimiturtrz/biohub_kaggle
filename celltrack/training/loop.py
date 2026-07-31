@@ -5,7 +5,7 @@ loss, step, log), not to train a competitive model. The production training sche
 detection model; what this fixes is that the mask actually gates the gradient and the run is observable.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import mlflow
 import torch
@@ -44,26 +44,26 @@ class TrainingRun:
 
 @dataclass(frozen=True)
 class DetectionTrainer:
-    """Runs the masked-detection training loop under one configuration."""
+    """Runs the masked-detection training loop under one configuration and objective."""
 
     config: TrainingConfig
+    criterion: torch.nn.Module = field(default_factory=MaskedDetectionLoss)
 
     def train(self, sources: list[AnnotatedVideo]) -> TrainingRun:
-        """Sample crops, step the U-Net under the masked loss, and log each step to MLflow."""
+        """Sample crops, step the U-Net under the masked objective, and log each step to MLflow."""
         loader = self._loader(sources)
         model = DetectionUNet(window=self.config.window, width=self.config.width, strides=self.config.strides).to(
             self.config.device
         )
         optimiser = torch.optim.Adam(model.parameters(), lr=self.config.learning_rate)
-        criterion = MaskedDetectionLoss()
 
         losses: list[float] = []
         with mlflow.start_run(experiment_id=self._experiment()):
             mlflow.log_params({"steps": self.config.steps, "window": self.config.window, "width": self.config.width})
             for batch in loader:
-                loss = self._step(model, optimiser, criterion, batch)
+                loss = self._step(model, optimiser, batch)
                 losses.append(loss)
-                mlflow.log_metric("masked_mse", loss, step=len(losses))
+                mlflow.log_metric("loss", loss, step=len(losses))
         return TrainingRun(model=model, losses=losses)
 
     def _loader(self, sources: list[AnnotatedVideo]) -> "DataLoader[_Item]":
@@ -76,12 +76,11 @@ class DetectionTrainer:
         self,
         model: DetectionUNet,
         optimiser: torch.optim.Optimizer,
-        criterion: MaskedDetectionLoss,
         batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor],
     ) -> float:
         """One optimisation step over a (frames, heatmap, mask) batch; returns the scalar masked loss."""
         frames, heatmap, mask = (tensor.to(self.config.device) for tensor in batch)
-        loss = criterion(model(frames), heatmap, mask)
+        loss = self.criterion(model(frames), heatmap, mask)
         optimiser.zero_grad()
         loss.backward()
         optimiser.step()

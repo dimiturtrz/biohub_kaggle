@@ -21,3 +21,10 @@ def test_detect(video_store: Path):
     assert detections.edges.shape == (0, 2)
     assert detections.coordinates.shape[1] == 4
     assert set(detections.timepoints().tolist()) <= set(range(CellVideo.from_ome_zarr(video_store).timepoint_count))
+
+
+def test_detect_above(video_store: Path):
+    """Threshold detection returns an edgeless centre graph; the node count emerges from the threshold."""
+    detections = a_detector().detect_above(CellVideo.from_ome_zarr(video_store), probability_threshold=0.5)
+    assert detections.edges.shape == (0, 2)
+    assert detections.coordinates.shape[1] == 4

@@ -14,6 +14,14 @@ def test_centres():
     assert sorted(EXTRACTOR.centres(response, keep=2).tolist()) == [[4, 4, 4], [4, 12, 12]]
 
 
+def test_above_threshold():
+    """Every suppressed maximum above the threshold comes back; a weaker maximum and the background do not."""
+    response = np.zeros((16, 16, 16))
+    response[4, 4, 4] = 0.99
+    response[4, 12, 12] = 0.30
+    assert EXTRACTOR.above_threshold(response, threshold=0.5).tolist() == [[4, 4, 4]]
+
+
 def test_centres_suppresses_a_neighbour_within_a_cell():
     """Two maxima closer than the cell scale cannot both survive — the weaker is suppressed."""
     response = np.zeros((16, 16, 16))
