@@ -9,6 +9,8 @@ without materialising them. On CPU — the smoke and the unit tests — autocast
 themselves and the worker pool collapses to synchronous sampling, so the same loop runs unchanged.
 """
 
+import logging
+import time
 from dataclasses import dataclass, field
 
 import mlflow
@@ -20,7 +22,11 @@ from celltrack.training.dataset import AnnotatedVideo, CropDataset, _Item
 from celltrack.training.loss import MaskedDetectionLoss
 from celltrack.training.model import DetectionUNet
 
+logger = logging.getLogger(__name__)
+
 _PREFETCH_FACTOR = 2
+# How often the loop reports throughput — often enough to see a data stall early, rarely enough not to spam.
+_LOG_EVERY = 50
 
 
 @dataclass(frozen=True)
@@ -75,13 +81,30 @@ class DetectionTrainer:
         scaler = torch.amp.GradScaler(self.config.device_type(), enabled=self.config.mixed_precision())
 
         losses: list[float] = []
+        start = time.perf_counter()
         with mlflow.start_run(experiment_id=self._experiment()):
             mlflow.log_params({"steps": self.config.steps, "window": self.config.window, "width": self.config.width})
             for batch in loader:
                 loss = self._step(model, optimiser, scaler, batch)
                 losses.append(loss)
                 mlflow.log_metric("loss", loss, step=len(losses))
+                if len(losses) % _LOG_EVERY == 0:
+                    self._log_throughput(len(losses), loss, start)
         return TrainingRun(model=model, losses=losses)
+
+    def _log_throughput(self, step: int, loss: float, start: float) -> None:
+        """Report steps/s and samples/s so a data-starved loop shows up as a throughput floor, not a guess."""
+        elapsed = time.perf_counter() - start
+        steps_per_second = step / elapsed
+        logger.info(
+            "step %d/%d | loss %.4f | %.1f steps/s | %.0f crops/s | %.0fs elapsed",
+            step,
+            self.config.steps,
+            loss,
+            steps_per_second,
+            steps_per_second * self.config.batch,
+            elapsed,
+        )
 
     def _loader(self, sources: list[AnnotatedVideo]) -> "DataLoader[_Item]":
         """A loader whose worker pool prefetches freshly sampled crops so the GPU never waits on the CPU."""
