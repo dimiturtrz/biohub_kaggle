@@ -85,27 +85,37 @@ class DetectionTrainer:
 
         losses: list[float] = []
         start = time.perf_counter()
+        data_wait = 0.0
         with mlflow.start_run(experiment_id=self._experiment()):
             mlflow.log_params({"steps": self.config.steps, "window": self.config.window, "width": self.config.width})
+            ready = time.perf_counter()
             for batch in loader:
+                data_wait += time.perf_counter() - ready
                 loss = self._step(model, optimiser, scaler, batch)
                 losses.append(loss)
                 mlflow.log_metric("loss", loss, step=len(losses))
                 if len(losses) % _LOG_EVERY == 0:
-                    self._log_throughput(len(losses), loss, start)
+                    self._log_throughput(len(losses), loss, start, data_wait)
+                ready = time.perf_counter()
         return TrainingRun(model=model, losses=losses)
 
-    def _log_throughput(self, step: int, loss: float, start: float) -> None:
-        """Report steps/s and samples/s so a data-starved loop shows up as a throughput floor, not a guess."""
+    def _log_throughput(self, step: int, loss: float, start: float, data_wait: float) -> None:
+        """Report throughput and the data-wait share — the gauge that shows a data-starved loop as a number.
+
+        `data_wait` is wall time the loop spent blocked on the loader (the `float(loss)` in `_step` syncs the
+        step, so everything else is GPU compute). A low share means the GPU is compute-bound and the pipeline
+        is not the bottleneck; a rising share means the workers stopped keeping up.
+        """
         elapsed = time.perf_counter() - start
         steps_per_second = step / elapsed
         logger.info(
-            "step %d/%d | loss %.4f | %.1f steps/s | %.0f crops/s | %.0fs elapsed",
+            "step %d/%d | loss %.4f | %.1f steps/s | %.0f crops/s | data-wait %.0f%% | %.0fs elapsed",
             step,
             self.config.steps,
             loss,
             steps_per_second,
             steps_per_second * self.config.batch,
+            100.0 * data_wait / elapsed,
             elapsed,
         )
 
