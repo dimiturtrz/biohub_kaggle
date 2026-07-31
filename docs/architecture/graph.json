@@ -3728,14 +3728,6 @@
     },
     {
       "descendants": 0,
-      "id": "celltrack.training.classification_loss.MaskedBCEClassificationLoss.__init__",
-      "label": "__init__",
-      "level": "method",
-      "parent": "celltrack.training.classification_loss.MaskedBCEClassificationLoss",
-      "role": null
-    },
-    {
-      "descendants": 0,
       "id": "celltrack.training.classification_loss.MaskedBCEClassificationLoss.forward",
       "label": "forward",
       "level": "method",
