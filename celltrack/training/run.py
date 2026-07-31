@@ -46,6 +46,7 @@ def main() -> None:
     parser.add_argument("--anisotropic", action="store_true")
     parser.add_argument("--objective", choices=sorted(_OBJECTIVES), default="mse")
     parser.add_argument("--weights", type=str, default=_WEIGHTS)
+    parser.add_argument("--width", type=int, default=16)
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--batch", type=int, default=8)
     parser.add_argument("--no-amp", action="store_true")
@@ -70,6 +71,7 @@ def main() -> None:
         steps=arguments.steps,
         device=arguments.device,
         strides=strides,
+        width=arguments.width,
         num_workers=arguments.workers,
         batch=arguments.batch,
         amp=not arguments.no_amp,
