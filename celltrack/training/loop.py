@@ -3,10 +3,12 @@
 The loop is built so the GPU never waits on the CPU. Crops are expensive to make — each decompresses whole
 timepoint chunks from the zarr store — so they are sampled by a pool of DataLoader workers that prefetch the
 next batches while the network trains on the current one. Host-to-device copies are pinned and non-blocking,
-the forward and loss run under autocast so the RTX's tensor cores do the matmuls in half precision (a
-gradient scaler keeps the small-magnitude gradients from underflowing), and the optimiser zeroes gradients
-without materialising them. On CPU — the smoke and the unit tests — autocast and the scaler disable
-themselves and the worker pool collapses to synchronous sampling, so the same loop runs unchanged.
+and the forward and loss run under autocast in bfloat16 so the RTX's tensor cores do the matmuls at half the
+memory. bfloat16, not float16, on purpose: it keeps float32's exponent range, so a large activation cannot
+overflow to inf and take the loss to NaN the way float16 does — a numerical fix, not a clip. A non-finite
+gradient (a transient overflow or a stray NaN) still skips its optimiser step rather than corrupting the
+weights. On CPU — the smoke and the unit tests — autocast disables itself and the worker pool collapses to
+synchronous sampling, so the same loop runs unchanged.
 """
 
 import logging
@@ -150,13 +152,18 @@ class DetectionTrainer:
     ) -> float:
         """One optimisation step over a (frames, heatmap, mask) batch; returns the scalar masked loss."""
         frames, heatmap, mask = (tensor.to(self.config.device, non_blocking=True) for tensor in batch)
-        with torch.autocast(device_type=self.config.device_type(), enabled=self.config.mixed_precision()):
+        with torch.autocast(
+            device_type=self.config.device_type(),
+            dtype=torch.bfloat16 if self.config.device_type() == "cuda" else torch.float32,
+            enabled=self.config.mixed_precision(),
+        ):
             loss: torch.Tensor = self.criterion(model(frames), heatmap, mask)
         optimiser.zero_grad(set_to_none=True)
         scaler.scale(loss).backward()
         scaler.unscale_(optimiser)
-        torch.nn.utils.clip_grad_norm_(model.parameters(), _MAX_GRAD_NORM)
-        scaler.step(optimiser)
+        grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), _MAX_GRAD_NORM)
+        if torch.isfinite(grad_norm):
+            scaler.step(optimiser)
         scaler.update()
         return float(loss.detach())
 
