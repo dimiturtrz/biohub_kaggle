@@ -54,3 +54,7 @@ node_modules/
 # Transient tool output from local gate runs.
 *.log
 /scratchpad/
+
+/kaggle/kit/
+kaggle/**/*.pt
+kaggle/**/*.whl

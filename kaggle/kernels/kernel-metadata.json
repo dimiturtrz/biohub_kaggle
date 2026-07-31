@@ -1,0 +1,15 @@
+{
+  "id": "dimiturnt/celltrack-learned-submit",
+  "title": "celltrack-learned-submit",
+  "code_file": "celltrack-learned-submit.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": false,
+  "dataset_sources": ["dimiturnt/celltrack-kit"],
+  "competition_sources": ["biohub-cell-tracking-during-development"],
+  "kernel_sources": [],
+  "model_sources": []
+}
