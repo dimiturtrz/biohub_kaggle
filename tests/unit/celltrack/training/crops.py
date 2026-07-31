@@ -25,3 +25,12 @@ def test_sample_is_centred_on_an_annotated_cell(video_store: Path, in_bounds_tra
     video = CellVideo.from_ome_zarr(video_store)
     crop = SAMPLER.sample(video, in_bounds_tracks, SPACING, np.random.default_rng(1))
     assert crop.heatmap.max() == 1.0
+
+
+def test_sample_background_crop_is_a_valid_supervised_crop(video_store: Path, in_bounds_tracks: AnnotatedTracks):
+    """With background_fraction=1 the crop comes from a random location yet still yields a valid masked target."""
+    video = CellVideo.from_ome_zarr(video_store)
+    sampler = CropSampler(window=1, size=(2, 4, 4), scale_um=2.0, background_fraction=1.0)
+    crop = sampler.sample(video, in_bounds_tracks, SPACING, np.random.default_rng(2))
+    assert crop.frames.shape == (1, 2, 4, 4)
+    assert crop.heatmap.shape == (2, 4, 4)

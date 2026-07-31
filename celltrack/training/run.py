@@ -52,6 +52,7 @@ def main() -> None:
     parser.add_argument("--batch", type=int, default=8)
     parser.add_argument("--no-amp", action="store_true")
     parser.add_argument("--label-smoothing", type=float, default=0.0)
+    parser.add_argument("--background-fraction", type=float, default=0.0, help="share of crops from random background")
     parser.add_argument("--save", action="store_true")
     arguments = parser.parse_args()
 
@@ -78,6 +79,7 @@ def main() -> None:
         num_workers=arguments.workers,
         batch=arguments.batch,
         amp=not arguments.no_amp,
+        background_fraction=arguments.background_fraction,
     )
     criterion: torch.nn.Module = (
         MaskedBCEClassificationLoss(label_smoothing=arguments.label_smoothing)

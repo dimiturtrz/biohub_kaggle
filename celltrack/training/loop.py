@@ -48,6 +48,7 @@ class TrainingConfig:
     device: str = "cpu"
     num_workers: int = 0
     amp: bool = True
+    background_fraction: float = 0.0
     experiment: str = "detection-smoke"
 
     def device_type(self) -> str:
@@ -121,7 +122,12 @@ class DetectionTrainer:
 
     def _loader(self, sources: list[AnnotatedVideo]) -> "DataLoader[_Item]":
         """A loader whose worker pool prefetches freshly sampled crops so the GPU never waits on the CPU."""
-        sampler = CropSampler(window=self.config.window, size=self.config.size, scale_um=self.config.scale_um)
+        sampler = CropSampler(
+            window=self.config.window,
+            size=self.config.size,
+            scale_um=self.config.scale_um,
+            background_fraction=self.config.background_fraction,
+        )
         dataset = CropDataset(sources, sampler, steps=self.config.steps * self.config.batch, seed=self.config.seed)
         pin = self.config.device_type() == "cuda"
         if self.config.num_workers > 0:

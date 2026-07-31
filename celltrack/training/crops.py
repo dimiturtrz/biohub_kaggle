@@ -47,21 +47,29 @@ class TrainingCrop:
 
 @dataclass(frozen=True)
 class CropSampler:
-    """Samples fixed-size supervised crops anchored on annotated cells, jittered and flipped for variety."""
+    """Samples fixed-size supervised crops anchored on annotated cells, jittered and flipped for variety.
+
+    A fraction of crops are instead taken from a uniformly-random location — `background_fraction`. Cell-only
+    anchoring teaches the model what a cell looks like but never what empty tissue looks like, so at full-frame
+    inference it over-fires on the background it never trained against. Random crops (almost all empty in a
+    sparsely-annotated volume) supply that confidently-negative signal; the target mask still excludes ambiguous
+    bright regions, so an un-annotated cell that lands in a random crop carries no gradient.
+    """
 
     window: int
     size: tuple[int, int, int]
     scale_um: float
     augment: bool = True
+    background_fraction: float = 0.0
 
     def sample(
         self, video: CellVideo, tracks: AnnotatedTracks, spacing: Spacing, rng: np.random.Generator
     ) -> TrainingCrop:
-        """One crop anchored on a randomly chosen annotated cell, augmented, with its masked detection target."""
+        """One crop — usually anchored on an annotated cell, sometimes on random background — with its target."""
         coordinates = tracks.graph.coordinates
-        anchor = coordinates[rng.integers(len(coordinates))]
-        timepoints = self._window_timepoints(int(anchor[0]), video.timepoint_count)
-        origin = self._crop_origin(anchor[1:], video.volume_shape, rng)
+        anchor_t, spatial = self._anchor(video, coordinates, rng)
+        timepoints = self._window_timepoints(anchor_t, video.timepoint_count)
+        origin = self._crop_origin(spatial, video.volume_shape, rng)
         middle = timepoints[len(timepoints) // 2]
         box = (int(origin[0]), int(origin[1]), int(origin[2]))
         frames = np.stack([video.quantiles.normalise(video.window(t, box, self.size), _LOW, _HIGH) for t in timepoints])
@@ -71,6 +79,16 @@ class CropSampler:
         target = DetectionTarget.build(centres, frames[len(timepoints) // 2], spacing, self.scale_um)
         model_input = self._intensity(frames, rng) if self.augment else frames
         return TrainingCrop(frames=model_input, heatmap=target.heatmap, mask=target.mask)
+
+    def _anchor(
+        self, video: CellVideo, coordinates: Int[np.ndarray, "n 4"], rng: np.random.Generator
+    ) -> tuple[int, Int[np.ndarray, "3"]]:
+        """The `(timepoint, zyx)` a crop centres on — an annotated cell, or a random background point."""
+        if self.augment and rng.random() < self.background_fraction:
+            spatial = rng.integers(np.asarray(video.volume_shape))
+            return int(rng.integers(video.timepoint_count)), spatial
+        anchor = coordinates[rng.integers(len(coordinates))]
+        return int(anchor[0]), anchor[1:]
 
     def _intensity(
         self, frames: Float[np.ndarray, "t z y x"], rng: np.random.Generator
