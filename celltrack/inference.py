@@ -18,6 +18,7 @@ stable, confident centres and lands the node count in the metric's under-predict
 """
 
 from collections.abc import Iterator
+from contextlib import nullcontext
 from dataclasses import dataclass
 
 import numpy as np
@@ -31,7 +32,7 @@ from core.data.tracks import TrackGraph
 from core.data.video import CellVideo
 
 _LOW, _HIGH = 0.001, 0.999
-_DEFAULT_BATCH = 4
+_DEFAULT_BATCH = 8
 
 
 @dataclass(frozen=True)
@@ -47,24 +48,38 @@ class LearnedDetector:
     def detect(self, video: CellVideo, keep: int) -> TrackGraph:
         """Detect the `keep` strongest centres across a video, evenly split over its timepoints."""
         per_frame = max(1, round(keep / video.timepoint_count))
-        return self._graph([self.peaks.centres(response, per_frame) for response in self._responses(video)])
+        return self._graph([self.peaks.centres(response, per_frame) for response in self.responses(video)])
 
     def detect_above(self, video: CellVideo, probability_threshold: float) -> TrackGraph:
         """Detect every centre whose predicted probability exceeds the threshold — the node count emerges."""
         return self._graph(
-            [self.peaks.above_threshold(response, probability_threshold) for response in self._responses(video)]
+            [self.peaks.above_threshold(response, probability_threshold) for response in self.responses(video)]
         )
 
-    def _responses(self, video: CellVideo) -> Iterator[Float[Tensor, "z y x"]]:
-        """Each timepoint's probability volume, on the device, from batched forward passes over the video."""
-        frames = list(video.normalised_frames(_LOW, _HIGH))
-        windows = [self._window(frames, timepoint) for timepoint in range(len(frames))]
-        for start in range(0, len(windows), self.batch):
-            batch = torch.from_numpy(np.stack(windows[start : start + self.batch])).to(self.device)
-            with torch.no_grad():
-                probabilities = torch.sigmoid(self.model(batch))
+    def responses(self, video: CellVideo) -> Iterator[Float[Tensor, "z y x"]]:
+        """Each timepoint's probability volume, on the device, from batched forward passes over the video.
+
+        The forward runs under fp16 autocast in channels-last-3d memory format, so full-frame inference takes
+        the tensor-core path instead of dense fp32 convolutions. fp16 (not the training loop's bf16) keeps the
+        response fine-grained: the equality-based peak NMS collapses a plateau of *bit-identical* maxima to one
+        centre, and bf16's 8-bit mantissa would round distinct neighbouring peaks into false plateaus and merge
+        them away. Inference has no gradients to overflow, so bf16's wider range buys nothing here.
+        """
+        cuda = self.device.startswith("cuda")
+        autocast = torch.autocast(device_type="cuda", dtype=torch.float16) if cuda else nullcontext()
+        stacks = self._stacks(video)
+        for start in range(0, len(stacks), self.batch):
+            batch = torch.from_numpy(np.stack(stacks[start : start + self.batch])).to(self.device)
+            batch = batch.contiguous(memory_format=torch.channels_last_3d)
+            with torch.no_grad(), autocast:
+                probabilities = torch.sigmoid(self.model(batch)).float()
             for index in range(probabilities.shape[0]):
                 yield probabilities[index]
+
+    def _stacks(self, video: CellVideo) -> list[Float[np.ndarray, "t z y x"]]:
+        """Every timepoint's `window`-frame temporal stack, clamped to the video's ends."""
+        frames = list(video.normalised_frames(_LOW, _HIGH))
+        return [self._window(frames, timepoint) for timepoint in range(len(frames))]
 
     def _graph(self, per_frame_centres: list[Int[np.ndarray, "k 3"]]) -> TrackGraph:
         """Stack per-timepoint `(z, y, x)` centres into a `(t, z, y, x)` edgeless track graph."""

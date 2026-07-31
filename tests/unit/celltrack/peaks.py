@@ -29,6 +29,17 @@ def test_above_threshold_collapses_a_plateau_to_one_centre():
     assert len(EXTRACTOR.above_threshold(response, threshold=0.5)) == 1
 
 
+def test_maxima():
+    """`maxima` returns each suppressed peak with its value; a higher threshold is then a mask, not a re-pool."""
+    response = np.zeros((16, 16, 16))
+    response[4, 4, 4] = 0.99
+    response[4, 12, 12] = 0.60
+    coordinates, values = EXTRACTOR.maxima(response, floor=0.5)
+    assert sorted(coordinates.tolist()) == [[4, 4, 4], [4, 12, 12]]
+    kept = coordinates[values >= 0.9]
+    assert kept.tolist() == [[4, 4, 4]]
+
+
 def test_centres_suppresses_a_neighbour_within_a_cell():
     """Two maxima closer than the cell scale cannot both survive — the weaker is suppressed."""
     response = np.zeros((16, 16, 16))

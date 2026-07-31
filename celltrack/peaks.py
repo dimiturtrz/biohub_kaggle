@@ -55,6 +55,15 @@ class PeakExtractor:
         coordinates, _ = self._local_maxima(self._volume(response), floor=threshold)
         return coordinates.cpu().numpy().astype(np.int64)
 
+    def maxima(self, response: _Response, floor: float) -> tuple[Int[np.ndarray, "k 3"], Float[np.ndarray, "k"]]:
+        """Every suppressed maximum above `floor` with its value, so a threshold sweep filters instead of re-pooling.
+
+        The max-pool NMS is the expensive step and is threshold-independent — only the floor cut varies. Extract
+        once at the lowest floor of interest, then any higher threshold is a value mask over this small array.
+        """
+        coordinates, values = self._local_maxima(self._volume(response), floor=floor)
+        return coordinates.cpu().numpy().astype(np.int64), values.cpu().numpy()
+
     def _volume(self, response: _Response) -> Float[Tensor, "1 1 z y x"]:
         """The response as a batched float tensor on the extractor's device — a no-op if it is already there."""
         return torch.as_tensor(response, dtype=torch.float32, device=self.device)[None, None]
