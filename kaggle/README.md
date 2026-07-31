@@ -44,9 +44,21 @@ kaggle kernels output dimiturnt/celltrack-learned-submit -p /tmp/out   # sanity-
 
 ## Gotchas that cost real time
 
-- **keep-N, never a probability threshold.** The detector saturates to flat plateaus at prob≈1; NMS on a
-  plateau returns ~1e5 "peaks" per frame, and the linker's `N×N` cost matrix (`cdist`) then needs tens of GB
-  → the machine swaps to death. `peaks.centres(response, keep)` caps the count (~250/frame) and the cost.
+- **T4, not the default P100** — set `"machine_shape": "NvidiaTeslaT4"` in `kernel-metadata.json`. Kaggle's
+  default GPU is a P100 (`sm_60`, Pascal), which our torch build (2.10, compiled for `sm_70`+) refuses with
+  *"no kernel image is available for execution on the device"*. The `--accelerator` CLI flag does **not**
+  override it; only the metadata field does. Valid tokens: `NvidiaTeslaT4`, `NvidiaTeslaP100`, `Tpu1VmV38`.
+- **fp16 inference, not bf16.** The forward autocasts in fp16 (CUDA autocast's default — `torch.autocast(
+  device_type="cuda")` with no `dtype`). Do **not** switch it to bf16: the peak NMS collapses a plateau of
+  *bit-identical* maxima to one centre, and bf16's 8-bit mantissa rounds distinct neighbouring peaks into
+  false plateaus that then merge away, halving the score. bf16 is a *training*-only choice (gradient range).
+- **keep-N vs threshold is now a free choice.** The kernel reads out with `peaks.centres(response, ~250)` — a
+  bounded per-frame budget. It used to be *mandatory*: a saturated detector's flat plateaus made threshold-NMS
+  emit ~1e5 "peaks" whose `N×N` linker `cdist` swapped the machine to death. `peaks.py` now collapses each
+  plateau to one centre (connected components), so `above_threshold` is safe too; keep-N stays for count control.
+- **`kaggle` CLI is `.venv/Scripts/kaggle.exe`, not `python -m kaggle`.** The repo's own `kaggle/` directory
+  shadows the installed package, so `import kaggle` / `python -m kaggle` resolves to our source tree and fails.
+  Call the venv entrypoint directly (or run from outside the repo root).
 - **GPU on** (`enable_gpu: true`) — the full-frame 3-D forward is far too slow on CPU.
 - **No internet** — every dependency must be a wheel in the kit.
 - **`enable_gpu` kernels queue** — a run is not instant; poll `kaggle kernels status`.
