@@ -2,9 +2,15 @@
 
 A crop is a short temporal window of the normalised volume — the model sees a few timepoints so it can use
 motion, and predicts a detection heatmap for the middle one. Because annotation is sparse, a uniformly
-random crop would usually contain no labelled cell and no positive signal, so crops are centred on an
+random crop would usually contain no labelled cell and no positive signal, so crops are *anchored* on an
 annotated cell: that guarantees supervision while the surrounding tissue still supplies the dark negatives
 and the excluded-ambiguous regions the mask needs.
+
+Anchoring on a cell narrows what the model sees, though — if every crop had its cell dead-centre the model
+could learn "fire in the middle" instead of "fire on a cell". Two augmentations widen the distribution back
+out, turning the few thousand annotated anchors into far more effective examples: the anchor is *jittered*
+so the cell lands anywhere in the crop, and the crop is randomly *flipped* along each spatial axis (with its
+centres flipped to match). This is the standard cure for a detector that memorises its training crops.
 """
 
 from dataclasses import dataclass
@@ -18,6 +24,11 @@ from core.data.video import CellVideo
 from core.geometry import Spacing
 
 _LOW, _HIGH = 0.001, 0.999
+# The anchor is jittered by up to a quarter of the crop in each axis: enough to move the cell well off
+# centre, not so far it leaves the crop and loses the supervision the anchor exists to guarantee.
+_JITTER_FRACTION = 4
+# Each spatial axis is mirrored with even odds — an unbiased coin per axis gives all eight reflections.
+_FLIP_PROBABILITY = 0.5
 
 
 @dataclass(frozen=True)
@@ -31,27 +42,30 @@ class TrainingCrop:
 
 @dataclass(frozen=True)
 class CropSampler:
-    """Samples fixed-size supervised crops centred on annotated cells."""
+    """Samples fixed-size supervised crops anchored on annotated cells, jittered and flipped for variety."""
 
     window: int
     size: tuple[int, int, int]
     scale_um: float
+    augment: bool = True
 
     def sample(
         self, video: CellVideo, tracks: AnnotatedTracks, spacing: Spacing, rng: np.random.Generator
     ) -> TrainingCrop:
-        """One crop centred on a randomly chosen annotated cell, with its masked detection target."""
+        """One crop anchored on a randomly chosen annotated cell, augmented, with its masked detection target."""
         coordinates = tracks.graph.coordinates
         anchor = coordinates[rng.integers(len(coordinates))]
         timepoints = self._window_timepoints(int(anchor[0]), video.timepoint_count)
-        origin = self._crop_origin(anchor[1:], video.volume_shape)
-        frames = np.stack([self._crop(video.frame(t), origin) for t in timepoints])
-        centre_frame = video.quantiles.normalise(video.frame(timepoints[len(timepoints) // 2]), _LOW, _HIGH)
-        centre_volume = self._crop(centre_frame, origin)
-        centres = self._centres_in_crop(coordinates, timepoints[len(timepoints) // 2], origin)
-        target = DetectionTarget.build(centres, centre_volume, spacing, self.scale_um)
-        normalised = np.stack([video.quantiles.normalise(frame, _LOW, _HIGH) for frame in frames])
-        return TrainingCrop(frames=normalised, heatmap=target.heatmap, mask=target.mask)
+        origin = self._crop_origin(anchor[1:], video.volume_shape, rng)
+        middle = timepoints[len(timepoints) // 2]
+        frames = np.stack(
+            [self._crop(video.quantiles.normalise(video.frame(t), _LOW, _HIGH), origin) for t in timepoints]
+        )
+        centres = self._centres_in_crop(coordinates, middle, origin)
+        if self.augment:
+            frames, centres = self._flip(frames, centres, rng)
+        target = DetectionTarget.build(centres, frames[len(timepoints) // 2], spacing, self.scale_um)
+        return TrainingCrop(frames=frames, heatmap=target.heatmap, mask=target.mask)
 
     def _window_timepoints(self, centre_t: int, timepoint_count: int) -> list[int]:
         """A temporal window around a timepoint, clamped to the video and centred on `centre_t`."""
@@ -60,17 +74,37 @@ class CropSampler:
         return list(range(start, start + min(self.window, timepoint_count)))
 
     def _crop_origin(
-        self, centre_zyx: Int[np.ndarray, "3"], volume_shape: tuple[int, int, int]
+        self, centre_zyx: Int[np.ndarray, "3"], volume_shape: tuple[int, int, int], rng: np.random.Generator
     ) -> Int[np.ndarray, "3"]:
-        """The lower corner of a crop centred on a point, clamped so the crop stays inside the volume."""
-        wanted = np.asarray(centre_zyx) - np.asarray(self.size) // 2
-        upper = np.asarray(volume_shape) - np.asarray(self.size)
+        """The lower corner of a crop anchored on a point, jittered for variety and clamped inside the volume."""
+        size = np.asarray(self.size)
+        jitter = self._jitter(rng)
+        wanted = np.asarray(centre_zyx) - size // 2 + jitter
+        upper = np.asarray(volume_shape) - size
         return np.clip(wanted, 0, np.maximum(upper, 0))
+
+    def _jitter(self, rng: np.random.Generator) -> Int[np.ndarray, "3"]:
+        """A per-axis anchor offset of up to a quarter of the crop, or zero when augmentation is off."""
+        if not self.augment:
+            return np.zeros(3, dtype=np.int64)
+        reach = np.asarray(self.size) // _JITTER_FRACTION
+        return rng.integers(-reach, reach + 1)
 
     def _crop(self, volume: Float[np.ndarray, "z y x"], origin: Int[np.ndarray, "3"]) -> Float[np.ndarray, "z y x"]:
         """Extract the fixed-size box at an origin."""
         window = tuple(slice(int(o), int(o) + s) for o, s in zip(origin, self.size, strict=True))
         return volume[window]
+
+    def _flip(
+        self, frames: Float[np.ndarray, "t z y x"], centres: Int[np.ndarray, "k 3"], rng: np.random.Generator
+    ) -> tuple[Float[np.ndarray, "t z y x"], Int[np.ndarray, "k 3"]]:
+        """Randomly mirror each spatial axis, moving the centres to match so labels stay aligned to the volume."""
+        flipped = centres.copy()
+        for axis in range(3):
+            if rng.random() < _FLIP_PROBABILITY:
+                frames = np.flip(frames, axis=axis + 1)
+                flipped[:, axis] = self.size[axis] - 1 - flipped[:, axis]
+        return np.ascontiguousarray(frames), flipped
 
     def _centres_in_crop(
         self,
