@@ -18,6 +18,7 @@ from celltrack.training.dataset import AnnotatedVideo
 from celltrack.training.loop import DetectionTrainer, TrainingConfig
 from celltrack.training.loss import MaskedDetectionLoss
 from celltrack.training.model import ANISOTROPIC_STRIDES
+from core.data.split import AcquisitionFolds
 from core.data.tracks import AnnotatedTracks
 from core.data.video import CellVideo
 from core.paths import DataRoot
@@ -38,7 +39,8 @@ def main() -> None:
     """Train the detection model over real videos, logging to MLflow and optionally saving the weights."""
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser(description="Train the detection model on real videos.")
-    parser.add_argument("--videos", type=int, default=4)
+    parser.add_argument("--fold", type=int, default=0)
+    parser.add_argument("--videos", type=int, default=0, help="training-video cap; 0 = whole fold-train split")
     parser.add_argument("--steps", type=int, default=300)
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--anisotropic", action="store_true")
@@ -53,13 +55,15 @@ def main() -> None:
     root = DataRoot.from_config(_CONFIG)
     mlflow.set_tracking_uri(f"sqlite:///{(root.processed(_DATASET) / 'mlflow.db').as_posix()}")
 
+    train_videos = AcquisitionFolds().split(root.videos("train"), arguments.fold).train
+    limit = arguments.videos or len(train_videos)
     sources = [
         AnnotatedVideo(
             video=(cell := CellVideo.from_ome_zarr(video)),
             tracks=AnnotatedTracks.from_geff(root.track_store(video)),
             spacing=cell.spacing,
         )
-        for video in root.videos("train")[: arguments.videos]
+        for video in train_videos[:limit]
     ]
     strides = ANISOTROPIC_STRIDES if arguments.anisotropic else ((2, 2, 2),)
     config = TrainingConfig(
