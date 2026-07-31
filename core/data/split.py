@@ -37,6 +37,42 @@ class VideoSplit:
 
 
 @dataclass(frozen=True)
+class DatasetSplit:
+    """A three-way partition: the videos to fit on, to validate each epoch, and to score once at the end."""
+
+    train: tuple[Path, ...]
+    validation: tuple[Path, ...]
+    test: tuple[Path, ...]
+
+
+@dataclass(frozen=True)
+class StratifiedSplit:
+    """Deterministic train/validation/test over videos, each acquisition partitioned the same way.
+
+    A held-out count per acquisition rather than a fold index: the smallest useful test set mirrors the
+    competition's own — a couple of videos of each acquisition, so the local number tracks the leaderboard —
+    and validation is smaller still, since per-epoch scoring must stay cheap. Membership is by the same stable
+    filename rank the folds use, so the split is reproducible from the filenames with no seed to carry.
+    """
+
+    test_per_prefix: int = 2
+    validation_per_prefix: int = 1
+
+    def partition(self, videos: Sequence[Path]) -> DatasetSplit:
+        """Split each acquisition into test, then validation, then train, by stable rank — the rest is train."""
+        train: list[Path] = []
+        validation: list[Path] = []
+        test: list[Path] = []
+        held = self.test_per_prefix + self.validation_per_prefix
+        for group in AcquisitionFolds.by_prefix(videos).values():
+            ordered = sorted(group, key=AcquisitionFolds.rank_of)
+            test.extend(ordered[: self.test_per_prefix])
+            validation.extend(ordered[self.test_per_prefix : held])
+            train.extend(ordered[held:])
+        return DatasetSplit(train=tuple(train), validation=tuple(validation), test=tuple(test))
+
+
+@dataclass(frozen=True)
 class AcquisitionFolds:
     """Deterministic k-fold over videos, stratified so each acquisition is spread evenly across folds."""
 

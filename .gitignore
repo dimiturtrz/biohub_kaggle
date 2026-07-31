@@ -53,3 +53,4 @@ node_modules/
 
 # Transient tool output from local gate runs.
 *.log
+/scratchpad/
