@@ -32,7 +32,17 @@ _POSITIVE_LABEL = math.exp(-0.5)
 
 
 class MaskedBCEClassificationLoss(torch.nn.Module):
-    """Binary cross-entropy over the supervised voxels, each class's per-batch loss mass normalised to one."""
+    """Binary cross-entropy over the supervised voxels, each class's per-batch loss mass normalised to one.
+
+    Optional label smoothing softens the targets from {0, 1} to {eps, 1-eps}: a hard target rewards ever
+    larger logits without bound, which is what drives the detector to output probability one everywhere and
+    forces a 0.99 read-out threshold. Smoothing caps the reward, so probabilities spread and calibration
+    improves — the operating point drifts back toward a half.
+    """
+
+    def __init__(self, label_smoothing: float = 0.0) -> None:
+        super().__init__()
+        self._label_smoothing = label_smoothing
 
     @override
     def forward(
@@ -45,6 +55,6 @@ class MaskedBCEClassificationLoss(torch.nn.Module):
         positive = (target > _POSITIVE_LABEL) & mask
         negative = mask & ~positive
         weight = positive / torch.clamp(positive.sum(), min=1.0) + negative / torch.clamp(negative.sum(), min=1.0)
-        labels = positive.to(prediction.dtype)
+        labels = positive.to(prediction.dtype) * (1 - 2 * self._label_smoothing) + self._label_smoothing
         per_voxel = functional.binary_cross_entropy_with_logits(prediction, labels, reduction="none")
         return (weight * per_voxel).sum()

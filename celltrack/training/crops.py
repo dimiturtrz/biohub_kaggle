@@ -29,6 +29,11 @@ _LOW, _HIGH = 0.001, 0.999
 _JITTER_FRACTION = 4
 # Each spatial axis is mirrored with even odds — an unbiased coin per axis gives all eight reflections.
 _FLIP_PROBABILITY = 0.5
+# Intensity jitter for the model's input: acquisitions vary in brightness and contrast, so scale and shift
+# each crop's normalised intensities, clipped back to [0, 1]. The supervision target is built from the clean
+# crop, not this one, so the dark-background mask threshold is never moved by the augmentation.
+_INTENSITY_SCALE = (0.8, 1.2)
+_INTENSITY_SHIFT = 0.1
 
 
 @dataclass(frozen=True)
@@ -65,7 +70,16 @@ class CropSampler:
         if self.augment:
             frames, centres = self._flip(frames, centres, rng)
         target = DetectionTarget.build(centres, frames[len(timepoints) // 2], spacing, self.scale_um)
-        return TrainingCrop(frames=frames, heatmap=target.heatmap, mask=target.mask)
+        model_input = self._intensity(frames, rng) if self.augment else frames
+        return TrainingCrop(frames=model_input, heatmap=target.heatmap, mask=target.mask)
+
+    def _intensity(
+        self, frames: Float[np.ndarray, "t z y x"], rng: np.random.Generator
+    ) -> Float[np.ndarray, "t z y x"]:
+        """Scale and shift a crop's normalised intensities, clipped to [0, 1] — brightness/contrast variety."""
+        scale = rng.uniform(*_INTENSITY_SCALE)
+        shift = rng.uniform(-_INTENSITY_SHIFT, _INTENSITY_SHIFT)
+        return np.clip(frames * scale + shift, 0.0, 1.0).astype(np.float32)
 
     def _window_timepoints(self, centre_t: int, timepoint_count: int) -> list[int]:
         """A temporal window around a timepoint, clamped to the video and centred on `centre_t`."""
