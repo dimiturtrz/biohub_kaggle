@@ -1316,13 +1316,13 @@
     },
     {
       "kind": "calls",
-      "source": "celltrack.inference.LearnedDetector._responses",
+      "source": "celltrack.inference.LearnedDetector._stacks",
       "target": "celltrack.inference.LearnedDetector._window",
       "weight": 1
     },
     {
       "kind": "calls",
-      "source": "celltrack.inference.LearnedDetector._responses",
+      "source": "celltrack.inference.LearnedDetector._stacks",
       "target": "core.data.video.CellVideo.normalised_frames",
       "weight": 1
     },
@@ -1335,7 +1335,7 @@
     {
       "kind": "calls",
       "source": "celltrack.inference.LearnedDetector.detect",
-      "target": "celltrack.inference.LearnedDetector._responses",
+      "target": "celltrack.inference.LearnedDetector.responses",
       "weight": 1
     },
     {
@@ -1353,13 +1353,19 @@
     {
       "kind": "calls",
       "source": "celltrack.inference.LearnedDetector.detect_above",
-      "target": "celltrack.inference.LearnedDetector._responses",
+      "target": "celltrack.inference.LearnedDetector.responses",
       "weight": 1
     },
     {
       "kind": "calls",
       "source": "celltrack.inference.LearnedDetector.detect_above",
       "target": "celltrack.peaks.PeakExtractor.above_threshold",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.inference.LearnedDetector.responses",
+      "target": "celltrack.inference.LearnedDetector._stacks",
       "weight": 1
     },
     {
@@ -1587,6 +1593,18 @@
     {
       "kind": "calls",
       "source": "celltrack.peaks.PeakExtractor.centres",
+      "target": "celltrack.peaks.PeakExtractor._volume",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.peaks.PeakExtractor.maxima",
+      "target": "celltrack.peaks.PeakExtractor._local_maxima",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.peaks.PeakExtractor.maxima",
       "target": "celltrack.peaks.PeakExtractor._volume",
       "weight": 1
     },
@@ -1892,6 +1910,18 @@
     },
     {
       "kind": "references",
+      "source": "celltrack.training.dataset.DensitySampling",
+      "target": "celltrack.training.dataset.AnnotatedVideo",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.dataset.DensitySampling.weights",
+      "target": "celltrack.training.dataset.DensitySampling._stratified",
+      "weight": 1
+    },
+    {
+      "kind": "references",
       "source": "celltrack.training.loop.DetectionTrainer",
       "target": "celltrack.training.dataset.AnnotatedVideo",
       "weight": 1
@@ -1924,6 +1954,18 @@
       "kind": "construct",
       "source": "celltrack.training.loop.DetectionTrainer._loader",
       "target": "celltrack.training.dataset.CropDataset",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.loop.DetectionTrainer._loader",
+      "target": "celltrack.training.dataset.DensitySampling",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.loop.DetectionTrainer._loader",
+      "target": "celltrack.training.dataset.DensitySampling.weights",
       "weight": 1
     },
     {
@@ -2661,7 +2703,7 @@
   ],
   "nodes": [
     {
-      "descendants": 23,
+      "descendants": 24,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -2760,6 +2802,14 @@
       "descendants": 0,
       "id": "celltrack.peaks",
       "label": "peaks",
+      "level": "module",
+      "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.response_cache",
+      "label": "response_cache",
       "level": "module",
       "parent": "celltrack",
       "role": null
@@ -3118,6 +3168,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.response_cache.ResponseCache",
+      "label": "ResponseCache",
+      "level": "class",
+      "parent": "celltrack.response_cache",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.short_track_filter.ShortTrackFilter",
       "label": "ShortTrackFilter",
       "level": "class",
@@ -3179,6 +3237,14 @@
       "level": "class",
       "parent": "celltrack.training.dataset",
       "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.dataset.DensitySampling",
+      "label": "DensitySampling",
+      "level": "class",
+      "parent": "celltrack.training.dataset",
+      "role": "satellite"
     },
     {
       "descendants": 0,
@@ -3726,8 +3792,8 @@
     },
     {
       "descendants": 0,
-      "id": "celltrack.inference.LearnedDetector._responses",
-      "label": "_responses",
+      "id": "celltrack.inference.LearnedDetector._stacks",
+      "label": "_stacks",
       "level": "method",
       "parent": "celltrack.inference.LearnedDetector",
       "role": null
@@ -3752,6 +3818,14 @@
       "descendants": 0,
       "id": "celltrack.inference.LearnedDetector.detect_above",
       "label": "detect_above",
+      "level": "method",
+      "parent": "celltrack.inference.LearnedDetector",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.inference.LearnedDetector.responses",
+      "label": "responses",
       "level": "method",
       "parent": "celltrack.inference.LearnedDetector",
       "role": null
@@ -3850,6 +3924,30 @@
       "label": "centres",
       "level": "method",
       "parent": "celltrack.peaks.PeakExtractor",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.peaks.PeakExtractor.maxima",
+      "label": "maxima",
+      "level": "method",
+      "parent": "celltrack.peaks.PeakExtractor",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.response_cache.ResponseCache.__init__",
+      "label": "__init__",
+      "level": "method",
+      "parent": "celltrack.response_cache.ResponseCache",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.response_cache.ResponseCache.responses",
+      "label": "responses",
+      "level": "method",
+      "parent": "celltrack.response_cache.ResponseCache",
       "role": null
     },
     {
@@ -3982,6 +4080,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.training.dataset.AnnotatedVideo.cells_per_frame",
+      "label": "cells_per_frame",
+      "level": "method",
+      "parent": "celltrack.training.dataset.AnnotatedVideo",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.training.dataset.CropDataset.__getitem__",
       "label": "__getitem__",
       "level": "method",
@@ -4002,6 +4108,22 @@
       "label": "__len__",
       "level": "method",
       "parent": "celltrack.training.dataset.CropDataset",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.dataset.DensitySampling._stratified",
+      "label": "_stratified",
+      "level": "method",
+      "parent": "celltrack.training.dataset.DensitySampling",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.dataset.DensitySampling.weights",
+      "label": "weights",
+      "level": "method",
+      "parent": "celltrack.training.dataset.DensitySampling",
       "role": null
     },
     {
