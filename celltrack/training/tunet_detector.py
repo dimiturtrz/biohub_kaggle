@@ -211,6 +211,7 @@ def main() -> None:
     parser.add_argument("--threads", type=int, default=12, help="parallel frame-decompress threads")
     parser.add_argument("--eval-every", type=int, default=250)
     parser.add_argument("--eval-subset", type=int, default=2)
+    parser.add_argument("--eval-threshold", type=float, default=0.5)
     parser.add_argument("--warm-start", action="store_true", help="initialise from the published pilkwang weights")
     parser.add_argument("--weights", type=str, default="detector_tunet_ours.pt")
     args = parser.parse_args()
@@ -223,6 +224,7 @@ def main() -> None:
         threads=args.threads,
         eval_every=args.eval_every,
         eval_subset=args.eval_subset,
+        eval_threshold=args.eval_threshold,
     )
     root = DataRoot.from_config(_CONFIG)
     dz, dy, dx = config.downsample

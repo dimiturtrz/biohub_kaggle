@@ -7,7 +7,6 @@ these cover the code this repo owns: the reproducible-inference recipe and local
 import json
 from pathlib import Path
 
-import numpy as np
 import torch
 import zarr
 
@@ -37,45 +36,6 @@ def test_from_config():
 def test_recipe_defaults_are_pilkwangs_input_pipeline():
     """The zero-argument recipe is the ×4 Y/X downsample the detector was trained under."""
     assert DetectorRecipe().downsample == (1, 4, 4)
-
-
-def _kernel() -> tuple[int, int, int]:
-    return (3, 3, 3)
-
-
-def test_local_maximum_above_threshold_is_a_peak():
-    """A single strong voxel clears the sigmoid threshold and is returned at its coordinate."""
-    logits = torch.full((5, 5, 5), -10.0)
-    logits[2, 2, 2] = 10.0
-    peaks = TemporalUNetDetector._local_maxima(logits, threshold=0.5, pool_kernel=_kernel())
-    assert peaks.tolist() == [[2, 2, 2]]
-
-
-def test_sub_threshold_maximum_is_suppressed():
-    """A local maximum whose probability is below the threshold produces no detection."""
-    logits = torch.full((5, 5, 5), -10.0)
-    logits[2, 2, 2] = -1.0  # sigmoid(-1) ~ 0.27 < 0.5
-    peaks = TemporalUNetDetector._local_maxima(logits, threshold=0.5, pool_kernel=_kernel())
-    assert len(peaks) == 0
-
-
-def test_pool_collapses_a_ridge_to_its_single_maximum():
-    """Two neighbouring high voxels within one pool window resolve to the strict maximum only."""
-    logits = torch.full((5, 5, 5), -10.0)
-    logits[2, 2, 2] = 5.0
-    logits[2, 2, 3] = 8.0  # the strict max of the adjacent pair
-    peaks = TemporalUNetDetector._local_maxima(logits, threshold=0.5, pool_kernel=_kernel())
-    assert peaks.tolist() == [[2, 2, 3]]
-
-
-def test_two_separated_peaks_both_survive():
-    """Peaks farther apart than the pool kernel are independent and both detected."""
-    logits = torch.full((9, 9, 9), -10.0)
-    logits[1, 1, 1] = 6.0
-    logits[7, 7, 7] = 6.0
-    peaks = TemporalUNetDetector._local_maxima(logits, threshold=0.5, pool_kernel=_kernel())
-    assert {tuple(p) for p in peaks.tolist()} == {(1, 1, 1), (7, 7, 7)}
-    assert np.asarray(peaks).shape == (2, 3)
 
 
 def test_forward():

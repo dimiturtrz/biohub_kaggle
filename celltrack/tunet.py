@@ -21,29 +21,38 @@ from typing import cast, override
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 import zarr
 from jaxtyping import Float, Int
 from torch import Tensor, nn
 from zarr.core.metadata import ArrayV3Metadata
 
+from celltrack.peaks import PeakExtractor
 from core.data.tracks import TrackGraph
 from core.data.video import ImageStatistics, Multiscale
+from core.geometry import Spacing
 
 _EXT_SRC = Path(__file__).parents[1] / "external" / "kaggle-cell-tracking-competition" / "src"
 
 
 @dataclass(frozen=True)
 class DetectorRecipe:
-    """The fixed input pipeline around the network — downsample, peak-suppression radius, TTA."""
+    """The fixed input pipeline around the network — downsample, peak-suppression radius, TTA, node cap."""
 
     downsample: tuple[int, int, int] = (1, 4, 4)
     pool_kernel_um: float = 5.0
     tta: bool = True
+    # Hard cap on detected centres per frame. A well-trained detector emits far fewer, but an undertrained one
+    # can fire on noise everywhere; without a cap that flood explodes the linker's per-frame O(N^3) assignment.
+    keep_per_frame: int = 2000
 
     def as_config(self) -> dict[str, object]:
         """The recipe as a JSON-serialisable dict, saved beside the weights so inference is reproducible."""
-        return {"downsample": list(self.downsample), "pool_kernel_um": self.pool_kernel_um, "tta": self.tta}
+        return {
+            "downsample": list(self.downsample),
+            "pool_kernel_um": self.pool_kernel_um,
+            "tta": self.tta,
+            "keep_per_frame": self.keep_per_frame,
+        }
 
     @classmethod
     def from_config(cls, config: dict[str, object]) -> "DetectorRecipe":
@@ -52,6 +61,7 @@ class DetectorRecipe:
             downsample=tuple(config["downsample"]),  # type: ignore[arg-type]
             pool_kernel_um=float(config.get("pool_kernel_um", 5.0)),  # type: ignore[arg-type]
             tta=bool(config.get("tta", True)),
+            keep_per_frame=int(config.get("keep_per_frame", 2000)),  # type: ignore[arg-type]
         )
 
 
@@ -142,12 +152,12 @@ class TemporalUNetDetector(nn.Module):
         """
         self.eval()
         source = self._open_source(path)
-        pool_kernel = self._pool_kernel(source.scale, recipe.pool_kernel_um, recipe.downsample)
+        extractor = self._extractor(source.scale, recipe, device)
         stamped: list[np.ndarray] = []
         for timepoint in range(int(source.array.shape[0])):
             frame = self._read_frame(source, timepoint, recipe.downsample, device)
-            logits = self._logits(frame, recipe.tta)
-            peaks = self._local_maxima(logits, threshold, pool_kernel)
+            probs = torch.sigmoid(self._logits(frame, recipe.tta))
+            peaks = self._capped_peaks(extractor, probs, threshold, recipe.keep_per_frame)
             scaled = peaks * np.array(recipe.downsample)
             stamped.append(np.column_stack([np.full(len(scaled), timepoint), scaled]).astype(np.int64))
         nodes = np.concatenate(stamped) if stamped else np.empty((0, 4), dtype=np.int64)
@@ -163,14 +173,24 @@ class TemporalUNetDetector(nn.Module):
         return logits
 
     @staticmethod
-    def _local_maxima(
-        logits: Float[Tensor, "z y x"], threshold: float, pool_kernel: tuple[int, ...]
+    def _extractor(scale: tuple[float, float, float], recipe: DetectorRecipe, device: str) -> PeakExtractor:
+        """A peak extractor on the downsampled voxel grid — its NMS collapses a saturated plateau to one centre."""
+        spacing = Spacing(
+            z=scale[0] * recipe.downsample[0],
+            y=scale[1] * recipe.downsample[1],
+            x=scale[2] * recipe.downsample[2],
+        )
+        return PeakExtractor(spacing, scale_um=recipe.pool_kernel_um / 2.0, device=device)
+
+    @staticmethod
+    def _capped_peaks(
+        extractor: PeakExtractor, probs: Float[Tensor, "z y x"], threshold: float, keep: int
     ) -> Int[np.ndarray, "k 3"]:
-        """Voxel indices of strict local maxima whose sigmoid probability clears the threshold."""
-        pad = tuple(k // 2 for k in pool_kernel)
-        pooled = F.max_pool3d(logits[None, None], pool_kernel, stride=1, padding=pad)[0, 0]
-        is_peak = (logits == pooled) & (torch.sigmoid(logits) > threshold)
-        return torch.nonzero(is_peak, as_tuple=False).cpu().numpy()  # (k, 3) z y' x'
+        """Suppressed maxima above `threshold`, capped to the `keep` strongest — bounds the linker's cost matrix."""
+        coordinates, values = extractor.maxima(probs, floor=threshold)
+        if len(coordinates) > keep:
+            coordinates = coordinates[np.argsort(values)[::-1][:keep]]
+        return coordinates
 
     @staticmethod
     def _open_source(path: Path) -> _VideoSource:
@@ -195,9 +215,3 @@ class TemporalUNetDetector(nn.Module):
         raw = np.asarray(source.array[timepoint, ::dz, ::dy, ::dx], dtype=np.float32)
         normed = (torch.from_numpy(raw) - source.q_low) / (source.q_high - source.q_low + 1e-6)
         return normed.clamp(0.0).to(device)
-
-    @staticmethod
-    def _pool_kernel(scale: tuple[float, float, float], um: float, downsample: tuple[int, int, int]) -> tuple[int, ...]:
-        """Odd per-axis max-pool kernel covering `um` micrometres in the downsampled grid."""
-        voxel = tuple(s * d for s, d in zip(scale, downsample, strict=True))
-        return tuple((size := max(1, round(um / s))) + (size % 2 == 0) for s in voxel)
