@@ -1,7 +1,7 @@
 {
-  "id": "dimiturnt/celltrack-aug8k-nn",
-  "title": "celltrack-aug8k-nn",
-  "code_file": "celltrack-aug8k-nn.py",
+  "id": "dimiturnt/celltrack-pilktunet-motion-stlf",
+  "title": "celltrack-pilktunet-motion-stlf",
+  "code_file": "celltrack-pilktunet-motion-stlf.py",
   "language": "python",
   "kernel_type": "script",
   "is_private": true,
@@ -9,7 +9,8 @@
   "enable_tpu": false,
   "enable_internet": false,
   "dataset_sources": [
-    "dimiturnt/celltrack-kit"
+    "dimiturnt/celltrack-kit",
+    "pilkwang/biohub-tracking-support-pack-50ep-v1"
   ],
   "competition_sources": [
     "biohub-cell-tracking-during-development"

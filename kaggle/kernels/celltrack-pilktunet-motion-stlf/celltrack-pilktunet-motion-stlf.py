@@ -18,17 +18,24 @@ from pathlib import Path
 _INPUTS = os.listdir("/kaggle/input")
 print("INPUT DIRS:", _INPUTS, flush=True)
 
-_PACK = next(p for p in glob.glob("/kaggle/input/*") if "support-pack" in p)
-_KIT = next(p for p in glob.glob("/kaggle/input/*") if glob.glob(f"{p}/**/celltrack/motion_linking.py", recursive=True))
-_MARKER = next(m for m in glob.glob(f"{_KIT}/**/celltrack/motion_linking.py", recursive=True))
+
+# Kaggle mounts nest under /kaggle/input/{datasets,competitions}/... — anchor every lookup on a known file.
+def _find(pattern: str) -> str:
+    return next(iter(glob.glob(f"/kaggle/input/**/{pattern}", recursive=True)))
+
+
+_WEIGHTS = Path(_find("weights/unet_transformer/split_0/config.json")).parent
+_PACK_SRC = Path(_find("repo/src/biohub_tracking/models/__init__.py")).parents[2]
+_MARKER = _find("celltrack/motion_linking.py")
 
 # The detector is pure torch, but celltrack (zarr/jaxtyping/beartype/numcodecs) needs the kit's offline wheels.
-_WHEELS = sorted(glob.glob(f"{_KIT}/**/*.whl", recursive=True))
+_KIT_ROOT = os.path.dirname(os.path.dirname(_MARKER))
+_WHEELS = sorted(glob.glob(f"{Path(_KIT_ROOT).parent}/**/*.whl", recursive=True))
 print("WHEELS:", [os.path.basename(w) for w in _WHEELS], flush=True)
 subprocess.run([sys.executable, "-m", "pip", "install", "--no-index", "--no-deps", *_WHEELS], check=True)
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(_MARKER)))
-sys.path.insert(0, str(Path(_PACK) / "repo" / "src"))
+sys.path.insert(0, _KIT_ROOT)
+sys.path.insert(0, str(_PACK_SRC))
 
 import json  # noqa: E402
 
@@ -37,7 +44,7 @@ import torch  # noqa: E402
 import torch.nn.functional as F  # noqa: E402
 import zarr  # noqa: E402
 
-from tracking_cellmot.models import TemporalUNet3D  # noqa: E402
+from biohub_tracking.models import TemporalUNet3D  # noqa: E402
 
 from celltrack.linefit_smoother import LinefitSmoother  # noqa: E402
 from celltrack.motion_linking import MotionHungarianLinker  # noqa: E402
@@ -46,8 +53,7 @@ from core.data.submission import Submission  # noqa: E402
 from core.data.tracks import TrackGraph  # noqa: E402
 from core.geometry import Spacing  # noqa: E402
 
-_COMP = "/kaggle/input/competitions/biohub-cell-tracking-during-development"
-_WEIGHTS = Path(_PACK) / "weights" / "unet_transformer" / "split_0"
+_TEST_GLOB = "/kaggle/input/**/biohub-cell-tracking-during-development/test/*.zarr"
 _DOWNSAMPLE = (1, 4, 4)
 _WINDOW_UM, _THRESHOLD = 5.0, 0.5
 _DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -108,7 +114,7 @@ def _detections(model: _Detector, path: str) -> tuple[TrackGraph, Spacing]:
 
 
 def main() -> None:
-    tests = sorted(glob.glob(f"{_COMP}/test/*.zarr"))
+    tests = sorted(glob.glob(_TEST_GLOB, recursive=True))
     print(f"test videos: {len(tests)} on {_DEVICE}", flush=True)
     config = json.loads((_WEIGHTS / "config.json").read_text())
     state = torch.load(_WEIGHTS / "edge_predictor_best.pth", map_location=_DEVICE, weights_only=True)

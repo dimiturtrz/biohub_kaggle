@@ -28,11 +28,11 @@ uv run python kaggle/build_kit.py \
 cd kaggle && kaggle datasets version -p kit -m "<message>"
 
 # 3. push + run a kernel  (one method per subdir; metadata file must be named kernel-metadata.json)
-cd kaggle && kaggle kernels push -p kernels/celltrack-pilkwang-motion
+cd kaggle && kaggle kernels push -p kernels/celltrack-pilktunet-motion-stlf
 
 # 4. watch it, then submit its output to the competition
-kaggle kernels status dimiturnt/celltrack-aug8k-nn
-kaggle kernels output dimiturnt/celltrack-aug8k-nn -p /tmp/out   # sanity-check submission.csv
+kaggle kernels status dimiturnt/celltrack-pilktunet-motion-stlf
+kaggle kernels output dimiturnt/celltrack-pilktunet-motion-stlf -p /tmp/out   # sanity-check submission.csv
 # submit the completed kernel version on the competition's "Submit" page (code-competition flow)
 ```
 
@@ -42,14 +42,16 @@ Named for the method, `celltrack-<detector>-<linker>` — a different detector o
 kernel, not a new version of an existing one. The version history of one slug is the same method retrained
 or re-tuned; the slug itself says which method it is.
 
-Each kernel is a subdir `kernels/<slug>/` holding `<slug>.py` + its `kernel-metadata.json`.
+Kernels are named systematically `celltrack-<S1>-<S2>-<S3>` (detection-linking-postproc) from the closed
+vocabulary in [`SUBMISSIONS.md`](SUBMISSIONS.md) — the name is the method tuple, and that file's coverage
+grid is what is tried vs untried. Each kernel is a subdir `kernels/<slug>/` holding `<slug>.py` + its
+`kernel-metadata.json`.
 
-- `celltrack-pilkwang-motion` — pilkwang's public TemporalUNet3D detector (mounted from the support pack,
-  no wheels) → our MotionHungarianLinker → short-track → linefit. Fold-0 local ~0.93.
-- `celltrack-aug8k-nn` — our aug-recipe width-16 U-Net (`detector_bce_aug_8k.pt`) → NN linker → short-track
-  → linefit. Fold-0 local 0.472.
-- The classical baseline (`dimiturnt/celltrack-classical-submit`, LoG detector → NN linker, scored **0.427**)
-  is the proven reference for the path.
+- `celltrack-pilktunet-motion-stlf` — pilkwang `TemporalUNet3D` (from the support pack, no wheels) → motion
+  linker → short-track + linefit. Fold-0 local **0.877**.
+- `celltrack-unetaug-nn-stlf` — our width-16 aug U-Net (`detector_bce_aug_8k.pt`) → NN → short-track +
+  linefit. Fold-0 local 0.472.
+- The classical baseline (`dog`-`nn`-`raw`, legacy slug `celltrack-classical-submit`) scored **0.427**.
 
 ## Gotchas that cost real time
 

@@ -56,6 +56,7 @@ def main() -> None:
     parser.add_argument(
         "--density-stratified", action="store_true", help="draw cell-density octaves equally (balance sparse vs dense)"
     )
+    parser.add_argument("--weight-decay", type=float, default=0.0, help="AdamW weight decay (regularization)")
     parser.add_argument("--save", action="store_true")
     arguments = parser.parse_args()
 
@@ -84,6 +85,7 @@ def main() -> None:
         amp=not arguments.no_amp,
         background_fraction=arguments.background_fraction,
         density_stratified=arguments.density_stratified,
+        weight_decay=arguments.weight_decay,
     )
     criterion: torch.nn.Module = (
         MaskedBCEClassificationLoss(label_smoothing=arguments.label_smoothing)

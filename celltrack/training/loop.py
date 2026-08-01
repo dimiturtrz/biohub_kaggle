@@ -46,6 +46,7 @@ class TrainingConfig:
     steps: int = 200
     batch: int = 2
     learning_rate: float = 1e-3
+    weight_decay: float = 0.0
     seed: int = 0
     device: str = "cpu"
     num_workers: int = 0
@@ -84,7 +85,9 @@ class DetectionTrainer:
         model = DetectionUNet(window=self.config.window, width=self.config.width, strides=self.config.strides).to(
             self.config.device
         )
-        optimiser = torch.optim.Adam(model.parameters(), lr=self.config.learning_rate)
+        optimiser = torch.optim.AdamW(
+            model.parameters(), lr=self.config.learning_rate, weight_decay=self.config.weight_decay
+        )
         scaler = torch.amp.GradScaler(self.config.device_type(), enabled=self.config.mixed_precision())
 
         losses: list[float] = []

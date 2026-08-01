@@ -254,6 +254,36 @@
     },
     {
       "kind": "import",
+      "source": "celltrack.linkers",
+      "target": "celltrack.division_linking",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.linkers",
+      "target": "celltrack.ilp_linking",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.linkers",
+      "target": "celltrack.linking",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.linkers",
+      "target": "celltrack.motion_linking",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.linkers",
+      "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "celltrack.linking",
       "target": "core.data.tracks",
       "weight": 1
@@ -261,6 +291,18 @@
     {
       "kind": "import",
       "source": "celltrack.linking",
+      "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.motion_linking",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.motion_linking",
       "target": "core.geometry",
       "weight": 1
     },
@@ -1394,6 +1436,18 @@
     },
     {
       "kind": "references",
+      "source": "celltrack.linkers.LinkerConfig",
+      "target": "celltrack.linking.Linker",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.linkers.LinkerConfig",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "references",
       "source": "celltrack.linking.Linker",
       "target": "core.data.tracks.TrackGraph",
       "weight": 1
@@ -1437,6 +1491,54 @@
     {
       "kind": "calls",
       "source": "celltrack.linking.NearestNeighbourLinker.link",
+      "target": "core.geometry.Spacing.to_micrometres",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.motion_linking.MotionHungarianLinker",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.motion_linking.MotionHungarianLinker",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.motion_linking.MotionHungarianLinker._match",
+      "target": "celltrack.motion_linking.MotionHungarianLinker._assign",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.motion_linking.MotionHungarianLinker.link",
+      "target": "celltrack.motion_linking.MotionHungarianLinker._match",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.motion_linking.MotionHungarianLinker.link",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.motion_linking.MotionHungarianLinker.link",
+      "target": "core.data.tracks.TrackGraph.positions",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.motion_linking.MotionHungarianLinker.link",
+      "target": "core.data.tracks.TrackGraph.timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.motion_linking.MotionHungarianLinker.link",
       "target": "core.geometry.Spacing.to_micrometres",
       "weight": 1
     },
@@ -2703,7 +2805,7 @@
   ],
   "nodes": [
     {
-      "descendants": 24,
+      "descendants": 26,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -2784,8 +2886,24 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.linkers",
+      "label": "linkers",
+      "level": "module",
+      "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.linking",
       "label": "linking",
+      "level": "module",
+      "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.motion_linking",
+      "label": "motion_linking",
       "level": "module",
       "parent": "celltrack",
       "role": null
@@ -3128,6 +3246,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.linkers.LinkerConfig",
+      "label": "LinkerConfig",
+      "level": "class",
+      "parent": "celltrack.linkers",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.linking.Linker",
       "label": "Linker",
       "level": "class",
@@ -3140,6 +3266,14 @@
       "label": "NearestNeighbourLinker",
       "level": "class",
       "parent": "celltrack.linking",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.motion_linking.MotionHungarianLinker",
+      "label": "MotionHungarianLinker",
+      "level": "class",
+      "parent": "celltrack.motion_linking",
       "role": "satellite"
     },
     {
@@ -3848,6 +3982,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.linkers.LinkerConfig.build",
+      "label": "build",
+      "level": "method",
+      "parent": "celltrack.linkers.LinkerConfig",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.linking.Linker.link",
       "label": "link",
       "level": "method",
@@ -3868,6 +4010,30 @@
       "label": "link",
       "level": "method",
       "parent": "celltrack.linking.NearestNeighbourLinker",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.motion_linking.MotionHungarianLinker._assign",
+      "label": "_assign",
+      "level": "method",
+      "parent": "celltrack.motion_linking.MotionHungarianLinker",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.motion_linking.MotionHungarianLinker._match",
+      "label": "_match",
+      "level": "method",
+      "parent": "celltrack.motion_linking.MotionHungarianLinker",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.motion_linking.MotionHungarianLinker.link",
+      "label": "link",
+      "level": "method",
+      "parent": "celltrack.motion_linking.MotionHungarianLinker",
       "role": null
     },
     {
