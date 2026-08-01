@@ -2439,6 +2439,12 @@
     {
       "kind": "references",
       "source": "celltrack.tunet.TemporalUNetDetector",
+      "target": "celltrack.peaks.PeakExtractor",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.tunet.TemporalUNetDetector",
       "target": "celltrack.tunet.DetectorRecipe",
       "weight": 1
     },
@@ -2461,6 +2467,24 @@
       "weight": 1
     },
     {
+      "kind": "calls",
+      "source": "celltrack.tunet.TemporalUNetDetector._capped_peaks",
+      "target": "celltrack.peaks.PeakExtractor.maxima",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.tunet.TemporalUNetDetector._extractor",
+      "target": "celltrack.peaks.PeakExtractor",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.tunet.TemporalUNetDetector._extractor",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
       "kind": "construct",
       "source": "celltrack.tunet.TemporalUNetDetector._open_source",
       "target": "celltrack.tunet._VideoSource",
@@ -2469,7 +2493,13 @@
     {
       "kind": "calls",
       "source": "celltrack.tunet.TemporalUNetDetector.detections",
-      "target": "celltrack.tunet.TemporalUNetDetector._local_maxima",
+      "target": "celltrack.tunet.TemporalUNetDetector._capped_peaks",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.tunet.TemporalUNetDetector.detections",
+      "target": "celltrack.tunet.TemporalUNetDetector._extractor",
       "weight": 1
     },
     {
@@ -2482,12 +2512,6 @@
       "kind": "calls",
       "source": "celltrack.tunet.TemporalUNetDetector.detections",
       "target": "celltrack.tunet.TemporalUNetDetector._open_source",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.tunet.TemporalUNetDetector.detections",
-      "target": "celltrack.tunet.TemporalUNetDetector._pool_kernel",
       "weight": 1
     },
     {
@@ -4958,8 +4982,16 @@
     },
     {
       "descendants": 0,
-      "id": "celltrack.tunet.TemporalUNetDetector._local_maxima",
-      "label": "_local_maxima",
+      "id": "celltrack.tunet.TemporalUNetDetector._capped_peaks",
+      "label": "_capped_peaks",
+      "level": "method",
+      "parent": "celltrack.tunet.TemporalUNetDetector",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.tunet.TemporalUNetDetector._extractor",
+      "label": "_extractor",
       "level": "method",
       "parent": "celltrack.tunet.TemporalUNetDetector",
       "role": null
@@ -4976,14 +5008,6 @@
       "descendants": 0,
       "id": "celltrack.tunet.TemporalUNetDetector._open_source",
       "label": "_open_source",
-      "level": "method",
-      "parent": "celltrack.tunet.TemporalUNetDetector",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.tunet.TemporalUNetDetector._pool_kernel",
-      "label": "_pool_kernel",
       "level": "method",
       "parent": "celltrack.tunet.TemporalUNetDetector",
       "role": null
