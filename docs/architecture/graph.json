@@ -554,6 +554,96 @@
     },
     {
       "kind": "import",
+      "source": "celltrack.training.tunet_detector",
+      "target": "celltrack.bracket",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.tunet_detector",
+      "target": "celltrack.linefit_smoother",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.tunet_detector",
+      "target": "celltrack.linkers",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.tunet_detector",
+      "target": "celltrack.short_track_filter",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.tunet_detector",
+      "target": "celltrack.training.tunet_dataset",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.tunet_detector",
+      "target": "celltrack.tunet",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.tunet_detector",
+      "target": "core.data.split",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.tunet_detector",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.tunet_detector",
+      "target": "core.data.video",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.tunet_detector",
+      "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.tunet_detector",
+      "target": "core.metrics.matching",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.tunet_detector",
+      "target": "core.metrics.score",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.tunet_detector",
+      "target": "core.paths",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.tunet",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.tunet",
+      "target": "core.data.video",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "core.data.submission",
       "target": "core.data.tracks",
       "weight": 1
@@ -2185,6 +2275,234 @@
       "weight": 1
     },
     {
+      "kind": "holds",
+      "source": "celltrack.training.tunet_dataset.FrameDataset",
+      "target": "celltrack.training.tunet_dataset.FrameTarget",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer",
+      "target": "celltrack.training.tunet_dataset.FrameTarget",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer",
+      "target": "celltrack.training.tunet_detector.TUNetTrainConfig",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer",
+      "target": "celltrack.training.tunet_detector._FoldEval",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer",
+      "target": "celltrack.tunet.TemporalUNetDetector",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._detector",
+      "target": "celltrack.tunet.TemporalUNetDetector",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._detector",
+      "target": "celltrack.tunet.TemporalUNetDetector.from_pack",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._score_fold",
+      "target": "celltrack.tunet.TemporalUNetDetector.detections",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._score_fold",
+      "target": "core.data.split.AcquisitionFolds.prefix_of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._score_fold",
+      "target": "core.metrics.score.SplitScore.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._score_fold",
+      "target": "core.metrics.score.VideoMetrics.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._step",
+      "target": "celltrack.training.tunet_detector.TUNetDetectorTrainer._detection_loss",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer.train",
+      "target": "celltrack.training.tunet_dataset.FrameDataset",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer.train",
+      "target": "celltrack.training.tunet_detector.TUNetDetectorTrainer._detector",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer.train",
+      "target": "celltrack.training.tunet_detector.TUNetDetectorTrainer._score_fold",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer.train",
+      "target": "celltrack.training.tunet_detector.TUNetDetectorTrainer._step",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.training.tunet_detector.TUNetTrainConfig",
+      "target": "celltrack.tunet.DetectorRecipe",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.training.tunet_detector._FoldEval",
+      "target": "celltrack.linefit_smoother.LinefitSmoother",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.training.tunet_detector._FoldEval",
+      "target": "celltrack.linkers.LinkerConfig",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.training.tunet_detector._FoldEval",
+      "target": "celltrack.short_track_filter.ShortTrackFilter",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.training.tunet_detector._FoldEval",
+      "target": "core.data.tracks.AnnotatedTracks",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.training.tunet_detector._FoldEval",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.training.tunet_detector._FoldEval",
+      "target": "core.metrics.matching.DistanceMatcher",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.tunet.DetectorRecipe",
+      "target": "celltrack.tunet.DetectorRecipe",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.tunet.TemporalUNetDetector",
+      "target": "celltrack.tunet.DetectorRecipe",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.tunet.TemporalUNetDetector",
+      "target": "celltrack.tunet._VideoSource",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.tunet.TemporalUNetDetector",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.tunet.TemporalUNetDetector.__init__",
+      "target": "celltrack.tunet.TemporalUNetDetector._backbone_cls",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.tunet.TemporalUNetDetector._open_source",
+      "target": "celltrack.tunet._VideoSource",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.tunet.TemporalUNetDetector.detections",
+      "target": "celltrack.tunet.TemporalUNetDetector._local_maxima",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.tunet.TemporalUNetDetector.detections",
+      "target": "celltrack.tunet.TemporalUNetDetector._logits",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.tunet.TemporalUNetDetector.detections",
+      "target": "celltrack.tunet.TemporalUNetDetector._open_source",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.tunet.TemporalUNetDetector.detections",
+      "target": "celltrack.tunet.TemporalUNetDetector._pool_kernel",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.tunet.TemporalUNetDetector.detections",
+      "target": "celltrack.tunet.TemporalUNetDetector._read_frame",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.tunet.TemporalUNetDetector.detections",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.tunet.TemporalUNetDetector.from_checkpoint",
+      "target": "celltrack.tunet.DetectorRecipe.from_config",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.tunet.TemporalUNetDetector.from_pack",
+      "target": "celltrack.tunet.DetectorRecipe.from_config",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.tunet.TemporalUNetDetector.save_checkpoint",
+      "target": "celltrack.tunet.DetectorRecipe.as_config",
+      "weight": 1
+    },
+    {
       "kind": "references",
       "source": "core.data.split.AcquisitionFolds",
       "target": "core.data.split.VideoSplit",
@@ -2805,7 +3123,7 @@
   ],
   "nodes": [
     {
-      "descendants": 26,
+      "descendants": 29,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -2949,7 +3267,7 @@
       "role": null
     },
     {
-      "descendants": 8,
+      "descendants": 10,
       "id": "celltrack.training",
       "label": "training",
       "level": "module",
@@ -3018,6 +3336,30 @@
       "label": "targets",
       "level": "module",
       "parent": "celltrack.training",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.tunet_dataset",
+      "label": "tunet_dataset",
+      "level": "module",
+      "parent": "celltrack.training",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.tunet_detector",
+      "label": "tunet_detector",
+      "level": "module",
+      "parent": "celltrack.training",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.tunet",
+      "label": "tunet",
+      "level": "module",
+      "parent": "celltrack",
       "role": null
     },
     {
@@ -3434,6 +3776,70 @@
       "label": "DetectionTarget",
       "level": "class",
       "parent": "celltrack.training.targets",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.tunet_dataset.FrameDataset",
+      "label": "FrameDataset",
+      "level": "class",
+      "parent": "celltrack.training.tunet_dataset",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.tunet_dataset.FrameTarget",
+      "label": "FrameTarget",
+      "level": "class",
+      "parent": "celltrack.training.tunet_dataset",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.tunet_detector.TUNetDetectorTrainer",
+      "label": "TUNetDetectorTrainer",
+      "level": "class",
+      "parent": "celltrack.training.tunet_detector",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.tunet_detector.TUNetTrainConfig",
+      "label": "TUNetTrainConfig",
+      "level": "class",
+      "parent": "celltrack.training.tunet_detector",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.tunet_detector._FoldEval",
+      "label": "_FoldEval",
+      "level": "class",
+      "parent": "celltrack.training.tunet_detector",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.tunet.DetectorRecipe",
+      "label": "DetectorRecipe",
+      "level": "class",
+      "parent": "celltrack.tunet",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.tunet.TemporalUNetDetector",
+      "label": "TemporalUNetDetector",
+      "level": "class",
+      "parent": "celltrack.tunet",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.tunet._VideoSource",
+      "label": "_VideoSource",
+      "level": "class",
+      "parent": "celltrack.tunet",
       "role": "satellite"
     },
     {
@@ -4410,6 +4816,190 @@
       "label": "supervised_fraction",
       "level": "method",
       "parent": "celltrack.training.targets.DetectionTarget",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.tunet_dataset.FrameDataset.__getitem__",
+      "label": "__getitem__",
+      "level": "method",
+      "parent": "celltrack.training.tunet_dataset.FrameDataset",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.tunet_dataset.FrameDataset.__init__",
+      "label": "__init__",
+      "level": "method",
+      "parent": "celltrack.training.tunet_dataset.FrameDataset",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.tunet_dataset.FrameDataset.__len__",
+      "label": "__len__",
+      "level": "method",
+      "parent": "celltrack.training.tunet_dataset.FrameDataset",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.tunet_detector.TUNetDetectorTrainer.__init__",
+      "label": "__init__",
+      "level": "method",
+      "parent": "celltrack.training.tunet_detector.TUNetDetectorTrainer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.tunet_detector.TUNetDetectorTrainer._detection_loss",
+      "label": "_detection_loss",
+      "level": "method",
+      "parent": "celltrack.training.tunet_detector.TUNetDetectorTrainer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.tunet_detector.TUNetDetectorTrainer._detector",
+      "label": "_detector",
+      "level": "method",
+      "parent": "celltrack.training.tunet_detector.TUNetDetectorTrainer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.tunet_detector.TUNetDetectorTrainer._score_fold",
+      "label": "_score_fold",
+      "level": "method",
+      "parent": "celltrack.training.tunet_detector.TUNetDetectorTrainer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.tunet_detector.TUNetDetectorTrainer._step",
+      "label": "_step",
+      "level": "method",
+      "parent": "celltrack.training.tunet_detector.TUNetDetectorTrainer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.tunet_detector.TUNetDetectorTrainer.train",
+      "label": "train",
+      "level": "method",
+      "parent": "celltrack.training.tunet_detector.TUNetDetectorTrainer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.tunet.DetectorRecipe.as_config",
+      "label": "as_config",
+      "level": "method",
+      "parent": "celltrack.tunet.DetectorRecipe",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.tunet.DetectorRecipe.from_config",
+      "label": "from_config",
+      "level": "method",
+      "parent": "celltrack.tunet.DetectorRecipe",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.tunet.TemporalUNetDetector.__init__",
+      "label": "__init__",
+      "level": "method",
+      "parent": "celltrack.tunet.TemporalUNetDetector",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.tunet.TemporalUNetDetector._backbone_cls",
+      "label": "_backbone_cls",
+      "level": "method",
+      "parent": "celltrack.tunet.TemporalUNetDetector",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.tunet.TemporalUNetDetector._local_maxima",
+      "label": "_local_maxima",
+      "level": "method",
+      "parent": "celltrack.tunet.TemporalUNetDetector",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.tunet.TemporalUNetDetector._logits",
+      "label": "_logits",
+      "level": "method",
+      "parent": "celltrack.tunet.TemporalUNetDetector",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.tunet.TemporalUNetDetector._open_source",
+      "label": "_open_source",
+      "level": "method",
+      "parent": "celltrack.tunet.TemporalUNetDetector",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.tunet.TemporalUNetDetector._pool_kernel",
+      "label": "_pool_kernel",
+      "level": "method",
+      "parent": "celltrack.tunet.TemporalUNetDetector",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.tunet.TemporalUNetDetector._read_frame",
+      "label": "_read_frame",
+      "level": "method",
+      "parent": "celltrack.tunet.TemporalUNetDetector",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.tunet.TemporalUNetDetector.detections",
+      "label": "detections",
+      "level": "method",
+      "parent": "celltrack.tunet.TemporalUNetDetector",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.tunet.TemporalUNetDetector.forward",
+      "label": "forward",
+      "level": "method",
+      "parent": "celltrack.tunet.TemporalUNetDetector",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.tunet.TemporalUNetDetector.from_checkpoint",
+      "label": "from_checkpoint",
+      "level": "method",
+      "parent": "celltrack.tunet.TemporalUNetDetector",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.tunet.TemporalUNetDetector.from_pack",
+      "label": "from_pack",
+      "level": "method",
+      "parent": "celltrack.tunet.TemporalUNetDetector",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.tunet.TemporalUNetDetector.save_checkpoint",
+      "label": "save_checkpoint",
+      "level": "method",
+      "parent": "celltrack.tunet.TemporalUNetDetector",
       "role": null
     },
     {
