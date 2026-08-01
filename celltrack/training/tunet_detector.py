@@ -26,7 +26,6 @@ import torch.nn.functional as F
 import zarr
 from jaxtyping import Float, Int
 from torch import Tensor, nn
-from torch.utils.data import DataLoader
 
 from celltrack.bracket import ValidationFold
 from celltrack.linefit_smoother import LinefitSmoother
@@ -46,7 +45,9 @@ logger = logging.getLogger(__name__)
 
 _CONFIG = Path(__file__).parents[2] / "paths.yaml"
 _DATASET = "biohub_cell_tracking"
-_PACK = Path("C:/Users/User/.claude/jobs/f93c11b0/tmp/pilkw/weights/unet_transformer/split_0")
+# The published pilkwang detector, kept under the (gitignored) data root's reference area — not vendored,
+# not a machine-specific absolute path. Fetch: copy weights/unet_transformer/split_0 from the support pack.
+_PACK_REL = Path("reference") / "pilkwang" / "split_0"
 
 
 @dataclass(frozen=True)
@@ -60,7 +61,10 @@ class TUNetTrainConfig:
     out_channels: int = 32
     layers: tuple[int, ...] = (32, 64, 128)
     device: str = "cuda"
-    workers: int = 8
+    # Frames are decompressed by a thread pool (blosc frees the GIL), not DataLoader worker processes — those
+    # deadlock on this Windows box on repeated spawn. `threads` parallel readers, `prefetch` frames in flight.
+    threads: int = 12
+    prefetch: int = 24
     grad_clip: float = 1.0
     eval_every: int = 250
     eval_subset: int = 2
@@ -88,54 +92,65 @@ class TUNetDetectorTrainer:
         self.config = config
 
     def train(self, targets: list[FrameTarget], evaluator: _FoldEval, *, warm_start: bool, save_to: Path) -> float:
-        """Train (or fine-tune) on the prepared frames, saving the best fold-0 score. Returns that best score."""
+        """Train (or fine-tune) on the prepared frames, saving the best fold-0 score. Returns that best score.
+
+        The loop runs in eval-sized windows; each window's frames are decompressed by a thread pool (see
+        `FrameDataset.stream`) so the GPU stays fed without DataLoader worker processes, which deadlock on
+        repeated spawn on this box.
+        """
         detector = self._detector(warm_start=warm_start).to(self.config.device)
-        loader = DataLoader(
-            FrameDataset(targets, self.config.steps, self.config.downsample, self.config.seed),
-            batch_size=1,
-            num_workers=self.config.workers,
-            persistent_workers=self.config.workers > 0,
-            prefetch_factor=2 if self.config.workers > 0 else None,
-        )
         optimizer = torch.optim.AdamW(detector.parameters(), lr=self.config.lr)
 
         best = self._score_fold(evaluator, detector, self.config.eval_threshold)
         logger.info("init fold-0 subset score = %.4f", best)
         detector.save_checkpoint(save_to, self.config.recipe)
 
-        detector.train()
-        running, t0 = 0.0, time.perf_counter()
-        for step, (frame, coords) in enumerate(loader, start=1):
-            loss = self._step(detector, optimizer, frame[0], coords[0])
-            running += loss
-            if step % self.config.eval_every == 0:
-                score = self._score_fold(evaluator, detector, self.config.eval_threshold)
-                marker = ""
-                if score >= best:
-                    best, marker = score, " *saved"
-                    detector.save_checkpoint(save_to, self.config.recipe)
-                rate = self.config.eval_every / (time.perf_counter() - t0)
-                logger.info(
-                    "step %4d/%d | loss %.4f | fold-0 subset %.4f | best %.4f%s | %.1f it/s",
-                    step,
-                    self.config.steps,
-                    running / self.config.eval_every,
-                    score,
-                    best,
-                    marker,
-                    rate,
-                )
-                running, t0 = 0.0, time.perf_counter()
-                detector.train()
+        done = 0
+        while done < self.config.steps:
+            window = min(self.config.eval_every, self.config.steps - done)
+            loss, rate = self._run_window(detector, optimizer, targets, window, done)
+            done += window
+            score = self._score_fold(evaluator, detector, self.config.eval_threshold)
+            marker = ""
+            if score >= best:
+                best, marker = score, " *saved"
+                detector.save_checkpoint(save_to, self.config.recipe)
+            logger.info(
+                "step %5d/%d | loss %.4f | fold-0 subset %.4f | best %.4f%s | %.1f it/s",
+                done,
+                self.config.steps,
+                loss,
+                score,
+                best,
+                marker,
+                rate,
+            )
 
         logger.info("best fold-0 subset score = %.4f, saved to %s", best, save_to)
         return best
 
+    def _run_window(
+        self,
+        detector: TemporalUNetDetector,
+        optimizer: torch.optim.Optimizer,
+        targets: list[FrameTarget],
+        steps: int,
+        seed_offset: int,
+    ) -> tuple[float, float]:
+        """Train `steps` steps, frames decompressed by a thread pool. Returns (mean loss, it/s)."""
+        detector.train()
+        dataset = FrameDataset(targets, steps, self.config.downsample, self.config.seed + seed_offset)
+        running, t0 = 0.0, time.perf_counter()
+        for frame, coords in dataset.stream(self.config.threads, self.config.prefetch):
+            running += self._step(detector, optimizer, frame, coords)
+        return running / steps, steps / (time.perf_counter() - t0)
+
     def _detector(self, *, warm_start: bool) -> TemporalUNetDetector:
         """A detector to train — warm-started from the published pack, or fresh at the configured size."""
         if warm_start:
-            detector, _ = TemporalUNetDetector.from_pack(_PACK, map_location=self.config.device)
-            logger.info("warm-started from pilkwang pack")
+            pack = DataRoot.from_config(_CONFIG).processed(_DATASET) / _PACK_REL
+            detector, _ = TemporalUNetDetector.from_pack(pack, map_location=self.config.device)
+            logger.info("warm-started from pilkwang pack at %s", pack)
             return detector
         return TemporalUNetDetector(self.config.out_channels, self.config.layers)
 
@@ -193,7 +208,7 @@ def main() -> None:
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--neg-weight", type=float, default=1e-2)
     parser.add_argument("--device", type=str, default="cuda")
-    parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--threads", type=int, default=12, help="parallel frame-decompress threads")
     parser.add_argument("--eval-every", type=int, default=250)
     parser.add_argument("--eval-subset", type=int, default=2)
     parser.add_argument("--warm-start", action="store_true", help="initialise from the published pilkwang weights")
@@ -205,7 +220,7 @@ def main() -> None:
         lr=args.lr,
         neg_weight=args.neg_weight,
         device=args.device,
-        workers=args.workers,
+        threads=args.threads,
         eval_every=args.eval_every,
         eval_subset=args.eval_subset,
     )

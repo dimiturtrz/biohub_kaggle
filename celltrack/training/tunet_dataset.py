@@ -5,7 +5,11 @@ the downsampled grid. Frames are opened per worker at access time (no full video
 stream length is a fixed step count rather than the corpus size, so an epoch is a number of optimiser steps.
 """
 
+from collections import deque
+from collections.abc import Iterator
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
+from itertools import islice
 from pathlib import Path
 from typing import override
 
@@ -50,3 +54,23 @@ class FrameDataset(Dataset[tuple[Tensor, Tensor]]):
         raw = np.asarray(array[target.timepoint, ::dz, ::dy, ::dx], dtype=np.float32)
         normed = (torch.from_numpy(raw) - target.q_low) / (target.q_high - target.q_low + 1e-6)
         return normed.clamp(0.0), torch.from_numpy(target.coords)
+
+    def stream(self, threads: int, prefetch: int) -> Iterator[tuple[Tensor, Tensor]]:
+        """Yield every item once, decompressed by a pool of `threads`, keeping `prefetch` frames in flight.
+
+        zarr's blosc/zstd decompression releases the GIL, so worker *threads* parallelise it across cores with
+        no process spawn — the throughput of DataLoader workers without the Windows worker-pool deadlock, and
+        with the GPU overlapping the reads instead of stalling on them. Items are yielded in index order (so a
+        run stays reproducible) even though they finish decompressing out of order.
+        """
+        with ThreadPoolExecutor(max_workers=threads) as pool:
+            indices = iter(range(self._steps))
+            pending: deque[Future[tuple[Tensor, Tensor]]] = deque()
+            for index in islice(indices, prefetch):
+                pending.append(pool.submit(self.__getitem__, index))
+            for index in indices:
+                item = pending.popleft().result()
+                pending.append(pool.submit(self.__getitem__, index))
+                yield item
+            while pending:
+                yield pending.popleft().result()
