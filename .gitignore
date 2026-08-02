@@ -56,5 +56,6 @@ node_modules/
 /scratchpad/
 
 /kaggle/kit/
+/kaggle/kit_staging/
 kaggle/**/*.pt
 kaggle/**/*.whl
