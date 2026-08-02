@@ -23,6 +23,12 @@ a 6 GB laptop and is not portable. Check:
 | `.venv` | `uv sync --extra dev --extra devtools` |
 | `bd list` works | **do NOT run `bd init` in this repo** — see the trap below |
 
+**`git pull --rebase` does not import beads.** The auto-import runs from the `post-merge` hook, and a rebase
+fires `post-rewrite` instead — so after the `git pull --rebase` in this repo's own session protocol, the
+files are updated but the database is not, and `bd ready` shows the *old* set with no error anywhere. It
+reads exactly like "nothing new was pushed". Run `bd import` explicitly after pulling, or check
+`git log --oneline -1` against the remote before believing the issue list.
+
 **The `bd init` trap.** It bootstraps from the `git+https` remote into a schema 21 migrations behind, and
 the migration then fails (bd bug: `0047` recomputes across a `wisps` table a JSONL-bootstrapped database
 never had). It also silently uncomments `sync.remote` in `.beads/config.yaml` and drops `project_id` from
