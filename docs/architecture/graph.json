@@ -170,6 +170,18 @@
     },
     {
       "kind": "import",
+      "source": "celltrack.division_recovery",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.division_recovery",
+      "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "celltrack.dog_detection",
       "target": "celltrack.detection",
       "weight": 1
@@ -795,6 +807,12 @@
     {
       "kind": "holds",
       "source": "celltrack.bracket.Ceiling",
+      "target": "celltrack.division_recovery.DivisionRecovery",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.bracket.Ceiling",
       "target": "celltrack.linking.Linker",
       "weight": 1
     },
@@ -802,6 +820,12 @@
       "kind": "references",
       "source": "celltrack.bracket.Ceiling",
       "target": "core.data.tracks.AnnotatedTracks",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.bracket.Ceiling",
+      "target": "core.data.tracks.TrackGraph",
       "weight": 1
     },
     {
@@ -817,6 +841,18 @@
       "weight": 1
     },
     {
+      "kind": "calls",
+      "source": "celltrack.bracket.Ceiling._predict",
+      "target": "celltrack.division_recovery.DivisionRecovery.transform",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.bracket.Ceiling._predict",
+      "target": "celltrack.linking.Linker.link",
+      "weight": 1
+    },
+    {
       "kind": "construct",
       "source": "celltrack.bracket.Ceiling.over",
       "target": "celltrack.bracket.ArmResult",
@@ -825,7 +861,7 @@
     {
       "kind": "calls",
       "source": "celltrack.bracket.Ceiling.over",
-      "target": "celltrack.linking.Linker.link",
+      "target": "celltrack.bracket.Ceiling._predict",
       "weight": 1
     },
     {
@@ -843,6 +879,18 @@
     {
       "kind": "construct",
       "source": "celltrack.bracket.Ceiling.with_gate",
+      "target": "core.metrics.matching.DistanceMatcher",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.bracket.Ceiling.with_motion",
+      "target": "celltrack.motion_linking.MotionHungarianLinker",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.bracket.Ceiling.with_motion",
       "target": "core.metrics.matching.DistanceMatcher",
       "weight": 1
     },
@@ -1275,6 +1323,72 @@
     {
       "kind": "construct",
       "source": "celltrack.division_linking.DivisionAwareLinker.link",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.division_recovery.DivisionRecovery",
+      "target": "core.data.tracks.Adjacency",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.division_recovery.DivisionRecovery",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.division_recovery.DivisionRecovery",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.division_recovery.DivisionRecovery._division_edges",
+      "target": "celltrack.division_recovery.DivisionRecovery._proposals_between",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.division_recovery.DivisionRecovery._division_edges",
+      "target": "core.data.tracks.Adjacency.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.division_recovery.DivisionRecovery._division_edges",
+      "target": "core.data.tracks.TrackGraph.positions",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.division_recovery.DivisionRecovery._division_edges",
+      "target": "core.data.tracks.TrackGraph.timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.division_recovery.DivisionRecovery._division_edges",
+      "target": "core.geometry.Spacing.to_micrometres",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.division_recovery.DivisionRecovery._proposals_between",
+      "target": "celltrack.division_recovery.DivisionRecovery._nearest_eligible",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.division_recovery.DivisionRecovery.transform",
+      "target": "celltrack.division_recovery.DivisionRecovery._division_edges",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.division_recovery.DivisionRecovery.transform",
       "target": "core.data.tracks.TrackGraph",
       "weight": 1
     },
@@ -3165,7 +3279,7 @@
   ],
   "nodes": [
     {
-      "descendants": 29,
+      "descendants": 30,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -3200,6 +3314,14 @@
       "descendants": 0,
       "id": "celltrack.division_linking",
       "label": "division_linking",
+      "level": "module",
+      "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.division_recovery",
+      "label": "division_recovery",
       "level": "module",
       "parent": "celltrack",
       "role": null
@@ -3578,6 +3700,14 @@
       "label": "DivisionAwareLinker",
       "level": "class",
       "parent": "celltrack.division_linking",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.division_recovery.DivisionRecovery",
+      "label": "DivisionRecovery",
+      "level": "class",
+      "parent": "celltrack.division_recovery",
       "role": "satellite"
     },
     {
@@ -4126,6 +4256,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.bracket.Ceiling._predict",
+      "label": "_predict",
+      "level": "method",
+      "parent": "celltrack.bracket.Ceiling",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.bracket.Ceiling.over",
       "label": "over",
       "level": "method",
@@ -4136,6 +4274,14 @@
       "descendants": 0,
       "id": "celltrack.bracket.Ceiling.with_gate",
       "label": "with_gate",
+      "level": "method",
+      "parent": "celltrack.bracket.Ceiling",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.bracket.Ceiling.with_motion",
+      "label": "with_motion",
       "level": "method",
       "parent": "celltrack.bracket.Ceiling",
       "role": null
@@ -4266,6 +4412,38 @@
       "label": "link",
       "level": "method",
       "parent": "celltrack.division_linking.DivisionAwareLinker",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.division_recovery.DivisionRecovery._division_edges",
+      "label": "_division_edges",
+      "level": "method",
+      "parent": "celltrack.division_recovery.DivisionRecovery",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.division_recovery.DivisionRecovery._nearest_eligible",
+      "label": "_nearest_eligible",
+      "level": "method",
+      "parent": "celltrack.division_recovery.DivisionRecovery",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.division_recovery.DivisionRecovery._proposals_between",
+      "label": "_proposals_between",
+      "level": "method",
+      "parent": "celltrack.division_recovery.DivisionRecovery",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.division_recovery.DivisionRecovery.transform",
+      "label": "transform",
+      "level": "method",
+      "parent": "celltrack.division_recovery.DivisionRecovery",
       "role": null
     },
     {
