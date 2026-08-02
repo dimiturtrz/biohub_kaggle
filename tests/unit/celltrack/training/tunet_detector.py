@@ -20,6 +20,7 @@ from celltrack.training.tunet_detector import (
     TUNetDetectorTrainer,
     TUNetTrainConfig,
     _FoldEval,
+    _Optimization,
 )
 from celltrack.tunet import DetectorRecipe
 from core.data.tracks import AnnotatedTracks
@@ -73,6 +74,32 @@ def test_config_defaults_to_pilkwangs_recipe():
     config = TUNetTrainConfig()
     assert config.downsample == (1, 4, 4)
     assert config.lr == 1e-4
+
+
+def _one_param_optimization(*, with_schedule: bool) -> tuple[torch.nn.Parameter, _Optimization]:
+    """A single-parameter SGD optimiser, optionally under a cosine schedule, for exercising _Optimization."""
+    param = torch.nn.Parameter(torch.tensor([1.0]))
+    optimizer = torch.optim.SGD([param], lr=0.1)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10) if with_schedule else None
+    return param, _Optimization(optimizer, scheduler)
+
+
+def test_zero_grad():
+    """Clearing gradients through the bundle leaves the parameter with no pending gradient."""
+    param, optimization = _one_param_optimization(with_schedule=False)
+    param.grad = torch.tensor([5.0])
+    optimization.zero_grad()
+    assert param.grad is None
+
+
+def test_step():
+    """One bundled step moves the parameter along its gradient and advances the learning-rate schedule."""
+    param, optimization = _one_param_optimization(with_schedule=True)
+    (param * param).sum().backward()  # grad = 2 * param
+    lr_before = optimization.optimizer.param_groups[0]["lr"]
+    optimization.step()
+    assert param.item() != 1.0
+    assert optimization.optimizer.param_groups[0]["lr"] < lr_before
 
 
 def _cpu_config() -> TUNetTrainConfig:

@@ -71,6 +71,7 @@ class TUNetTrainConfig:
     eval_threshold: float = 0.5
     seed: int = 0
     augmentation: Augmentation = field(default_factory=Augmentation)
+    cosine_lr: bool = False  # decay lr to zero over `steps` (cosine); off keeps the flat lr of the baseline
     recipe: DetectorRecipe = field(default_factory=DetectorRecipe)
 
 
@@ -84,6 +85,24 @@ class _FoldEval:
     short: ShortTrackFilter
     smooth: LinefitSmoother
     linker_config: LinkerConfig
+
+
+@dataclass(frozen=True)
+class _Optimization:
+    """The optimiser and its optional learning-rate schedule, advanced together after each step."""
+
+    optimizer: torch.optim.Optimizer
+    scheduler: torch.optim.lr_scheduler.LRScheduler | None
+
+    def zero_grad(self) -> None:
+        """Clear the accumulated gradients before the next backward pass."""
+        self.optimizer.zero_grad()
+
+    def step(self) -> None:
+        """Take one optimiser step, then advance the schedule if there is one."""
+        self.optimizer.step()
+        if self.scheduler is not None:
+            self.scheduler.step()
 
 
 class TUNetDetectorTrainer:
@@ -101,6 +120,7 @@ class TUNetDetectorTrainer:
         """
         detector = self._detector(warm_start=warm_start).to(self.config.device)
         optimizer = torch.optim.AdamW(detector.parameters(), lr=self.config.lr)
+        optimization = _Optimization(optimizer, self._scheduler(optimizer))
 
         best = self._score_fold(evaluator, detector, self.config.eval_threshold)
         logger.info("init fold-0 subset score = %.4f", best)
@@ -109,7 +129,7 @@ class TUNetDetectorTrainer:
         done = 0
         while done < self.config.steps:
             window = min(self.config.eval_every, self.config.steps - done)
-            loss, rate = self._run_window(detector, optimizer, targets, window, done)
+            loss, rate = self._run_window(detector, optimization, targets, window, done)
             done += window
             score = self._score_fold(evaluator, detector, self.config.eval_threshold)
             marker = ""
@@ -130,10 +150,16 @@ class TUNetDetectorTrainer:
         logger.info("best fold-0 subset score = %.4f, saved to %s", best, save_to)
         return best
 
+    def _scheduler(self, optimizer: torch.optim.Optimizer) -> torch.optim.lr_scheduler.LRScheduler | None:
+        """A cosine decay to zero over the whole run, or none for the baseline's flat learning rate."""
+        if not self.config.cosine_lr:
+            return None
+        return torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.config.steps)
+
     def _run_window(
         self,
         detector: TemporalUNetDetector,
-        optimizer: torch.optim.Optimizer,
+        optimization: _Optimization,
         targets: list[FrameTarget],
         steps: int,
         seed_offset: int,
@@ -145,7 +171,7 @@ class TUNetDetectorTrainer:
         )
         running, t0 = 0.0, time.perf_counter()
         for frame, coords in dataset.stream(self.config.threads, self.config.prefetch):
-            running += self._step(detector, optimizer, frame, coords)
+            running += self._step(detector, optimization, frame, coords)
         return running / steps, steps / (time.perf_counter() - t0)
 
     def _detector(self, *, warm_start: bool) -> TemporalUNetDetector:
@@ -160,7 +186,7 @@ class TUNetDetectorTrainer:
     def _step(
         self,
         detector: TemporalUNetDetector,
-        optimizer: torch.optim.Optimizer,
+        optimization: _Optimization,
         frame: Float[Tensor, "z y x"],
         coords: Int[Tensor, "n 3"],
     ) -> float:
@@ -170,10 +196,10 @@ class TUNetDetectorTrainer:
         with torch.autocast(device_type="cuda", enabled=self.config.device == "cuda"):
             logits = detector(frame)
             loss = self._detection_loss(logits, coords, self.config.neg_weight)
-        optimizer.zero_grad()
+        optimization.zero_grad()
         loss.backward()
         nn.utils.clip_grad_norm_(detector.parameters(), self.config.grad_clip)
-        optimizer.step()
+        optimization.step()
         return float(loss.detach())
 
     def _score_fold(self, evaluator: _FoldEval, detector: TemporalUNetDetector, threshold: float) -> float:
@@ -219,6 +245,7 @@ def main() -> None:
     parser.add_argument("--aug-brightness", type=float, default=0.0, help="multiplicative intensity jitter half-range")
     parser.add_argument("--aug-offset", type=float, default=0.0, help="additive intensity jitter half-range")
     parser.add_argument("--aug-flip", action="store_true", help="random flips along y and x (the in-plane axes)")
+    parser.add_argument("--cosine-lr", action="store_true", help="cosine-decay the learning rate to zero over the run")
     parser.add_argument("--weights", type=str, default="detector_tunet_ours.pt")
     args = parser.parse_args()
 
@@ -236,6 +263,7 @@ def main() -> None:
             offset=args.aug_offset,
             flip_axes=(1, 2) if args.aug_flip else (),
         ),
+        cosine_lr=args.cosine_lr,
     )
     root = DataRoot.from_config(_CONFIG)
     dz, dy, dx = config.downsample
