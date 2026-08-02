@@ -102,6 +102,25 @@ def test_step():
     assert optimization.optimizer.param_groups[0]["lr"] < lr_before
 
 
+def test_state_dict():
+    """The bundle's state carries both the optimiser and, when scheduled, the schedule."""
+    _param, optimization = _one_param_optimization(with_schedule=True)
+    state = optimization.state_dict()
+    assert "optimizer" in state
+    assert state["scheduler"] is not None
+
+
+def test_load_state_dict():
+    """Restoring a saved state replays the schedule so the resumed learning rate matches the saved one."""
+    _param, saved = _one_param_optimization(with_schedule=True)
+    for _ in range(3):
+        saved.step()
+    target_lr = saved.optimizer.param_groups[0]["lr"]
+    _fresh_param, fresh = _one_param_optimization(with_schedule=True)
+    fresh.load_state_dict(saved.state_dict())
+    assert fresh.optimizer.param_groups[0]["lr"] == target_lr
+
+
 def _cpu_config() -> TUNetTrainConfig:
     """A tiny CPU config: a two-level backbone, no downsample, evaluated at a permissive threshold."""
     return TUNetTrainConfig(

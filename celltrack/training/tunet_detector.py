@@ -104,6 +104,17 @@ class _Optimization:
         if self.scheduler is not None:
             self.scheduler.step()
 
+    def state_dict(self) -> dict[str, object]:
+        """The optimiser and schedule state, so a resumed run continues the same momentum and decay."""
+        schedule = None if self.scheduler is None else self.scheduler.state_dict()
+        return {"optimizer": self.optimizer.state_dict(), "scheduler": schedule}
+
+    def load_state_dict(self, state: dict[str, object]) -> None:
+        """Restore the optimiser and (if present on both sides) the schedule from a saved state."""
+        self.optimizer.load_state_dict(cast(dict[str, object], state["optimizer"]))
+        if self.scheduler is not None and state["scheduler"] is not None:
+            self.scheduler.load_state_dict(cast(dict[str, object], state["scheduler"]))
+
 
 class TUNetDetectorTrainer:
     """Runs the detector-only training loop under one configuration, checkpointing the best fold-0 score."""
@@ -111,22 +122,27 @@ class TUNetDetectorTrainer:
     def __init__(self, config: TUNetTrainConfig) -> None:
         self.config = config
 
-    def train(self, targets: list[FrameTarget], evaluator: _FoldEval, *, warm_start: bool, save_to: Path) -> float:
+    def train(
+        self, targets: list[FrameTarget], evaluator: _FoldEval, *, warm_start: bool, save_to: Path, resume: bool = False
+    ) -> float:
         """Train (or fine-tune) on the prepared frames, saving the best fold-0 score. Returns that best score.
 
         The loop runs in eval-sized windows; each window's frames are decompressed by a thread pool (see
         `FrameDataset.stream`) so the GPU stays fed without DataLoader worker processes, which deadlock on
-        repeated spawn on this box.
+        repeated spawn on this box. A full resume snapshot (weights, optimiser, schedule, step, best) is written
+        beside the checkpoint every window; ``resume=True`` picks the latest up where a killed run left off.
         """
         detector = self._detector(warm_start=warm_start).to(self.config.device)
         optimizer = torch.optim.AdamW(detector.parameters(), lr=self.config.lr)
         optimization = _Optimization(optimizer, self._scheduler(optimizer))
 
-        best = self._score_fold(evaluator, detector, self.config.eval_threshold)
-        logger.info("init fold-0 subset score = %.4f", best)
-        detector.save_checkpoint(save_to, self.config.recipe)
+        resume_path = save_to.with_suffix(".resume.pt")
+        done, restored = self._restore(detector, optimization, resume_path, resume=resume)
+        best = restored if restored is not None else self._score_fold(evaluator, detector, self.config.eval_threshold)
+        if restored is None:
+            logger.info("init fold-0 subset score = %.4f", best)
+            detector.save_checkpoint(save_to, self.config.recipe)
 
-        done = 0
         while done < self.config.steps:
             window = min(self.config.eval_every, self.config.steps - done)
             loss, rate = self._run_window(detector, optimization, targets, window, done)
@@ -136,6 +152,7 @@ class TUNetDetectorTrainer:
             if score >= best:
                 best, marker = score, " *saved"
                 detector.save_checkpoint(save_to, self.config.recipe)
+            self._save_resume(resume_path, detector, optimization, done, best)
             logger.info(
                 "step %5d/%d | loss %.4f | fold-0 subset %.4f | best %.4f%s | %.1f it/s",
                 done,
@@ -155,6 +172,32 @@ class TUNetDetectorTrainer:
         if not self.config.cosine_lr:
             return None
         return torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.config.steps)
+
+    def _restore(
+        self, detector: TemporalUNetDetector, optimization: _Optimization, resume_path: Path, *, resume: bool
+    ) -> tuple[int, float | None]:
+        """Load a resume snapshot into the detector and optimiser, returning (step, best) — (0, None) if fresh."""
+        if not (resume and resume_path.exists()):
+            return 0, None
+        state = torch.load(resume_path, map_location=self.config.device, weights_only=False)
+        detector.load_state_dict(state["detector"])
+        optimization.load_state_dict(state["optimization"])
+        logger.info("resumed from %s at step %d (best %.4f)", resume_path, state["done"], state["best"])
+        return int(state["done"]), float(state["best"])
+
+    def _save_resume(
+        self, resume_path: Path, detector: TemporalUNetDetector, optimization: _Optimization, done: int, best: float
+    ) -> None:
+        """Write the full run state — weights, optimiser, schedule, step, best — so a killed run can continue."""
+        torch.save(
+            {
+                "detector": detector.state_dict(),
+                "optimization": optimization.state_dict(),
+                "done": done,
+                "best": best,
+            },
+            resume_path,
+        )
 
     def _run_window(
         self,
@@ -246,6 +289,7 @@ def main() -> None:
     parser.add_argument("--aug-offset", type=float, default=0.0, help="additive intensity jitter half-range")
     parser.add_argument("--aug-flip", action="store_true", help="random flips along y and x (the in-plane axes)")
     parser.add_argument("--cosine-lr", action="store_true", help="cosine-decay the learning rate to zero over the run")
+    parser.add_argument("--resume", action="store_true", help="continue from the .resume.pt snapshot")
     parser.add_argument("--weights", type=str, default="detector_tunet_ours.pt")
     args = parser.parse_args()
 
@@ -293,7 +337,9 @@ def main() -> None:
     logger.info("eval on %d fold-0 subset videos", len(evaluator.videos))
 
     save_to = root.processed(_DATASET) / args.weights
-    TUNetDetectorTrainer(config).train(targets, evaluator, warm_start=args.warm_start, save_to=save_to)
+    TUNetDetectorTrainer(config).train(
+        targets, evaluator, warm_start=args.warm_start, save_to=save_to, resume=args.resume
+    )
 
 
 if __name__ == "__main__":
