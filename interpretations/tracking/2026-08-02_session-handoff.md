@@ -69,6 +69,53 @@ it sits directly under the cheapest available experiment.
 The research practice drifted into the issue tracker. Promoting those memories into dated deep dives is
 filed under Housekeeping in the roadmap.
 
+## Later the same day — divisions built, and this laptop made to work
+
+**`DivisionRecovery` exists and is measured.** A post-link transform (`celltrack/division_recovery.py`),
+matching the frontier's `add_safe_divisions_postlink` rather than touching `MotionHungarianLinker`. On fold-0
+ground-truth nodes, via the two new `celltrack.bracket` arms:
+
+| arm | edge_jaccard | division_jaccard |
+|-----|--------------|------------------|
+| `ceiling-motion` | 0.9947 | **0.0000** |
+| `ceiling-motiondiv` frontier gates (10.5 / 8.0) | 0.9950 | 0.2593 |
+| `ceiling-motiondiv` tuned (10.5 / 18.0) | 0.9951 | **0.4468** |
+
+≈ +0.045, and the edge Jaccard *rises* — true forks pay on both terms. The parent gate's optimum is 10.5 µm,
+independently reproducing the frontier's constant. Their 8.0 µm sister gate is far too tight here; the
+plateau starts at 18 µm, where the gate is nearly inert (two daughters within 10.5 µm of one mother are at
+most 21 µm apart). The cap never binds between 0.02 and 0.5, and now logs when it does.
+
+**This is a ground-truth-node ceiling. It is NOT validated end to end** — real detections carry far more
+unparented false positives, which is exactly what the sister gate exists to reject. Expect a lower number.
+
+**The kernel `celltrack-pilktunet-motion-divstlf` is written but never pushed.** Threshold deliberately left
+at 0.5 so its LB delta is attributable to divisions alone.
+
+### What blocks a submission (in order)
+
+1. **End-to-end fold-0 validation.** All the pieces are now present locally (below) but there is **no
+   evaluation CLI** — `_score_fold` is private to `TUNetDetectorTrainer`, so today the only way to score the
+   pilktunet pipeline is to start a training run. That gap is the next thing to build: a `celltrack/evaluate.py`
+   taking a `LinkerConfig` + post-proc chain + threshold and scoring a fold. It also unlocks the threshold
+   sweep (0.5 → 0.95, worth a measured +0.009) and the future gap-close work.
+2. **Kit rebuild.** `build_kit.py --wheels` needs a wheels directory; none exists on this box, and the wheels
+   must target Kaggle's Python, not the local 3.14.
+3. **No `kaggle` CLI, and no credentials for it.** `KAGGLE_TOKEN` is a `KGAT_*` bearer token for the REST API;
+   the CLI wants a username + key pair. `survey.py` gained a `dataset` subcommand rather than adding the CLI.
+
+### Machine-local setup, all via junctions (nothing copied, nothing in git)
+
+- `D:\data\raw\biohub_cell_tracking` → the extracted competition folder, so `DataRoot`'s expected
+  `raw/<dataset>/{train,test}` layout resolves. `paths.yaml` is `data: D:/data`.
+- `external/kaggle-cell-tracking-competition/src` → the support pack's `repo/src`. **This fixes the six
+  `ModuleNotFoundError: biohub_tracking` test failures** — the suite is now fully green, 207 passing.
+- `<root>/processed/biohub_cell_tracking/reference/pilkwang/split_0` → the pack's `weights/unet_transformer/split_0`,
+  where `_PACK_REL` looks for it.
+- The pack itself: `python kaggle/survey.py dataset pilkwang/biohub-tracking-support-pack-50ep-v1 --out D:\data\external`.
+
+`uv` and the `.venv` now exist here; the GPU (RTX 3060 Laptop, 6 GB) is visible to torch.
+
 ## Environment notes for the next session
 
 - **`bd` is not installed here.** Nothing this session is filed as issues; the roadmap carries it instead.
