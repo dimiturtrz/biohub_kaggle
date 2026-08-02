@@ -21,6 +21,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -29,6 +30,9 @@ _COMPETITION = "biohub-cell-tracking-during-development"
 _BASE = "https://www.kaggle.com/api/v1"
 _TOKEN_VARIABLE = "KAGGLE_TOKEN"
 _TIMEOUT_SECONDS = 90
+# A model pack is hundreds of megabytes over one connection, so it gets its own budget and a chunked read.
+_DOWNLOAD_TIMEOUT_SECONDS = 1800
+_CHUNK_BYTES = 1 << 20
 _PAGE_SIZE = 100
 _MAX_PAGES = 6
 # The listing is ranked three ways and merged: a notebook can be high-signal by community vote, by being
@@ -64,6 +68,16 @@ class KaggleApi:
         )
         with urllib.request.urlopen(request, timeout=_TIMEOUT_SECONDS) as response:  # noqa: S310
             return json.loads(response.read().decode("utf-8", "replace"))
+
+    def download(self, path: str, destination: Path) -> int:
+        """Stream one authenticated GET to a file in chunks, returning the bytes written."""
+        request = urllib.request.Request(  # noqa: S310 - fixed https base, path is caller-controlled
+            f"{_BASE}{path}",
+            headers={"Authorization": f"Bearer {self.token}"},
+        )
+        with urllib.request.urlopen(request, timeout=_DOWNLOAD_TIMEOUT_SECONDS) as response:  # noqa: S310
+            with destination.open("wb") as sink:
+                return sum(sink.write(chunk) for chunk in iter(lambda: response.read(_CHUNK_BYTES), b""))
 
     def leaderboard(self, competition: str) -> list[dict[str, object]]:
         """The public leaderboard, best team first."""
@@ -164,6 +178,34 @@ def _pull_kernels(api: KaggleApi, arguments: argparse.Namespace) -> None:
         print(f"{len(source):>8} bytes  {_repo_relative(destination)}")
 
 
+def _safe_members(bundle: zipfile.ZipFile, target: Path) -> list[zipfile.ZipInfo]:
+    """The archive entries that stay inside the target, so a crafted path cannot escape it."""
+    resolved = target.resolve()
+    return [
+        member
+        for member in bundle.infolist()
+        if (resolved / member.filename).resolve().is_relative_to(resolved)
+    ]
+
+
+def _fetch_dataset(api: KaggleApi, arguments: argparse.Namespace) -> None:
+    """Download a public dataset archive and unpack it — the CC0 model packs the kernel mounts.
+
+    Local end-to-end measurement needs the same weights the kernel gets from a Kaggle mount, and pulling
+    them by hand through a browser is the sort of undocumented step that rots between sessions.
+    """
+    arguments.out.mkdir(parents=True, exist_ok=True)
+    archive = arguments.out / f"{arguments.reference.replace('/', '__')}.zip"
+    written = api.download(f"/datasets/download/{arguments.reference}", archive)
+    print(f"{written} bytes -> {_repo_relative(archive)}")
+    target = arguments.out / arguments.reference.partition("/")[2]
+    with zipfile.ZipFile(archive) as bundle:
+        members = _safe_members(bundle, target)
+        skipped = len(bundle.infolist()) - len(members)
+        bundle.extractall(target, members=members)  # noqa: S202 - members filtered to the target subtree
+    print(f"extracted {len(members)} entries to {_repo_relative(target)}" + (f" ({skipped} unsafe skipped)" if skipped else ""))
+
+
 def _show_leaderboard(api: KaggleApi, arguments: argparse.Namespace) -> None:
     """Print the top of the public leaderboard."""
     for rank, entry in enumerate(api.leaderboard(arguments.competition)[: arguments.limit], start=1):
@@ -178,7 +220,7 @@ def _show_submissions(api: KaggleApi, arguments: argparse.Namespace) -> None:
 
 
 def _parser() -> argparse.ArgumentParser:
-    """The subcommand tree: notebooks, pull, leaderboard, submissions."""
+    """The subcommand tree: notebooks, pull, dataset, leaderboard, submissions."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--competition", default=_COMPETITION)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -192,6 +234,11 @@ def _parser() -> argparse.ArgumentParser:
     pull.add_argument("reference", nargs="+", help="one or more user/slug references")
     pull.add_argument("--out", type=Path, default=_REPO / "scratchpad" / "nb")
     pull.set_defaults(handler=_pull_kernels)
+
+    dataset = subparsers.add_parser("dataset", help="download and unpack a public dataset (model packs)")
+    dataset.add_argument("reference", help="owner/slug of the dataset")
+    dataset.add_argument("--out", type=Path, default=_REPO / "scratchpad" / "packs")
+    dataset.set_defaults(handler=_fetch_dataset)
 
     leaderboard = subparsers.add_parser("leaderboard", help="show the public leaderboard")
     leaderboard.add_argument("--limit", type=int, default=20)
