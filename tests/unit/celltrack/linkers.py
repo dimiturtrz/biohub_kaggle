@@ -1,4 +1,5 @@
 import pytest
+from pydantic import ValidationError
 
 from celltrack.division_linking import DivisionAwareLinker
 from celltrack.ilp_linking import ILPLinker
@@ -27,9 +28,15 @@ def test_build_names_the_whole_family():
 
 
 def test_build_rejects_an_unknown_name():
-    """An unregistered name is a KeyError at build time, not a silent no-op linker."""
-    with pytest.raises(KeyError):
-        LinkerConfig(name="nope").build(SPACING)
+    """An unregistered name is rejected at construction (validated boundary), not deep inside build."""
+    with pytest.raises(ValidationError):
+        LinkerConfig(name="nope")
+
+
+def test_config_rejects_a_non_positive_radius():
+    """Radii cross the same trust boundary — a zero/negative gate is caught at construction."""
+    with pytest.raises(ValidationError):
+        LinkerConfig(name="nn", gate_um=0.0)
 
 
 def test_build_wires_ilp_and_division_gates():
