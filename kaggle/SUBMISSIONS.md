@@ -40,8 +40,9 @@ so each stage token is a single word (no internal dash). One kernel per tuple, u
 | `raw` | none |
 | `st` | short-track filter (min length 3) |
 | `stlf` | short-track (3) + linefit smoother (0.8) |
-| `divstlf` | division recovery (parent 10.5 µm / sister 18 µm) + short-track (3) + linefit (0.8) |
-| `stlfg` | short-track + linefit + gap-close (planned) |
+| `stlf6` | short-track (min length 6, frontier `OUTPUT_MIN_TRACK_LEN`) + linefit (0.8) |
+| `divstlf` | division recovery (parent 4.7 / sister 7.2 / existing-child 7.8 µm) + short-track + linefit |
+| `stlfg` | short-track + linefit + gap-close (reuse built/inert; synthetic needs DeepCenter) |
 
 ## Coverage grid (fold-0 local pooled / Kaggle LB)
 
@@ -53,6 +54,7 @@ so each stage token is a single word (no internal dash). One kernel per tuple, u
 | `pilktunet` | `nn` | `stlf` | 0.877ˢ | — | subset; NN loses the sparse fast-movers |
 | `pilktunet` | `motion` | `stlf` | **0.877** (0.927ˢ) | **0.859** | 55148762 — local→LB offset −0.018 |
 | `pilktunet99` | `motion` | `stlf` | **0.9074** | pending | thr 0.99 + PeakExtractor; +0.011 over 0.5, +0.030 over the 0.859 kernel's path |
+| `pilktunet99` | `motion` | `stlf6` | **0.9090** | pending | short-track min length 3 -> 6 (frontier `OUTPUT_MIN_TRACK_LEN`); +0.0016 |
 | `ourstunet` | `motion` | `stlf` | 0.887ᶜ | — | warm-start=pilkwang wts (fine-tune erodes); NOT yet genuinely ours |
 
 ˢ = fold-0 stratified subset (2/prefix), not full-41. The `pilktunet` linker delta is large: `motion` beats
@@ -95,17 +97,32 @@ edge the one-to-one pass was dropping, so true forks pay on both terms and only 
 the large one. The parent gate's fold-0 optimum is 10.5 µm, independently reproducing the frontier's value
 (14 µm already falls to 0.2558). The cap never binds here at any fraction from 0.02 to 0.5.
 
-**Refuted end to end (2026-08-02).** On *real* pilkwang detections the pass regresses — the ground-truth
-ceiling does not carry (`scratchpad/div_eval.py`, full-41, `TemporalUNetDetector.detections`):
+**Detection-limited on real detections (2026-08-02).** The ground-truth ceiling does not carry. First error
+found and fixed: the "10.5 / 18" gates above were a **misread** of the frontier's config — its
+`add_safe_divisions_postlink` uses a *tight* parent gate **4.7 µm**, sister **7.2 µm**, an **existing-child
+gate 7.8 µm** (the mother's own link must be short, rejecting mislinked mothers), score
+`parent + 0.15·sister`, and per-frame 0.8 % / global 0.4 % caps. Ported faithfully to
+`celltrack.division_recovery` (all five gates, tested). With the correct gates on real detections
+(`scratchpad/div_gate_sweep.py`, full-41 @0.99):
 
-| thr | nodiv | div (sister 8) | div (sister 18) | div_jaccard (18) |
-|-----|-------|----------------|-----------------|------------------|
-| 0.5 | **0.8961** | 0.8870 | 0.8874 | 0.0130 |
-| 0.99 | **0.9074** | 0.8982 | 0.8975 | 0.0144 |
+| gates | score | div_jaccard | forks |
+|-------|-------|-------------|-------|
+| nodiv | 0.9074 | 0.0000 | 0 |
+| our old 10.5 / 18 | 0.8975 | 0.0144 | (floods) |
+| frontier 4.7 / 7.2 / 7.8 | **0.9076** | 0.0114 | 1725 |
 
-On annotated nodes an orphan is a true lost daughter; on real detections it is mostly a false-positive or
-missed-link — the recovered fork is false, and each false parent edge costs the edge Jaccard (~0.009) far
-more than the near-zero `division_jaccard` gain (0.013 × 0.1). Neither sister gate wins and the fraction cap
-only converges toward `nodiv`, so it is not a gate-width miss. The frontier gates its post-link divisions
-behind a **DeepCenter veto** (a centre-prior net that confirms each fork) we have not mounted; that veto is
-the missing precondition. Code and tests are kept; `divstlf` is **not shipped**. Divisions wait on the veto.
+The tight parent gate flips it from −0.010 to **+0.0002**. But `div_jaccard` reaches only 0.0114 (vs 0.4468
+on GT nodes): **most true second daughters are never detected**, so the fork the metric scores cannot be
+placed. The gain is real but negligible, and once `stlf6` prunes short false chains, adding divisions turns
+net-negative (0.9090 → 0.9085). The existing-child gate is inert at parent 4.7 (never binds). Divisions are
+now *correct* but capped by detector recall — the frontier's dual-seed blend + DeepCenter recover and confirm
+those daughters. Kept, not shipped.
+
+**Gap-close reuse** (`celltrack.gap_closer`, frontier 5.8 / 3.2 / 5 %): bridges a one-frame dropout by reusing
+an existing isolated node at the midpoint (the geometry-only half of the frontier's `gap_close`; synthetic
+insertion needs DeepCenter). **Inert here** (0.9090 → 0.9090) — at 0.99 there are too few isolated detections
+near a midpoint to reuse. Built + tested, waits on the synthetic + veto half.
+
+Both post-proc stages therefore converge on the same missing piece: the **DeepCenter centre-prior model**
+(`biohub-deepcenter-unet3d-center-prior-v1`) — for recall (detect the daughters / gap cells) and precision
+(veto false forks / synthetic nodes). That is the next real lever (`gsm`).

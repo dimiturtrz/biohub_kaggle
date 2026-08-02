@@ -38,6 +38,15 @@ def test_transform_rejects_a_daughter_beyond_the_parent_gate():
     assert recovery().transform(distant).edges.tolist() == [[0, 10]]
 
 
+def test_transform_rejects_a_mother_whose_existing_link_is_long():
+    """A mother whose surviving link is itself a long mis-link is not a divider — the existing-child gate."""
+    mislinked = graph([[0, 0, 0, 0], [1, 0, 0, 9], [1, 0, 0, 1]], [[0, 1]])
+    gated = recovery(existing_child_gate_um=7.8, sister_gate_um=10.0)
+    assert gated.transform(mislinked).edges.tolist() == [[0, 10]]
+    ungated = recovery(existing_child_gate_um=float("inf"), sister_gate_um=10.0)
+    assert ungated.transform(mislinked).edges.tolist() == [[0, 10], [0, 20]]
+
+
 def test_transform_never_gives_a_parent_a_third_child():
     """A node that already forked is not a candidate — the metric's divisions are binary."""
     already_forked = graph([[0, 0, 0, 0], [1, 0, 0, 1], [1, 0, 0, -1], [1, 0, 1, 0]], [[0, 1], [0, 2]])

@@ -60,12 +60,13 @@ from core.geometry import Spacing  # noqa: E402
 
 _TEST_GLOB = "/kaggle/input/**/biohub-cell-tracking-during-development/test/*.zarr"
 _DOWNSAMPLE = (1, 4, 4)
-_WINDOW_UM, _THRESHOLD = 5.0, 0.5
-# Swept on fold-0 ground-truth nodes: division Jaccard 0.0000 -> 0.4468, edge Jaccard 0.9947 -> 0.9951.
-# The parent gate's optimum reproduces the frontier's 10.5 um independently; their 8.0 um sister gate is
-# far too tight here (0.2593), and the plateau starts at 18 um.
-_PARENT_GATE_UM, _SISTER_GATE_UM = 10.5, 18.0
-_MAX_DIVISION_FRACTION = 0.02
+_WINDOW_UM, _THRESHOLD = 5.0, 0.99
+# The frontier's add_safe_divisions_postlink gates, verbatim (the earlier 10.5/18 was a misread of their
+# config): tight parent 4.7 um, sister 7.2 um, existing-child 7.8 um, global 0.4% / per-frame 0.8% caps.
+# On real fold-0 detections this nets +0.0002 (div_jaccard 0.0114) — divisions are detection-limited here
+# (most second daughters are undetected), so the gain is small without their dual-seed + DeepCenter recall.
+_PARENT_GATE_UM, _SISTER_GATE_UM, _EXISTING_CHILD_GATE_UM = 4.7, 7.2, 7.8
+_MAX_DIVISION_FRACTION, _FRAME_DIVISION_FRACTION = 0.004, 0.008
 _DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
@@ -141,6 +142,8 @@ def main() -> None:
             parent_gate_um=_PARENT_GATE_UM,
             sister_gate_um=_SISTER_GATE_UM,
             max_added_fraction=_MAX_DIVISION_FRACTION,
+            existing_child_gate_um=_EXISTING_CHILD_GATE_UM,
+            frame_fraction_cap=_FRAME_DIVISION_FRACTION,
         )
         linked = divide.transform(linker.link(detections))
         graph = smooth.transform(short.transform(linked))

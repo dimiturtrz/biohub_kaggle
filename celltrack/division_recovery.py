@@ -7,15 +7,25 @@ unparented, and the fork the metric scores is never expressed at all. The compet
 term however good its detector is — and the dropped daughter edge costs the edge Jaccard as well.
 
 This pass runs after linking and proposes the missing second daughter: an unparented cell is joined to a
-nearby cell in the previous frame that already has exactly one child. Two gates keep it honest. The parent
-gate bounds how far a daughter can sit from its mother; the sister gate bounds how far the two daughters
-can sit from each other, which is the discriminating one — a real mitosis leaves its products adjacent,
-while an ordinary cell that merely lost its own link has no sister anywhere near it. A global cap bounds
-how many forks the pass may invent, because a false fork is scored twice over: once against the division
-term it was reaching for, and once against the much larger edge term.
+nearby cell in the previous frame that already has exactly one child. It reproduces the public frontier's
+`add_safe_divisions_postlink`, whose precision comes from three geometry gates, not one — on real detections
+a loose single gate invents far more false forks than true ones, and a false fork is scored twice over
+(against the division term it reached for and against the much larger edge term):
+
+- **parent gate** — how far a daughter may sit from its mother (`4.7 um` in the frontier).
+- **sister gate** — how far the two daughters may sit from each other (`7.2 um`); the discriminating one, since
+  a real mitosis leaves its products adjacent while an ordinary cell that merely lost its link has no sister
+  nearby.
+- **existing-child gate** — how far the mother's *already-linked* daughter sits from her (`7.8 um`). This
+  rejects a mother whose surviving link is itself a long mis-link, the dominant false case in dense frames:
+  if the linker already mis-joined this mother across the tissue, her "division" is spurious.
+
+A per-frame cap and a global cap bound how many forks the pass may invent. Candidates are ranked by
+`parent_distance + 0.15 * sister_distance`, so the tightest, most division-like pairs win the limited budget.
 
 Run this before `ShortTrackFilter`, whose division-preserving carve-out can only protect forks that exist
-by the time it sees the graph.
+by the time it sees the graph. The frontier further confirms each candidate with a DeepCenter centre-prior
+veto; that second-opinion model is a separate stage this geometry-only pass does not include.
 """
 
 import logging
@@ -30,18 +40,24 @@ from core.geometry import Spacing
 
 _SINGLE_CHILD = 1
 _UNPARENTED = 0
+_SISTER_WEIGHT = 0.15
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
 class DivisionRecovery:
-    """Join unparented cells to a nearby single-child parent, gated on parent and sister distance."""
+    """Join unparented cells to a nearby single-child parent, gated on parent, sister and existing-child distance."""
 
     spacing: Spacing
     parent_gate_um: float
     sister_gate_um: float
     max_added_fraction: float
+    # The mother's already-linked daughter must sit within this of her, or the mother is a mis-link, not a
+    # divider. Defaults to no gate so a bare (parent, sister, fraction) construction keeps the old behaviour.
+    existing_child_gate_um: float = float("inf")
+    # Per-frame cap as a fraction of that frame's single-child parents, applied before the global cap.
+    frame_fraction_cap: float = 1.0
 
     def transform(self, graph: TrackGraph) -> TrackGraph:
         """Return the graph with recovered division edges added."""
@@ -55,27 +71,29 @@ class DivisionRecovery:
         )
 
     def _division_edges(self, graph: TrackGraph) -> Int[np.ndarray, "d 2"]:
-        """Every accepted fork, as node-id pairs, after the global cap trims the least confident."""
+        """Every accepted fork as node-id pairs, capped per frame then globally, tightest pairs first."""
         adjacency = Adjacency.of(graph)
         positions_um = self.spacing.to_micrometres(graph.positions())
         timepoints = graph.timepoints()
-        proposals: list[tuple[float, int, int]] = []
+        global_cap = int(self.max_added_fraction * len(graph.edges))
+        accepted: list[tuple[int, int]] = []
         for timepoint in np.unique(timepoints)[:-1]:
-            proposals.extend(
-                self._proposals_between(
-                    np.flatnonzero(timepoints == timepoint),
-                    np.flatnonzero(timepoints == timepoint + 1),
-                    positions_um,
-                    adjacency,
-                )
-            )
-        limit = int(self.max_added_fraction * len(graph.edges))
-        accepted = sorted(proposals)[:limit]
-        if len(accepted) < len(proposals):
-            logger.info("division cap bound: %d of %d proposals kept", len(accepted), len(proposals))
+            if len(accepted) >= global_cap:
+                break
+            sources = np.flatnonzero(timepoints == timepoint)
+            targets = np.flatnonzero(timepoints == timepoint + 1)
+            proposals = self._proposals_between(sources, targets, positions_um, adjacency)
+            frame_cap = max(1, round(self._frame_source_count(sources, adjacency) * self.frame_fraction_cap))
+            for _, parent, child in sorted(proposals)[: min(frame_cap, global_cap - len(accepted))]:
+                accepted.append((int(graph.node_ids[parent]), int(graph.node_ids[child])))
         if not accepted:
             return np.empty((0, 2), dtype=np.int64)
-        return np.array([[graph.node_ids[parent], graph.node_ids[child]] for _, parent, child in accepted])
+        return np.array(accepted, dtype=np.int64)
+
+    @staticmethod
+    def _frame_source_count(sources: Int[np.ndarray, "s"], adjacency: Adjacency) -> int:
+        """How many of this frame's cells are single-child parents — the base of the per-frame cap."""
+        return sum(1 for row in sources.tolist() if adjacency.out_degrees[row] == _SINGLE_CHILD)
 
     def _proposals_between(
         self,
@@ -84,8 +102,13 @@ class DivisionRecovery:
         positions_um: Float[np.ndarray, "n 3"],
         adjacency: Adjacency,
     ) -> list[tuple[float, int, int]]:
-        """Candidate forks across one frame gap, as `(parent distance, parent row, daughter row)`."""
-        parents = [row for row in source_rows.tolist() if adjacency.out_degrees[row] == _SINGLE_CHILD]
+        """Candidate forks across one frame gap, as `(score, parent row, daughter row)`, all gates applied."""
+        parents = [
+            row
+            for row in source_rows.tolist()
+            if adjacency.out_degrees[row] == _SINGLE_CHILD
+            and self._distance(positions_um, row, adjacency.successors[row][0]) <= self.existing_child_gate_um
+        ]
         orphans = [row for row in target_rows.tolist() if adjacency.in_degrees[row] == _UNPARENTED]
         if not parents or not orphans:
             return []
@@ -101,19 +124,30 @@ class DivisionRecovery:
         within_reach: list[list[int]],
         positions_um: Float[np.ndarray, "n 3"],
     ) -> list[tuple[float, int, int]]:
-        """Pick each orphan's closest sister-gated parent, letting no parent gain more than one daughter."""
+        """Pick each orphan's lowest-score sister-gated parent, letting no parent gain more than one daughter."""
         claimed: set[int] = set()
         found: list[tuple[float, int, int]] = []
         for orphan, reachable in zip(orphans, within_reach, strict=True):
             eligible = [
-                (float(np.linalg.norm(positions_um[orphan] - positions_um[parents[index]])), index)
+                (self._score(positions_um, parents[index], sisters[index], orphan), index)
                 for index in reachable
                 if parents[index] not in claimed
-                and np.linalg.norm(positions_um[orphan] - positions_um[sisters[index]]) <= self.sister_gate_um
+                and self._distance(positions_um, sisters[index], orphan) <= self.sister_gate_um
             ]
             if not eligible:
                 continue
-            distance, index = min(eligible)
+            _, index = min(eligible)
             claimed.add(parents[index])
-            found.append((distance, parents[index], orphan))
+            found.append((self._score(positions_um, parents[index], sisters[index], orphan), parents[index], orphan))
         return found
+
+    def _score(self, positions_um: Float[np.ndarray, "n 3"], parent: int, sister: int, orphan: int) -> float:
+        """Rank key `parent_distance + 0.15 * sister_distance` — the frontier's tightest-pair-first ordering."""
+        return self._distance(positions_um, parent, orphan) + _SISTER_WEIGHT * self._distance(
+            positions_um, sister, orphan
+        )
+
+    @staticmethod
+    def _distance(positions_um: Float[np.ndarray, "n 3"], a: int, b: int) -> float:
+        """Euclidean distance in micrometres between two node rows."""
+        return float(np.linalg.norm(positions_um[a] - positions_um[b]))
