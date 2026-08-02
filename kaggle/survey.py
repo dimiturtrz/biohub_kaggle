@@ -94,9 +94,7 @@ class KaggleApi:
         found: dict[str, dict[str, object]] = {}
         for sort in _SORTS:
             for page in range(1, _MAX_PAGES + 1):
-                rows = self.get(
-                    "/kernels/list", competition=competition, sortBy=sort, pageSize=_PAGE_SIZE, page=page
-                )
+                rows = self.get("/kernels/list", competition=competition, sortBy=sort, pageSize=_PAGE_SIZE, page=page)
                 if not isinstance(rows, list) or not rows:
                     break
                 found.update({str(row["ref"]): row for row in rows})
@@ -181,11 +179,7 @@ def _pull_kernels(api: KaggleApi, arguments: argparse.Namespace) -> None:
 def _safe_members(bundle: zipfile.ZipFile, target: Path) -> list[zipfile.ZipInfo]:
     """The archive entries that stay inside the target, so a crafted path cannot escape it."""
     resolved = target.resolve()
-    return [
-        member
-        for member in bundle.infolist()
-        if (resolved / member.filename).resolve().is_relative_to(resolved)
-    ]
+    return [member for member in bundle.infolist() if (resolved / member.filename).resolve().is_relative_to(resolved)]
 
 
 def _fetch_dataset(api: KaggleApi, arguments: argparse.Namespace) -> None:
@@ -203,7 +197,10 @@ def _fetch_dataset(api: KaggleApi, arguments: argparse.Namespace) -> None:
         members = _safe_members(bundle, target)
         skipped = len(bundle.infolist()) - len(members)
         bundle.extractall(target, members=members)  # noqa: S202 - members filtered to the target subtree
-    print(f"extracted {len(members)} entries to {_repo_relative(target)}" + (f" ({skipped} unsafe skipped)" if skipped else ""))
+    print(
+        f"extracted {len(members)} entries to {_repo_relative(target)}"
+        + (f" ({skipped} unsafe skipped)" if skipped else "")
+    )
 
 
 def _show_leaderboard(api: KaggleApi, arguments: argparse.Namespace) -> None:

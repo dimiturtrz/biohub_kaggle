@@ -3,6 +3,7 @@ from pathlib import Path
 import numpy as np
 
 from celltrack.bracket import ArmResult, Ceiling, Floor, ValidationFold
+from celltrack.division_recovery import DivisionRecovery
 from core.data.tracks import AnnotatedTracks, TrackGraph
 from core.data.video import CellVideo
 from core.geometry import Spacing
@@ -60,6 +61,15 @@ def test_report():
 def test_with_gate():
     ceiling = Ceiling.with_gate(SPACING, gate_um=12.0)
     assert ceiling.linker.max_distance_um == 12.0
+
+
+def test_with_motion():
+    """The motion ceiling labels itself by whether a division-recovery pass follows the linker."""
+    plain = Ceiling.with_motion(SPACING, recovery=None)
+    assert plain.label == "ceiling-motion"
+    assert plain.recovery is None
+    divided = Ceiling.with_motion(SPACING, recovery=DivisionRecovery(SPACING, 10.5, 8.0, 0.02))
+    assert divided.label == "ceiling-motiondiv"
 
 
 def test_ceiling_over():

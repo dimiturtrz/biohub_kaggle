@@ -23,6 +23,7 @@ so each stage token is a single word (no internal dash). One kernel per tuple, u
 | `unetaug` | our `DetectionUNet`, width-16, BCE, aug recipe, 8k steps (`detector_bce_aug_8k.pt`) |
 | `unetw64bg` | our `DetectionUNet`, width-64, aug + bg-crops 0.3 + weight-decay 0.01, 8k steps (`detector_bce_w64_aug.pt`) — **refuted** |
 | `pilktunet` | pilkwang public `TemporalUNet3D` + detect-head (`edge_predictor_best.pth`, split_0) |
+| `pilktunet99` | `pilktunet` read out at threshold 0.99 via the shared `TemporalUNetDetector.detections` (PeakExtractor plateau-collapse) |
 | `ourstunet` | our-trained `TemporalUNet3D` (planned) |
 
 ### S2 — linking (nodes → tracks; the edge-Jaccard the metric scores)
@@ -50,7 +51,8 @@ so each stage token is a single word (no internal dash). One kernel per tuple, u
 | `unetaug` | `nn` | `stlf` | 0.472 | 0.442 | 55146849 (legacy slug `celltrack-aug8k-nn`) |
 | `unetw64bg` | `motion` | `stlf` | 0.246 | — | width/bg/wd refuted; not submitted |
 | `pilktunet` | `nn` | `stlf` | 0.877ˢ | — | subset; NN loses the sparse fast-movers |
-| `pilktunet` | `motion` | `stlf` | **0.877** (0.927ˢ) | **0.859** | 55148762 — our best; local→LB offset −0.018 |
+| `pilktunet` | `motion` | `stlf` | **0.877** (0.927ˢ) | **0.859** | 55148762 — local→LB offset −0.018 |
+| `pilktunet99` | `motion` | `stlf` | **0.9074** | pending | thr 0.99 + PeakExtractor; +0.011 over 0.5, +0.030 over the 0.859 kernel's path |
 | `ourstunet` | `motion` | `stlf` | 0.887ᶜ | — | warm-start=pilkwang wts (fine-tune erodes); NOT yet genuinely ours |
 
 ˢ = fold-0 stratified subset (2/prefix), not full-41. The `pilktunet` linker delta is large: `motion` beats
@@ -64,6 +66,9 @@ monotone in the read-out threshold — trimming over-detection farms the count-r
 | pooled | 0.8742 | 0.8771 | 0.8794 | 0.8815 | 0.8837 | 0.8861 |
 | nodes | 1.02M | 985k | 952k | 929k | 892k | 855k |
 
+That table predates the `PeakExtractor` peak read-out (this session's `tunet.detections` rewrite); on the
+current shared path the same sweep is **higher and clears 0.9** — 0.5 → **0.8961**, 0.99 → **0.9074** — the
+plateau-collapse recovers one centre per saturated blob where the old naive `logits == maxpool` over-counted.
 The detector ceiling is ~**0.887** (rising, plateauing) — short of 0.9 by operating point alone. `ourstunet`
 warm-start fine-tune (lr 1e-4, our fold-train) *erodes* the score (best = init, late collapse to 0.80 @2k
 steps): the warm-start already fits, so there is no gradient, and our fold-train is likely disjoint from the
@@ -90,5 +95,17 @@ edge the one-to-one pass was dropping, so true forks pay on both terms and only 
 the large one. The parent gate's fold-0 optimum is 10.5 µm, independently reproducing the frontier's value
 (14 µm already falls to 0.2558). The cap never binds here at any fraction from 0.02 to 0.5.
 
-**Not yet validated on real detections**, where unparented false positives are far more common than on
-annotated nodes, so the sister gate in particular wants re-tuning before this is trusted end to end.
+**Refuted end to end (2026-08-02).** On *real* pilkwang detections the pass regresses — the ground-truth
+ceiling does not carry (`scratchpad/div_eval.py`, full-41, `TemporalUNetDetector.detections`):
+
+| thr | nodiv | div (sister 8) | div (sister 18) | div_jaccard (18) |
+|-----|-------|----------------|-----------------|------------------|
+| 0.5 | **0.8961** | 0.8870 | 0.8874 | 0.0130 |
+| 0.99 | **0.9074** | 0.8982 | 0.8975 | 0.0144 |
+
+On annotated nodes an orphan is a true lost daughter; on real detections it is mostly a false-positive or
+missed-link — the recovered fork is false, and each false parent edge costs the edge Jaccard (~0.009) far
+more than the near-zero `division_jaccard` gain (0.013 × 0.1). Neither sister gate wins and the fraction cap
+only converges toward `nodiv`, so it is not a gate-width miss. The frontier gates its post-link divisions
+behind a **DeepCenter veto** (a centre-prior net that confirms each fork) we have not mounted; that veto is
+the missing precondition. Code and tests are kept; `divstlf` is **not shipped**. Divisions wait on the veto.

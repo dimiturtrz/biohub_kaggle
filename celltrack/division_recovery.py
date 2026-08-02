@@ -23,7 +23,7 @@ from dataclasses import dataclass
 
 import numpy as np
 from jaxtyping import Float, Int
-from scipy.spatial import cKDTree
+from scipy.spatial import KDTree
 
 from core.data.tracks import Adjacency, TrackGraph
 from core.geometry import Spacing
@@ -90,7 +90,7 @@ class DivisionRecovery:
         if not parents or not orphans:
             return []
         sisters = [adjacency.successors[parent][0] for parent in parents]
-        within_reach = cKDTree(positions_um[parents]).query_ball_point(positions_um[orphans], r=self.parent_gate_um)
+        within_reach = KDTree(positions_um[parents]).query_ball_point(positions_um[orphans], r=self.parent_gate_um)
         return self._nearest_eligible(parents, sisters, orphans, within_reach, positions_um)
 
     def _nearest_eligible(
