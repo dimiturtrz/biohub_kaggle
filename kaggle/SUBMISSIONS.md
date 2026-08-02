@@ -39,6 +39,7 @@ so each stage token is a single word (no internal dash). One kernel per tuple, u
 | `raw` | none |
 | `st` | short-track filter (min length 3) |
 | `stlf` | short-track (3) + linefit smoother (0.8) |
+| `divstlf` | division recovery (parent 10.5 µm / sister 18 µm) + short-track (3) + linefit (0.8) |
 | `stlfg` | short-track + linefit + gap-close (planned) |
 
 ## Coverage grid (fold-0 local pooled / Kaggle LB)
@@ -71,3 +72,23 @@ epochs (batch=1 single-frame is ~1 epoch/47min — shape-bucketed batching is th
 
 Untried cells worth filling: `pilktunet`×`ilp`, any S3=`stlfg` (gap-close) — the remaining non-detector lever
 to 0.9 once the detector is fixed.
+
+## Divisions — the term we score zero on
+
+`MotionHungarianLinker` is a one-to-one assignment, so no node can ever have two children and
+`division_jaccard` is **structurally 0.0000**, forfeiting the metric's whole `0.1 × division_jaccard` term.
+Measured on fold-0 ground-truth nodes with `celltrack.bracket --arm ceiling-motion[div]`:
+
+| arm | edge_jaccard | division_jaccard |
+|-----|--------------|------------------|
+| `ceiling-motion` | 0.9947 | **0.0000** |
+| `ceiling-motiondiv`, frontier gates (10.5 / 8.0) | 0.9950 | 0.2593 |
+| `ceiling-motiondiv`, tuned (10.5 / 18.0) | 0.9951 | **0.4468** |
+
+≈ **+0.045** score on GT nodes, and the edge Jaccard *rises* too — a recovered daughter edge is a real GT
+edge the one-to-one pass was dropping, so true forks pay on both terms and only false ones trade against
+the large one. The parent gate's fold-0 optimum is 10.5 µm, independently reproducing the frontier's value
+(14 µm already falls to 0.2558). The cap never binds here at any fraction from 0.02 to 0.5.
+
+**Not yet validated on real detections**, where unparented false positives are far more common than on
+annotated nodes, so the sister gate in particular wants re-tuning before this is trusted end to end.
