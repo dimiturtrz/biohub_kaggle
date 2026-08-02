@@ -1,5 +1,36 @@
 # Session handoff — what this session established
 
+## START HERE (next session, any machine)
+
+**First action, before any setup:** test whether `POST /kernels/push` works with the `KAGGLE_TOKEN` bearer
+credential. One call, no data, no GPU, no local environment. It decides whether a submission is twenty
+minutes away or blocked on a Kaggle credential that has to be regenerated from account settings. The
+dataset-upload endpoint 404s with that token (`biohub_kaggle-ejl`); kernel push is a **different code
+path** — one JSON POST, no upload protocol — and was never tried. That omission is why this session ended
+without a submission.
+
+Then, in order: `biohub_kaggle-ejl` → `biohub_kaggle-xpz` (no evaluation CLI) → `biohub_kaggle-tnk` (submit).
+
+**Establish your own machine's state rather than trusting this document's.** The setup below was recorded on
+a 6 GB laptop and is not portable. Check:
+
+| check | fix if missing |
+|---|---|
+| `paths.yaml` resolves | write it; gitignored, one line, `data: <root>` |
+| `<root>/raw/biohub_cell_tracking/{train,test}` | extract the competition zip (or junction to it) |
+| `<root>/processed/biohub_cell_tracking/reference/pilkwang/split_0` | `survey.py dataset pilkwang/biohub-tracking-support-pack-50ep-v1` |
+| `external/kaggle-cell-tracking-competition/src` importable | same pack — its `repo/src` is that tree |
+| `.venv` | `uv sync --extra dev --extra devtools` |
+| `bd list` works | **do NOT run `bd init` in this repo** — see the trap below |
+
+**The `bd init` trap.** It bootstraps from the `git+https` remote into a schema 21 migrations behind, and
+the migration then fails (bd bug: `0047` recomputes across a `wisps` table a JSONL-bootstrapped database
+never had). It also silently uncomments `sync.remote` in `.beads/config.yaml` and drops `project_id` from
+`metadata.json`. If `bd` already works on your machine, leave it alone — `issues.jsonl` is schema-tolerant
+and imports fine across versions. The beads from this session were authored in a throwaway database outside
+the repo for exactly this reason.
+
+
 *2026-08-02. Written as a document because `bd` is not installed on this machine, so none of it could be
 filed as beads issues or memories. Fold into beads when a machine with `bd` picks this up.*
 
