@@ -31,7 +31,7 @@ from celltrack.bracket import ValidationFold
 from celltrack.linefit_smoother import LinefitSmoother
 from celltrack.linkers import LinkerConfig
 from celltrack.short_track_filter import ShortTrackFilter
-from celltrack.training.tunet_dataset import FrameDataset, FrameTarget
+from celltrack.training.tunet_dataset import Augmentation, FrameDataset, FrameTarget
 from celltrack.tunet import DetectorRecipe, TemporalUNetDetector
 from core.data.split import AcquisitionFolds
 from core.data.tracks import AnnotatedTracks
@@ -70,6 +70,7 @@ class TUNetTrainConfig:
     eval_subset: int = 2
     eval_threshold: float = 0.5
     seed: int = 0
+    augmentation: Augmentation = field(default_factory=Augmentation)
     recipe: DetectorRecipe = field(default_factory=DetectorRecipe)
 
 
@@ -139,7 +140,9 @@ class TUNetDetectorTrainer:
     ) -> tuple[float, float]:
         """Train `steps` steps, frames decompressed by a thread pool. Returns (mean loss, it/s)."""
         detector.train()
-        dataset = FrameDataset(targets, steps, self.config.downsample, self.config.seed + seed_offset)
+        dataset = FrameDataset(
+            targets, steps, self.config.downsample, self.config.seed + seed_offset, self.config.augmentation
+        )
         running, t0 = 0.0, time.perf_counter()
         for frame, coords in dataset.stream(self.config.threads, self.config.prefetch):
             running += self._step(detector, optimizer, frame, coords)
@@ -213,6 +216,9 @@ def main() -> None:
     parser.add_argument("--eval-subset", type=int, default=2)
     parser.add_argument("--eval-threshold", type=float, default=0.5)
     parser.add_argument("--warm-start", action="store_true", help="initialise from the published pilkwang weights")
+    parser.add_argument("--aug-brightness", type=float, default=0.0, help="multiplicative intensity jitter half-range")
+    parser.add_argument("--aug-offset", type=float, default=0.0, help="additive intensity jitter half-range")
+    parser.add_argument("--aug-flip", action="store_true", help="random flips along y and x (the in-plane axes)")
     parser.add_argument("--weights", type=str, default="detector_tunet_ours.pt")
     args = parser.parse_args()
 
@@ -225,6 +231,11 @@ def main() -> None:
         eval_every=args.eval_every,
         eval_subset=args.eval_subset,
         eval_threshold=args.eval_threshold,
+        augmentation=Augmentation(
+            brightness=args.aug_brightness,
+            offset=args.aug_offset,
+            flip_axes=(1, 2) if args.aug_flip else (),
+        ),
     )
     root = DataRoot.from_config(_CONFIG)
     dz, dy, dx = config.downsample

@@ -16,7 +16,7 @@ from typing import override
 import numpy as np
 import torch
 import zarr
-from jaxtyping import Int
+from jaxtyping import Float, Int
 from torch import Tensor
 from torch.utils.data import Dataset
 
@@ -32,14 +32,57 @@ class FrameTarget:
     coords: Int[np.ndarray, "n 3"]  # downsampled (z, y', x')
 
 
+@dataclass(frozen=True)
+class Augmentation:
+    """Label-preserving frame perturbations — intensity jitter and axis flips — the pilkwang recipe has and ours lacks.
+
+    A crop centred on a cell teaches "fire here"; without variation the detector memorises the exact intensity
+    and orientation it saw. Multiplicative + additive intensity jitter breaks the brightness dependence, and a
+    random flip along each eligible axis multiplies the effective orientations — coordinates are mirrored with
+    the volume so a flipped frame stays correctly labelled. Defaults are the identity, so a run that does not
+    ask for augmentation is byte-for-byte the un-augmented baseline.
+    """
+
+    brightness: float = 0.0  # multiplicative jitter half-range: gain in [1 - b, 1 + b]
+    offset: float = 0.0  # additive jitter half-range: bias in [-o, o]
+    flip_axes: tuple[int, ...] = ()  # frame axes (0=z, 1=y, 2=x) each flipped independently
+
+    _FLIP_PROBABILITY = 0.5
+
+    def apply(
+        self, frame: Float[Tensor, "z y x"], coords: Int[Tensor, "n 3"], rng: np.random.Generator
+    ) -> tuple[Float[Tensor, "z y x"], Int[Tensor, "n 3"]]:
+        """Return the jittered, randomly-flipped frame with its centres mirrored to match."""
+        gain = 1.0 + rng.uniform(-self.brightness, self.brightness)
+        bias = rng.uniform(-self.offset, self.offset)
+        frame = (frame * gain + bias).clamp(0.0)
+        for axis in self.flip_axes:
+            if rng.random() < self._FLIP_PROBABILITY:
+                frame = torch.flip(frame, dims=(axis,))
+                coords = coords.clone()
+                coords[:, axis] = frame.shape[axis] - 1 - coords[:, axis]
+        return frame, coords
+
+
+_NO_AUGMENTATION = Augmentation()  # frozen identity default; a module singleton avoids a call in arg defaults
+
+
 class FrameDataset(Dataset[tuple[Tensor, Tensor]]):
     """A stream of `steps` frames sampled uniformly from the annotated frames, opened lazily per worker."""
 
-    def __init__(self, targets: list[FrameTarget], steps: int, downsample: tuple[int, int, int], seed: int) -> None:
+    def __init__(
+        self,
+        targets: list[FrameTarget],
+        steps: int,
+        downsample: tuple[int, int, int],
+        seed: int,
+        augmentation: Augmentation = _NO_AUGMENTATION,
+    ) -> None:
         self._targets = targets
         self._steps = steps
         self._downsample = downsample
         self._seed = seed
+        self._augmentation = augmentation
 
     def __len__(self) -> int:
         return self._steps
@@ -53,7 +96,7 @@ class FrameDataset(Dataset[tuple[Tensor, Tensor]]):
         array = zarr.open_array(target.zarr_path / "0")
         raw = np.asarray(array[target.timepoint, ::dz, ::dy, ::dx], dtype=np.float32)
         normed = (torch.from_numpy(raw) - target.q_low) / (target.q_high - target.q_low + 1e-6)
-        return normed.clamp(0.0), torch.from_numpy(target.coords)
+        return self._augmentation.apply(normed.clamp(0.0), torch.from_numpy(target.coords), rng)
 
     def stream(self, threads: int, prefetch: int) -> Iterator[tuple[Tensor, Tensor]]:
         """Yield every item once, decompressed by a pool of `threads`, keeping `prefetch` frames in flight.
