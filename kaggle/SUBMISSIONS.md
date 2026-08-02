@@ -46,10 +46,10 @@ so each stage token is a single word (no internal dash). One kernel per tuple, u
 | S1 | S2 | S3 | fold-0 | LB | notes |
 |----|----|----|--------|----|-------|
 | `dog` | `nn` | `raw` | — | **0.427** | classical baseline (`celltrack-classical-submit`, legacy slug) |
-| `unetaug` | `nn` | `stlf` | 0.472 | pending | 55146849 (legacy slug `celltrack-aug8k-nn`) |
+| `unetaug` | `nn` | `stlf` | 0.472 | 0.442 | 55146849 (legacy slug `celltrack-aug8k-nn`) |
 | `unetw64bg` | `motion` | `stlf` | 0.246 | — | width/bg/wd refuted; not submitted |
 | `pilktunet` | `nn` | `stlf` | 0.877ˢ | — | subset; NN loses the sparse fast-movers |
-| `pilktunet` | `motion` | `stlf` | **0.877** (0.927ˢ) | in flight | the win — this is what to submit |
+| `pilktunet` | `motion` | `stlf` | **0.877** (0.927ˢ) | **0.859** | 55148762 — our best; local→LB offset −0.018 |
 | `ourstunet` | `motion` | `stlf` | 0.887ᶜ | — | warm-start=pilkwang wts (fine-tune erodes); NOT yet genuinely ours |
 
 ˢ = fold-0 stratified subset (2/prefix), not full-41. The `pilktunet` linker delta is large: `motion` beats
