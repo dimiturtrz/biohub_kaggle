@@ -578,6 +578,24 @@
     },
     {
       "kind": "import",
+      "source": "celltrack.training.tracked_run",
+      "target": "celltrack.training.early_stop",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.tracked_run",
+      "target": "core.hparams",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.tracked_run",
+      "target": "core.tracking",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "celltrack.training.tunet_detector",
       "target": "celltrack.bracket",
       "weight": 1
@@ -2503,6 +2521,42 @@
       "weight": 1
     },
     {
+      "kind": "references",
+      "source": "celltrack.training.tracked_run.TrackedRun",
+      "target": "core.hparams.RunConfig",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.tracked_run.TrackedRun",
+      "target": "core.tracking.Tracker",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.tracked_run.TrackedRun.fit",
+      "target": "celltrack.training.early_stop.EarlyStop",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.tracked_run.TrackedRun.fit",
+      "target": "celltrack.training.early_stop.EarlyStop.update",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.tracked_run.TrackedRun.fit",
+      "target": "celltrack.training.tracked_run.TrackedRun._log_epoch",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.tracked_run.TrackedRun.fit",
+      "target": "celltrack.training.tracked_run.TrackedRun._record",
+      "weight": 1
+    },
+    {
       "kind": "holds",
       "source": "celltrack.training.tunet_dataset.FrameDataset",
       "target": "celltrack.training.tunet_dataset.Augmentation",
@@ -3549,7 +3603,7 @@
   ],
   "nodes": [
     {
-      "descendants": 31,
+      "descendants": 33,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -3709,7 +3763,7 @@
       "role": null
     },
     {
-      "descendants": 10,
+      "descendants": 12,
       "id": "celltrack.training",
       "label": "training",
       "level": "module",
@@ -3736,6 +3790,14 @@
       "descendants": 0,
       "id": "celltrack.training.dataset",
       "label": "dataset",
+      "level": "module",
+      "parent": "celltrack.training",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.early_stop",
+      "label": "early_stop",
       "level": "module",
       "parent": "celltrack.training",
       "role": null
@@ -3776,6 +3838,14 @@
       "descendants": 0,
       "id": "celltrack.training.targets",
       "label": "targets",
+      "level": "module",
+      "parent": "celltrack.training",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.tracked_run",
+      "label": "tracked_run",
       "level": "module",
       "parent": "celltrack.training",
       "role": null
@@ -4206,6 +4276,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.training.early_stop.EarlyStop",
+      "label": "EarlyStop",
+      "level": "class",
+      "parent": "celltrack.training.early_stop",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.training.loop.DetectionTrainer",
       "label": "DetectionTrainer",
       "level": "class",
@@ -4259,6 +4337,14 @@
       "level": "class",
       "parent": "celltrack.training.targets",
       "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.tracked_run.TrackedRun",
+      "label": "TrackedRun",
+      "level": "class",
+      "parent": "celltrack.training.tracked_run",
+      "role": "primary"
     },
     {
       "descendants": 0,
@@ -5374,6 +5460,30 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.training.early_stop.EarlyStop.__init__",
+      "label": "__init__",
+      "level": "method",
+      "parent": "celltrack.training.early_stop.EarlyStop",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.early_stop.EarlyStop.should_stop",
+      "label": "should_stop",
+      "level": "method",
+      "parent": "celltrack.training.early_stop.EarlyStop",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.early_stop.EarlyStop.update",
+      "label": "update",
+      "level": "method",
+      "parent": "celltrack.training.early_stop.EarlyStop",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.training.loop.DetectionTrainer._experiment",
       "label": "_experiment",
       "level": "method",
@@ -5490,6 +5600,38 @@
       "label": "supervised_fraction",
       "level": "method",
       "parent": "celltrack.training.targets.DetectionTarget",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.tracked_run.TrackedRun.__init__",
+      "label": "__init__",
+      "level": "method",
+      "parent": "celltrack.training.tracked_run.TrackedRun",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.tracked_run.TrackedRun._log_epoch",
+      "label": "_log_epoch",
+      "level": "method",
+      "parent": "celltrack.training.tracked_run.TrackedRun",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.tracked_run.TrackedRun._record",
+      "label": "_record",
+      "level": "method",
+      "parent": "celltrack.training.tracked_run.TrackedRun",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.tracked_run.TrackedRun.fit",
+      "label": "fit",
+      "level": "method",
+      "parent": "celltrack.training.tracked_run.TrackedRun",
       "role": null
     },
     {
