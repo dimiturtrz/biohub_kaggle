@@ -224,6 +224,18 @@
     },
     {
       "kind": "import",
+      "source": "celltrack.gap_closer",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.gap_closer",
+      "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "celltrack.ilp_linking",
       "target": "core.data.tracks",
       "weight": 1
@@ -1347,6 +1359,12 @@
     {
       "kind": "calls",
       "source": "celltrack.division_recovery.DivisionRecovery._division_edges",
+      "target": "celltrack.division_recovery.DivisionRecovery._frame_source_count",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.division_recovery.DivisionRecovery._division_edges",
       "target": "celltrack.division_recovery.DivisionRecovery._proposals_between",
       "weight": 1
     },
@@ -1376,8 +1394,32 @@
     },
     {
       "kind": "calls",
+      "source": "celltrack.division_recovery.DivisionRecovery._nearest_eligible",
+      "target": "celltrack.division_recovery.DivisionRecovery._distance",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.division_recovery.DivisionRecovery._nearest_eligible",
+      "target": "celltrack.division_recovery.DivisionRecovery._score",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.division_recovery.DivisionRecovery._proposals_between",
+      "target": "celltrack.division_recovery.DivisionRecovery._distance",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
       "source": "celltrack.division_recovery.DivisionRecovery._proposals_between",
       "target": "celltrack.division_recovery.DivisionRecovery._nearest_eligible",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.division_recovery.DivisionRecovery._score",
+      "target": "celltrack.division_recovery.DivisionRecovery._distance",
       "weight": 1
     },
     {
@@ -1504,6 +1546,78 @@
       "kind": "calls",
       "source": "celltrack.explore.DatasetSurvey.summarise",
       "target": "core.paths.DataRoot.track_store",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.gap_closer.GapCloser",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.gap_closer.GapCloser",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.gap_closer.GapCloser._bridges",
+      "target": "celltrack.gap_closer.GapCloser._accept",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.gap_closer.GapCloser._bridges",
+      "target": "celltrack.gap_closer.GapCloser._proposals",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.gap_closer.GapCloser._bridges",
+      "target": "core.data.tracks.Adjacency.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.gap_closer.GapCloser._bridges",
+      "target": "core.data.tracks.TrackGraph.positions",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.gap_closer.GapCloser._bridges",
+      "target": "core.data.tracks.TrackGraph.timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.gap_closer.GapCloser._bridges",
+      "target": "core.geometry.Spacing.to_micrometres",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.gap_closer.GapCloser._match_frame",
+      "target": "celltrack.gap_closer.GapCloser._reusable_midpoint",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.gap_closer.GapCloser._proposals",
+      "target": "celltrack.gap_closer.GapCloser._match_frame",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.gap_closer.GapCloser.transform",
+      "target": "celltrack.gap_closer.GapCloser._bridges",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.gap_closer.GapCloser.transform",
+      "target": "core.data.tracks.TrackGraph",
       "weight": 1
     },
     {
@@ -3279,7 +3393,7 @@
   ],
   "nodes": [
     {
-      "descendants": 30,
+      "descendants": 31,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -3338,6 +3452,14 @@
       "descendants": 0,
       "id": "celltrack.explore",
       "label": "explore",
+      "level": "module",
+      "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.gap_closer",
+      "label": "gap_closer",
       "level": "module",
       "parent": "celltrack",
       "role": null
@@ -3732,6 +3854,14 @@
       "label": "VideoSummary",
       "level": "class",
       "parent": "celltrack.explore",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.gap_closer.GapCloser",
+      "label": "GapCloser",
+      "level": "class",
+      "parent": "celltrack.gap_closer",
       "role": "satellite"
     },
     {
@@ -4416,8 +4546,24 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.division_recovery.DivisionRecovery._distance",
+      "label": "_distance",
+      "level": "method",
+      "parent": "celltrack.division_recovery.DivisionRecovery",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.division_recovery.DivisionRecovery._division_edges",
       "label": "_division_edges",
+      "level": "method",
+      "parent": "celltrack.division_recovery.DivisionRecovery",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.division_recovery.DivisionRecovery._frame_source_count",
+      "label": "_frame_source_count",
       "level": "method",
       "parent": "celltrack.division_recovery.DivisionRecovery",
       "role": null
@@ -4434,6 +4580,14 @@
       "descendants": 0,
       "id": "celltrack.division_recovery.DivisionRecovery._proposals_between",
       "label": "_proposals_between",
+      "level": "method",
+      "parent": "celltrack.division_recovery.DivisionRecovery",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.division_recovery.DivisionRecovery._score",
+      "label": "_score",
       "level": "method",
       "parent": "celltrack.division_recovery.DivisionRecovery",
       "role": null
@@ -4516,6 +4670,54 @@
       "label": "summarise",
       "level": "method",
       "parent": "celltrack.explore.DatasetSurvey",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.gap_closer.GapCloser._accept",
+      "label": "_accept",
+      "level": "method",
+      "parent": "celltrack.gap_closer.GapCloser",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.gap_closer.GapCloser._bridges",
+      "label": "_bridges",
+      "level": "method",
+      "parent": "celltrack.gap_closer.GapCloser",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.gap_closer.GapCloser._match_frame",
+      "label": "_match_frame",
+      "level": "method",
+      "parent": "celltrack.gap_closer.GapCloser",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.gap_closer.GapCloser._proposals",
+      "label": "_proposals",
+      "level": "method",
+      "parent": "celltrack.gap_closer.GapCloser",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.gap_closer.GapCloser._reusable_midpoint",
+      "label": "_reusable_midpoint",
+      "level": "method",
+      "parent": "celltrack.gap_closer.GapCloser",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.gap_closer.GapCloser.transform",
+      "label": "transform",
+      "level": "method",
+      "parent": "celltrack.gap_closer.GapCloser",
       "role": null
     },
     {
