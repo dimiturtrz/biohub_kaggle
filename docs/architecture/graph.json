@@ -3086,6 +3086,42 @@
     },
     {
       "kind": "holds",
+      "source": "core.hparams.RunConfig",
+      "target": "core.hparams.AugCfg",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "core.hparams.RunConfig",
+      "target": "core.hparams.DataCfg",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "core.hparams.RunConfig",
+      "target": "core.hparams.EvalCfg",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "core.hparams.RunConfig",
+      "target": "core.hparams.OptimCfg",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "core.hparams.RunConfig",
+      "target": "core.hparams.RunConfig",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.hparams.RunConfig.apply_overrides",
+      "target": "core.hparams.RunConfig._coerce",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
       "source": "core.metrics.divisions.DivisionScoring",
       "target": "core.data.tracks.Adjacency",
       "weight": 1
@@ -3461,6 +3497,54 @@
       "source": "core.paths.DataRoot.videos",
       "target": "core.paths.DataRoot.raw",
       "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "core.tracking.Tracker",
+      "target": "core.tracking.Tracker",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.tracking.Tracker._log_open",
+      "target": "core.tracking.Tracker._flat",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.tracking.Tracker.start",
+      "target": "core.tracking.Tracker._backend",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.tracking.Tracker.start",
+      "target": "core.tracking.Tracker._configure",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.tracking.Tracker.start",
+      "target": "core.tracking.Tracker._log_open",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.tracking.Tracker.track_run",
+      "target": "core.tracking.Tracker._backend",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.tracking.Tracker.track_run",
+      "target": "core.tracking.Tracker._configure",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.tracking.Tracker.track_run",
+      "target": "core.tracking.Tracker._log_open",
+      "weight": 1
     }
   ],
   "nodes": [
@@ -3721,7 +3805,7 @@
       "role": null
     },
     {
-      "descendants": 13,
+      "descendants": 16,
       "id": "core",
       "label": "core",
       "level": "module",
@@ -3777,6 +3861,14 @@
       "role": null
     },
     {
+      "descendants": 0,
+      "id": "core.hparams",
+      "label": "hparams",
+      "level": "module",
+      "parent": "core",
+      "role": null
+    },
+    {
       "descendants": 5,
       "id": "core.metrics",
       "label": "metrics",
@@ -3826,8 +3918,24 @@
     },
     {
       "descendants": 0,
+      "id": "core.obs",
+      "label": "obs",
+      "level": "module",
+      "parent": "core",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "core.paths",
       "label": "paths",
+      "level": "module",
+      "parent": "core",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.tracking",
+      "label": "tracking",
       "level": "module",
       "parent": "core",
       "role": null
@@ -4362,6 +4470,46 @@
     },
     {
       "descendants": 0,
+      "id": "core.hparams.AugCfg",
+      "label": "AugCfg",
+      "level": "class",
+      "parent": "core.hparams",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "core.hparams.DataCfg",
+      "label": "DataCfg",
+      "level": "class",
+      "parent": "core.hparams",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "core.hparams.EvalCfg",
+      "label": "EvalCfg",
+      "level": "class",
+      "parent": "core.hparams",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "core.hparams.OptimCfg",
+      "label": "OptimCfg",
+      "level": "class",
+      "parent": "core.hparams",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "core.hparams.RunConfig",
+      "label": "RunConfig",
+      "level": "class",
+      "parent": "core.hparams",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
       "id": "core.metrics.divisions.DivisionCounts",
       "label": "DivisionCounts",
       "level": "class",
@@ -4426,10 +4574,26 @@
     },
     {
       "descendants": 0,
+      "id": "core.obs.Obs",
+      "label": "Obs",
+      "level": "class",
+      "parent": "core.obs",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
       "id": "core.paths.DataRoot",
       "label": "DataRoot",
       "level": "class",
       "parent": "core.paths",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "core.tracking.Tracker",
+      "label": "Tracker",
+      "level": "class",
+      "parent": "core.tracking",
       "role": "primary"
     },
     {
@@ -5898,6 +6062,38 @@
     },
     {
       "descendants": 0,
+      "id": "core.hparams.RunConfig._coerce",
+      "label": "_coerce",
+      "level": "method",
+      "parent": "core.hparams.RunConfig",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.hparams.RunConfig.apply_overrides",
+      "label": "apply_overrides",
+      "level": "method",
+      "parent": "core.hparams.RunConfig",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.hparams.RunConfig.from_json",
+      "label": "from_json",
+      "level": "method",
+      "parent": "core.hparams.RunConfig",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.hparams.RunConfig.to_json",
+      "label": "to_json",
+      "level": "method",
+      "parent": "core.hparams.RunConfig",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "core.metrics.divisions.DivisionCounts.jaccard",
       "label": "jaccard",
       "level": "method",
@@ -6170,6 +6366,30 @@
     },
     {
       "descendants": 0,
+      "id": "core.obs.Obs.progress",
+      "label": "progress",
+      "level": "method",
+      "parent": "core.obs.Obs",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.obs.Obs.setup",
+      "label": "setup",
+      "level": "method",
+      "parent": "core.obs.Obs",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.obs.Obs.timed",
+      "label": "timed",
+      "level": "method",
+      "parent": "core.obs.Obs",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "core.paths.DataRoot.__init__",
       "label": "__init__",
       "level": "method",
@@ -6214,6 +6434,62 @@
       "label": "videos",
       "level": "method",
       "parent": "core.paths.DataRoot",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.tracking.Tracker.__init__",
+      "label": "__init__",
+      "level": "method",
+      "parent": "core.tracking.Tracker",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.tracking.Tracker._backend",
+      "label": "_backend",
+      "level": "method",
+      "parent": "core.tracking.Tracker",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.tracking.Tracker._configure",
+      "label": "_configure",
+      "level": "method",
+      "parent": "core.tracking.Tracker",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.tracking.Tracker._flat",
+      "label": "_flat",
+      "level": "method",
+      "parent": "core.tracking.Tracker",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.tracking.Tracker._log_open",
+      "label": "_log_open",
+      "level": "method",
+      "parent": "core.tracking.Tracker",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.tracking.Tracker.start",
+      "label": "start",
+      "level": "method",
+      "parent": "core.tracking.Tracker",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.tracking.Tracker.track_run",
+      "label": "track_run",
+      "level": "method",
+      "parent": "core.tracking.Tracker",
       "role": null
     }
   ]
