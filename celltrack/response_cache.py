@@ -6,8 +6,11 @@ forward, so a detector's fold-0 score cost a full video sweep each time. The res
 (weights, video), though — so it is forwarded once and written to disk, and every later read-out replays it
 instantly. A retrain invalidates only its own weights' cache, keyed by the checkpoint's stem.
 
-Volumes are stored half-precision: the response is a probability the peak-picker reads through a
-float32 cast anyway, and fp16 halves the disk footprint of a mostly-dark volume that compresses well.
+Volumes are stored at full float32 precision, not half. The peak read-out is an *equality* NMS
+(`volume == max_pool(volume)`), and fp16 rounding fabricates ties between distinct neighbouring peaks —
+false plateaus the component-collapse then merges into one centre. A cached replay must reproduce the live
+score exactly (that faithfulness is the whole point of the cache), so the storage cannot round the response
+the NMS reads through. Disk is out-of-repo and cheap; a wrong number replayed fast is not.
 """
 
 from collections.abc import Callable
@@ -32,5 +35,5 @@ class ResponseCache:
         if store.exists():
             return list(np.load(store).astype(np.float32))
         volumes = forward()
-        np.save(store, np.stack(volumes).astype(np.float16))
+        np.save(store, np.stack(volumes).astype(np.float32))
         return volumes

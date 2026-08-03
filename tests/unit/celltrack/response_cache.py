@@ -6,8 +6,12 @@ from celltrack.response_cache import ResponseCache
 
 
 def test_responses(tmp_path: Path):
-    """A first request forwards and persists; a second replays the stored volumes without forwarding again."""
-    volumes = [np.full((2, 3, 3), 0.5, dtype=np.float32), np.full((2, 3, 3), 0.25, dtype=np.float32)]
+    """A first request forwards and persists; a second replays the stored volumes *exactly*, without forwarding.
+
+    Exactly, not approximately: `0.99998` is not representable in float16, so a half-precision store would
+    round it and the equality-based peak NMS would read a different response on replay than on the live run.
+    """
+    volumes = [np.full((2, 3, 3), 0.99998, dtype=np.float32), np.full((2, 3, 3), 0.25, dtype=np.float32)]
     calls = 0
 
     def forward():
@@ -16,11 +20,11 @@ def test_responses(tmp_path: Path):
         return volumes
 
     cache = ResponseCache(tmp_path, "weights_a")
-    first = cache.responses("video_x", forward)
-    second = cache.responses("video_x", forward)
+    cache.responses("video_x", forward)
+    replayed = cache.responses("video_x", forward)
 
     assert calls == 1
-    assert np.allclose(np.stack(first), np.stack(second))
+    assert np.array_equal(np.stack(volumes), np.stack(replayed))
 
 
 def test_a_different_checkpoint_gets_its_own_cache(tmp_path: Path):
