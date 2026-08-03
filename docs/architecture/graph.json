@@ -9,19 +9,7 @@
     {
       "kind": "import",
       "source": "celltrack.bracket",
-      "target": "celltrack.division_recovery",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.bracket",
       "target": "celltrack.linking",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.bracket",
-      "target": "celltrack.motion_linking",
       "weight": 1
     },
     {
@@ -687,12 +675,6 @@
     {
       "kind": "import",
       "source": "celltrack.training.run",
-      "target": "celltrack.training.classification_loss",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.training.run",
       "target": "celltrack.training.dataset",
       "weight": 1
     },
@@ -705,19 +687,7 @@
     {
       "kind": "import",
       "source": "celltrack.training.run",
-      "target": "celltrack.training.loss",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.training.run",
       "target": "celltrack.training.model",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.training.run",
-      "target": "core.data.split",
       "weight": 1
     },
     {
@@ -843,12 +813,6 @@
     {
       "kind": "import",
       "source": "celltrack.tunet",
-      "target": "celltrack.peaks",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.tunet",
       "target": "core.data.tracks",
       "weight": 1
     },
@@ -856,12 +820,6 @@
       "kind": "import",
       "source": "celltrack.tunet",
       "target": "core.data.video",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.tunet",
-      "target": "core.geometry",
       "weight": 1
     },
     {
@@ -2319,7 +2277,19 @@
     {
       "kind": "holds",
       "source": "celltrack.ilp_linking.ILPLinker",
+      "target": "celltrack.motion_linking.EdgeAffinity",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.ilp_linking.ILPLinker",
       "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.ilp_linking.ILPLinker._add_candidate_edges",
+      "target": "celltrack.motion_linking.EdgeAffinity.probabilities",
       "weight": 1
     },
     {
