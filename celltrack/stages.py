@@ -21,7 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from celltrack.center_prior import CenterPriorVeto, CenterVetoConfig
 from celltrack.division_recovery import DivisionRecovery
-from celltrack.gap_closer import GapCloser, SyntheticGap
+from celltrack.gap_closer import DensityGapBridge, GapCloser, SyntheticGap
 from celltrack.linefit_smoother import LinefitSmoother
 from celltrack.linkers import LinkerConfig
 from celltrack.linking import Linker
@@ -88,6 +88,24 @@ class GapSpec(BaseModel):
         return GapCloser(spacing, self.gate_um, self.reuse_um, self.max_added_fraction, confirmer, self.synthetic)
 
 
+class DensityGapSpec(BaseModel):
+    """Bridge a one-frame gap by motion prediction with a density-adaptive radius — no centre prior.
+
+    Where a track ends at t and a single plausible successor starts at t+2, insert the missing t+1 detection
+    and its two edges. `reach_um` caps the local Voronoi radius at the linker's one-frame motion gate, so a
+    crowded region bridges tight and an ambiguous gap is left open.
+    """
+
+    model_config = _Spec
+
+    kind: Literal["density_gap"] = "density_gap"
+    reach_um: float = Field(10.0, gt=0)
+    max_added_fraction: float = Field(0.05, ge=0)
+
+    def build(self, spacing: Spacing, veto: CenterPriorVeto | None = None) -> GraphStage:
+        return DensityGapBridge(spacing, self.reach_um, self.max_added_fraction)
+
+
 class DivisionSpec(BaseModel):
     """Recover the second daughter of a division a one-to-one linker cannot represent, three gates guarding it."""
 
@@ -150,6 +168,6 @@ class TopologySpec(BaseModel):
 
 
 StageSpec = Annotated[
-    LinkerSpec | GapSpec | DivisionSpec | ShortTrackSpec | SmoothSpec | TopologySpec,
+    LinkerSpec | GapSpec | DensityGapSpec | DivisionSpec | ShortTrackSpec | SmoothSpec | TopologySpec,
     Field(discriminator="kind"),
 ]
