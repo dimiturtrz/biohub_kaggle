@@ -20,6 +20,42 @@
     },
     {
       "kind": "import",
+      "source": "celltrack.assignment_linking",
+      "target": "celltrack.motion_linking",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.assignment_linking",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.assignment_linking",
+      "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.blended_edge_scoring",
+      "target": "celltrack.edge_scoring",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.blended_edge_scoring",
+      "target": "celltrack.tunet",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.blended_edge_scoring",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "celltrack.bracket",
       "target": "celltrack.detection",
       "weight": 1
@@ -1027,6 +1063,126 @@
       "weight": 1
     },
     {
+      "kind": "holds",
+      "source": "celltrack.assignment_linking.AssignmentLinker",
+      "target": "celltrack.motion_linking.EdgeAffinity",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.assignment_linking.AssignmentLinker",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.assignment_linking.AssignmentLinker",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.assignment_linking.AssignmentLinker._gated_cost",
+      "target": "celltrack.motion_linking.EdgeAffinity.probabilities",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.assignment_linking.AssignmentLinker._match",
+      "target": "celltrack.assignment_linking.AssignmentLinker._augment_with_skips",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.assignment_linking.AssignmentLinker._match",
+      "target": "celltrack.assignment_linking.AssignmentLinker._gated_cost",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.assignment_linking.AssignmentLinker.link",
+      "target": "celltrack.assignment_linking.AssignmentLinker._match",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.assignment_linking.AssignmentLinker.link",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.assignment_linking.AssignmentLinker.link",
+      "target": "core.data.tracks.TrackGraph.positions",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.assignment_linking.AssignmentLinker.link",
+      "target": "core.data.tracks.TrackGraph.timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.assignment_linking.AssignmentLinker.link",
+      "target": "core.geometry.Spacing.to_micrometres",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.blended_edge_scoring.BlendedEdgeTransformerScorer",
+      "target": "celltrack.blended_edge_scoring.BlendedEdgeTransformerScorer",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.blended_edge_scoring.BlendedEdgeTransformerScorer",
+      "target": "celltrack.edge_scoring.EdgeTransformerScorer",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.blended_edge_scoring.BlendedEdgeTransformerScorer",
+      "target": "celltrack.edge_scoring.PrecomputedEdgeAffinity",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.blended_edge_scoring.BlendedEdgeTransformerScorer",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.blended_edge_scoring.BlendedEdgeTransformerScorer.affinities",
+      "target": "celltrack.edge_scoring.PrecomputedEdgeAffinity",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.blended_edge_scoring.BlendedEdgeTransformerScorer.affinities",
+      "target": "celltrack.tunet.TemporalUNetDetector._open_source",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.blended_edge_scoring.BlendedEdgeTransformerScorer.affinities",
+      "target": "core.data.tracks.TrackGraph.positions",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.blended_edge_scoring.BlendedEdgeTransformerScorer.affinities",
+      "target": "core.data.tracks.TrackGraph.timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.blended_edge_scoring.BlendedEdgeTransformerScorer.from_packs",
+      "target": "celltrack.edge_scoring.EdgeTransformerScorer.from_pack",
+      "weight": 1
+    },
+    {
       "kind": "references",
       "source": "celltrack.bracket.ArmResult",
       "target": "core.metrics.score.SplitScore",
@@ -1970,6 +2126,18 @@
     },
     {
       "kind": "calls",
+      "source": "celltrack.edge_scoring.EdgeTransformerScorer._gap_logits",
+      "target": "celltrack.edge_scoring.EdgeTransformerScorer._node_features",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.edge_scoring.EdgeTransformerScorer._gap_logits",
+      "target": "celltrack.tunet.TemporalUNetDetector._read_frame",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
       "source": "celltrack.edge_scoring.EdgeTransformerScorer._node_features",
       "target": "celltrack.edge_scoring.EdgeTransformerScorer._position_embedding",
       "weight": 1
@@ -1977,13 +2145,7 @@
     {
       "kind": "calls",
       "source": "celltrack.edge_scoring.EdgeTransformerScorer._score_gap",
-      "target": "celltrack.edge_scoring.EdgeTransformerScorer._node_features",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.edge_scoring.EdgeTransformerScorer._score_gap",
-      "target": "celltrack.tunet.TemporalUNetDetector._read_frame",
+      "target": "celltrack.edge_scoring.EdgeTransformerScorer._gap_logits",
       "weight": 1
     },
     {
@@ -4899,7 +5061,7 @@
   ],
   "nodes": [
     {
-      "descendants": 39,
+      "descendants": 41,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -4910,6 +5072,22 @@
       "descendants": 0,
       "id": "celltrack.affinity_division",
       "label": "affinity_division",
+      "level": "module",
+      "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.assignment_linking",
+      "label": "assignment_linking",
+      "level": "module",
+      "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.blended_edge_scoring",
+      "label": "blended_edge_scoring",
       "level": "module",
       "parent": "celltrack",
       "role": null
@@ -5369,6 +5547,22 @@
       "level": "class",
       "parent": "celltrack.affinity_division",
       "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.assignment_linking.AssignmentLinker",
+      "label": "AssignmentLinker",
+      "level": "class",
+      "parent": "celltrack.assignment_linking",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.blended_edge_scoring.BlendedEdgeTransformerScorer",
+      "label": "BlendedEdgeTransformerScorer",
+      "level": "class",
+      "parent": "celltrack.blended_edge_scoring",
+      "role": "primary"
     },
     {
       "descendants": 0,
@@ -6340,6 +6534,62 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.assignment_linking.AssignmentLinker._augment_with_skips",
+      "label": "_augment_with_skips",
+      "level": "method",
+      "parent": "celltrack.assignment_linking.AssignmentLinker",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.assignment_linking.AssignmentLinker._gated_cost",
+      "label": "_gated_cost",
+      "level": "method",
+      "parent": "celltrack.assignment_linking.AssignmentLinker",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.assignment_linking.AssignmentLinker._match",
+      "label": "_match",
+      "level": "method",
+      "parent": "celltrack.assignment_linking.AssignmentLinker",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.assignment_linking.AssignmentLinker.link",
+      "label": "link",
+      "level": "method",
+      "parent": "celltrack.assignment_linking.AssignmentLinker",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.blended_edge_scoring.BlendedEdgeTransformerScorer.__init__",
+      "label": "__init__",
+      "level": "method",
+      "parent": "celltrack.blended_edge_scoring.BlendedEdgeTransformerScorer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.blended_edge_scoring.BlendedEdgeTransformerScorer.affinities",
+      "label": "affinities",
+      "level": "method",
+      "parent": "celltrack.blended_edge_scoring.BlendedEdgeTransformerScorer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.blended_edge_scoring.BlendedEdgeTransformerScorer.from_packs",
+      "label": "from_packs",
+      "level": "method",
+      "parent": "celltrack.blended_edge_scoring.BlendedEdgeTransformerScorer",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.bracket.ArmResult.edge_jaccard",
       "label": "edge_jaccard",
       "level": "method",
@@ -6774,6 +7024,14 @@
       "descendants": 0,
       "id": "celltrack.edge_scoring.EdgeTransformerScorer.__init__",
       "label": "__init__",
+      "level": "method",
+      "parent": "celltrack.edge_scoring.EdgeTransformerScorer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.edge_scoring.EdgeTransformerScorer._gap_logits",
+      "label": "_gap_logits",
       "level": "method",
       "parent": "celltrack.edge_scoring.EdgeTransformerScorer",
       "role": null
