@@ -12,7 +12,7 @@ from pathlib import Path
 
 from celltrack.bracket import ValidationFold
 from celltrack.linkers import LinkerConfig
-from celltrack.pipeline import DetectorScorer, DetectorSpec, PipelineConfig
+from celltrack.pipeline import BlendDetectorScorer, DetectorScorer, DetectorSpec, PipelineConfig, Scorer
 from celltrack.response_cache import ResponseCache
 from celltrack.stages import DivisionSpec, GraphStage, LinkerSpec, ShortTrackSpec, SmoothSpec
 from celltrack.tunet import TemporalUNetDetector
@@ -50,7 +50,7 @@ def _score(graphs: list[tuple[TrackGraph, AnnotatedTracks]], matcher: DistanceMa
     return SplitScore.of([VideoMetrics.of(graph, truth, matcher) for graph, truth in graphs])
 
 
-def _full(config: PipelineConfig, scorer: DetectorScorer, fold: ValidationFold) -> None:
+def _full(config: PipelineConfig, scorer: Scorer, fold: ValidationFold, label: str) -> None:
     """Run the whole pipeline over the fold, replaying detection from cache, and log the reproduced score."""
     pipeline = config.build(scorer, fold.spacing)
     matcher = DistanceMatcher(spacing=fold.spacing)
@@ -60,7 +60,13 @@ def _full(config: PipelineConfig, scorer: DetectorScorer, fold: ValidationFold) 
         graphs.append((pipeline.run(path.name, path), truth))
         logger.info("  [%d/%d] %s %.1fs", done, len(fold.videos), path.name, time.perf_counter() - t0)
     scored = _score(graphs, matcher)
-    logger.info("FULL (from cache): score=%.4f div_jac=%.4f", scored.score, scored.division_jaccard)
+    logger.info("FULL %-12s score=%.4f div_jac=%.4f", label, scored.score, scored.division_jaccard)
+
+
+def _mounted(pack: Path, device: str) -> TemporalUNetDetector:
+    """Load a published detector pack onto the device, ready for inference."""
+    detector, _ = TemporalUNetDetector.from_pack(pack, map_location=device)
+    return detector.to(device).eval()
 
 
 def _attribution(config: PipelineConfig, fold: ValidationFold) -> None:
@@ -94,19 +100,31 @@ def _teacher_forced(truth: AnnotatedTracks, stages: tuple[GraphStage, ...]) -> T
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     root = DataRoot.from_config(_CONFIG)
-    pack = root.processed("biohub_cell_tracking") / "reference/pilkwang/split_0"
+    proc = root.processed("biohub_cell_tracking")
+    responses = proc / "cache/responses"
     fold = ValidationFold.load(root, 0)
-    detector, recipe = TemporalUNetDetector.from_pack(pack, map_location="cuda")
-    detector = detector.to("cuda").eval()
-    cache = ResponseCache(root.processed("biohub_cell_tracking") / "cache/responses", "pilkwang_split0_t99")
-    scorer = DetectorScorer(detector=detector, recipe=recipe, cache=cache, device="cuda")
+
+    seed1 = _mounted(proc / "reference/pilkwang/split_0", "cuda")
+    _, recipe = TemporalUNetDetector.from_pack(proc / "reference/pilkwang/split_0", map_location="cpu")
+    single = DetectorScorer(seed1, recipe, ResponseCache(responses, "pilkwang_split0_t99"), "cuda")
+
+    seed2 = _mounted(proc / "reference/pilkwang/seed2/weights/unet_transformer/split_0", "cuda")
+    blend = BlendDetectorScorer(
+        detectors=(
+            (seed1, ResponseCache(responses, "pilkwang_seed1_logits")),
+            (seed2, ResponseCache(responses, "pilkwang_seed2_logits")),
+        ),
+        recipe=recipe,
+        device="cuda",
+    )
 
     logger.info("=== attribution: current best (GT-teacher-forced, perfect detection) ===")
     _attribution(_BEST, fold)
     logger.info("=== attribution: division probe (the fork ceiling on GT nodes) ===")
     _attribution(_DIV_PROBE, fold)
     logger.info("=== full pipeline (real detection, from cache) ===")
-    _full(_BEST, scorer, fold)
+    _full(_BEST, single, fold, "single-seed")
+    _full(_BEST, blend, fold, "dual-seed")
 
 
 if __name__ == "__main__":

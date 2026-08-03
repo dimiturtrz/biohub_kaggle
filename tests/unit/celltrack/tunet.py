@@ -108,11 +108,23 @@ def test_detections(tmp_path: Path):
 
 
 def test_probability_volumes(tmp_path: Path):
-    """The cacheable forward yields one downsampled probability volume per timepoint, as host arrays."""
+    """The cacheable forward yields one downsampled probability volume per timepoint, in [0, 1], as host arrays."""
     recipe = DetectorRecipe(downsample=(1, 1, 1), pool_kernel_um=1.0, tta=False)
     volumes = _tiny_detector().probability_volumes(_video(tmp_path, [1.0, 1.0, 1.0, 1.0]), recipe, "cpu")
     assert len(volumes) == 2  # one per timepoint
     assert volumes[0].shape == (4, 8, 8)  # the downsampled grid
+    assert volumes[0].min() >= 0.0 and volumes[0].max() <= 1.0  # probabilities
+
+
+def test_logit_volumes(tmp_path: Path):
+    """The blend-space response is the pre-sigmoid logits — `probability_volumes` is exactly their sigmoid."""
+    detector = _tiny_detector()
+    recipe = DetectorRecipe(downsample=(1, 1, 1), pool_kernel_um=1.0, tta=False)
+    video = _video(tmp_path, [1.0, 1.0, 1.0, 1.0])
+    logits = detector.logit_volumes(video, recipe, "cpu")
+    probs = detector.probability_volumes(video, recipe, "cpu")
+    assert len(logits) == 2
+    assert np.allclose(probs[0], 1.0 / (1.0 + np.exp(-logits[0])), atol=1e-5)
 
 
 def test_graph_from_volumes():

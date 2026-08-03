@@ -15,6 +15,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+import numpy as np
+import torch
+from jaxtyping import Float
 from pydantic import BaseModel, ConfigDict, Field
 
 from celltrack.response_cache import ResponseCache
@@ -53,6 +56,39 @@ class DetectorScorer:
         )
         scale = self.detector.voxel_scale(path)
         return self.detector.graph_from_volumes(volumes, scale, threshold, self.recipe, self.device)
+
+
+@dataclass(frozen=True)
+class BlendDetectorScorer:
+    """Several trained detectors blended at the logit level — one Scorer over an N-seed ensemble.
+
+    Each seed forwards once into its own cache; the read-out averages their logit volumes (the honest,
+    unsaturated blend space — near-1.0 probabilities lose the peak distinctions the NMS needs), takes the
+    sigmoid, and shares the peak read-out. Mounting a second public seed and averaging is the frontier's
+    dual-seed detector — no retraining. Mean and sigmoid run on the device; only the small blended volume
+    returns to the host for the peak read-out.
+    """
+
+    detectors: tuple[tuple[TemporalUNetDetector, ResponseCache], ...]
+    recipe: DetectorRecipe
+    device: str
+
+    def nodes(self, video_key: str, path: Path, threshold: float) -> TrackGraph:
+        """Blend every seed's cached logits on the device, sigmoid, and read the peaks out as an edge-free graph."""
+        stacks = [self._cached_logits(video_key, path, detector, cache) for detector, cache in self.detectors]
+        blended = [self._blend(frames) for frames in zip(*stacks, strict=True)]
+        scale = self.detectors[0][0].voxel_scale(path)
+        return TemporalUNetDetector.graph_from_volumes(blended, scale, threshold, self.recipe, self.device)
+
+    def _cached_logits(
+        self, video_key: str, path: Path, detector: TemporalUNetDetector, cache: ResponseCache
+    ) -> list[Float[np.ndarray, "z y x"]]:
+        return cache.responses(video_key, lambda: detector.logit_volumes(path, self.recipe, self.device))
+
+    def _blend(self, frames: tuple[Float[np.ndarray, "z y x"], ...]) -> Float[np.ndarray, "z y x"]:
+        """Mean the seeds' logits and take the sigmoid, on the device."""
+        stacked = torch.as_tensor(np.stack(frames), device=self.device)
+        return torch.sigmoid(stacked.mean(dim=0)).cpu().numpy()
 
 
 class DetectorSpec(BaseModel):

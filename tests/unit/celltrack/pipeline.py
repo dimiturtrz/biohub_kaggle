@@ -7,7 +7,7 @@ import pytest
 from pydantic import ValidationError
 
 from celltrack.gap_closer import GapCloser
-from celltrack.pipeline import DetectorScorer, DetectorSpec, Pipeline, PipelineConfig
+from celltrack.pipeline import BlendDetectorScorer, DetectorScorer, DetectorSpec, Pipeline, PipelineConfig
 from celltrack.response_cache import ResponseCache
 from celltrack.short_track_filter import ShortTrackFilter
 from celltrack.stages import GapSpec, ShortTrackSpec
@@ -76,7 +76,33 @@ class _FakeDetector:
         return _nodes()
 
 
-def test_nodes(tmp_path: Path):
+@dataclass
+class _FakeSeed:
+    """Duck-typed detector returning one canned logit volume with a single peak, for the blend test."""
+
+    peak_logit: float
+
+    def logit_volumes(self, path: Path, recipe: DetectorRecipe, device: str) -> list[np.ndarray]:
+        volume = np.full((2, 4, 4), -10.0, dtype=np.float32)
+        volume[1, 2, 3] = self.peak_logit
+        return [volume]
+
+    def voxel_scale(self, path: Path) -> tuple[float, float, float]:
+        return (1.0, 1.0, 1.0)
+
+
+def test_blend_detector_scorer_nodes(tmp_path: Path):
+    """The blend averages both seeds' logits, sigmoids, and reads a peak both seeds fire on into a node."""
+    recipe = DetectorRecipe(downsample=(1, 1, 1), pool_kernel_um=1.0, tta=False)
+    seeds = (
+        (cast(TemporalUNetDetector, _FakeSeed(10.0)), ResponseCache(tmp_path, "seed1")),
+        (cast(TemporalUNetDetector, _FakeSeed(10.0)), ResponseCache(tmp_path, "seed2")),
+    )
+    graph = BlendDetectorScorer(detectors=seeds, recipe=recipe, device="cpu").nodes("vid", Path("v.zarr"), 0.5)
+    assert graph.coordinates.tolist() == [[0, 1, 2, 3]]  # (t, z, y, x) — the shared peak
+
+
+def test_detector_scorer_nodes(tmp_path: Path):
     """The detector scorer forwards a video once and replays the read-out from cache on later calls."""
     fake = _FakeDetector()
     scorer = DetectorScorer(

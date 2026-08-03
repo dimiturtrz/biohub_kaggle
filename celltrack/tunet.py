@@ -154,22 +154,34 @@ class TemporalUNetDetector(nn.Module):
         volumes = self.probability_volumes(path, recipe, device)
         return self.graph_from_volumes(volumes, self.voxel_scale(path), threshold, recipe, device)
 
-    @torch.no_grad()
-    def probability_volumes(self, path: Path, recipe: DetectorRecipe, device: str) -> list[Float[np.ndarray, "z y x"]]:
-        """Each frame's per-voxel cellness probability on the downsampled grid — the cacheable response.
+    def logit_volumes(self, path: Path, recipe: DetectorRecipe, device: str) -> list[Float[np.ndarray, "z y x"]]:
+        """Each frame's per-voxel cellness **logit** on the downsampled grid — the cacheable response to blend.
 
-        This is the expensive, weights-and-video-determined half of detection; a `ResponseCache` forwards it
-        once and every later threshold/keep-N/linker experiment replays the cheap `graph_from_volumes` on
-        these arrays. Volumes are the downsampled shape (16x fewer voxels), so a whole video's stack is small.
+        Logits, not probabilities, are the multi-seed blend space: they are unsaturated, so averaging seeds
+        keeps the peak distinctions the equality-NMS reads. `probability_volumes` is the sigmoid of these.
+        """
+        return self._response(path, recipe, device, as_probability=False)
+
+    def probability_volumes(self, path: Path, recipe: DetectorRecipe, device: str) -> list[Float[np.ndarray, "z y x"]]:
+        """Each frame's per-voxel cellness probability — the single-seed cacheable response (sigmoid on device)."""
+        return self._response(path, recipe, device, as_probability=True)
+
+    @torch.no_grad()
+    def _response(
+        self, path: Path, recipe: DetectorRecipe, device: str, *, as_probability: bool
+    ) -> list[Float[np.ndarray, "z y x"]]:
+        """Forward the whole video into per-frame volumes, taking the sigmoid on the device before the host copy.
+
+        The forward is the expensive, weights-and-video-determined half; a `ResponseCache` runs it once and
+        every later read-out replays cheaply. Volumes are the downsampled shape (16x fewer voxels) — small.
         """
         self.eval()
         source = self._open_source(path)
-        return [
-            torch.sigmoid(self._logits(self._read_frame(source, timepoint, recipe.downsample, device), recipe.tta))
-            .cpu()
-            .numpy()
-            for timepoint in range(int(source.array.shape[0]))
-        ]
+        volumes: list[Float[np.ndarray, "z y x"]] = []
+        for timepoint in range(int(source.array.shape[0])):
+            logits = self._logits(self._read_frame(source, timepoint, recipe.downsample, device), recipe.tta)
+            volumes.append((torch.sigmoid(logits) if as_probability else logits).cpu().numpy())
+        return volumes
 
     @classmethod
     def graph_from_volumes(

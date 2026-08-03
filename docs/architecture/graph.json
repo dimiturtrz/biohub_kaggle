@@ -2126,6 +2126,60 @@
     },
     {
       "kind": "holds",
+      "source": "celltrack.pipeline.BlendDetectorScorer",
+      "target": "celltrack.response_cache.ResponseCache",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.pipeline.BlendDetectorScorer",
+      "target": "celltrack.tunet.DetectorRecipe",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.pipeline.BlendDetectorScorer",
+      "target": "celltrack.tunet.TemporalUNetDetector",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.pipeline.BlendDetectorScorer",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.pipeline.BlendDetectorScorer._cached_logits",
+      "target": "celltrack.response_cache.ResponseCache.responses",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.pipeline.BlendDetectorScorer._cached_logits",
+      "target": "celltrack.tunet.TemporalUNetDetector.logit_volumes",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.pipeline.BlendDetectorScorer.nodes",
+      "target": "celltrack.pipeline.BlendDetectorScorer._blend",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.pipeline.BlendDetectorScorer.nodes",
+      "target": "celltrack.pipeline.BlendDetectorScorer._cached_logits",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.pipeline.BlendDetectorScorer.nodes",
+      "target": "celltrack.tunet.TemporalUNetDetector.graph_from_volumes",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
       "source": "celltrack.pipeline.DetectorScorer",
       "target": "celltrack.response_cache.ResponseCache",
       "weight": 1
@@ -3182,6 +3236,24 @@
     },
     {
       "kind": "calls",
+      "source": "celltrack.tunet.TemporalUNetDetector._response",
+      "target": "celltrack.tunet.TemporalUNetDetector._logits",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.tunet.TemporalUNetDetector._response",
+      "target": "celltrack.tunet.TemporalUNetDetector._open_source",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.tunet.TemporalUNetDetector._response",
+      "target": "celltrack.tunet.TemporalUNetDetector._read_frame",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
       "source": "celltrack.tunet.TemporalUNetDetector.detections",
       "target": "celltrack.tunet.TemporalUNetDetector.graph_from_volumes",
       "weight": 1
@@ -3218,20 +3290,14 @@
     },
     {
       "kind": "calls",
-      "source": "celltrack.tunet.TemporalUNetDetector.probability_volumes",
-      "target": "celltrack.tunet.TemporalUNetDetector._logits",
+      "source": "celltrack.tunet.TemporalUNetDetector.logit_volumes",
+      "target": "celltrack.tunet.TemporalUNetDetector._response",
       "weight": 1
     },
     {
       "kind": "calls",
       "source": "celltrack.tunet.TemporalUNetDetector.probability_volumes",
-      "target": "celltrack.tunet.TemporalUNetDetector._open_source",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.tunet.TemporalUNetDetector.probability_volumes",
-      "target": "celltrack.tunet.TemporalUNetDetector._read_frame",
+      "target": "celltrack.tunet.TemporalUNetDetector._response",
       "weight": 1
     },
     {
@@ -4560,6 +4626,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.pipeline.BlendDetectorScorer",
+      "label": "BlendDetectorScorer",
+      "level": "class",
+      "parent": "celltrack.pipeline",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.pipeline.DetectorScorer",
       "label": "DetectorScorer",
       "level": "class",
@@ -5736,6 +5810,30 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.pipeline.BlendDetectorScorer._blend",
+      "label": "_blend",
+      "level": "method",
+      "parent": "celltrack.pipeline.BlendDetectorScorer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.pipeline.BlendDetectorScorer._cached_logits",
+      "label": "_cached_logits",
+      "level": "method",
+      "parent": "celltrack.pipeline.BlendDetectorScorer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.pipeline.BlendDetectorScorer.nodes",
+      "label": "nodes",
+      "level": "method",
+      "parent": "celltrack.pipeline.BlendDetectorScorer",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.pipeline.DetectorScorer.nodes",
       "label": "nodes",
       "level": "method",
@@ -6440,6 +6538,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.tunet.TemporalUNetDetector._response",
+      "label": "_response",
+      "level": "method",
+      "parent": "celltrack.tunet.TemporalUNetDetector",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.tunet.TemporalUNetDetector.detections",
       "label": "detections",
       "level": "method",
@@ -6474,6 +6580,14 @@
       "descendants": 0,
       "id": "celltrack.tunet.TemporalUNetDetector.graph_from_volumes",
       "label": "graph_from_volumes",
+      "level": "method",
+      "parent": "celltrack.tunet.TemporalUNetDetector",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.tunet.TemporalUNetDetector.logit_volumes",
+      "label": "logit_volumes",
       "level": "method",
       "parent": "celltrack.tunet.TemporalUNetDetector",
       "role": null
