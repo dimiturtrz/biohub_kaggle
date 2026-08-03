@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
+from celltrack.center_prior import CenterPriorRecipe, CenterPriorVeto, CenterVetoConfig
 from celltrack.division_recovery import DivisionRecovery
 from celltrack.gap_closer import GapCloser
 from celltrack.linefit_smoother import LinefitSmoother
@@ -37,6 +38,25 @@ def test_gap_spec_build():
 
 def test_division_spec_build():
     assert DivisionSpec().build(SPACING) == DivisionRecovery(SPACING, 4.7, 7.2, 0.004, 7.8, 0.008)
+
+
+def _veto() -> CenterPriorVeto:
+    """A centre-prior veto over a single trivial heatmap, enough to resolve a spec's gate to a confirmer."""
+    return CenterPriorVeto(heatmaps=(np.ones((1, 1, 1), dtype=np.float32),), recipe=CenterPriorRecipe())
+
+
+def test_division_spec_build_binds_the_veto_when_configured():
+    """A division spec carrying a centre-veto config resolves to a confirmer once a video's heatmaps are in hand."""
+    spec = DivisionSpec(center_veto=CenterVetoConfig(threshold=0.2))
+    assert spec.build(SPACING, _veto()).confirmer is not None  # gate + heatmaps -> a bound confirmer
+    assert spec.build(SPACING).confirmer is None  # a configured gate but no heatmaps stays veto-free
+    assert DivisionSpec().build(SPACING, _veto()).confirmer is None  # no gate -> no veto even with heatmaps
+
+
+def test_gap_spec_build_binds_the_veto_when_configured():
+    """A gap spec carrying a centre-veto config resolves to a confirmer once a video's heatmaps are in hand."""
+    assert GapSpec(center_veto=CenterVetoConfig()).build(SPACING, _veto()).confirmer is not None
+    assert GapSpec(center_veto=CenterVetoConfig()).build(SPACING).confirmer is None
 
 
 def test_short_track_spec_build():

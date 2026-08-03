@@ -21,6 +21,7 @@ from jaxtyping import Float, Int
 from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
 
+from celltrack.center_prior import CenterConfirmer
 from core.data.tracks import Adjacency, TrackGraph
 from core.geometry import Spacing
 
@@ -37,6 +38,9 @@ class GapCloser:
     gate_um: float
     reuse_um: float
     max_added_fraction: float
+    # An optional centre-prior veto: a reused midpoint bridges the gap only if DeepCenter confirms a centre at
+    # its voxel. Defaults to no veto, so the geometry-only construction keeps its behaviour and existing tests hold.
+    confirmer: CenterConfirmer | None = None
 
     def transform(self, graph: TrackGraph) -> TrackGraph:
         """Return the graph with reused-midpoint bridge edges added across one-frame gaps."""
@@ -58,6 +62,7 @@ class GapCloser:
         ends = np.flatnonzero(adjacency.out_degrees == _UNLINKED)
         starts = np.flatnonzero(adjacency.in_degrees == _UNLINKED)
         isolated = np.flatnonzero((adjacency.in_degrees == _UNLINKED) & (adjacency.out_degrees == _UNLINKED))
+        isolated = self._confirmed_midpoints(isolated, graph.positions(), timepoints)
         proposals = self._proposals(ends, starts, isolated, positions_um, timepoints)
         cap = int(self.max_added_fraction * len(graph.edges))
         return self._accept(sorted(proposals), graph.node_ids, cap)
@@ -100,6 +105,15 @@ class GapCloser:
             if middle is not None:
                 matched.append((float(cost[row, column]), end, middle, start))
         return matched
+
+    def _confirmed_midpoints(
+        self, isolated: Int[np.ndarray, "i"], positions_voxel: Int[np.ndarray, "n 3"], timepoints: Int[np.ndarray, "n"]
+    ) -> Int[np.ndarray, "k"]:
+        """The isolated rows the centre prior confirms as real centres — all of them when no veto is configured."""
+        if self.confirmer is None:
+            return isolated
+        kept = [row for row in isolated.tolist() if self.confirmer.confirm(int(timepoints[row]), positions_voxel[row])]
+        return np.asarray(kept, dtype=isolated.dtype)
 
     def _reusable_midpoint(
         self, end: int, start: int, middles: Int[np.ndarray, "m"], positions_um: Float[np.ndarray, "n 3"]

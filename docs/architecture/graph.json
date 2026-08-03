@@ -9,7 +9,19 @@
     {
       "kind": "import",
       "source": "celltrack.bracket",
+      "target": "celltrack.division_recovery",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.bracket",
       "target": "celltrack.linking",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.bracket",
+      "target": "celltrack.motion_linking",
       "weight": 1
     },
     {
@@ -58,6 +70,12 @@
       "kind": "import",
       "source": "celltrack.bracket",
       "target": "core.paths",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.center_prior",
+      "target": "celltrack.response_cache",
       "weight": 1
     },
     {
@@ -171,6 +189,12 @@
     {
       "kind": "import",
       "source": "celltrack.division_recovery",
+      "target": "celltrack.center_prior",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.division_recovery",
       "target": "core.data.tracks",
       "weight": 1
     },
@@ -220,6 +244,12 @@
       "kind": "import",
       "source": "celltrack.explore",
       "target": "core.paths",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.gap_closer",
+      "target": "celltrack.center_prior",
       "weight": 1
     },
     {
@@ -417,6 +447,12 @@
     {
       "kind": "import",
       "source": "celltrack.pipeline",
+      "target": "celltrack.center_prior",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.pipeline",
       "target": "celltrack.response_cache",
       "weight": 1
     },
@@ -448,6 +484,12 @@
       "kind": "import",
       "source": "celltrack.short_track_filter",
       "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.stages",
+      "target": "celltrack.center_prior",
       "weight": 1
     },
     {
@@ -627,6 +669,12 @@
     {
       "kind": "import",
       "source": "celltrack.training.run",
+      "target": "celltrack.training.classification_loss",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.run",
       "target": "celltrack.training.dataset",
       "weight": 1
     },
@@ -639,7 +687,19 @@
     {
       "kind": "import",
       "source": "celltrack.training.run",
+      "target": "celltrack.training.loss",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.run",
       "target": "celltrack.training.model",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.run",
+      "target": "core.data.split",
       "weight": 1
     },
     {
@@ -765,6 +825,12 @@
     {
       "kind": "import",
       "source": "celltrack.tunet",
+      "target": "celltrack.peaks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.tunet",
       "target": "core.data.tracks",
       "weight": 1
     },
@@ -772,6 +838,12 @@
       "kind": "import",
       "source": "celltrack.tunet",
       "target": "core.data.video",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.tunet",
+      "target": "core.geometry",
       "weight": 1
     },
     {
@@ -1202,6 +1274,144 @@
     },
     {
       "kind": "references",
+      "source": "celltrack.center_prior.CenterPrior",
+      "target": "celltrack.center_prior.CenterPriorRecipe",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.center_prior.CenterPrior.__init__",
+      "target": "celltrack.center_prior.CenterPrior._block",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.center_prior.CenterPrior._frame_heatmap",
+      "target": "celltrack.center_prior.CenterPrior._pad_to_multiple",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.center_prior.CenterPrior._frame_heatmap",
+      "target": "celltrack.center_prior.CenterPriorRecipe.pooled_and_normalised",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.center_prior.CenterPrior.from_pack",
+      "target": "celltrack.center_prior.CenterPriorRecipe.from_config",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.center_prior.CenterPrior.heatmaps",
+      "target": "celltrack.center_prior.CenterPrior._frame_heatmap",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.center_prior.CenterPriorRecipe",
+      "target": "celltrack.center_prior.CenterPriorRecipe",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.center_prior.CenterPriorRecipe.pooled_and_normalised",
+      "target": "celltrack.center_prior.CenterPriorRecipe._block_mean_xy",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.center_prior.CenterPriorScorer",
+      "target": "celltrack.center_prior.CenterPrior",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.center_prior.CenterPriorScorer",
+      "target": "celltrack.center_prior.CenterPriorRecipe",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.center_prior.CenterPriorScorer",
+      "target": "celltrack.center_prior.CenterPriorVeto",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.center_prior.CenterPriorScorer",
+      "target": "celltrack.response_cache.ResponseCache",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.center_prior.CenterPriorScorer.veto",
+      "target": "celltrack.center_prior.CenterPrior.heatmaps",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.center_prior.CenterPriorScorer.veto",
+      "target": "celltrack.center_prior.CenterPriorVeto",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.center_prior.CenterPriorScorer.veto",
+      "target": "celltrack.response_cache.ResponseCache.responses",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.center_prior.CenterPriorVeto",
+      "target": "celltrack.center_prior.CenterConfirmer",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.center_prior.CenterPriorVeto",
+      "target": "celltrack.center_prior.CenterPriorRecipe",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.center_prior.CenterPriorVeto",
+      "target": "celltrack.center_prior.CenterVetoConfig",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.center_prior.CenterPriorVeto.confirmer",
+      "target": "celltrack.center_prior.CenterConfirmer",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.center_prior.CenterPriorVeto.for_gate",
+      "target": "celltrack.center_prior.CenterPriorVeto.confirmer",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.center_prior.CenterVetoConfig",
+      "target": "celltrack.center_prior.CenterConfirmer",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.center_prior.CenterVetoConfig",
+      "target": "celltrack.center_prior.CenterPriorVeto",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.center_prior.CenterVetoConfig.resolve",
+      "target": "celltrack.center_prior.CenterPriorVeto.for_gate",
+      "weight": 1
+    },
+    {
+      "kind": "references",
       "source": "celltrack.detection.BlobDetector",
       "target": "core.data.tracks.TrackGraph",
       "weight": 1
@@ -1447,6 +1657,12 @@
       "weight": 1
     },
     {
+      "kind": "holds",
+      "source": "celltrack.division_recovery.DivisionRecovery",
+      "target": "celltrack.center_prior.CenterConfirmer",
+      "weight": 1
+    },
+    {
       "kind": "references",
       "source": "celltrack.division_recovery.DivisionRecovery",
       "target": "core.data.tracks.Adjacency",
@@ -1462,6 +1678,18 @@
       "kind": "holds",
       "source": "celltrack.division_recovery.DivisionRecovery",
       "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.division_recovery.DivisionRecovery._confirmed_rows",
+      "target": "celltrack.center_prior.CenterConfirmer.confirm",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.division_recovery.DivisionRecovery._division_edges",
+      "target": "celltrack.division_recovery.DivisionRecovery._confirmed_rows",
       "weight": 1
     },
     {
@@ -1657,6 +1885,12 @@
       "weight": 1
     },
     {
+      "kind": "holds",
+      "source": "celltrack.gap_closer.GapCloser",
+      "target": "celltrack.center_prior.CenterConfirmer",
+      "weight": 1
+    },
+    {
       "kind": "references",
       "source": "celltrack.gap_closer.GapCloser",
       "target": "core.data.tracks.TrackGraph",
@@ -1672,6 +1906,12 @@
       "kind": "calls",
       "source": "celltrack.gap_closer.GapCloser._bridges",
       "target": "celltrack.gap_closer.GapCloser._accept",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.gap_closer.GapCloser._bridges",
+      "target": "celltrack.gap_closer.GapCloser._confirmed_midpoints",
       "weight": 1
     },
     {
@@ -1702,6 +1942,12 @@
       "kind": "calls",
       "source": "celltrack.gap_closer.GapCloser._bridges",
       "target": "core.geometry.Spacing.to_micrometres",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.gap_closer.GapCloser._confirmed_midpoints",
+      "target": "celltrack.center_prior.CenterConfirmer.confirm",
       "weight": 1
     },
     {
@@ -2275,6 +2521,12 @@
       "weight": 1
     },
     {
+      "kind": "references",
+      "source": "celltrack.pipeline.PipelineConfig",
+      "target": "celltrack.center_prior.CenterPriorVeto",
+      "weight": 1
+    },
+    {
       "kind": "holds",
       "source": "celltrack.pipeline.PipelineConfig",
       "target": "celltrack.pipeline.DetectorSpec",
@@ -2349,6 +2601,18 @@
     {
       "kind": "references",
       "source": "celltrack.stages.DivisionSpec",
+      "target": "celltrack.center_prior.CenterPriorVeto",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.stages.DivisionSpec",
+      "target": "celltrack.center_prior.CenterVetoConfig",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.stages.DivisionSpec",
       "target": "celltrack.stages.GraphStage",
       "weight": 1
     },
@@ -2356,6 +2620,12 @@
       "kind": "references",
       "source": "celltrack.stages.DivisionSpec",
       "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.stages.DivisionSpec.build",
+      "target": "celltrack.center_prior.CenterVetoConfig.resolve",
       "weight": 1
     },
     {
@@ -2367,6 +2637,18 @@
     {
       "kind": "references",
       "source": "celltrack.stages.GapSpec",
+      "target": "celltrack.center_prior.CenterPriorVeto",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.stages.GapSpec",
+      "target": "celltrack.center_prior.CenterVetoConfig",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.stages.GapSpec",
       "target": "celltrack.stages.GraphStage",
       "weight": 1
     },
@@ -2374,6 +2656,12 @@
       "kind": "references",
       "source": "celltrack.stages.GapSpec",
       "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.stages.GapSpec.build",
+      "target": "celltrack.center_prior.CenterVetoConfig.resolve",
       "weight": 1
     },
     {
@@ -2386,6 +2674,12 @@
       "kind": "references",
       "source": "celltrack.stages.GraphStage",
       "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.stages.LinkerSpec",
+      "target": "celltrack.center_prior.CenterPriorVeto",
       "weight": 1
     },
     {
@@ -2439,6 +2733,12 @@
     {
       "kind": "references",
       "source": "celltrack.stages.ShortTrackSpec",
+      "target": "celltrack.center_prior.CenterPriorVeto",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.stages.ShortTrackSpec",
       "target": "celltrack.stages.GraphStage",
       "weight": 1
     },
@@ -2452,6 +2752,12 @@
       "kind": "construct",
       "source": "celltrack.stages.ShortTrackSpec.build",
       "target": "celltrack.short_track_filter.ShortTrackFilter",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.stages.SmoothSpec",
+      "target": "celltrack.center_prior.CenterPriorVeto",
       "weight": 1
     },
     {
@@ -4130,6 +4436,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.center_prior",
+      "label": "center_prior",
+      "level": "module",
+      "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.detection",
       "label": "detection",
       "level": "module",
@@ -4574,6 +4888,54 @@
       "label": "ValidationFold",
       "level": "class",
       "parent": "celltrack.bracket",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.center_prior.CenterConfirmer",
+      "label": "CenterConfirmer",
+      "level": "class",
+      "parent": "celltrack.center_prior",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.center_prior.CenterPrior",
+      "label": "CenterPrior",
+      "level": "class",
+      "parent": "celltrack.center_prior",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.center_prior.CenterPriorRecipe",
+      "label": "CenterPriorRecipe",
+      "level": "class",
+      "parent": "celltrack.center_prior",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.center_prior.CenterPriorScorer",
+      "label": "CenterPriorScorer",
+      "level": "class",
+      "parent": "celltrack.center_prior",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.center_prior.CenterPriorVeto",
+      "label": "CenterPriorVeto",
+      "level": "class",
+      "parent": "celltrack.center_prior",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.center_prior.CenterVetoConfig",
+      "label": "CenterVetoConfig",
+      "level": "class",
+      "parent": "celltrack.center_prior",
       "role": "satellite"
     },
     {
@@ -5458,6 +5820,126 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.center_prior.CenterConfirmer.confirm",
+      "label": "confirm",
+      "level": "method",
+      "parent": "celltrack.center_prior.CenterConfirmer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.center_prior.CenterPrior.__init__",
+      "label": "__init__",
+      "level": "method",
+      "parent": "celltrack.center_prior.CenterPrior",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.center_prior.CenterPrior._block",
+      "label": "_block",
+      "level": "method",
+      "parent": "celltrack.center_prior.CenterPrior",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.center_prior.CenterPrior._frame_heatmap",
+      "label": "_frame_heatmap",
+      "level": "method",
+      "parent": "celltrack.center_prior.CenterPrior",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.center_prior.CenterPrior._pad_to_multiple",
+      "label": "_pad_to_multiple",
+      "level": "method",
+      "parent": "celltrack.center_prior.CenterPrior",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.center_prior.CenterPrior.forward",
+      "label": "forward",
+      "level": "method",
+      "parent": "celltrack.center_prior.CenterPrior",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.center_prior.CenterPrior.from_pack",
+      "label": "from_pack",
+      "level": "method",
+      "parent": "celltrack.center_prior.CenterPrior",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.center_prior.CenterPrior.heatmaps",
+      "label": "heatmaps",
+      "level": "method",
+      "parent": "celltrack.center_prior.CenterPrior",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.center_prior.CenterPriorRecipe._block_mean_xy",
+      "label": "_block_mean_xy",
+      "level": "method",
+      "parent": "celltrack.center_prior.CenterPriorRecipe",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.center_prior.CenterPriorRecipe.from_config",
+      "label": "from_config",
+      "level": "method",
+      "parent": "celltrack.center_prior.CenterPriorRecipe",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.center_prior.CenterPriorRecipe.pooled_and_normalised",
+      "label": "pooled_and_normalised",
+      "level": "method",
+      "parent": "celltrack.center_prior.CenterPriorRecipe",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.center_prior.CenterPriorScorer.veto",
+      "label": "veto",
+      "level": "method",
+      "parent": "celltrack.center_prior.CenterPriorScorer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.center_prior.CenterPriorVeto.confirmer",
+      "label": "confirmer",
+      "level": "method",
+      "parent": "celltrack.center_prior.CenterPriorVeto",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.center_prior.CenterPriorVeto.for_gate",
+      "label": "for_gate",
+      "level": "method",
+      "parent": "celltrack.center_prior.CenterPriorVeto",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.center_prior.CenterVetoConfig.resolve",
+      "label": "resolve",
+      "level": "method",
+      "parent": "celltrack.center_prior.CenterVetoConfig",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.detection.BlobDetector.centres",
       "label": "centres",
       "level": "method",
@@ -5534,6 +6016,14 @@
       "label": "link",
       "level": "method",
       "parent": "celltrack.division_linking.DivisionAwareLinker",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.division_recovery.DivisionRecovery._confirmed_rows",
+      "label": "_confirmed_rows",
+      "level": "method",
+      "parent": "celltrack.division_recovery.DivisionRecovery",
       "role": null
     },
     {
@@ -5676,6 +6166,14 @@
       "descendants": 0,
       "id": "celltrack.gap_closer.GapCloser._bridges",
       "label": "_bridges",
+      "level": "method",
+      "parent": "celltrack.gap_closer.GapCloser",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.gap_closer.GapCloser._confirmed_midpoints",
+      "label": "_confirmed_midpoints",
       "level": "method",
       "parent": "celltrack.gap_closer.GapCloser",
       "role": null

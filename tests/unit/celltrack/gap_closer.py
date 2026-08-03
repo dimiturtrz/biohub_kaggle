@@ -1,8 +1,15 @@
 import numpy as np
 
+from celltrack.center_prior import CenterConfirmer
 from celltrack.gap_closer import GapCloser
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
+
+
+def confirmer(value: float) -> CenterConfirmer:
+    """A centre-prior confirmer answering `value` everywhere — 1.0 confirms every midpoint, 0.0 vetoes them."""
+    heatmaps = tuple(np.full((1, 1, 1), value, dtype=np.float32) for _ in range(4))
+    return CenterConfirmer(heatmaps=heatmaps, pool_factor=4, threshold=0.5, window_z=1, window_yx=2)
 
 
 def graph(coordinates: list[list[int]], edges: list[list[int]]) -> TrackGraph:
@@ -13,9 +20,9 @@ def graph(coordinates: list[list[int]], edges: list[list[int]]) -> TrackGraph:
     )
 
 
-def closer(**overrides: float) -> GapCloser:
+def closer(confirmer: CenterConfirmer | None = None, **overrides: float) -> GapCloser:
     settings: dict[str, float] = {"gate_um": 10.0, "reuse_um": 5.0, "max_added_fraction": 1.0}
-    return GapCloser(spacing=Spacing(z=1.0, y=1.0, x=1.0), **(settings | overrides))
+    return GapCloser(spacing=Spacing(z=1.0, y=1.0, x=1.0), confirmer=confirmer, **(settings | overrides))
 
 
 def test_transform():
@@ -36,6 +43,14 @@ def test_transform_rejects_an_end_and_start_beyond_the_gate():
     """Two track fragments too far apart to be the same cell are not joined."""
     far_apart = graph([[0, 0, 0, 0], [1, 0, 0, 0], [3, 0, 0, 50], [2, 0, 0, 25]], [[0, 1]])
     assert closer().transform(far_apart).edges.tolist() == [[0, 10]]
+
+
+def test_transform_bridges_only_a_midpoint_the_centre_prior_confirms():
+    """With a veto, a reused midpoint bridges the gap only when the centre prior confirms a cell at its voxel."""
+    gapped = graph([[0, 0, 0, 0], [1, 0, 0, 0], [3, 0, 0, 0], [2, 0, 0, 0]], [[0, 1]])
+    confirmed = closer(confirmer(1.0)).transform(gapped).edges.tolist()
+    assert [10, 30] in confirmed and [30, 20] in confirmed
+    assert closer(confirmer(0.0)).transform(gapped).edges.tolist() == [[0, 10]]
 
 
 def test_transform_honours_the_cap():
