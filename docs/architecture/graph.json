@@ -536,6 +536,42 @@
     },
     {
       "kind": "import",
+      "source": "celltrack.proxy",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.proxy",
+      "target": "core.data.video",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.proxy",
+      "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.proxy",
+      "target": "core.metrics.matching",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.proxy",
+      "target": "core.metrics.score",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.proxy",
+      "target": "core.paths",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "celltrack.short_track_filter",
       "target": "core.data.tracks",
       "weight": 1
@@ -3182,6 +3218,96 @@
     },
     {
       "kind": "references",
+      "source": "celltrack.proxy.LinkingPipeline",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.proxy.TestMovieProxy",
+      "target": "celltrack.proxy.LinkingPipeline",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.proxy.TestMovieProxy",
+      "target": "celltrack.proxy.TestMovieProxy",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.proxy.TestMovieProxy",
+      "target": "core.data.tracks.AnnotatedTracks",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.proxy.TestMovieProxy",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.proxy.TestMovieProxy",
+      "target": "core.metrics.score.SplitScore",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.proxy.TestMovieProxy",
+      "target": "core.paths.DataRoot",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.proxy.TestMovieProxy.load",
+      "target": "core.data.tracks.AnnotatedTracks.from_geff",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.proxy.TestMovieProxy.load",
+      "target": "core.data.video.CellVideo.from_ome_zarr",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.proxy.TestMovieProxy.load",
+      "target": "core.paths.DataRoot.track_store",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.proxy.TestMovieProxy.load",
+      "target": "core.paths.DataRoot.videos",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.proxy.TestMovieProxy.score",
+      "target": "celltrack.proxy.LinkingPipeline.run",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.proxy.TestMovieProxy.score",
+      "target": "core.metrics.matching.DistanceMatcher",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.proxy.TestMovieProxy.score",
+      "target": "core.metrics.score.SplitScore.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.proxy.TestMovieProxy.score",
+      "target": "core.metrics.score.VideoMetrics.of",
+      "weight": 1
+    },
+    {
+      "kind": "references",
       "source": "celltrack.short_track_filter.ShortTrackFilter",
       "target": "core.data.tracks.TrackGraph",
       "weight": 1
@@ -5061,7 +5187,7 @@
   ],
   "nodes": [
     {
-      "descendants": 41,
+      "descendants": 42,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -5240,6 +5366,14 @@
       "descendants": 0,
       "id": "celltrack.pipeline",
       "label": "pipeline",
+      "level": "module",
+      "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.proxy",
+      "label": "proxy",
       "level": "module",
       "parent": "celltrack",
       "role": null
@@ -5923,6 +6057,22 @@
       "level": "class",
       "parent": "celltrack.pipeline",
       "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.proxy.LinkingPipeline",
+      "label": "LinkingPipeline",
+      "level": "class",
+      "parent": "celltrack.proxy",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.proxy.TestMovieProxy",
+      "label": "TestMovieProxy",
+      "level": "class",
+      "parent": "celltrack.proxy",
+      "role": "satellite"
     },
     {
       "descendants": 0,
@@ -7602,6 +7752,30 @@
       "label": "nodes",
       "level": "method",
       "parent": "celltrack.pipeline.Scorer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.proxy.LinkingPipeline.run",
+      "label": "run",
+      "level": "method",
+      "parent": "celltrack.proxy.LinkingPipeline",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.proxy.TestMovieProxy.load",
+      "label": "load",
+      "level": "method",
+      "parent": "celltrack.proxy.TestMovieProxy",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.proxy.TestMovieProxy.score",
+      "label": "score",
+      "level": "method",
+      "parent": "celltrack.proxy.TestMovieProxy",
       "role": null
     },
     {
