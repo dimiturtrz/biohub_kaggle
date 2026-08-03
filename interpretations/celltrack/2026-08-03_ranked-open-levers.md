@@ -1,5 +1,12 @@
 # Ranked open levers — where the next real gain lives (aet)
 
+> **UPDATE 2026-08-04 — lever 1 (edge-signal retrain) and lever 3 (complementary detector) are now REFUTED.**
+> The edge signal is at ceiling (dense crowd-AUC 0.986, unretrainable), the linker is 91.4% correct and
+> per-frame optimal, and the residual 4.4% dense mislinks are 98% signal-fooled-by-proximity = crowd-ambiguity
+> floor. We are at the achievable ~0.92 ceiling with current assets. See
+> `2026-08-04_dense-ceiling-diagnosis.md` (capstone) and `2026-08-04_edge-retrain-refuted.md`. Only lever 2
+> (track-level global opt) remains untested, at low-moderate EV.
+
 Local synthesis of everything measured this campaign. Purpose: rank the remaining levers by
 **expected real gain** and **evidence strength**, so the next goal spends wall-time where signal is.
 
