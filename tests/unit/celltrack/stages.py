@@ -15,7 +15,9 @@ from celltrack.stages import (
     ShortTrackSpec,
     SmoothSpec,
     StageSpec,
+    TopologySpec,
 )
+from celltrack.topology_repair import TopologyRepair
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
 
@@ -43,6 +45,10 @@ def test_short_track_spec_build():
 
 def test_smooth_spec_build():
     assert SmoothSpec(strength=0.5).build(SPACING) == LinefitSmoother(0.5)
+
+
+def test_topology_spec_build():
+    assert TopologySpec().build(SPACING) == TopologyRepair(SPACING, 14.0)
 
 
 def test_transform():

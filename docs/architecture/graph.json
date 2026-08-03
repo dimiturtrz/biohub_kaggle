@@ -9,7 +9,19 @@
     {
       "kind": "import",
       "source": "celltrack.bracket",
+      "target": "celltrack.division_recovery",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.bracket",
       "target": "celltrack.linking",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.bracket",
+      "target": "celltrack.motion_linking",
       "weight": 1
     },
     {
@@ -489,6 +501,12 @@
     {
       "kind": "import",
       "source": "celltrack.stages",
+      "target": "celltrack.topology_repair",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.stages",
       "target": "core.data.tracks",
       "weight": 1
     },
@@ -538,6 +556,18 @@
       "kind": "import",
       "source": "celltrack.submit",
       "target": "core.paths",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.topology_repair",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.topology_repair",
+      "target": "core.geometry",
       "weight": 1
     },
     {
@@ -615,6 +645,12 @@
     {
       "kind": "import",
       "source": "celltrack.training.run",
+      "target": "celltrack.training.classification_loss",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.run",
       "target": "celltrack.training.dataset",
       "weight": 1
     },
@@ -627,7 +663,19 @@
     {
       "kind": "import",
       "source": "celltrack.training.run",
+      "target": "celltrack.training.loss",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.run",
       "target": "celltrack.training.model",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.run",
+      "target": "core.data.split",
       "weight": 1
     },
     {
@@ -753,6 +801,12 @@
     {
       "kind": "import",
       "source": "celltrack.tunet",
+      "target": "celltrack.peaks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.tunet",
       "target": "core.data.tracks",
       "weight": 1
     },
@@ -760,6 +814,12 @@
       "kind": "import",
       "source": "celltrack.tunet",
       "target": "core.data.video",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.tunet",
+      "target": "core.geometry",
       "weight": 1
     },
     {
@@ -2462,6 +2522,24 @@
     },
     {
       "kind": "references",
+      "source": "celltrack.stages.TopologySpec",
+      "target": "celltrack.stages.GraphStage",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.stages.TopologySpec",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.stages.TopologySpec.build",
+      "target": "celltrack.topology_repair.TopologyRepair",
+      "weight": 1
+    },
+    {
+      "kind": "references",
       "source": "celltrack.submit.NodeBudget",
       "target": "celltrack.submit.NodeBudget",
       "weight": 1
@@ -2614,6 +2692,72 @@
       "kind": "calls",
       "source": "celltrack.submit.TestPredictor.submission",
       "target": "core.paths.DataRoot.videos",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.topology_repair.TopologyRepair",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.topology_repair.TopologyRepair",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.topology_repair.TopologyRepair._prune_isolated",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.topology_repair.TopologyRepair._prune_isolated",
+      "target": "core.data.tracks.TrackGraph.rows_of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.topology_repair.TopologyRepair._repaired_edges",
+      "target": "celltrack.topology_repair.TopologyRepair._single_parent",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.topology_repair.TopologyRepair._repaired_edges",
+      "target": "core.data.tracks.TrackGraph.edge_rows",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.topology_repair.TopologyRepair._repaired_edges",
+      "target": "core.data.tracks.TrackGraph.positions",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.topology_repair.TopologyRepair._repaired_edges",
+      "target": "core.data.tracks.TrackGraph.timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.topology_repair.TopologyRepair._repaired_edges",
+      "target": "core.geometry.Spacing.to_micrometres",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.topology_repair.TopologyRepair.transform",
+      "target": "celltrack.topology_repair.TopologyRepair._prune_isolated",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.topology_repair.TopologyRepair.transform",
+      "target": "celltrack.topology_repair.TopologyRepair._repaired_edges",
       "weight": 1
     },
     {
@@ -4017,7 +4161,7 @@
   ],
   "nodes": [
     {
-      "descendants": 35,
+      "descendants": 36,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -4188,6 +4332,14 @@
       "descendants": 0,
       "id": "celltrack.submit",
       "label": "submit",
+      "level": "module",
+      "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.topology_repair",
+      "label": "topology_repair",
       "level": "module",
       "parent": "celltrack",
       "role": null
@@ -4746,6 +4898,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.stages.TopologySpec",
+      "label": "TopologySpec",
+      "level": "class",
+      "parent": "celltrack.stages",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.submit.NodeBudget",
       "label": "NodeBudget",
       "level": "class",
@@ -4758,6 +4918,14 @@
       "label": "TestPredictor",
       "level": "class",
       "parent": "celltrack.submit",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.topology_repair.TopologyRepair",
+      "label": "TopologyRepair",
+      "level": "class",
+      "parent": "celltrack.topology_repair",
       "role": "satellite"
     },
     {
@@ -5970,6 +6138,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.stages.TopologySpec.build",
+      "label": "build",
+      "level": "method",
+      "parent": "celltrack.stages.TopologySpec",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.submit.NodeBudget.for_video",
       "label": "for_video",
       "level": "method",
@@ -6006,6 +6182,38 @@
       "label": "submission",
       "level": "method",
       "parent": "celltrack.submit.TestPredictor",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.topology_repair.TopologyRepair._prune_isolated",
+      "label": "_prune_isolated",
+      "level": "method",
+      "parent": "celltrack.topology_repair.TopologyRepair",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.topology_repair.TopologyRepair._repaired_edges",
+      "label": "_repaired_edges",
+      "level": "method",
+      "parent": "celltrack.topology_repair.TopologyRepair",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.topology_repair.TopologyRepair._single_parent",
+      "label": "_single_parent",
+      "level": "method",
+      "parent": "celltrack.topology_repair.TopologyRepair",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.topology_repair.TopologyRepair.transform",
+      "label": "transform",
+      "level": "method",
+      "parent": "celltrack.topology_repair.TopologyRepair",
       "role": null
     },
     {

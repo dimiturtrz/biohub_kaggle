@@ -25,6 +25,7 @@ from celltrack.linefit_smoother import LinefitSmoother
 from celltrack.linkers import LinkerConfig
 from celltrack.linking import Linker
 from celltrack.short_track_filter import ShortTrackFilter
+from celltrack.topology_repair import TopologyRepair
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
 
@@ -125,7 +126,19 @@ class SmoothSpec(BaseModel):
         return LinefitSmoother(self.strength)
 
 
+class TopologySpec(BaseModel):
+    """Restore consecutive-frame, in-gate, single-parent edges and drop isolated nodes — pure-geometry cleanups."""
+
+    model_config = _Spec
+
+    kind: Literal["topology"] = "topology"
+    edge_max_um: float = Field(14.0, gt=0)
+
+    def build(self, spacing: Spacing) -> GraphStage:
+        return TopologyRepair(spacing, self.edge_max_um)
+
+
 StageSpec = Annotated[
-    LinkerSpec | GapSpec | DivisionSpec | ShortTrackSpec | SmoothSpec,
+    LinkerSpec | GapSpec | DivisionSpec | ShortTrackSpec | SmoothSpec | TopologySpec,
     Field(discriminator="kind"),
 ]
