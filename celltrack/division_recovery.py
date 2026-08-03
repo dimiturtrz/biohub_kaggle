@@ -35,6 +35,7 @@ import numpy as np
 from jaxtyping import Float, Int
 from scipy.spatial import KDTree
 
+from celltrack.center_prior import CenterConfirmer
 from core.data.tracks import Adjacency, TrackGraph
 from core.geometry import Spacing
 
@@ -58,6 +59,9 @@ class DivisionRecovery:
     existing_child_gate_um: float = float("inf")
     # Per-frame cap as a fraction of that frame's single-child parents, applied before the global cap.
     frame_fraction_cap: float = 1.0
+    # An optional centre-prior veto: a recovered daughter is kept only if DeepCenter confirms a centre at its
+    # voxel. Defaults to no veto, so the geometry-only construction keeps its behaviour and existing tests hold.
+    confirmer: CenterConfirmer | None = None
 
     def transform(self, graph: TrackGraph) -> TrackGraph:
         """Return the graph with recovered division edges added."""
@@ -75,6 +79,7 @@ class DivisionRecovery:
         adjacency = Adjacency.of(graph)
         positions_um = self.spacing.to_micrometres(graph.positions())
         timepoints = graph.timepoints()
+        confirmed = self._confirmed_rows(graph.positions(), timepoints)
         global_cap = int(self.max_added_fraction * len(graph.edges))
         accepted: list[tuple[int, int]] = []
         for timepoint in np.unique(timepoints)[:-1]:
@@ -82,7 +87,7 @@ class DivisionRecovery:
                 break
             sources = np.flatnonzero(timepoints == timepoint)
             targets = np.flatnonzero(timepoints == timepoint + 1)
-            proposals = self._proposals_between(sources, targets, positions_um, adjacency)
+            proposals = self._proposals_between(sources, targets, positions_um, adjacency, confirmed)
             frame_cap = max(1, round(self._frame_source_count(sources, adjacency) * self.frame_fraction_cap))
             for _, parent, child in sorted(proposals)[: min(frame_cap, global_cap - len(accepted))]:
                 accepted.append((int(graph.node_ids[parent]), int(graph.node_ids[child])))
@@ -101,6 +106,7 @@ class DivisionRecovery:
         target_rows: Int[np.ndarray, "t"],
         positions_um: Float[np.ndarray, "n 3"],
         adjacency: Adjacency,
+        confirmed: set[int] | None,
     ) -> list[tuple[float, int, int]]:
         """Candidate forks across one frame gap, as `(score, parent row, daughter row)`, all gates applied."""
         parents = [
@@ -109,7 +115,11 @@ class DivisionRecovery:
             if adjacency.out_degrees[row] == _SINGLE_CHILD
             and self._distance(positions_um, row, adjacency.successors[row][0]) <= self.existing_child_gate_um
         ]
-        orphans = [row for row in target_rows.tolist() if adjacency.in_degrees[row] == _UNPARENTED]
+        orphans = [
+            row
+            for row in target_rows.tolist()
+            if adjacency.in_degrees[row] == _UNPARENTED and (confirmed is None or row in confirmed)
+        ]
         if not parents or not orphans:
             return []
         sisters = [adjacency.successors[parent][0] for parent in parents]
@@ -146,6 +156,16 @@ class DivisionRecovery:
         return self._distance(positions_um, parent, orphan) + _SISTER_WEIGHT * self._distance(
             positions_um, sister, orphan
         )
+
+    def _confirmed_rows(
+        self, positions_voxel: Int[np.ndarray, "n 3"], timepoints: Int[np.ndarray, "n"]
+    ) -> set[int] | None:
+        """The rows the centre prior confirms as real centres, or None when no veto is configured (all pass)."""
+        if self.confirmer is None:
+            return None
+        return {
+            row for row in range(len(timepoints)) if self.confirmer.confirm(int(timepoints[row]), positions_voxel[row])
+        }
 
     @staticmethod
     def _distance(positions_um: Float[np.ndarray, "n 3"], a: int, b: int) -> float:

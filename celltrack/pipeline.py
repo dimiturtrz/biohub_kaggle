@@ -17,6 +17,7 @@ from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from celltrack.center_prior import CenterPriorVeto
 from celltrack.response_cache import ResponseCache
 from celltrack.stages import GraphStage, StageSpec
 from celltrack.tunet import DetectorRecipe, TemporalUNetDetector
@@ -76,13 +77,13 @@ class PipelineConfig(BaseModel):
     detector: DetectorSpec = DetectorSpec()
     stages: tuple[StageSpec, ...] = ()
 
-    def build_stages(self, spacing: Spacing) -> tuple[GraphStage, ...]:
-        """The concrete ordered stages, each spec resolved to its impl at the video's spacing."""
-        return tuple(spec.build(spacing) for spec in self.stages)
+    def build_stages(self, spacing: Spacing, veto: CenterPriorVeto | None = None) -> tuple[GraphStage, ...]:
+        """The concrete ordered stages at the video's spacing, each vetoed stage bound to this video's heatmaps."""
+        return tuple(spec.build(spacing, veto) for spec in self.stages)
 
-    def build(self, scorer: Scorer, spacing: Spacing) -> "Pipeline":
-        """Wire this config to a concrete scorer, yielding a runnable pipeline."""
-        return Pipeline(scorer=scorer, threshold=self.detector.threshold, stages=self.build_stages(spacing))
+    def build(self, scorer: Scorer, spacing: Spacing, veto: CenterPriorVeto | None = None) -> "Pipeline":
+        """Wire this config to a concrete scorer (and, for a vetoed pipeline, one video's centre-prior heatmaps)."""
+        return Pipeline(scorer=scorer, threshold=self.detector.threshold, stages=self.build_stages(spacing, veto))
 
 
 @dataclass(frozen=True)

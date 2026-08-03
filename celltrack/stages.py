@@ -19,6 +19,7 @@ from typing import Annotated, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from celltrack.center_prior import CenterPriorVeto, CenterVetoConfig
 from celltrack.division_recovery import DivisionRecovery
 from celltrack.gap_closer import GapCloser
 from celltrack.linefit_smoother import LinefitSmoother
@@ -60,7 +61,7 @@ class LinkerSpec(BaseModel):
     kind: Literal["linker"] = "linker"
     linker: LinkerConfig = LinkerConfig()
 
-    def build(self, spacing: Spacing) -> GraphStage:
+    def build(self, spacing: Spacing, veto: CenterPriorVeto | None = None) -> GraphStage:
         return LinkerStage(self.linker.build(spacing))
 
 
@@ -73,9 +74,11 @@ class GapSpec(BaseModel):
     gate_um: float = Field(5.8, gt=0)
     reuse_um: float = Field(3.2, gt=0)
     max_added_fraction: float = Field(0.05, ge=0)
+    center_veto: CenterVetoConfig | None = None
 
-    def build(self, spacing: Spacing) -> GraphStage:
-        return GapCloser(spacing, self.gate_um, self.reuse_um, self.max_added_fraction)
+    def build(self, spacing: Spacing, veto: CenterPriorVeto | None = None) -> GraphStage:
+        confirmer = self.center_veto.resolve(veto) if self.center_veto is not None else None
+        return GapCloser(spacing, self.gate_um, self.reuse_um, self.max_added_fraction, confirmer)
 
 
 class DivisionSpec(BaseModel):
@@ -89,8 +92,9 @@ class DivisionSpec(BaseModel):
     max_added_fraction: float = Field(0.004, ge=0)
     existing_child_gate_um: float = Field(7.8, gt=0)
     frame_fraction_cap: float = Field(0.008, ge=0)
+    center_veto: CenterVetoConfig | None = None
 
-    def build(self, spacing: Spacing) -> GraphStage:
+    def build(self, spacing: Spacing, veto: CenterPriorVeto | None = None) -> GraphStage:
         return DivisionRecovery(
             spacing,
             self.parent_gate_um,
@@ -98,6 +102,7 @@ class DivisionSpec(BaseModel):
             self.max_added_fraction,
             self.existing_child_gate_um,
             self.frame_fraction_cap,
+            self.center_veto.resolve(veto) if self.center_veto is not None else None,
         )
 
 
@@ -109,7 +114,7 @@ class ShortTrackSpec(BaseModel):
     kind: Literal["short_track"] = "short_track"
     min_length: int = Field(6, ge=1)
 
-    def build(self, spacing: Spacing) -> GraphStage:
+    def build(self, spacing: Spacing, veto: CenterPriorVeto | None = None) -> GraphStage:
         return ShortTrackFilter(self.min_length)
 
 
@@ -121,7 +126,7 @@ class SmoothSpec(BaseModel):
     kind: Literal["smooth"] = "smooth"
     strength: float = Field(0.8, ge=0, le=1)
 
-    def build(self, spacing: Spacing) -> GraphStage:
+    def build(self, spacing: Spacing, veto: CenterPriorVeto | None = None) -> GraphStage:
         return LinefitSmoother(self.strength)
 
 
