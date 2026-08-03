@@ -65,7 +65,7 @@ from core.geometry import Spacing  # noqa: E402
 
 _TEST_GLOB = "/kaggle/input/**/biohub-cell-tracking-during-development/test/*.zarr"
 _THRESHOLD = 0.99
-_TIGHT_GATE_UM, _LOOSE_GATE_UM = 6.0, 10.0
+_TIGHT_GATE_UM, _LOOSE_GATE_UM = 6.0, 8.5
 _DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
