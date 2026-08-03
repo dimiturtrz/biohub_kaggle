@@ -139,7 +139,7 @@ class TopologySpec(BaseModel):
     kind: Literal["topology"] = "topology"
     edge_max_um: float = Field(14.0, gt=0)
 
-    def build(self, spacing: Spacing) -> GraphStage:
+    def build(self, spacing: Spacing, veto: CenterPriorVeto | None = None) -> GraphStage:
         return TopologyRepair(spacing, self.edge_max_um)
 
 
