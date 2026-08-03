@@ -143,25 +143,56 @@ class TemporalUNetDetector(nn.Module):
             path,
         )
 
-    @torch.no_grad()
     def detections(self, path: Path, threshold: float, recipe: DetectorRecipe, device: str) -> TrackGraph:
         """Detect cell centres in every frame of a video, returned as an edge-free `TrackGraph`.
 
-        Coordinates come back in the original full-resolution voxel grid (peaks are scaled by the downsample),
-        so the graph drops straight into a linker built for the video's native spacing.
+        The forward pass and the peak read-out are split so the response can be cached (see
+        `probability_volumes`): here they run back to back, the live path. Coordinates come back in the
+        original full-resolution voxel grid (peaks scaled by the downsample), so the graph drops straight
+        into a linker built for the video's native spacing.
+        """
+        volumes = self.probability_volumes(path, recipe, device)
+        return self.graph_from_volumes(volumes, self.voxel_scale(path), threshold, recipe, device)
+
+    @torch.no_grad()
+    def probability_volumes(self, path: Path, recipe: DetectorRecipe, device: str) -> list[Float[np.ndarray, "z y x"]]:
+        """Each frame's per-voxel cellness probability on the downsampled grid — the cacheable response.
+
+        This is the expensive, weights-and-video-determined half of detection; a `ResponseCache` forwards it
+        once and every later threshold/keep-N/linker experiment replays the cheap `graph_from_volumes` on
+        these arrays. Volumes are the downsampled shape (16x fewer voxels), so a whole video's stack is small.
         """
         self.eval()
         source = self._open_source(path)
-        extractor = self._extractor(source.scale, recipe, device)
+        return [
+            torch.sigmoid(self._logits(self._read_frame(source, timepoint, recipe.downsample, device), recipe.tta))
+            .cpu()
+            .numpy()
+            for timepoint in range(int(source.array.shape[0]))
+        ]
+
+    @classmethod
+    def graph_from_volumes(
+        cls,
+        volumes: list[Float[np.ndarray, "z y x"]],
+        scale: tuple[float, float, float],
+        threshold: float,
+        recipe: DetectorRecipe,
+        device: str,
+    ) -> TrackGraph:
+        """Read cell centres out of cached probability volumes — the cheap, replayable half of detection."""
+        extractor = cls._extractor(scale, recipe, device)
         stamped: list[np.ndarray] = []
-        for timepoint in range(int(source.array.shape[0])):
-            frame = self._read_frame(source, timepoint, recipe.downsample, device)
-            probs = torch.sigmoid(self._logits(frame, recipe.tta))
-            peaks = self._capped_peaks(extractor, probs, threshold, recipe.keep_per_frame)
+        for timepoint, volume in enumerate(volumes):
+            peaks = cls._capped_peaks(extractor, volume, threshold, recipe.keep_per_frame)
             scaled = peaks * np.array(recipe.downsample)
             stamped.append(np.column_stack([np.full(len(scaled), timepoint), scaled]).astype(np.int64))
         nodes = np.concatenate(stamped) if stamped else np.empty((0, 4), dtype=np.int64)
         return TrackGraph(np.arange(len(nodes), dtype=np.int64), nodes, np.empty((0, 2), np.int64))
+
+    def voxel_scale(self, path: Path) -> tuple[float, float, float]:
+        """The video's `(z, y, x)` micrometre voxel scale — read cheaply from the OME metadata for the read-out."""
+        return self._open_source(path).scale
 
     def _logits(self, frame: Float[Tensor, "z y x"], tta: bool) -> Float[Tensor, "z y x"]:  # noqa: FBT001
         """Detection logits for a frame, averaged over the flip-TTA ensemble when enabled."""
@@ -184,7 +215,7 @@ class TemporalUNetDetector(nn.Module):
 
     @staticmethod
     def _capped_peaks(
-        extractor: PeakExtractor, probs: Float[Tensor, "z y x"], threshold: float, keep: int
+        extractor: PeakExtractor, probs: Float[np.ndarray, "z y x"], threshold: float, keep: int
     ) -> Int[np.ndarray, "k 3"]:
         """Suppressed maxima above `threshold`, capped to the `keep` strongest — bounds the linker's cost matrix."""
         coordinates, values = extractor.maxima(probs, floor=threshold)

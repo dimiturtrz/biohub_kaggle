@@ -416,8 +416,86 @@
     },
     {
       "kind": "import",
+      "source": "celltrack.pipeline",
+      "target": "celltrack.response_cache",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.pipeline",
+      "target": "celltrack.stages",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.pipeline",
+      "target": "celltrack.tunet",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.pipeline",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.pipeline",
+      "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "celltrack.short_track_filter",
       "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.stages",
+      "target": "celltrack.division_recovery",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.stages",
+      "target": "celltrack.gap_closer",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.stages",
+      "target": "celltrack.linefit_smoother",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.stages",
+      "target": "celltrack.linkers",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.stages",
+      "target": "celltrack.linking",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.stages",
+      "target": "celltrack.short_track_filter",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.stages",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.stages",
+      "target": "core.geometry",
       "weight": 1
     },
     {
@@ -2047,6 +2125,138 @@
       "weight": 1
     },
     {
+      "kind": "holds",
+      "source": "celltrack.pipeline.DetectorScorer",
+      "target": "celltrack.response_cache.ResponseCache",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.pipeline.DetectorScorer",
+      "target": "celltrack.tunet.DetectorRecipe",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.pipeline.DetectorScorer",
+      "target": "celltrack.tunet.TemporalUNetDetector",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.pipeline.DetectorScorer",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.pipeline.DetectorScorer.nodes",
+      "target": "celltrack.response_cache.ResponseCache.responses",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.pipeline.DetectorScorer.nodes",
+      "target": "celltrack.tunet.TemporalUNetDetector.graph_from_volumes",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.pipeline.DetectorScorer.nodes",
+      "target": "celltrack.tunet.TemporalUNetDetector.probability_volumes",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.pipeline.DetectorScorer.nodes",
+      "target": "celltrack.tunet.TemporalUNetDetector.voxel_scale",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.pipeline.Pipeline",
+      "target": "celltrack.pipeline.Scorer",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.pipeline.Pipeline",
+      "target": "celltrack.stages.GraphStage",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.pipeline.Pipeline",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.pipeline.Pipeline.detect",
+      "target": "celltrack.pipeline.Scorer.nodes",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.pipeline.Pipeline.run",
+      "target": "celltrack.pipeline.Pipeline.detect",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.pipeline.Pipeline.run",
+      "target": "celltrack.pipeline.Pipeline.finish",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.pipeline.PipelineConfig",
+      "target": "celltrack.pipeline.DetectorSpec",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.pipeline.PipelineConfig",
+      "target": "celltrack.pipeline.Pipeline",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.pipeline.PipelineConfig",
+      "target": "celltrack.pipeline.Scorer",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.pipeline.PipelineConfig",
+      "target": "celltrack.stages.GraphStage",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.pipeline.PipelineConfig",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.pipeline.PipelineConfig.build",
+      "target": "celltrack.pipeline.Pipeline",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.pipeline.PipelineConfig.build",
+      "target": "celltrack.pipeline.PipelineConfig.build_stages",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.pipeline.Scorer",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
       "kind": "references",
       "source": "celltrack.short_track_filter.ShortTrackFilter",
       "target": "core.data.tracks.TrackGraph",
@@ -2068,6 +2278,132 @@
       "kind": "calls",
       "source": "celltrack.short_track_filter.ShortTrackFilter.transform",
       "target": "core.data.tracks.TrackGraph.edge_rows",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.stages.DivisionSpec",
+      "target": "celltrack.stages.GraphStage",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.stages.DivisionSpec",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.stages.DivisionSpec.build",
+      "target": "celltrack.division_recovery.DivisionRecovery",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.stages.GapSpec",
+      "target": "celltrack.stages.GraphStage",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.stages.GapSpec",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.stages.GapSpec.build",
+      "target": "celltrack.gap_closer.GapCloser",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.stages.GraphStage",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.stages.LinkerSpec",
+      "target": "celltrack.linkers.LinkerConfig",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.stages.LinkerSpec",
+      "target": "celltrack.stages.GraphStage",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.stages.LinkerSpec",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.stages.LinkerSpec.build",
+      "target": "celltrack.linkers.LinkerConfig.build",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.stages.LinkerSpec.build",
+      "target": "celltrack.stages.LinkerStage",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.stages.LinkerStage",
+      "target": "celltrack.linking.Linker",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.stages.LinkerStage",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.stages.LinkerStage.transform",
+      "target": "celltrack.linking.Linker.link",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.stages.ShortTrackSpec",
+      "target": "celltrack.stages.GraphStage",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.stages.ShortTrackSpec",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.stages.ShortTrackSpec.build",
+      "target": "celltrack.short_track_filter.ShortTrackFilter",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.stages.SmoothSpec",
+      "target": "celltrack.stages.GraphStage",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.stages.SmoothSpec",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.stages.SmoothSpec.build",
+      "target": "celltrack.linefit_smoother.LinefitSmoother",
       "weight": 1
     },
     {
@@ -2847,37 +3183,19 @@
     {
       "kind": "calls",
       "source": "celltrack.tunet.TemporalUNetDetector.detections",
-      "target": "celltrack.tunet.TemporalUNetDetector._capped_peaks",
+      "target": "celltrack.tunet.TemporalUNetDetector.graph_from_volumes",
       "weight": 1
     },
     {
       "kind": "calls",
       "source": "celltrack.tunet.TemporalUNetDetector.detections",
-      "target": "celltrack.tunet.TemporalUNetDetector._extractor",
+      "target": "celltrack.tunet.TemporalUNetDetector.probability_volumes",
       "weight": 1
     },
     {
       "kind": "calls",
       "source": "celltrack.tunet.TemporalUNetDetector.detections",
-      "target": "celltrack.tunet.TemporalUNetDetector._logits",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.tunet.TemporalUNetDetector.detections",
-      "target": "celltrack.tunet.TemporalUNetDetector._open_source",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.tunet.TemporalUNetDetector.detections",
-      "target": "celltrack.tunet.TemporalUNetDetector._read_frame",
-      "weight": 1
-    },
-    {
-      "kind": "construct",
-      "source": "celltrack.tunet.TemporalUNetDetector.detections",
-      "target": "core.data.tracks.TrackGraph",
+      "target": "celltrack.tunet.TemporalUNetDetector.voxel_scale",
       "weight": 1
     },
     {
@@ -2893,9 +3211,39 @@
       "weight": 1
     },
     {
+      "kind": "construct",
+      "source": "celltrack.tunet.TemporalUNetDetector.graph_from_volumes",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.tunet.TemporalUNetDetector.probability_volumes",
+      "target": "celltrack.tunet.TemporalUNetDetector._logits",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.tunet.TemporalUNetDetector.probability_volumes",
+      "target": "celltrack.tunet.TemporalUNetDetector._open_source",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.tunet.TemporalUNetDetector.probability_volumes",
+      "target": "celltrack.tunet.TemporalUNetDetector._read_frame",
+      "weight": 1
+    },
+    {
       "kind": "calls",
       "source": "celltrack.tunet.TemporalUNetDetector.save_checkpoint",
       "target": "celltrack.tunet.DetectorRecipe.as_config",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.tunet.TemporalUNetDetector.voxel_scale",
+      "target": "celltrack.tunet.TemporalUNetDetector._open_source",
       "weight": 1
     },
     {
@@ -3603,7 +3951,7 @@
   ],
   "nodes": [
     {
-      "descendants": 33,
+      "descendants": 35,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -3740,6 +4088,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.pipeline",
+      "label": "pipeline",
+      "level": "module",
+      "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.response_cache",
       "label": "response_cache",
       "level": "module",
@@ -3750,6 +4106,14 @@
       "descendants": 0,
       "id": "celltrack.short_track_filter",
       "label": "short_track_filter",
+      "level": "module",
+      "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.stages",
+      "label": "stages",
       "level": "module",
       "parent": "celltrack",
       "role": null
@@ -4196,6 +4560,46 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.pipeline.DetectorScorer",
+      "label": "DetectorScorer",
+      "level": "class",
+      "parent": "celltrack.pipeline",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.pipeline.DetectorSpec",
+      "label": "DetectorSpec",
+      "level": "class",
+      "parent": "celltrack.pipeline",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.pipeline.Pipeline",
+      "label": "Pipeline",
+      "level": "class",
+      "parent": "celltrack.pipeline",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.pipeline.PipelineConfig",
+      "label": "PipelineConfig",
+      "level": "class",
+      "parent": "celltrack.pipeline",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.pipeline.Scorer",
+      "label": "Scorer",
+      "level": "class",
+      "parent": "celltrack.pipeline",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.response_cache.ResponseCache",
       "label": "ResponseCache",
       "level": "class",
@@ -4208,6 +4612,62 @@
       "label": "ShortTrackFilter",
       "level": "class",
       "parent": "celltrack.short_track_filter",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.stages.DivisionSpec",
+      "label": "DivisionSpec",
+      "level": "class",
+      "parent": "celltrack.stages",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.stages.GapSpec",
+      "label": "GapSpec",
+      "level": "class",
+      "parent": "celltrack.stages",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.stages.GraphStage",
+      "label": "GraphStage",
+      "level": "class",
+      "parent": "celltrack.stages",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.stages.LinkerSpec",
+      "label": "LinkerSpec",
+      "level": "class",
+      "parent": "celltrack.stages",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.stages.LinkerStage",
+      "label": "LinkerStage",
+      "level": "class",
+      "parent": "celltrack.stages",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.stages.ShortTrackSpec",
+      "label": "ShortTrackSpec",
+      "level": "class",
+      "parent": "celltrack.stages",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.stages.SmoothSpec",
+      "label": "SmoothSpec",
+      "level": "class",
+      "parent": "celltrack.stages",
       "role": "satellite"
     },
     {
@@ -5276,6 +5736,62 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.pipeline.DetectorScorer.nodes",
+      "label": "nodes",
+      "level": "method",
+      "parent": "celltrack.pipeline.DetectorScorer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.pipeline.Pipeline.detect",
+      "label": "detect",
+      "level": "method",
+      "parent": "celltrack.pipeline.Pipeline",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.pipeline.Pipeline.finish",
+      "label": "finish",
+      "level": "method",
+      "parent": "celltrack.pipeline.Pipeline",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.pipeline.Pipeline.run",
+      "label": "run",
+      "level": "method",
+      "parent": "celltrack.pipeline.Pipeline",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.pipeline.PipelineConfig.build",
+      "label": "build",
+      "level": "method",
+      "parent": "celltrack.pipeline.PipelineConfig",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.pipeline.PipelineConfig.build_stages",
+      "label": "build_stages",
+      "level": "method",
+      "parent": "celltrack.pipeline.PipelineConfig",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.pipeline.Scorer.nodes",
+      "label": "nodes",
+      "level": "method",
+      "parent": "celltrack.pipeline.Scorer",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.response_cache.ResponseCache.__init__",
       "label": "__init__",
       "level": "method",
@@ -5296,6 +5812,62 @@
       "label": "transform",
       "level": "method",
       "parent": "celltrack.short_track_filter.ShortTrackFilter",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.stages.DivisionSpec.build",
+      "label": "build",
+      "level": "method",
+      "parent": "celltrack.stages.DivisionSpec",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.stages.GapSpec.build",
+      "label": "build",
+      "level": "method",
+      "parent": "celltrack.stages.GapSpec",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.stages.GraphStage.transform",
+      "label": "transform",
+      "level": "method",
+      "parent": "celltrack.stages.GraphStage",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.stages.LinkerSpec.build",
+      "label": "build",
+      "level": "method",
+      "parent": "celltrack.stages.LinkerSpec",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.stages.LinkerStage.transform",
+      "label": "transform",
+      "level": "method",
+      "parent": "celltrack.stages.LinkerStage",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.stages.ShortTrackSpec.build",
+      "label": "build",
+      "level": "method",
+      "parent": "celltrack.stages.ShortTrackSpec",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.stages.SmoothSpec.build",
+      "label": "build",
+      "level": "method",
+      "parent": "celltrack.stages.SmoothSpec",
       "role": null
     },
     {
@@ -5900,8 +6472,32 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.tunet.TemporalUNetDetector.graph_from_volumes",
+      "label": "graph_from_volumes",
+      "level": "method",
+      "parent": "celltrack.tunet.TemporalUNetDetector",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.tunet.TemporalUNetDetector.probability_volumes",
+      "label": "probability_volumes",
+      "level": "method",
+      "parent": "celltrack.tunet.TemporalUNetDetector",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.tunet.TemporalUNetDetector.save_checkpoint",
       "label": "save_checkpoint",
+      "level": "method",
+      "parent": "celltrack.tunet.TemporalUNetDetector",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.tunet.TemporalUNetDetector.voxel_scale",
+      "label": "voxel_scale",
       "level": "method",
       "parent": "celltrack.tunet.TemporalUNetDetector",
       "role": null
