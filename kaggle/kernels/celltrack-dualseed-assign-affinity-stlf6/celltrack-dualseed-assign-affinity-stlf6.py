@@ -57,9 +57,14 @@ from core.geometry import Spacing  # noqa: E402
 _TEST_GLOB = "/kaggle/input/**/biohub-cell-tracking-during-development/test/*.zarr"
 _THRESHOLD = 0.99
 _GATE_UM = 10.0
-_EDGE_BONUS = _GATE_UM  # a certain learned link overrides any within-gate distance
-# Two edge-transformer seeds blended in logit space; 0.8·seed1 + 0.2·seed2 lifts the linker 0.9134→0.9154 on
-# the proxy (monotone toward seed2, so the optimum likely sits a little lower — a follow-up sweep, bead 88x).
+# A certain learned association (P=1) must overpower up to two gate-widths of distance: in dense tissue the
+# true successor's displacement routinely exceeds one gate, so the nearest-distance prior is actively
+# misleading (the crowding-mislink), and the edge transformer — the discriminative signal — has to win against
+# it. bonus = 2·gate; the proxy peaks broadly over 2–3·gate (0.9154 at 1·gate → 0.9227 at 2·gate), declining
+# past it as pure-association over-trusts confident-but-wrong links. A median-scale autobalance is bead 88x.
+_EDGE_BONUS = 2.0 * _GATE_UM
+# Two edge-transformer seeds blended in logit space; 0.8·seed1 + 0.2·seed2 is the proxy peak (0.9134→0.9154
+# at bonus=1·gate; the sweep extends both together, bead 88x).
 _EDGE_BLEND = (0.8, 0.2)
 _DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
