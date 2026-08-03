@@ -2,6 +2,24 @@
   "edges": [
     {
       "kind": "import",
+      "source": "celltrack.affinity_division",
+      "target": "celltrack.motion_linking",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.affinity_division",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.affinity_division",
+      "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "celltrack.bracket",
       "target": "celltrack.detection",
       "weight": 1
@@ -910,6 +928,102 @@
       "kind": "import",
       "source": "core.metrics.score",
       "target": "core.metrics.matching",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.affinity_division.AffinityDivisionRecovery",
+      "target": "celltrack.affinity_division._Gap",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.affinity_division.AffinityDivisionRecovery",
+      "target": "celltrack.motion_linking.EdgeAffinity",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.affinity_division.AffinityDivisionRecovery",
+      "target": "core.data.tracks.Adjacency",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.affinity_division.AffinityDivisionRecovery",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.affinity_division.AffinityDivisionRecovery",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.affinity_division.AffinityDivisionRecovery._division_edges",
+      "target": "celltrack.affinity_division.AffinityDivisionRecovery._gap_proposals",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.affinity_division.AffinityDivisionRecovery._division_edges",
+      "target": "celltrack.motion_linking.EdgeAffinity.probabilities",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.affinity_division.AffinityDivisionRecovery._division_edges",
+      "target": "core.data.tracks.Adjacency.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.affinity_division.AffinityDivisionRecovery._division_edges",
+      "target": "core.data.tracks.TrackGraph.positions",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.affinity_division.AffinityDivisionRecovery._division_edges",
+      "target": "core.data.tracks.TrackGraph.timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.affinity_division.AffinityDivisionRecovery._division_edges",
+      "target": "core.geometry.Spacing.to_micrometres",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.affinity_division.AffinityDivisionRecovery._gap_proposals",
+      "target": "celltrack.affinity_division.AffinityDivisionRecovery._runner_up",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.affinity_division.AffinityDivisionRecovery._gap_proposals",
+      "target": "celltrack.affinity_division._Gap",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.affinity_division.AffinityDivisionRecovery._runner_up",
+      "target": "celltrack.affinity_division.AffinityDivisionRecovery._distance",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.affinity_division.AffinityDivisionRecovery.transform",
+      "target": "celltrack.affinity_division.AffinityDivisionRecovery._division_edges",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.affinity_division.AffinityDivisionRecovery.transform",
+      "target": "core.data.tracks.TrackGraph",
       "weight": 1
     },
     {
@@ -4785,11 +4899,19 @@
   ],
   "nodes": [
     {
-      "descendants": 38,
+      "descendants": 39,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
       "parent": null,
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.affinity_division",
+      "label": "affinity_division",
+      "level": "module",
+      "parent": "celltrack",
       "role": null
     },
     {
@@ -5231,6 +5353,22 @@
       "level": "module",
       "parent": "core",
       "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.affinity_division.AffinityDivisionRecovery",
+      "label": "AffinityDivisionRecovery",
+      "level": "class",
+      "parent": "celltrack.affinity_division",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.affinity_division._Gap",
+      "label": "_Gap",
+      "level": "class",
+      "parent": "celltrack.affinity_division",
+      "role": "satellite"
     },
     {
       "descendants": 0,
@@ -6159,6 +6297,46 @@
       "level": "class",
       "parent": "core.tracking",
       "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.affinity_division.AffinityDivisionRecovery._distance",
+      "label": "_distance",
+      "level": "method",
+      "parent": "celltrack.affinity_division.AffinityDivisionRecovery",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.affinity_division.AffinityDivisionRecovery._division_edges",
+      "label": "_division_edges",
+      "level": "method",
+      "parent": "celltrack.affinity_division.AffinityDivisionRecovery",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.affinity_division.AffinityDivisionRecovery._gap_proposals",
+      "label": "_gap_proposals",
+      "level": "method",
+      "parent": "celltrack.affinity_division.AffinityDivisionRecovery",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.affinity_division.AffinityDivisionRecovery._runner_up",
+      "label": "_runner_up",
+      "level": "method",
+      "parent": "celltrack.affinity_division.AffinityDivisionRecovery",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.affinity_division.AffinityDivisionRecovery.transform",
+      "label": "transform",
+      "level": "method",
+      "parent": "celltrack.affinity_division.AffinityDivisionRecovery",
+      "role": null
     },
     {
       "descendants": 0,
