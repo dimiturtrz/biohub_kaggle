@@ -2745,6 +2745,12 @@
     {
       "kind": "references",
       "source": "celltrack.stages.TopologySpec",
+      "target": "celltrack.center_prior.CenterPriorVeto",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.stages.TopologySpec",
       "target": "celltrack.stages.GraphStage",
       "weight": 1
     },
