@@ -84,6 +84,9 @@ tests — this repo's tests cover only ITS packages. Consumer-specific detector 
   (reproducible + reviewable), never a REPL session.
 - **Minimal comments** — prefer self-documenting names; a comment is a liability, not a default.
 - **Config objects over long arg lists**; strategy pattern over `if`/type dispatch.
+- **Cost-tiered experimenting** — iterate on the cached fold-0 eval (seconds–min); a ~1h train or the
+  3-4h Kaggle hidden eval is an async confirm gated on that proxy. Kaggle is 5/day — batch candidates
+  async, don't drip-and-wait.
 - **Doc layers** — `learning/<date>_<topic>.md` = the study ramp / general understanding;
   `research/` = external / field synthesis (theirs); `interpretations/<task>/<date>_<topic>.md` =
   sense-making of *our own* results (per task, `converging/` for cross-task). The build log is git history;
