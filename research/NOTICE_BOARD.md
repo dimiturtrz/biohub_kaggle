@@ -2,6 +2,25 @@
 
 ## Open Questions & Investigation Status
 
+### Kaggle Metric Scoring & Test Set Split
+
+**Status**: 🔶 **PARTIAL** (2026-08-03; metric formulas confirmed, test overlap unresolved)
+**Deep-dive**: [`2026-08-03_kaggle-deep-metric-split.md`](deep_dives/2026-08-03_kaggle-deep-metric-split.md)
+
+**Question**: (1) Does public/private split use same test movies with annotation subset vs different movies? (2) Do the 4 test movies (44b6_*, 6bba_*) appear in training data? (3) What is `estimated_node_count` (T_true) and how is it computed?
+
+**Findings**:
+- **Metric formulas CONFIRMED**: `score = adjusted_edge_jaccard + 0.1 * division_jaccard`. Adjusted Jaccard = `max(0, jaccard * (1 - 0.1 * (T_pred - T_true) / T_true))` where T_true is per-movie total node estimate. [S2]
+- **Division Jaccard exploit CLOSED**: Pre-patch, synthetic hub node at (−10000, −10000, −10000) with edges merging all track components + synthetic forks inflated score ~0→1.0 (+0.1 bonus). Patch implemented, all submissions re-scored. [S1, S2]
+- **T_true is per-movie TOTAL**, not per-timeframe; no source found on computation method (actual GT count, statistical estimate, or field-specific default). [OPEN]
+- **Test set overlap UNCONFIRMED**: No primary source found confirming whether 4 test movies appear in train data with sparse annotations. Public LB = 29%, private = 71% also unverified. [OPEN]
+
+**Risk**: Your working assumption (test movies in train with annotation split) is plausible but unconfirmed. If false, model generalization risk is higher.
+
+**Next**: Direct Kaggle forum inquiry or data inspection via Kaggle notebooks to verify test-train overlap status; impacts stratification strategy.
+
+---
+
 ### What the public notebook frontier actually does
 
 **Status**: ✅ **SETTLED** (2026-08-02)
@@ -59,6 +78,63 @@ Method survey (Cellpose/StarDist/Trackastra/motile/Ultrack, Gurobi-in-Kaggle) re
 - **Production stack**: Trackastra greedy or ILP mode; CELLECT for embedding space; analytical features as cost matrix terms
 
 **Next**: Test Trackastra ILP on fold-0; measure edge Jaccard lift vs baseline Hungarian. Then decide: add appearance cost-weighting (0-cost improvement) or full ILP (requires solver tuning).
+
+---
+
+### Training Discriminative Association Models for Dense 3D Cell Tracking
+
+**Status**: ✅ **SETTLED** (2026-08-03)
+**Deep-dive**: [`2026-08-03_dense-association-training.md`](deep_dives/2026-08-03_dense-association-training.md)
+
+**Question**: How do SOTA methods train association models to disambiguate crowded successors? What loss functions, hard-negative mining strategies, and features make the difference?
+
+**Findings**:
+- **Hard-negative mining** (core technique): Sample spatially-proximate wrong neighbors as negatives; forces model to learn "which of N candidates" not just pairwise matching
+- **Loss functions**: Trackastra uses parental softmax (enforces ≤1 parent, biological constraint); TWiX uses bidirectional contrastive loss (forward+backward consistency)
+- **Metric learning**: Triplet loss with focal weighting (down-weights easy negatives, emphasizes hard boundary cases)
+- **Features beyond distance**: Appearance embeddings (via metric learning), optical-flow motion priors, neighborhood attention context, morphological shape similarity
+- **Implementable levers** (prioritized): (1) hard-negative mining, (2) parental softmax + weight matrix, (3) bidirectional loss, (4) appearance embedding head, (5) motion-corrected linking via optical flow
+
+**Next**: Implement hard-negative mining + parental softmax as low-cost gains; measure edge Jaccard lift. Then add motion prior if gain plateaus.
+
+---
+
+### What separates the 0.930–0.947 pack from 0.913 frontier?
+
+**Status**: 🔶 **PARTIAL** (2026-08-03; competition ongoing, no winner writeups available)
+**Deep-dive**: [`2026-08-03_pack_decode.md`](deep_dives/2026-08-03_pack_decode.md)
+
+**Question**: What concrete levers do top teams (0.930–0.947) use to exceed the public 0.913 frontier? Which are detector, linker, ensemble, metric-exploitation, or post-processing?
+
+**Findings** (Evidence-based; some speculative):
+- **Undertrain gap (HIGH CONFIDENCE)**: Baseline explicitly states "not trained to convergence — expect gains." Extended training is likely +0.01–0.03 and nearly free.
+- **Edge-centric linkers (HIGH CONFIDENCE)**: HOCT (Biohub-authored, July 2026) addresses "cell division entanglement" + "weak edge topology" problems in node-centric approaches. 59% error reduction on fine-tuning; state-of-the-art on CTC benchmarks.
+- **Multi-detector ensemble + TTA (HIGH CONFIDENCE)**: Standard in 3D detection leaderboards; empirically +9.69% AP gains. Zero retraining for TTA; 2–3 detector seeds yield +0.01–0.06.
+- **Division-aware topology (MEDIUM CONFIDENCE)**: Recent Cell-TRACTR and division literature show linkage confusion (mother→child vs same-cell) as primary error. Dedicated division head + topology enforcement likely +0.01–0.025.
+- **Graph post-processing (MEDIUM CONFIDENCE)**: Gap-filling, tracklet refinement, Kalman smoothing shown in ARGUS and tracking literature; +0.01–0.02 orthogonal gains.
+- **Metric exploitation (LOW CONFIDENCE; HIGH RISK)**: Conservative node prediction can game Jaccard formula (10% penalty threshold), but brittle and regresses on private data if annotation densities differ.
+
+**Metric structure**: Adjusted Jaccard = max(0, jaccard × (1 − 0.1 × (Npred − Ntrue) / Ntrue)); 0.1× weight on divisions. Over-prediction penalty is mild (10%), favoring cautious edge-first strategies.
+
+**Next**: Prioritize (1) train to convergence, (2) multi-detector + TTA, (3) HOCT-style edge attention if first two plateau. Competition ends 2026-09-29; no public 0.93+ solutions found yet.
+
+---
+
+### Mountable 3D Detectors for Kaggle Kernels + Complementarity
+
+**Status**: ✅ **SETTLED** (2026-08-03)
+**Deep-dive**: [`2026-08-03_mountable-detectors-sota.md`](deep_dives/2026-08-03_mountable-detectors-sota.md)
+
+**Question**: Which offline-mountable 3D detectors complement your existing TemporalUNet3D? What's the complementarity of different architectures on crowded embryo tissue?
+
+**Findings**:
+- **Foundation models** (2025–2026): Cellpose-SAM v2 (June 2026, robust to contrast), CellposeDINO (lightweight), Omnipose (morphology-agnostic) — all offline, auto-download, 3D-capable.
+- **Complementarity benchmark**: StarDist3D (high precision 0.81, lower recall 0.63) vs U-Net (0.65–0.69 precision, 0.67–0.77 recall) — precision-recall tradeoff on dense nuclei; ensemble both for +0.02–0.04 Jaccard.
+- **Best ensemble for your case**: StarDist3D (high-precision) + Cellpose-SAM v2 (recall + generalization) → expected gain +0.01–0.04 edge Jaccard on crowded frames.
+- **Joint detection+tracking**: CellTracker-GNN (ECCV 2022, graph neural network, learned associations), TrackMate v7 (Fiji plugin, pluggable detectors).
+- **Practical Kaggle**: All fit T4 (~2–4 GB VRAM); PyTorch/TensorFlow deps self-install; weights auto-cached after first download.
+
+**Next**: Test StarDist3D + Cellpose-SAM v2 ensemble on fold-0 validation; measure precision lift vs baseline. If >+0.005 Jaccard, integrate into submission pipeline.
 
 ---
 
