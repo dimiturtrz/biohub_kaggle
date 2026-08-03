@@ -31,6 +31,10 @@ from core.geometry import Spacing
 _UNLINKED = 0
 _GAP_SPAN = 2  # end at t, start at t+2: exactly one missing frame between them
 _BEYOND_GATE = 1.0e9
+# Half the distance to the nearest same-frame neighbour is the Voronoi boundary: a successor that moved
+# less than this cannot be confused with a neighbour's, so it is the geometric — not tuned — radius past
+# which a bridge stops being unambiguous. Crowding shrinks the neighbour spacing, so it shrinks the gate.
+_VORONOI_FRACTION = 0.5
 
 
 class SyntheticGap(BaseModel):
@@ -266,3 +270,154 @@ class GapCloser:
         if proposal.cost >= inserter.min_span_um and not inserter.confirmer.confirm(timepoint, midpoint):
             return None
         return [timepoint, int(midpoint[0]), int(midpoint[1]), int(midpoint[2])]
+
+
+@dataclass(frozen=True)
+class _Bridge:
+    """One accepted density-adaptive bridge: the end and start rows and the synthetic t+1 voxel between them."""
+
+    cost: float
+    end: int
+    start: int
+    midpoint_voxel: Int[np.ndarray, "3"]
+
+
+@dataclass(frozen=True)
+class DensityGapBridge:
+    """Reconnect a one-frame detection dropout by motion prediction, with a density-adaptive bridge radius.
+
+    A track ENDS at t (a node with no successor, before the last frame) when its cell was missed at t+1; the
+    same cell reappears as a track START at t+2. This predicts where the cell went — the end's own velocity
+    carried across the gap — and, where a *single* start sits near that prediction, inserts the missing t+1
+    detection (a synthetic node at the motion-predicted position) plus the two consecutive edges the metric
+    counts, recovering both dropped links at once. No centre prior: the gate itself is the confirmer.
+
+    The radius is the LOCAL Voronoi boundary — half the distance from the end to its nearest same-frame
+    neighbour — capped by `reach_um`, the linker's one-frame motion gate (the most prediction error a real
+    step can leave). A crowded region has a small neighbour spacing, so it admits only a tight, confident
+    bridge; a sparse region may reach further. A gap with more than one plausible successor is left open.
+    """
+
+    spacing: Spacing
+    reach_um: float
+    max_added_fraction: float
+
+    def transform(self, graph: TrackGraph) -> TrackGraph:
+        """Return the graph with a synthetic node and two edges added for every unambiguous one-frame gap."""
+        bridges = self._bridges(graph)
+        if not bridges:
+            return graph
+        return self._build(graph, bridges)
+
+    def _bridges(self, graph: TrackGraph) -> list[_Bridge]:
+        """Every accepted bridge for this graph: tightest first, one end and one start each, under the cap."""
+        positions_um = self.spacing.to_micrometres(graph.positions())
+        timepoints = graph.timepoints()
+        adjacency = Adjacency.of(graph)
+        velocity = self._velocities(adjacency, positions_um)
+        proposals = self._proposals(adjacency, positions_um, timepoints, velocity)
+        proposals.sort(key=lambda bridge: bridge.cost)
+        return self._accept(proposals, cap=int(self.max_added_fraction * len(graph.node_ids)))
+
+    @staticmethod
+    def _velocities(adjacency: Adjacency, positions_um: Float[np.ndarray, "n 3"]) -> Float[np.ndarray, "n 3"]:
+        """Each node's incoming displacement in micrometres — its motion into the current frame, zero if a start."""
+        velocity = np.zeros_like(positions_um)
+        for row, parents in adjacency.predecessors.items():
+            if parents:
+                velocity[row] = positions_um[row] - positions_um[parents[0]]
+        return velocity
+
+    def _proposals(
+        self,
+        adjacency: Adjacency,
+        positions_um: Float[np.ndarray, "n 3"],
+        timepoints: Int[np.ndarray, "n"],
+        velocity: Float[np.ndarray, "n 3"],
+    ) -> list[_Bridge]:
+        """A bridge for every end whose motion prediction lands a single start two frames on within its radius."""
+        last = int(timepoints.max()) if len(timepoints) else 0
+        ends = np.flatnonzero((adjacency.out_degrees == _UNLINKED) & (timepoints < last - 1))
+        starts = np.flatnonzero(adjacency.in_degrees == _UNLINKED)
+        radius = self._radii(ends, positions_um, timepoints)
+        proposals: list[_Bridge] = []
+        for timepoint in np.unique(timepoints[ends]) if len(ends) else np.empty(0, dtype=timepoints.dtype):
+            frame_ends = ends[timepoints[ends] == timepoint]
+            frame_starts = starts[timepoints[starts] == timepoint + _GAP_SPAN]
+            proposals.extend(self._match_frame(frame_ends, frame_starts, positions_um, velocity, radius))
+        return proposals
+
+    def _radii(
+        self, ends: Int[np.ndarray, "e"], positions_um: Float[np.ndarray, "n 3"], timepoints: Int[np.ndarray, "n"]
+    ) -> Float[np.ndarray, "n"]:
+        """Per-end bridge radius: the local Voronoi half-spacing, capped by the one-frame motion reach."""
+        radius = np.zeros(len(positions_um))
+        for timepoint in np.unique(timepoints[ends]) if len(ends) else np.empty(0, dtype=timepoints.dtype):
+            frame = np.flatnonzero(timepoints == timepoint)
+            frame_ends = ends[timepoints[ends] == timepoint]
+            spacing = self._nearest_neighbour(frame_ends, frame, positions_um)
+            radius[frame_ends] = np.minimum(self.reach_um, _VORONOI_FRACTION * spacing)
+        return radius
+
+    @staticmethod
+    def _nearest_neighbour(
+        rows: Int[np.ndarray, "e"], frame: Int[np.ndarray, "f"], positions_um: Float[np.ndarray, "n 3"]
+    ) -> Float[np.ndarray, "e"]:
+        """Distance from each of `rows` to its nearest OTHER node in the same frame; +inf when alone in-frame."""
+        distances = cdist(positions_um[rows], positions_um[frame])
+        distances[distances == 0.0] = np.inf
+        return distances.min(axis=1)
+
+    def _match_frame(
+        self,
+        frame_ends: Int[np.ndarray, "e"],
+        frame_starts: Int[np.ndarray, "s"],
+        positions_um: Float[np.ndarray, "n 3"],
+        velocity: Float[np.ndarray, "n 3"],
+        radius: Float[np.ndarray, "n"],
+    ) -> list[_Bridge]:
+        """Each end whose predicted t+2 position has exactly one start within its radius yields one bridge."""
+        if not len(frame_ends) or not len(frame_starts):
+            return []
+        predicted = positions_um[frame_ends] + _GAP_SPAN * velocity[frame_ends]
+        distances = cdist(predicted, positions_um[frame_starts])
+        within = distances <= radius[frame_ends][:, None]
+        matched: list[_Bridge] = []
+        for row in np.flatnonzero(within.sum(axis=1) == 1):
+            column = int(np.flatnonzero(within[row])[0])
+            end, start = int(frame_ends[row]), int(frame_starts[column])
+            midpoint = np.rint(self.spacing.to_voxels(positions_um[end] + velocity[end])).astype(np.int64)
+            matched.append(_Bridge(cost=float(distances[row, column]), end=end, start=start, midpoint_voxel=midpoint))
+        return matched
+
+    @staticmethod
+    def _accept(proposals: list[_Bridge], cap: int) -> list[_Bridge]:
+        """Greedily take the tightest bridges, one per end and per start, until the added-node cap is spent."""
+        used: set[int] = set()
+        taken: list[_Bridge] = []
+        for bridge in proposals:
+            if len(taken) >= cap or used & {bridge.end, bridge.start}:
+                continue
+            used |= {bridge.end, bridge.start}
+            taken.append(bridge)
+        return taken
+
+    def _build(self, graph: TrackGraph, bridges: list[_Bridge]) -> TrackGraph:
+        """The graph with one synthetic t+1 node and two consecutive edges added per accepted bridge."""
+        next_id = int(graph.node_ids.max()) + 1 if len(graph.node_ids) else 0
+        bounds = graph.coordinates[:, 1:].max(axis=0)
+        new_ids: list[int] = []
+        new_coordinates: list[list[int]] = []
+        new_edges: list[list[int]] = []
+        for offset, bridge in enumerate(bridges):
+            middle_id = next_id + offset
+            timepoint = int(graph.timepoints()[bridge.end]) + 1
+            voxel = np.clip(bridge.midpoint_voxel, 0, bounds)
+            new_ids.append(middle_id)
+            new_coordinates.append([timepoint, int(voxel[0]), int(voxel[1]), int(voxel[2])])
+            source, target = int(graph.node_ids[bridge.end]), int(graph.node_ids[bridge.start])
+            new_edges += [[source, middle_id], [middle_id, target]]
+        node_ids = np.concatenate([graph.node_ids, np.asarray(new_ids, dtype=graph.node_ids.dtype)])
+        coordinates = np.concatenate([graph.coordinates, np.asarray(new_coordinates, dtype=graph.coordinates.dtype)])
+        edges = np.concatenate([graph.edges, np.asarray(new_edges, dtype=graph.edges.dtype)])
+        return TrackGraph(node_ids=node_ids, coordinates=coordinates, edges=edges)

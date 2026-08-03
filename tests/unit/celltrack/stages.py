@@ -4,11 +4,12 @@ from pydantic import TypeAdapter, ValidationError
 
 from celltrack.center_prior import CenterPriorRecipe, CenterPriorVeto, CenterVetoConfig
 from celltrack.division_recovery import DivisionRecovery
-from celltrack.gap_closer import GapCloser, SyntheticGap
+from celltrack.gap_closer import DensityGapBridge, GapCloser, SyntheticGap
 from celltrack.linefit_smoother import LinefitSmoother
 from celltrack.linking import NearestNeighbourLinker
 from celltrack.short_track_filter import ShortTrackFilter
 from celltrack.stages import (
+    DensityGapSpec,
     DivisionSpec,
     GapSpec,
     LinkerSpec,
@@ -34,6 +35,10 @@ def test_linker_spec_build():
 
 def test_gap_spec_build():
     assert GapSpec().build(SPACING) == GapCloser(SPACING, 5.8, 3.2, 0.05)
+
+
+def test_density_gap_spec_build():
+    assert DensityGapSpec().build(SPACING) == DensityGapBridge(SPACING, 10.0, 0.05)
 
 
 def test_division_spec_build():

@@ -9,7 +9,19 @@
     {
       "kind": "import",
       "source": "celltrack.bracket",
+      "target": "celltrack.division_recovery",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.bracket",
       "target": "celltrack.linking",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.bracket",
+      "target": "celltrack.motion_linking",
       "weight": 1
     },
     {
@@ -675,6 +687,12 @@
     {
       "kind": "import",
       "source": "celltrack.training.run",
+      "target": "celltrack.training.classification_loss",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.run",
       "target": "celltrack.training.dataset",
       "weight": 1
     },
@@ -687,7 +705,19 @@
     {
       "kind": "import",
       "source": "celltrack.training.run",
+      "target": "celltrack.training.loss",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.run",
       "target": "celltrack.training.model",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.run",
+      "target": "core.data.split",
       "weight": 1
     },
     {
@@ -813,6 +843,12 @@
     {
       "kind": "import",
       "source": "celltrack.tunet",
+      "target": "celltrack.peaks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.tunet",
       "target": "core.data.tracks",
       "weight": 1
     },
@@ -820,6 +856,12 @@
       "kind": "import",
       "source": "celltrack.tunet",
       "target": "core.data.video",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.tunet",
+      "target": "core.geometry",
       "weight": 1
     },
     {
@@ -1957,6 +1999,126 @@
       "weight": 1
     },
     {
+      "kind": "references",
+      "source": "celltrack.gap_closer.DensityGapBridge",
+      "target": "celltrack.gap_closer._Bridge",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.gap_closer.DensityGapBridge",
+      "target": "core.data.tracks.Adjacency",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.gap_closer.DensityGapBridge",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.gap_closer.DensityGapBridge",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.gap_closer.DensityGapBridge._bridges",
+      "target": "celltrack.gap_closer.DensityGapBridge._accept",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.gap_closer.DensityGapBridge._bridges",
+      "target": "celltrack.gap_closer.DensityGapBridge._proposals",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.gap_closer.DensityGapBridge._bridges",
+      "target": "celltrack.gap_closer.DensityGapBridge._velocities",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.gap_closer.DensityGapBridge._bridges",
+      "target": "core.data.tracks.Adjacency.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.gap_closer.DensityGapBridge._bridges",
+      "target": "core.data.tracks.TrackGraph.positions",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.gap_closer.DensityGapBridge._bridges",
+      "target": "core.data.tracks.TrackGraph.timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.gap_closer.DensityGapBridge._bridges",
+      "target": "core.geometry.Spacing.to_micrometres",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.gap_closer.DensityGapBridge._build",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.gap_closer.DensityGapBridge._build",
+      "target": "core.data.tracks.TrackGraph.timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.gap_closer.DensityGapBridge._match_frame",
+      "target": "celltrack.gap_closer._Bridge",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.gap_closer.DensityGapBridge._match_frame",
+      "target": "core.geometry.Spacing.to_voxels",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.gap_closer.DensityGapBridge._proposals",
+      "target": "celltrack.gap_closer.DensityGapBridge._match_frame",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.gap_closer.DensityGapBridge._proposals",
+      "target": "celltrack.gap_closer.DensityGapBridge._radii",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.gap_closer.DensityGapBridge._radii",
+      "target": "celltrack.gap_closer.DensityGapBridge._nearest_neighbour",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.gap_closer.DensityGapBridge.transform",
+      "target": "celltrack.gap_closer.DensityGapBridge._bridges",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.gap_closer.DensityGapBridge.transform",
+      "target": "celltrack.gap_closer.DensityGapBridge._build",
+      "weight": 1
+    },
+    {
       "kind": "holds",
       "source": "celltrack.gap_closer.GapCloser",
       "target": "celltrack.center_prior.CenterConfirmer",
@@ -2794,6 +2956,30 @@
       "kind": "calls",
       "source": "celltrack.short_track_filter.ShortTrackFilter.transform",
       "target": "core.data.tracks.TrackGraph.edge_rows",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.stages.DensityGapSpec",
+      "target": "celltrack.center_prior.CenterPriorVeto",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.stages.DensityGapSpec",
+      "target": "celltrack.stages.GraphStage",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.stages.DensityGapSpec",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.stages.DensityGapSpec.build",
+      "target": "celltrack.gap_closer.DensityGapBridge",
       "weight": 1
     },
     {
@@ -5238,6 +5424,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.gap_closer.DensityGapBridge",
+      "label": "DensityGapBridge",
+      "level": "class",
+      "parent": "celltrack.gap_closer",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.gap_closer.GapCloser",
       "label": "GapCloser",
       "level": "class",
@@ -5256,6 +5450,14 @@
       "descendants": 0,
       "id": "celltrack.gap_closer._AcceptContext",
       "label": "_AcceptContext",
+      "level": "class",
+      "parent": "celltrack.gap_closer",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.gap_closer._Bridge",
+      "label": "_Bridge",
       "level": "class",
       "parent": "celltrack.gap_closer",
       "role": "satellite"
@@ -5434,6 +5636,14 @@
       "label": "ShortTrackFilter",
       "level": "class",
       "parent": "celltrack.short_track_filter",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.stages.DensityGapSpec",
+      "label": "DensityGapSpec",
+      "level": "class",
+      "parent": "celltrack.stages",
       "role": "satellite"
     },
     {
@@ -6502,6 +6712,78 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.gap_closer.DensityGapBridge._accept",
+      "label": "_accept",
+      "level": "method",
+      "parent": "celltrack.gap_closer.DensityGapBridge",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.gap_closer.DensityGapBridge._bridges",
+      "label": "_bridges",
+      "level": "method",
+      "parent": "celltrack.gap_closer.DensityGapBridge",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.gap_closer.DensityGapBridge._build",
+      "label": "_build",
+      "level": "method",
+      "parent": "celltrack.gap_closer.DensityGapBridge",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.gap_closer.DensityGapBridge._match_frame",
+      "label": "_match_frame",
+      "level": "method",
+      "parent": "celltrack.gap_closer.DensityGapBridge",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.gap_closer.DensityGapBridge._nearest_neighbour",
+      "label": "_nearest_neighbour",
+      "level": "method",
+      "parent": "celltrack.gap_closer.DensityGapBridge",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.gap_closer.DensityGapBridge._proposals",
+      "label": "_proposals",
+      "level": "method",
+      "parent": "celltrack.gap_closer.DensityGapBridge",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.gap_closer.DensityGapBridge._radii",
+      "label": "_radii",
+      "level": "method",
+      "parent": "celltrack.gap_closer.DensityGapBridge",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.gap_closer.DensityGapBridge._velocities",
+      "label": "_velocities",
+      "level": "method",
+      "parent": "celltrack.gap_closer.DensityGapBridge",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.gap_closer.DensityGapBridge.transform",
+      "label": "transform",
+      "level": "method",
+      "parent": "celltrack.gap_closer.DensityGapBridge",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.gap_closer.GapCloser._accept",
       "label": "_accept",
       "level": "method",
@@ -6938,6 +7220,14 @@
       "label": "transform",
       "level": "method",
       "parent": "celltrack.short_track_filter.ShortTrackFilter",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.stages.DensityGapSpec.build",
+      "label": "build",
+      "level": "method",
+      "parent": "celltrack.stages.DensityGapSpec",
       "role": null
     },
     {

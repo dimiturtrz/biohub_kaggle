@@ -1,9 +1,15 @@
 import numpy as np
 
 from celltrack.center_prior import CenterConfirmer
-from celltrack.gap_closer import GapCloser, SyntheticGap
+from celltrack.gap_closer import DensityGapBridge, GapCloser, SyntheticGap
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
+
+
+def bridger(reach_um: float = 10.0, max_added_fraction: float = 1.0) -> DensityGapBridge:
+    return DensityGapBridge(
+        spacing=Spacing(z=1.0, y=1.0, x=1.0), reach_um=reach_um, max_added_fraction=max_added_fraction
+    )
 
 
 def confirmer(value: float) -> CenterConfirmer:
@@ -35,7 +41,7 @@ def gappy() -> TrackGraph:
     return graph([[0, 0, 0, 0], [1, 0, 0, 0], [3, 0, 0, 6], [4, 0, 0, 6]], [[0, 1], [2, 3]])
 
 
-def test_transform():
+def test_gap_closer_transform():
     """A track ending at t, an isolated node at t+1 near the midpoint, and a start at t+2 are bridged."""
     # nodes: P->E (end at t1), M isolated at t2, S start at t3; all colinear at the origin.
     gapped = graph([[0, 0, 0, 0], [1, 0, 0, 0], [3, 0, 0, 0], [2, 0, 0, 0]], [[0, 1]])
@@ -106,3 +112,56 @@ def test_transform_honours_the_synthetic_node_cap():
     synthetic = SyntheticGap(min_span_um=3.0, max_added_fraction=0.0)
     closed = closer(confirmer(1.0), synthetic).transform(gappy())
     assert closed.node_ids.tolist() == [0, 10, 20, 30]
+
+
+def test_density_gap_bridge_transform():
+    """An end at t1 and a lone start at t3 become one track: a synthetic t2 node and its two edges."""
+    gapped = graph([[0, 0, 0, 0], [1, 0, 0, 0], [3, 0, 0, 0], [4, 0, 0, 0]], [[0, 1], [2, 3]])
+    closed = bridger().transform(gapped)
+    assert closed.node_ids.tolist() == [0, 10, 20, 30, 31]
+    assert closed.coordinates[-1].tolist() == [2, 0, 0, 0]
+    assert [10, 31] in closed.edges.tolist() and [31, 20] in closed.edges.tolist()
+
+
+def test_density_bridge_predicts_along_the_ends_velocity():
+    """A moving end is bridged to the start at its predicted position, not the one it stood still over."""
+    moving = graph([[0, 0, 0, 0], [1, 0, 0, 2], [3, 0, 0, 6], [4, 0, 0, 6]], [[0, 1], [2, 3]])
+    closed = bridger().transform(moving)
+    assert closed.coordinates[-1].tolist() == [2, 0, 0, 4]
+    assert [10, 31] in closed.edges.tolist() and [31, 20] in closed.edges.tolist()
+
+
+def test_density_bridge_leaves_an_ambiguous_gap_open():
+    """Two starts within the radius mean the successor is not unique, so nothing is bridged."""
+    ambiguous = graph([[0, 0, 0, 0], [1, 0, 0, 0], [3, 0, 0, 0], [3, 0, 0, 2]], [[0, 1]])
+    assert bridger().transform(ambiguous).node_ids.tolist() == [0, 10, 20, 30]
+
+
+def test_density_bridge_tightens_the_radius_in_a_crowded_region():
+    """A near same-frame neighbour shrinks the Voronoi radius below the gap, suppressing a bridge a sparse
+    region would take."""
+    crowded = graph(
+        [[0, 0, 0, 2], [1, 0, 0, 2], [2, 0, 0, 2], [0, 0, 0, 0], [1, 0, 0, 0], [3, 0, 0, 3]],
+        [[0, 1], [1, 2], [3, 4]],
+    )
+    assert bridger().transform(crowded).node_ids.tolist() == [0, 10, 20, 30, 40, 50]
+    sparse = graph([[0, 0, 0, 0], [1, 0, 0, 0], [3, 0, 0, 3], [4, 0, 0, 3]], [[0, 1], [2, 3]])
+    assert len(bridger().transform(sparse).node_ids) == 5
+
+
+def test_density_bridge_caps_the_radius_at_the_motion_reach():
+    """An isolated end has no neighbour spacing, so a start past the motion reach stays unbridged."""
+    far = graph([[0, 0, 0, 0], [1, 0, 0, 0], [3, 0, 0, 20], [4, 0, 0, 20]], [[0, 1], [2, 3]])
+    assert bridger(reach_um=5.0).transform(far).node_ids.tolist() == [0, 10, 20, 30]
+
+
+def test_density_bridge_honours_the_cap():
+    """A zero added-node budget bridges nothing however clean the gap."""
+    gapped = graph([[0, 0, 0, 0], [1, 0, 0, 0], [3, 0, 0, 0], [4, 0, 0, 0]], [[0, 1], [2, 3]])
+    assert bridger(max_added_fraction=0.0).transform(gapped).node_ids.tolist() == [0, 10, 20, 30]
+
+
+def test_density_bridge_leaves_a_gapless_graph_unchanged():
+    """No qualifying end means the graph is returned as-is."""
+    linked = graph([[0, 0, 0, 0], [1, 0, 0, 0]], [[0, 1]])
+    assert bridger().transform(linked).edges.tolist() == [[0, 10]]
