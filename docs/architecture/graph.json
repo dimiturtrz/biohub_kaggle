@@ -218,6 +218,18 @@
     },
     {
       "kind": "import",
+      "source": "celltrack.edge_scoring",
+      "target": "celltrack.tunet",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.edge_scoring",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "celltrack.explore",
       "target": "core.data.tracks",
       "weight": 1
@@ -1802,6 +1814,102 @@
     },
     {
       "kind": "references",
+      "source": "celltrack.edge_scoring.EdgeTransformerScorer",
+      "target": "celltrack.edge_scoring.EdgeTransformerScorer",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.edge_scoring.EdgeTransformerScorer",
+      "target": "celltrack.edge_scoring.PrecomputedEdgeAffinity",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.edge_scoring.EdgeTransformerScorer",
+      "target": "celltrack.tunet.DetectorRecipe",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.edge_scoring.EdgeTransformerScorer",
+      "target": "celltrack.tunet.TemporalUNetDetector",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.edge_scoring.EdgeTransformerScorer",
+      "target": "celltrack.tunet._VideoSource",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.edge_scoring.EdgeTransformerScorer",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.edge_scoring.EdgeTransformerScorer.__init__",
+      "target": "celltrack.edge_scoring.EdgeTransformerScorer._transformer_cls",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.edge_scoring.EdgeTransformerScorer._node_features",
+      "target": "celltrack.edge_scoring.EdgeTransformerScorer._position_embedding",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.edge_scoring.EdgeTransformerScorer._score_gap",
+      "target": "celltrack.edge_scoring.EdgeTransformerScorer._node_features",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.edge_scoring.EdgeTransformerScorer._score_gap",
+      "target": "celltrack.tunet.TemporalUNetDetector._read_frame",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.edge_scoring.EdgeTransformerScorer.affinities",
+      "target": "celltrack.edge_scoring.EdgeTransformerScorer._score_gap",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.edge_scoring.EdgeTransformerScorer.affinities",
+      "target": "celltrack.edge_scoring.PrecomputedEdgeAffinity",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.edge_scoring.EdgeTransformerScorer.affinities",
+      "target": "celltrack.tunet.TemporalUNetDetector._open_source",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.edge_scoring.EdgeTransformerScorer.affinities",
+      "target": "core.data.tracks.TrackGraph.positions",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.edge_scoring.EdgeTransformerScorer.affinities",
+      "target": "core.data.tracks.TrackGraph.timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.edge_scoring.EdgeTransformerScorer.from_pack",
+      "target": "celltrack.tunet.TemporalUNetDetector.from_pack",
+      "weight": 1
+    },
+    {
+      "kind": "references",
       "source": "celltrack.explore.DatasetSurvey",
       "target": "celltrack.explore.VideoSummary",
       "weight": 1
@@ -2239,6 +2347,12 @@
       "weight": 1
     },
     {
+      "kind": "holds",
+      "source": "celltrack.motion_linking.MotionHungarianLinker",
+      "target": "celltrack.motion_linking.EdgeAffinity",
+      "weight": 1
+    },
+    {
       "kind": "references",
       "source": "celltrack.motion_linking.MotionHungarianLinker",
       "target": "core.data.tracks.TrackGraph",
@@ -2252,8 +2366,20 @@
     },
     {
       "kind": "calls",
+      "source": "celltrack.motion_linking.MotionHungarianLinker._blended_cost",
+      "target": "celltrack.motion_linking.EdgeAffinity.probabilities",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
       "source": "celltrack.motion_linking.MotionHungarianLinker._match",
       "target": "celltrack.motion_linking.MotionHungarianLinker._assign",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.motion_linking.MotionHungarianLinker._match",
+      "target": "celltrack.motion_linking.MotionHungarianLinker._blended_cost",
       "weight": 1
     },
     {
@@ -4503,7 +4629,7 @@
   ],
   "nodes": [
     {
-      "descendants": 37,
+      "descendants": 38,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -4562,6 +4688,14 @@
       "descendants": 0,
       "id": "celltrack.dog_detection",
       "label": "dog_detection",
+      "level": "module",
+      "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.edge_scoring",
+      "label": "edge_scoring",
       "level": "module",
       "parent": "celltrack",
       "role": null
@@ -5072,6 +5206,22 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.edge_scoring.EdgeTransformerScorer",
+      "label": "EdgeTransformerScorer",
+      "level": "class",
+      "parent": "celltrack.edge_scoring",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.edge_scoring.PrecomputedEdgeAffinity",
+      "label": "PrecomputedEdgeAffinity",
+      "level": "class",
+      "parent": "celltrack.edge_scoring",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.explore.DatasetSurvey",
       "label": "DatasetSurvey",
       "level": "class",
@@ -5181,6 +5331,14 @@
       "level": "class",
       "parent": "celltrack.linking",
       "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.motion_linking.EdgeAffinity",
+      "label": "EdgeAffinity",
+      "level": "class",
+      "parent": "celltrack.motion_linking",
+      "role": "primary"
     },
     {
       "descendants": 0,
@@ -6256,6 +6414,70 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.edge_scoring.EdgeTransformerScorer.__init__",
+      "label": "__init__",
+      "level": "method",
+      "parent": "celltrack.edge_scoring.EdgeTransformerScorer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.edge_scoring.EdgeTransformerScorer._node_features",
+      "label": "_node_features",
+      "level": "method",
+      "parent": "celltrack.edge_scoring.EdgeTransformerScorer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.edge_scoring.EdgeTransformerScorer._position_embedding",
+      "label": "_position_embedding",
+      "level": "method",
+      "parent": "celltrack.edge_scoring.EdgeTransformerScorer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.edge_scoring.EdgeTransformerScorer._score_gap",
+      "label": "_score_gap",
+      "level": "method",
+      "parent": "celltrack.edge_scoring.EdgeTransformerScorer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.edge_scoring.EdgeTransformerScorer._transformer_cls",
+      "label": "_transformer_cls",
+      "level": "method",
+      "parent": "celltrack.edge_scoring.EdgeTransformerScorer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.edge_scoring.EdgeTransformerScorer.affinities",
+      "label": "affinities",
+      "level": "method",
+      "parent": "celltrack.edge_scoring.EdgeTransformerScorer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.edge_scoring.EdgeTransformerScorer.from_pack",
+      "label": "from_pack",
+      "level": "method",
+      "parent": "celltrack.edge_scoring.EdgeTransformerScorer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.edge_scoring.PrecomputedEdgeAffinity.probabilities",
+      "label": "probabilities",
+      "level": "method",
+      "parent": "celltrack.edge_scoring.PrecomputedEdgeAffinity",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.explore.DatasetSurvey.__init__",
       "label": "__init__",
       "level": "method",
@@ -6512,8 +6734,24 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.motion_linking.EdgeAffinity.probabilities",
+      "label": "probabilities",
+      "level": "method",
+      "parent": "celltrack.motion_linking.EdgeAffinity",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.motion_linking.MotionHungarianLinker._assign",
       "label": "_assign",
+      "level": "method",
+      "parent": "celltrack.motion_linking.MotionHungarianLinker",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.motion_linking.MotionHungarianLinker._blended_cost",
+      "label": "_blended_cost",
       "level": "method",
       "parent": "celltrack.motion_linking.MotionHungarianLinker",
       "role": null
