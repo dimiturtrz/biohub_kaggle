@@ -98,7 +98,23 @@ class EdgeTransformerScorer(nn.Module):
         tgt_positions: Float[np.ndarray, "t 3"],
         device: str,
     ) -> Float[np.ndarray, "s t"]:
-        """The source→target probability matrix for one gap: UNet features + position embed → transformer."""
+        """The source→target probability matrix for one gap: transformer logits soft-maxed over the sources."""
+        logits = self._gap_logits(source, timepoint, src_positions, tgt_positions, device)
+        return torch.softmax(logits, dim=0).cpu().numpy()
+
+    def _gap_logits(
+        self,
+        source: _VideoSource,
+        timepoint: int,
+        src_positions: Float[np.ndarray, "s 3"],
+        tgt_positions: Float[np.ndarray, "t 3"],
+        device: str,
+    ) -> Float[Tensor, "s t"]:
+        """The pre-softmax association logits for one gap: UNet features + position embed → transformer.
+
+        Kept separate from the softmax so several seeds' logits can be blended *before* normalisation — the
+        detector-blend lesson, that probabilities saturate and logits don't (see `BlendedEdgeTransformerScorer`).
+        """
         downsample = torch.tensor(self.recipe.downsample, dtype=torch.float32, device=device)
         frame_t = TemporalUNetDetector._read_frame(source, timepoint, self.recipe.downsample, device)  # noqa: SLF001
         frame_t1 = TemporalUNetDetector._read_frame(source, timepoint + 1, self.recipe.downsample, device)  # noqa: SLF001
@@ -109,8 +125,7 @@ class EdgeTransformerScorer(nn.Module):
         tgt_voxel = torch.as_tensor(tgt_positions, device=device)
         feat_src = self._node_features(features[0], src_voxel / downsample, spatial, 0.0, device)
         feat_tgt = self._node_features(features[1], tgt_voxel / downsample, spatial, 1.0, device)
-        logits = self.transformer(feat_src, feat_tgt, src_voxel, tgt_voxel)  # (s, t)
-        return torch.softmax(logits, dim=0).cpu().numpy()
+        return self.transformer(feat_src, feat_tgt, src_voxel, tgt_voxel)  # (s, t)
 
     def _node_features(
         self,
