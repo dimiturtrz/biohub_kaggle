@@ -14,6 +14,7 @@ link updates the successor's velocity, so the motion estimate propagates along a
 """
 
 from dataclasses import dataclass
+from typing import Protocol
 
 import numpy as np
 from jaxtyping import Bool, Float, Int
@@ -24,6 +25,21 @@ from core.data.tracks import TrackGraph
 from core.geometry import Spacing
 
 _BEYOND_GATE = 1.0e9
+
+
+class EdgeAffinity(Protocol):
+    """A learned source->target association probability for one frame gap, aligned to the linker's node order.
+
+    Rows and columns follow the same ascending-index order the linker builds its cost from
+    (`np.flatnonzero(timepoints == t)` for the sources, `== t + 1` for the targets), so the matrix drops
+    straight onto the cost. `None` for a gap with no learned scores leaves that gap pure geometry.
+    """
+
+    def probabilities(self, timepoint: int) -> Float[np.ndarray, "s t"] | None:
+        """P(source is the parent of target) for every candidate pair across the `t -> t+1` gap."""
+        ...
+
+
 # The successor is predicted half a step ahead, not a full one: a full-velocity extrapolation overshoots a
 # cell that is decelerating or turning, and cells here move smoothly rather than ballistically, so a damped
 # prediction tracks the real displacement more closely than a naive constant-velocity one.
@@ -32,11 +48,20 @@ _VELOCITY_DAMPING = 0.5
 
 @dataclass(frozen=True)
 class MotionHungarianLinker:
-    """Two-pass optimal assignment against a damped constant-velocity prediction, gated tight then loose."""
+    """Two-pass optimal assignment against a damped constant-velocity prediction, gated tight then loose.
+
+    An optional `affinity` folds a learned source->target association into the assignment: the gate stays
+    pure geometry (so no candidate the physics excludes is admitted), but within the gate the cost a pair
+    competes on is `distance - affinity_bonus * probability`, so geometry and learned appearance jointly
+    pick the successor. A high-confidence learned link wins a tie the raw distance would have mis-broken —
+    the crowding-mislink the dense movies pay. Left unset it is exactly the pure-geometry linker.
+    """
 
     spacing: Spacing
     tight_gate_um: float
     loose_gate_um: float
+    affinity: EdgeAffinity | None = None
+    affinity_bonus: float = 0.0
 
     def link(self, detections: TrackGraph) -> TrackGraph:
         """Join each cell to its motion-predicted successor, committing tight links before loose ones."""
@@ -47,7 +72,7 @@ class MotionHungarianLinker:
         for timepoint in np.unique(timepoints)[:-1]:
             sources = np.flatnonzero(timepoints == timepoint)
             targets = np.flatnonzero(timepoints == timepoint + 1)
-            for source, target in self._match(sources, targets, positions_um, velocity):
+            for source, target in self._match(int(timepoint), sources, targets, positions_um, velocity):
                 edges.append((int(detections.node_ids[source]), int(detections.node_ids[target])))
                 velocity[target] = positions_um[target] - positions_um[source]
         stacked = np.array(edges, dtype=np.int64) if edges else np.empty((0, 2), dtype=np.int64)
@@ -55,6 +80,7 @@ class MotionHungarianLinker:
 
     def _match(
         self,
+        timepoint: int,
         sources: Int[np.ndarray, "s"],
         targets: Int[np.ndarray, "t"],
         positions_um: Float[np.ndarray, "n 3"],
@@ -64,11 +90,20 @@ class MotionHungarianLinker:
         if len(sources) == 0 or len(targets) == 0:
             return []
         predicted = positions_um[sources] + _VELOCITY_DAMPING * velocity[sources]
-        cost = cdist(predicted, positions_um[targets])
+        cost = self._blended_cost(timepoint, cdist(predicted, positions_um[targets]))
         displacement = cdist(positions_um[sources], positions_um[targets])
         tight = self._assign(cost, displacement <= self.tight_gate_um)
         loose = self._assign(cost, displacement <= self.loose_gate_um, taken=tight)
         return [(int(sources[s]), int(targets[t])) for s, t in tight + loose]
+
+    def _blended_cost(self, timepoint: int, distance: Float[np.ndarray, "s t"]) -> Float[np.ndarray, "s t"]:
+        """The distance cost minus a learned-association bonus, when an affinity is wired for this gap."""
+        if self.affinity is None or self.affinity_bonus == 0.0:
+            return distance
+        probability = self.affinity.probabilities(timepoint)
+        if probability is None:
+            return distance
+        return distance - self.affinity_bonus * probability
 
     def _assign(
         self,

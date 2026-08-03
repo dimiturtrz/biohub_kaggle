@@ -45,6 +45,23 @@ Method survey (Cellpose/StarDist/Trackastra/motile/Ultrack, Gurobi-in-Kaggle) re
 
 ---
 
+### Linking Disambiguation: Appearance + Learned Association Methods
+
+**Status**: ✅ **SETTLED** (2026-08-03)
+**Deep-dive**: [`2026-08-03_linking_disambiguation_methods.md`](deep_dives/2026-08-03_linking_disambiguation_methods.md)
+
+**Question**: What concrete methods can disambiguate multi-object linking in crowded 3D cell microscopy? Which require training, which are analytical, and when does global (ILP) beat greedy Hungarian?
+
+**Findings**:
+- **Analytical features** (free, offline): intensity/texture (LBP, Hu moments), shape (eccentricity), local descriptors (SIFT/ORB)
+- **Learned linkers** (no retraining needed): Trackastra (transformer, pretrained CTC weights), CELLECT (contrastive embedding, cross-modal pretrained)
+- **Global optimization** (5–15% gain on dense frames): ILP/min-cost-flow via motile+CBC (Kaggle-compatible) or Ultrack; permits division + backtracking; greedy commits locally
+- **Production stack**: Trackastra greedy or ILP mode; CELLECT for embedding space; analytical features as cost matrix terms
+
+**Next**: Test Trackastra ILP on fold-0; measure edge Jaccard lift vs baseline Hungarian. Then decide: add appearance cost-weighting (0-cost improvement) or full ILP (requires solver tuning).
+
+---
+
 ## Legend
 
 - ✅ **SETTLED**: Findings complete, actionable, moved to SUMMARY
