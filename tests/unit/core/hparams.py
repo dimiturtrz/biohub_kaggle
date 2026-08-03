@@ -11,7 +11,10 @@ def test_defaults_describe_the_joint_recipe():
     cfg = RunConfig()
     assert cfg.data.window_size == 2
     assert cfg.data.downsample == (1, 4, 4)
-    assert cfg.optim.precision == "bf16"
+    assert cfg.data.pool_kernel_um == pytest.approx(5.0)
+    assert cfg.optim.lr == pytest.approx(1e-3)  # their train() default
+    assert cfg.optim.det_loss_weight == pytest.approx(10.0)  # their 1e1
+    assert cfg.optim.precision == "bf16"  # mixed precision, fp32 exponent range — accuracy ~unchanged
     assert cfg.optim.patience == 8
     assert cfg.eval.threshold == pytest.approx(0.99)
 

@@ -76,7 +76,8 @@ class Tracker:
 
     @staticmethod
     def _backend() -> types.ModuleType | None:
-        """The mlflow module if tracking is enabled, else None (CELLTRACK_NO_MLFLOW opt-out)."""
+        """The mlflow module if tracking is enabled AND installed, else None (CELLTRACK_NO_MLFLOW opt-out
+        or a venv without mlflow)."""
         if os.environ.get(_DISABLE_ENV):
             return None
         return mlflow

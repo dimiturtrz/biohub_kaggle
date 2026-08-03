@@ -35,6 +35,7 @@ class DataCfg(BaseModel):
     subset: int = Field(0, ge=0)  # videos/prefix for the in-loop test split; 0 = full fold
     window_size: int = Field(2, ge=1)  # frames per temporal sample (t, t+1) for edge supervision
     downsample: tuple[int, int, int] = (1, 4, 4)  # (z, y, x) strided read — the pilkwang x4 in-plane
+    pool_kernel_um: float = Field(5.0, gt=0)  # local-max peak-readout kernel (their model_config default)
 
 
 class AugCfg(BaseModel):
@@ -52,16 +53,18 @@ class OptimCfg(BaseModel):
 
     model_config = _VALIDATE
 
-    lr: float = Field(1e-4, gt=0)
+    lr: float = Field(1e-3, gt=0)  # their train() default (AdamW)
     epochs: int = Field(50, ge=1)  # ceiling; early stopping ends sooner
     batch: int = Field(1, ge=1)  # 1 for our mixed video shapes (no shape-bucketed batching yet)
-    det_loss_weight: float = Field(1.0, ge=0)  # joint loss = edge_loss + det_loss_weight * det_loss
+    det_loss_weight: float = Field(10.0, ge=0)  # joint loss = edge_loss + det_loss_weight * det_loss (their 1e1)
     neg_weight: float = Field(1e-2, gt=0)  # background-voxel down-weight in the detection BCE
     grad_clip: float = Field(1.0, gt=0)
     cosine_lr: bool = False  # decay lr to zero over `epochs` (cosine); off keeps a flat lr
     patience: int = Field(8, ge=1)  # early stop after this many epochs with no best-score gain
     es_min_delta: float = Field(0.0, ge=0)  # min val-gain to count as improvement (0 = any gain)
-    precision: Literal["fp32", "bf16"] = "bf16"  # bf16 native on the 5090, wider exponent than fp16
+    # bf16 keeps fp32's exponent range (no fp16 overflow→NaN); mixed precision keeps fp32 master weights,
+    # so accuracy is ~unchanged. Native on the 5090. fp32 is the exact faithful recipe.
+    precision: Literal["fp32", "bf16"] = "bf16"
 
 
 class EvalCfg(BaseModel):
