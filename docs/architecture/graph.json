@@ -9,19 +9,7 @@
     {
       "kind": "import",
       "source": "celltrack.bracket",
-      "target": "celltrack.division_recovery",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.bracket",
       "target": "celltrack.linking",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.bracket",
-      "target": "celltrack.motion_linking",
       "weight": 1
     },
     {
@@ -501,12 +489,6 @@
     {
       "kind": "import",
       "source": "celltrack.stages",
-      "target": "celltrack.topology_repair",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.stages",
       "target": "core.data.tracks",
       "weight": 1
     },
@@ -645,12 +627,6 @@
     {
       "kind": "import",
       "source": "celltrack.training.run",
-      "target": "celltrack.training.classification_loss",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.training.run",
       "target": "celltrack.training.dataset",
       "weight": 1
     },
@@ -663,19 +639,7 @@
     {
       "kind": "import",
       "source": "celltrack.training.run",
-      "target": "celltrack.training.loss",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.training.run",
       "target": "celltrack.training.model",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.training.run",
-      "target": "core.data.split",
       "weight": 1
     },
     {
@@ -801,12 +765,6 @@
     {
       "kind": "import",
       "source": "celltrack.tunet",
-      "target": "celltrack.peaks",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.tunet",
       "target": "core.data.tracks",
       "weight": 1
     },
@@ -814,12 +772,6 @@
       "kind": "import",
       "source": "celltrack.tunet",
       "target": "core.data.video",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.tunet",
-      "target": "core.geometry",
       "weight": 1
     },
     {
