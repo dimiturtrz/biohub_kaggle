@@ -126,3 +126,32 @@ near a midpoint to reuse. Built + tested, waits on the synthetic + veto half.
 Both post-proc stages therefore converge on the same missing piece: the **DeepCenter centre-prior model**
 (`biohub-deepcenter-unet3d-center-prior-v1`) — for recall (detect the daughters / gap cells) and precision
 (veto false forks / synthetic nodes). That is the next real lever (`gsm`).
+
+## 2026-08-03 — global linker goes SCIP-free, and the proxy proves out on the board
+
+The frontier's global-ILP linker was blocked on Kaggle (`SCIP: unspecified error!`). It didn't need SCIP:
+`ILPLinker(division=False)` is `MaxParents(1)+MaxChildren(1)`, whose constraints never couple two frame gaps,
+so the program **decomposes into an independent min-cost matching per gap** — `scipy.linear_sum_assignment`
+with a zero-cost skip per node reproduces it **edge-for-edge** (dense-movie edge jaccard 1.0). `AssignmentLinker`
+(`celltrack.assignment_linking`) is that, pure numpy/scipy, no motile/ilpy/pyscipopt.
+
+Champion = dual-seed logit blend + two-seed edge-transformer blend (`0.8·seed1+0.2·seed2`, logit space) +
+`AssignmentLinker` + density gap-bridge + `stlf6` + linefit. Proxy build-up (4 test movies):
+
+| config | proxy | note |
+|--------|-------|------|
+| dual-seed + neural edge-bonus (greedy) | 0.8989 | greedy Hungarian |
+| + global `AssignmentLinker` (SCIP-free ILP) | 0.9125 | ooi |
+| + density gap-bridge | 0.9134 | |
+| + edge-seed blend `0.8/0.2` | 0.9154 | 3th |
+| + affinity bonus `2·gate` (was `1·gate`) | 0.9227 | 88x — bonus underweighted the learned signal |
+| + threshold `0.995` (node-count bonus) | 0.9287 | vbn — held pending LB confirm |
+
+Derivations (no magic): gate `10um` = max annotated single-frame displacement (9.96um, proxy plateau 10–15);
+bonus `2·gate` = crowding over-trust (scale-match autobalance undershoots ~2.5×, refuted in 88x); threshold
+`0.995` banks the node-count bonus (every movie already under-detects at 0.99).
+
+**LB confirms the proxy.** dual-seed `@0.99` = proxy 0.8876 → **public 0.882** (55212692), single-seed 0.8731 →
+0.871: the 4-movie proxy predicts the board within ~0.005. New best public **0.882** (was 0.873). The SCIP-free
+Assignment champion (0.9227, 55218808) and the neural greedy (0.8989, 55216476) are scoring; the `0.995`
+candidate is prepped, held until the Assignment core confirms the linker itself transfers.
