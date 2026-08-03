@@ -21,7 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from celltrack.center_prior import CenterPriorVeto, CenterVetoConfig
 from celltrack.division_recovery import DivisionRecovery
-from celltrack.gap_closer import GapCloser
+from celltrack.gap_closer import GapCloser, SyntheticGap
 from celltrack.linefit_smoother import LinefitSmoother
 from celltrack.linkers import LinkerConfig
 from celltrack.linking import Linker
@@ -67,7 +67,12 @@ class LinkerSpec(BaseModel):
 
 
 class GapSpec(BaseModel):
-    """Reconnect one-frame detection dropouts by reusing an existing isolated node near the midpoint."""
+    """Reconnect one-frame detection dropouts — reusing an isolated node, or inserting a confirmed synthetic one.
+
+    Reuse is geometry-only. Synthetic insertion (`synthetic` set) recovers a missed detection at the gap
+    midpoint and needs a `center_veto` to gate it — the confirmer it resolves to is what a wide-gap insertion
+    is confirmed against, so `synthetic` without `center_veto` stays reuse-only.
+    """
 
     model_config = _Spec
 
@@ -76,10 +81,11 @@ class GapSpec(BaseModel):
     reuse_um: float = Field(3.2, gt=0)
     max_added_fraction: float = Field(0.05, ge=0)
     center_veto: CenterVetoConfig | None = None
+    synthetic: SyntheticGap | None = None
 
     def build(self, spacing: Spacing, veto: CenterPriorVeto | None = None) -> GraphStage:
         confirmer = self.center_veto.resolve(veto) if self.center_veto is not None else None
-        return GapCloser(spacing, self.gate_um, self.reuse_um, self.max_added_fraction, confirmer)
+        return GapCloser(spacing, self.gate_um, self.reuse_um, self.max_added_fraction, confirmer, self.synthetic)
 
 
 class DivisionSpec(BaseModel):

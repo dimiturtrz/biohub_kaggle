@@ -4,7 +4,7 @@ from pydantic import TypeAdapter, ValidationError
 
 from celltrack.center_prior import CenterPriorRecipe, CenterPriorVeto, CenterVetoConfig
 from celltrack.division_recovery import DivisionRecovery
-from celltrack.gap_closer import GapCloser
+from celltrack.gap_closer import GapCloser, SyntheticGap
 from celltrack.linefit_smoother import LinefitSmoother
 from celltrack.linking import NearestNeighbourLinker
 from celltrack.short_track_filter import ShortTrackFilter
@@ -57,6 +57,13 @@ def test_gap_spec_build_binds_the_veto_when_configured():
     """A gap spec carrying a centre-veto config resolves to a confirmer once a video's heatmaps are in hand."""
     assert GapSpec(center_veto=CenterVetoConfig()).build(SPACING, _veto()).confirmer is not None
     assert GapSpec(center_veto=CenterVetoConfig()).build(SPACING).confirmer is None
+
+
+def test_gap_spec_build_carries_the_synthetic_policy():
+    """A gap spec's synthetic-insertion policy is carried onto the built gap closer."""
+    policy = SyntheticGap(min_span_um=8.5, max_added_fraction=0.05)
+    assert GapSpec(synthetic=policy).build(SPACING, _veto()).synthetic == policy
+    assert GapSpec().build(SPACING).synthetic is None
 
 
 def test_short_track_spec_build():
