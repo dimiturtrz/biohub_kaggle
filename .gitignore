@@ -59,3 +59,7 @@ node_modules/
 /kaggle/kit_staging/
 kaggle/**/*.pt
 kaggle/**/*.whl
+.venv-repro/
+
+# ephemeral agent worktrees (isolated; not part of tracked tree)
+.claude/worktrees/
