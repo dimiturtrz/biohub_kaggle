@@ -9,19 +9,7 @@
     {
       "kind": "import",
       "source": "celltrack.bracket",
-      "target": "celltrack.division_recovery",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.bracket",
       "target": "celltrack.linking",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.bracket",
-      "target": "celltrack.motion_linking",
       "weight": 1
     },
     {
@@ -675,12 +663,6 @@
     {
       "kind": "import",
       "source": "celltrack.training.run",
-      "target": "celltrack.training.classification_loss",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.training.run",
       "target": "celltrack.training.dataset",
       "weight": 1
     },
@@ -693,19 +675,7 @@
     {
       "kind": "import",
       "source": "celltrack.training.run",
-      "target": "celltrack.training.loss",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.training.run",
       "target": "celltrack.training.model",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.training.run",
-      "target": "core.data.split",
       "weight": 1
     },
     {
@@ -831,12 +801,6 @@
     {
       "kind": "import",
       "source": "celltrack.tunet",
-      "target": "celltrack.peaks",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.tunet",
       "target": "core.data.tracks",
       "weight": 1
     },
@@ -844,12 +808,6 @@
       "kind": "import",
       "source": "celltrack.tunet",
       "target": "core.data.video",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.tunet",
-      "target": "core.geometry",
       "weight": 1
     },
     {
@@ -1923,6 +1881,12 @@
     {
       "kind": "references",
       "source": "celltrack.gap_closer.GapCloser",
+      "target": "celltrack.gap_closer._SyntheticInserter",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.gap_closer.GapCloser",
       "target": "core.data.tracks.TrackGraph",
       "weight": 1
     },
@@ -1942,6 +1906,12 @@
       "kind": "construct",
       "source": "celltrack.gap_closer.GapCloser._accept",
       "target": "celltrack.gap_closer._Closure",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.gap_closer.GapCloser._build",
+      "target": "core.data.tracks.TrackGraph",
       "weight": 1
     },
     {
@@ -1983,12 +1953,6 @@
     {
       "kind": "calls",
       "source": "celltrack.gap_closer.GapCloser._closure",
-      "target": "core.data.tracks.TrackGraph.timepoints",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.gap_closer.GapCloser._closure",
       "target": "core.geometry.Spacing.to_micrometres",
       "weight": 1
     },
@@ -2012,26 +1976,32 @@
     },
     {
       "kind": "calls",
-      "source": "celltrack.gap_closer.GapCloser._consider_reuse",
-      "target": "celltrack.gap_closer._Closure._reuse",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
       "source": "celltrack.gap_closer.GapCloser._consider_synthetic",
       "target": "celltrack.gap_closer.GapCloser._synthetic_coordinate",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.gap_closer.GapCloser._consider_synthetic",
-      "target": "celltrack.gap_closer._Closure._insert",
       "weight": 1
     },
     {
       "kind": "construct",
       "source": "celltrack.gap_closer.GapCloser._context",
       "target": "celltrack.gap_closer._AcceptContext",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.gap_closer.GapCloser._context",
+      "target": "celltrack.gap_closer._SyntheticInserter",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.gap_closer.GapCloser._context",
+      "target": "core.data.tracks.TrackGraph.positions",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.gap_closer.GapCloser._context",
+      "target": "core.data.tracks.TrackGraph.timepoints",
       "weight": 1
     },
     {
@@ -2054,8 +2024,8 @@
     },
     {
       "kind": "calls",
-      "source": "celltrack.gap_closer.GapCloser._synthetic_coordinate",
-      "target": "celltrack.center_prior.CenterConfirmer.confirm",
+      "source": "celltrack.gap_closer.GapCloser.transform",
+      "target": "celltrack.gap_closer.GapCloser._build",
       "weight": 1
     },
     {
@@ -2065,15 +2035,15 @@
       "weight": 1
     },
     {
-      "kind": "references",
-      "source": "celltrack.gap_closer._Closure",
-      "target": "core.data.tracks.TrackGraph",
+      "kind": "holds",
+      "source": "celltrack.gap_closer._AcceptContext",
+      "target": "celltrack.gap_closer._SyntheticInserter",
       "weight": 1
     },
     {
-      "kind": "construct",
-      "source": "celltrack.gap_closer._Closure._applied_to",
-      "target": "core.data.tracks.TrackGraph",
+      "kind": "holds",
+      "source": "celltrack.gap_closer._SyntheticInserter",
+      "target": "celltrack.center_prior.CenterConfirmer",
       "weight": 1
     },
     {
@@ -5158,6 +5128,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.gap_closer._SyntheticInserter",
+      "label": "_SyntheticInserter",
+      "level": "class",
+      "parent": "celltrack.gap_closer",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.ilp_linking.ILPLinker",
       "label": "ILPLinker",
       "level": "class",
@@ -6310,6 +6288,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.gap_closer.GapCloser._build",
+      "label": "_build",
+      "level": "method",
+      "parent": "celltrack.gap_closer.GapCloser",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.gap_closer.GapCloser._closure",
       "label": "_closure",
       "level": "method",
@@ -6390,42 +6376,10 @@
     },
     {
       "descendants": 0,
-      "id": "celltrack.gap_closer.GapCloser._synthetic_on",
-      "label": "_synthetic_on",
-      "level": "method",
-      "parent": "celltrack.gap_closer.GapCloser",
-      "role": null
-    },
-    {
-      "descendants": 0,
       "id": "celltrack.gap_closer.GapCloser.transform",
       "label": "transform",
       "level": "method",
       "parent": "celltrack.gap_closer.GapCloser",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.gap_closer._Closure._applied_to",
-      "label": "_applied_to",
-      "level": "method",
-      "parent": "celltrack.gap_closer._Closure",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.gap_closer._Closure._insert",
-      "label": "_insert",
-      "level": "method",
-      "parent": "celltrack.gap_closer._Closure",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.gap_closer._Closure._reuse",
-      "label": "_reuse",
-      "level": "method",
-      "parent": "celltrack.gap_closer._Closure",
       "role": null
     },
     {
