@@ -3,6 +3,17 @@
 **Date:** 2026-08-04 · **Verdict:** detector-side recall is saturated on the four test movies; no detection
 asset adds true recall. The recall the leaderboard rewards is reachable only by the inference threshold.
 
+> **CORRECTION (same day) — "we're near our ceiling" was WRONG.** A public Kaggle kernel
+> (`yusuketogashi/lb897-baseline`) scores **LB 0.897 — 10 points above our 0.887 — on the exact same
+> pilkwang weights we use.** The entire gap is *linking + post-processing config* (disclosed): a two-stage
+> ILP-then-velocity-motion-relink linker, `OUTPUT_EDGE_MAX_UM=14` (vs our 10), appearance weight 0.1, output
+> topology repairs, `min_track_len=7`. So the climb from 0.887 is not blocked by missing assets — it is a
+> config/recipe gap on the same detector. The four-movie proxy **cannot** rank these knobs (the motion linker
+> scores *worse* on the proxy yet Yusuke wins the LB; the 14µm gate is proxy-invisible since GT max
+> displacement is 9.96µm), so the recipe must be ported faithfully and LB-arbitrated. See memories
+> `LB897-PUBLIC-DECODE-2026-08-04`, `LB897-proxy-cannot-validate-2026-08-04`, and the port bead. Detector
+> recall being saturated (below) still holds — the lever was never detection; it is the linker/post-proc recipe.
+
 ## The premise being tested
 
 The one leaderboard-confirmed lever is *recall*: matched A/B, thr0.99 → LB 0.887 beats thr0.995 → LB 0.880
