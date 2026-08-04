@@ -143,13 +143,14 @@ at 0.5 so its LB delta is attributable to divisions alone.
 
 ### Machine-local setup, all via junctions (nothing copied, nothing in git)
 
-- `D:\data\raw\biohub_cell_tracking` → the extracted competition folder, so `DataRoot`'s expected
-  `raw/<dataset>/{train,test}` layout resolves. `paths.yaml` is `data: D:/data`.
+- `<data root>/raw/biohub_cell_tracking` → the extracted competition folder, so `DataRoot`'s expected
+  `raw/<dataset>/{train,test}` layout resolves. The data root is `paths.yaml`'s gitignored `data:` entry
+  (machine-local; this laptop: `D:/data`).
 - `external/kaggle-cell-tracking-competition/src` → the support pack's `repo/src`. **This fixes the six
   `ModuleNotFoundError: biohub_tracking` test failures** — the suite is now fully green, 207 passing.
 - `<root>/processed/biohub_cell_tracking/reference/pilkwang/split_0` → the pack's `weights/unet_transformer/split_0`,
   where `_PACK_REL` looks for it.
-- The pack itself: `python kaggle/survey.py dataset pilkwang/biohub-tracking-support-pack-50ep-v1 --out D:\data\external`.
+- The pack itself: `python kaggle/survey.py dataset pilkwang/biohub-tracking-support-pack-50ep-v1 --out <data root>/external`.
 
 `uv` and the `.venv` now exist here; the GPU (RTX 3060 Laptop, 6 GB) is visible to torch.
 
