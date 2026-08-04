@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
+from celltrack.affinity_division import AffinityDivisionConfig
 from celltrack.blended_edge_scoring import BlendedEdgeTransformerScorer
 from celltrack.gap_closer import DensityGapBridge
 from celltrack.linefit_smoother import LinefitSmoother
@@ -62,6 +63,9 @@ class TrackerConfig:
     threshold: float = 0.99
     linker: LinkerConfig = field(default_factory=LinkerConfig)
     edge_blend: tuple[float, float] = (0.8, 0.2)
+    # Off by default: recovering the edge head's second-daughter fork is a detection-limited lever (the second
+    # daughter is often undetected, so the fork cannot be placed). Set it to A/B the division-jaccard term.
+    division: AffinityDivisionConfig | None = None
     min_track_length: int = 6
     bridge_reach_um: float = 10.0
     bridge_max_added_fraction: float = 0.05
@@ -123,6 +127,13 @@ class CellTracker:
         splice fragments that the filter would have removed, and scores lower.
         """
         link = LinkerStage(self.config.linker.build(spacing, affinity))
+        # Division recovery reads the edge affinity, so it needs a learned head and runs before the short-track
+        # filter (whose division-preserving carve-out can only protect a fork that already exists).
+        divide = (
+            (self.config.division.build(spacing, affinity),)
+            if self.config.division is not None and affinity is not None
+            else ()
+        )
         short = ShortTrackFilter(min_length=self.config.min_track_length)
         bridge = DensityGapBridge(
             spacing=spacing,
@@ -134,7 +145,7 @@ class CellTracker:
         # final — after bridging — so it prunes exactly the nodes the finished edge set leaves unbacked. It is
         # the frontier's output filter; optional because prune-isolated changes the node count the metric reads.
         repair = (TopologyRepair(spacing, self.config.topology_edge_max_um),) if self.config.topology_repair else ()
-        return (link, short, bridge, *repair, smooth)
+        return (link, *divide, short, bridge, *repair, smooth)
 
     def spacing(self, path: Path) -> Spacing:
         """The video's physical voxel spacing — exposed so a caller can build a matching metric matcher."""

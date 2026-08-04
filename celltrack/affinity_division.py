@@ -149,3 +149,30 @@ class AffinityDivisionRecovery:
     def _distance(positions_um: Float[np.ndarray, "n 3"], a: int, b: int) -> float:
         """Euclidean distance in micrometres between two node rows."""
         return float(np.linalg.norm(positions_um[a] - positions_um[b]))
+
+
+@dataclass(frozen=True)
+class AffinityDivisionConfig:
+    """The gates for `AffinityDivisionRecovery`, resolved to the stage once a video's affinity is in hand.
+
+    Distances follow the frontier's safe-division bracket (parent 4.7um, sister 7.2um); the probability floors
+    and the budget are what a caller sweeps. `build` binds the per-video edge affinity the recovery reads.
+    """
+
+    min_second_prob: float = 0.5
+    parent_gate_um: float = 4.7
+    sister_gate_um: float = 7.2
+    max_added_fraction: float = 0.004
+    min_kept_prob: float = 0.5
+
+    def build(self, spacing: Spacing, affinity: EdgeAffinity) -> AffinityDivisionRecovery:
+        """The recovery stage wired with these gates and the video's edge-head probabilities."""
+        return AffinityDivisionRecovery(
+            spacing=spacing,
+            affinity=affinity,
+            min_second_prob=self.min_second_prob,
+            parent_gate_um=self.parent_gate_um,
+            sister_gate_um=self.sister_gate_um,
+            max_added_fraction=self.max_added_fraction,
+            min_kept_prob=self.min_kept_prob,
+        )

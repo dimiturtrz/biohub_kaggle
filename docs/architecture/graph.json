@@ -980,6 +980,30 @@
     },
     {
       "kind": "references",
+      "source": "celltrack.affinity_division.AffinityDivisionConfig",
+      "target": "celltrack.affinity_division.AffinityDivisionRecovery",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.affinity_division.AffinityDivisionConfig",
+      "target": "celltrack.motion_linking.EdgeAffinity",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.affinity_division.AffinityDivisionConfig",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.affinity_division.AffinityDivisionConfig.build",
+      "target": "celltrack.affinity_division.AffinityDivisionRecovery",
+      "weight": 1
+    },
+    {
+      "kind": "references",
       "source": "celltrack.affinity_division.AffinityDivisionRecovery",
       "target": "celltrack.affinity_division._Gap",
       "weight": 1
@@ -3573,6 +3597,12 @@
     {
       "kind": "holds",
       "source": "celltrack.tracker.TrackerConfig",
+      "target": "celltrack.affinity_division.AffinityDivisionConfig",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.tracker.TrackerConfig",
       "target": "celltrack.linkers.LinkerConfig",
       "weight": 1
     },
@@ -5466,6 +5496,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.affinity_division.AffinityDivisionConfig",
+      "label": "AffinityDivisionConfig",
+      "level": "class",
+      "parent": "celltrack.affinity_division",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.affinity_division.AffinityDivisionRecovery",
       "label": "AffinityDivisionRecovery",
       "level": "class",
@@ -6359,6 +6397,14 @@
       "level": "class",
       "parent": "core.tracking",
       "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.affinity_division.AffinityDivisionConfig.build",
+      "label": "build",
+      "level": "method",
+      "parent": "celltrack.affinity_division.AffinityDivisionConfig",
+      "role": null
     },
     {
       "descendants": 0,

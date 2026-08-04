@@ -1,7 +1,10 @@
+from typing import cast
+
 import numpy as np
 from jaxtyping import Float
 
-from celltrack.affinity_division import AffinityDivisionRecovery
+from celltrack.affinity_division import AffinityDivisionConfig, AffinityDivisionRecovery
+from celltrack.motion_linking import EdgeAffinity
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
 
@@ -42,6 +45,18 @@ def recovery(matrix: list[list[float]], **overrides: float) -> AffinityDivisionR
 # One parent (row 0) at t=0; two targets at t=1 — the kept child (row 1) and an orphan runner-up (row 2).
 _MITOSIS = [[0, 0, 0, 0], [1, 0, 0, 1], [1, 0, 0, 2]]
 _KEPT_TOP = [[0.7, 0.2]]
+
+
+def test_build():
+    """`AffinityDivisionConfig.build` binds its gates and the per-video affinity into the recovery stage."""
+    affinity = cast(EdgeAffinity, FakeAffinity({}))
+    stage = AffinityDivisionConfig(min_second_prob=0.6, parent_gate_um=4.0).build(
+        Spacing(z=1.0, y=1.0, x=1.0), affinity
+    )
+
+    assert isinstance(stage, AffinityDivisionRecovery)
+    assert stage.affinity is affinity  # the video's edge-head probabilities are threaded through
+    assert (stage.min_second_prob, stage.parent_gate_um) == (0.6, 4.0)
 
 
 def test_transform():
