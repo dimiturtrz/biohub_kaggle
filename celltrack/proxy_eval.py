@@ -38,6 +38,7 @@ class TrackerProxyEval:
     stems: tuple[str, ...] = TEST_MOVIES
     linker: str = "assignment"
     reuse_gap: bool = False
+    smooth_strength: float = 0.8
 
     def _mount(self, root: DataRoot) -> tuple[TestMovieProxy, CellTracker]:
         """The loaded proxy and the tracker mounted once — models and per-seed caches shared across the sweep."""
@@ -58,7 +59,9 @@ class TrackerProxyEval:
         for threshold in self.thresholds:
             for cost in self.disappearance_costs:
                 linker = LinkerConfig(name=self.linker, disappearance_cost=cost)
-                config = TrackerConfig(threshold=threshold, linker=linker, reuse_gap=self.reuse_gap)
+                config = TrackerConfig(
+                    threshold=threshold, linker=linker, reuse_gap=self.reuse_gap, smooth_strength=self.smooth_strength
+                )
                 results[(threshold, cost)] = proxy.score(pipeline.with_config(config)).score
         return results
 
@@ -66,7 +69,9 @@ class TrackerProxyEval:
         """Per-movie metrics of the tracker at its first swept threshold — separates recall from bonus-farming."""
         proxy, pipeline = self._mount(root)
         linker = LinkerConfig(name=self.linker, disappearance_cost=self.disappearance_costs[0])
-        config = TrackerConfig(threshold=self.thresholds[0], linker=linker, reuse_gap=self.reuse_gap)
+        config = TrackerConfig(
+            threshold=self.thresholds[0], linker=linker, reuse_gap=self.reuse_gap, smooth_strength=self.smooth_strength
+        )
         return proxy.metrics(pipeline.with_config(config))
 
     @staticmethod
@@ -94,6 +99,7 @@ class _Args:
     stems: tuple[str, ...]
     linker: str = field(default="assignment")
     reuse_gap: bool = field(default=False)
+    smooth_strength: float = field(default=0.8)
     stems_label: str = field(default="test")
     per_movie: bool = field(default=False)
 
@@ -109,6 +115,7 @@ class _Args:
         parser.add_argument("--per-movie", action="store_true", help="also log each movie's raw Jaccard and node ratio")
         parser.add_argument("--linker", default="assignment", help="the linker to score (e.g. assignment, flow)")
         parser.add_argument("--reuse-gap", action="store_true", help="enable the reuse gap-bridge stage (GapCloser)")
+        parser.add_argument("--smooth", type=float, default=0.8, help="LinefitSmoother strength (0 = off, 1 = full)")
         parsed = parser.parse_args()
         return cls(
             config=parsed.config,
@@ -118,6 +125,7 @@ class _Args:
             stems=CV_MOVIES if parsed.cv else TEST_MOVIES,
             linker=parsed.linker,
             reuse_gap=parsed.reuse_gap,
+            smooth_strength=parsed.smooth,
             stems_label="cv-8" if parsed.cv else "test-4",
             per_movie=parsed.per_movie,
         )
@@ -129,9 +137,15 @@ def main() -> None:
     args = _Args.from_argv()
     root = DataRoot.from_config(args.config)
     evaluator = TrackerProxyEval(
-        args.device, args.thresholds, args.disappearance_costs, args.stems, args.linker, args.reuse_gap
+        args.device,
+        args.thresholds,
+        args.disappearance_costs,
+        args.stems,
+        args.linker,
+        args.reuse_gap,
+        args.smooth_strength,
     )
-    logger.info("proxy=%s linker=%s reuse_gap=%s", args.stems_label, args.linker, args.reuse_gap)
+    logger.info("proxy=%s linker=%s smooth=%.2f", args.stems_label, args.linker, args.smooth_strength)
     if args.per_movie:
         breakdown = evaluator.breakdown(root)
         for stem, metric in breakdown.items():
