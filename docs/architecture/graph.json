@@ -356,6 +356,18 @@
     },
     {
       "kind": "import",
+      "source": "celltrack.kernel_runtime",
+      "target": "core.data.submission",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.kernel_runtime",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "celltrack.linefit_smoother",
       "target": "core.data.tracks",
       "weight": 1
@@ -5019,7 +5031,7 @@
   ],
   "nodes": [
     {
-      "descendants": 43,
+      "descendants": 44,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -5150,6 +5162,14 @@
       "descendants": 0,
       "id": "celltrack.inference",
       "label": "inference",
+      "level": "module",
+      "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.kernel_runtime",
+      "label": "kernel_runtime",
       "level": "module",
       "parent": "celltrack",
       "role": null
