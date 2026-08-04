@@ -23,6 +23,16 @@ from core.metrics.score import SplitScore, VideoMetrics
 from core.paths import DataRoot
 
 TEST_MOVIES: tuple[str, ...] = ("44b6_0113de3b", "44b6_0b24845f", "6bba_05b6850b", "6bba_05db0fb1")
+# The public frontier's fixed-8 local CV (yusuketogashi): the four test movies plus four fully-annotated
+# train videos. The extra four carry ~4x denser 44b6 lineages, so a threshold sweep is not recall-saturated
+# on them the way it is on the sparse-annotated test four — a broader, threshold-sensitive local read.
+CV_MOVIES: tuple[str, ...] = (
+    *TEST_MOVIES,
+    "44b6_341df25f",
+    "44b6_e57ff5c6",
+    "6bba_969618f6",
+    "6bba_fc83837d",
+)
 
 
 class LinkingPipeline(Protocol):
@@ -42,10 +52,14 @@ class TestMovieProxy:
     spacing: Spacing
 
     @classmethod
-    def load(cls, root: DataRoot) -> "TestMovieProxy":
-        """Resolve the four movies, their GEFF annotations, and the shared voxel spacing from the data root."""
+    def load(cls, root: DataRoot, stems: tuple[str, ...] = TEST_MOVIES) -> "TestMovieProxy":
+        """Resolve the chosen movies, their GEFF annotations, and the shared voxel spacing from the data root.
+
+        Defaults to the four test movies (the tightest hidden-LB proxy); pass `CV_MOVIES` for the broader,
+        threshold-sensitive fixed-8 local CV.
+        """
         by_stem = {p.stem: p for p in root.videos("train")}
-        paths = tuple(by_stem[stem] for stem in TEST_MOVIES)
+        paths = tuple(by_stem[stem] for stem in stems)
         truths = tuple(AnnotatedTracks.from_geff(root.track_store(p)) for p in paths)
         spacing = CellVideo.from_ome_zarr(paths[0]).spacing
         return cls(paths=paths, truths=truths, spacing=spacing)

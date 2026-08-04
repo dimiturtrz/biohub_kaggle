@@ -3614,6 +3614,12 @@
     },
     {
       "kind": "references",
+      "source": "celltrack.proxy_eval._Args",
+      "target": "celltrack.proxy_eval._Args",
+      "weight": 1
+    },
+    {
+      "kind": "references",
       "source": "celltrack.short_track_filter.ShortTrackFilter",
       "target": "core.data.tracks.TrackGraph",
       "weight": 1
@@ -6422,6 +6428,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.proxy_eval._Args",
+      "label": "_Args",
+      "level": "class",
+      "parent": "celltrack.proxy_eval",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.response_cache.ResponseCache",
       "label": "ResponseCache",
       "level": "class",
@@ -8170,6 +8184,14 @@
       "label": "scores",
       "level": "method",
       "parent": "celltrack.proxy_eval.ChampionProxyEval",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.proxy_eval._Args.from_argv",
+      "label": "from_argv",
+      "level": "method",
+      "parent": "celltrack.proxy_eval._Args",
       "role": null
     },
     {

@@ -7,7 +7,8 @@ import pytest
 
 from celltrack import proxy_eval
 from celltrack.champion import ChampionConfig, ChampionPipeline
-from celltrack.proxy_eval import ChampionProxyEval
+from celltrack.proxy import CV_MOVIES
+from celltrack.proxy_eval import ChampionProxyEval, _Args
 from core.paths import DataRoot
 
 
@@ -19,7 +20,7 @@ class _Score:
 
 
 class _FakePipeline:
-    """A mounted champion whose score depends on the config, so the sweep produces distinct values."""
+    """A mounted champion whose score depends on the config, so the grid produces distinct values."""
 
     def __init__(self, config: ChampionConfig) -> None:
         self.config = config
@@ -29,10 +30,10 @@ class _FakePipeline:
 
 
 class _FakeProxy:
-    """A loaded proxy that scores a pipeline by its disappearance cost, so the wiring runs without data."""
+    """A loaded proxy scoring a pipeline by its threshold and disappearance, so the wiring runs without data."""
 
     def score(self, pipeline: _FakePipeline) -> _Score:
-        return _Score(0.9 + pipeline.config.disappearance_cost)
+        return _Score(pipeline.config.threshold + pipeline.config.disappearance_cost)
 
 
 class _Root:
@@ -43,7 +44,7 @@ class _Root:
 
 
 def _patch(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(proxy_eval.TestMovieProxy, "load", classmethod(lambda cls, root: _FakeProxy()))
+    monkeypatch.setattr(proxy_eval.TestMovieProxy, "load", classmethod(lambda cls, root, stems=(): _FakeProxy()))
     monkeypatch.setattr(
         ChampionPipeline,
         "from_packs",
@@ -52,15 +53,24 @@ def _patch(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_scores(monkeypatch: pytest.MonkeyPatch):
-    """`scores` mounts once and returns the proxy score per swept disappearance cost."""
+    """`scores` mounts once and returns the proxy score for every `(threshold, disappearance)` in the grid."""
     _patch(monkeypatch)
-    result = ChampionProxyEval("cpu", (0.0, 1.0)).scores(cast(DataRoot, _Root()))
-    assert result == {0.0: 0.9, 1.0: 1.9}
+    result = ChampionProxyEval("cpu", (0.98, 0.99), (0.0,)).scores(cast(DataRoot, _Root()))
+    assert result == {(0.98, 0.0): 0.98, (0.99, 0.0): 0.99}
+
+
+def test_from_argv(monkeypatch: pytest.MonkeyPatch):
+    """`from_argv` parses the threshold and disappearance ranges and selects the CV proxy under `--cv`."""
+    monkeypatch.setattr(sys, "argv", ["proxy_eval", "--threshold", "0.97,0.99", "--disappearance", "0.0,2.0", "--cv"])
+    args = _Args.from_argv()
+    assert args.thresholds == (0.97, 0.99)
+    assert args.disappearance_costs == (0.0, 2.0)
+    assert args.stems == CV_MOVIES
 
 
 def test_main(monkeypatch: pytest.MonkeyPatch):
-    """The CLI mounts, sweeps the disappearance costs, and logs a score for each without raising."""
+    """The CLI mounts, sweeps the grid, and logs a score for each cell without raising."""
     _patch(monkeypatch)
     monkeypatch.setattr(proxy_eval.DataRoot, "from_config", staticmethod(lambda config: cast(DataRoot, _Root())))
-    monkeypatch.setattr(sys, "argv", ["proxy_eval", "--device", "cpu", "--disappearance", "0.0,2.0"])
+    monkeypatch.setattr(sys, "argv", ["proxy_eval", "--device", "cpu", "--threshold", "0.98,0.99"])
     proxy_eval.main()
