@@ -156,6 +156,12 @@ class MislinkSignal:
         """The share of mislinks the affinity itself gets wrong (chosen scored above true) — the retrain target."""
         return float(np.mean(self.p_chosen > self.p_true)) if len(self.p_true) else float("nan")
 
+    def means(self) -> tuple[float, float]:
+        """Mean true-successor and chosen-neighbour probability over the mislinks — NaN when there are none."""
+        if not len(self.p_true):
+            return float("nan"), float("nan")
+        return float(np.mean(self.p_true)), float(np.mean(self.p_chosen))
+
     @staticmethod
     def _probabilities(source_row, true_row, successors, timepoints, affinity) -> tuple[float, float]:
         """The affinity probability of the true successor and of the (first) successor the linker actually chose."""
@@ -212,12 +218,13 @@ def main() -> None:
     logger.info("movie=%s  annotated edges=%d", args.movie, total)
     for fate, count in counts.items():
         logger.info("  %-18s %5d  %5.1f%%", fate.name, count, 100.0 * count / max(total, 1))
+    mean_true, mean_chosen = signal.means()
     logger.info(
         "mislink signal: %d edges, affinity-inverted (retrain target) = %.1f%%  [mean P_true=%.3f vs P_chosen=%.3f]",
         len(signal.p_true),
         100.0 * signal.inverted_fraction(),
-        float(np.mean(signal.p_true)) if len(signal.p_true) else float("nan"),
-        float(np.mean(signal.p_chosen)) if len(signal.p_true) else float("nan"),
+        mean_true,
+        mean_chosen,
     )
 
 

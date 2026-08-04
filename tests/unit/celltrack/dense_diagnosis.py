@@ -90,3 +90,11 @@ def test_inverted_fraction():
     """`inverted_fraction` is the share of mislinks whose chosen neighbour outscored the true successor."""
     signal = MislinkSignal(p_true=np.array([0.1, 0.8, 0.3]), p_chosen=np.array([0.6, 0.2, 0.9]))
     assert signal.inverted_fraction() == 2 / 3  # edges 0 and 2 are inverted; edge 1 is not
+
+
+def test_means():
+    """`means` averages the true- and chosen-target probabilities, and is NaN when there are no mislinks."""
+    signal = MislinkSignal(p_true=np.array([0.2, 0.4]), p_chosen=np.array([0.6, 0.8]))
+    assert signal.means() == (0.30000000000000004, 0.7)
+    empty = MislinkSignal(p_true=np.array([]), p_chosen=np.array([]))
+    assert all(value != value for value in empty.means())  # both NaN (NaN != itself)

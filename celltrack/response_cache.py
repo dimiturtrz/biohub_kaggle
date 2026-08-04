@@ -27,19 +27,15 @@ from typing import Protocol
 import numpy as np
 from jaxtyping import Float
 
+# A video's per-frame response volumes — the one type the store contract, its cache, and its callers all speak.
+_Volumes = list[Float[np.ndarray, "z y x"]]
+
 
 class ResponseStore(Protocol):
     """A detector's response-volume store: a first forward computes the volumes, later calls decide whether to
     replay or recompute. The read-out (blend, threshold, link) speaks this contract, not a concrete cache."""
 
-    def responses(
-        self,
-        video_key: str,
-        forward: Callable[[], list[Float[np.ndarray, "z y x"]]],
-        *,
-        kind: str,
-        fingerprint: str,
-    ) -> list[Float[np.ndarray, "z y x"]]:
+    def responses(self, video_key: str, forward: Callable[[], _Volumes], *, kind: str, fingerprint: str) -> _Volumes:
         """The response volumes for a video, computing them via `forward` when this store has nothing to replay."""
         ...
 
@@ -54,14 +50,7 @@ class EphemeralResponseStore:
     and drops them — the equality-NMS still reads them at full precision, in memory, never through disk.
     """
 
-    def responses(
-        self,
-        video_key: str,
-        forward: Callable[[], list[Float[np.ndarray, "z y x"]]],
-        *,
-        kind: str,
-        fingerprint: str,
-    ) -> list[Float[np.ndarray, "z y x"]]:
+    def responses(self, video_key: str, forward: Callable[[], _Volumes], *, kind: str, fingerprint: str) -> _Volumes:
         """Forward the volumes once and return them unpersisted — no replay to amortise in a single pass."""
         return forward()
 
@@ -73,14 +62,7 @@ class ResponseCache:
         self._directory = root / weights_key
         self._directory.mkdir(parents=True, exist_ok=True)
 
-    def responses(
-        self,
-        video_key: str,
-        forward: Callable[[], list[Float[np.ndarray, "z y x"]]],
-        *,
-        kind: str,
-        fingerprint: str,
-    ) -> list[Float[np.ndarray, "z y x"]]:
+    def responses(self, video_key: str, forward: Callable[[], _Volumes], *, kind: str, fingerprint: str) -> _Volumes:
         """The cached per-frame volumes for a video, forwarding and persisting them on a first miss.
 
         `kind` (logit / prob / heatmap) and the recipe `fingerprint` are part of the store name, so a request

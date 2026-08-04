@@ -200,14 +200,15 @@ def _mount(root: DataRoot, device: str) -> tuple[TestMovieProxy, CellTracker]:
 def _report(label: str, fate: DenseFateDiagnosis, signal: MislinkSignal) -> None:
     """Log the held-out dense movie's correct/mislink counts and the affinity inversion — the probe's read-out."""
     counts = fate.counts()
+    mean_true, mean_chosen = signal.means()
     logger.info(
         "%-6s correct=%d mislink=%d  inversion=%.1f%%  P_true=%.3f P_chosen=%.3f",
         label,
         counts[Fate.CORRECT],
         counts[Fate.MISLINK_CONFLICT] + counts[Fate.MISLINK_FREE],
         100.0 * signal.inverted_fraction(),
-        float(np.mean(signal.p_true)) if len(signal.p_true) else float("nan"),
-        float(np.mean(signal.p_chosen)) if len(signal.p_true) else float("nan"),
+        mean_true,
+        mean_chosen,
     )
 
 
