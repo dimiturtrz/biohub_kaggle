@@ -6,36 +6,27 @@ so this kernel installs no wheels. Its detections (quantile-normalised, ×4 Y/X 
 fake-pair forward, flip-TTA, max-pool peaks, coordinates rescaled to original voxels) feed OUR
 MotionHungarianLinker + short-track + linefit and write the competition CSV. Fold-0 locally ~0.93.
 
-Two mounts: the pilkwang support pack (their model code + weights) and celltrack-kit (our pipeline).
+Two mounts: the pilkwang support pack (their model code + weights) and celltrack-kit (our pipeline). The
+kit-mount, wheel-install and submission-write ceremony lives in `celltrack.kernel_runtime`; this file is the
+bootstrap plus the one assembly it tests.
 """
 
 import glob
+import logging
 import os
-import subprocess
 import sys
 from pathlib import Path
 
-_INPUTS = os.listdir("/kaggle/input")
-print("INPUT DIRS:", _INPUTS, flush=True)
+logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-
-# Kaggle mounts nest under /kaggle/input/{datasets,competitions}/... — anchor every lookup on a known file.
-def _find(pattern: str) -> str:
-    return next(iter(glob.glob(f"/kaggle/input/**/{pattern}", recursive=True)))
-
-
-_WEIGHTS = Path(_find("weights/unet_transformer/split_0/config.json")).parent
-_PACK_SRC = Path(_find("repo/src/biohub_tracking/models/__init__.py")).parents[2]
-_MARKER = _find("celltrack/motion_linking.py")
-
-# The detector is pure torch, but celltrack (zarr/jaxtyping/beartype/numcodecs) needs the kit's offline wheels.
+_MARKER = next(iter(glob.glob("/kaggle/input/**/celltrack/motion_linking.py", recursive=True)))
 _KIT_ROOT = os.path.dirname(os.path.dirname(_MARKER))
-_WHEELS = sorted(glob.glob(f"{Path(_KIT_ROOT).parent}/**/*.whl", recursive=True))
-print("WHEELS:", [os.path.basename(w) for w in _WHEELS], flush=True)
-subprocess.run([sys.executable, "-m", "pip", "install", "--no-index", "--no-deps", *_WHEELS], check=True)
-
 sys.path.insert(0, _KIT_ROOT)
-sys.path.insert(0, str(_PACK_SRC))
+
+from celltrack.kernel_runtime import install_wheels, pack_source, run_submission, test_videos  # noqa: E402
+
+install_wheels(Path(_KIT_ROOT))
+sys.path.insert(0, str(pack_source()))
 
 import json  # noqa: E402
 
@@ -43,17 +34,22 @@ import numpy as np  # noqa: E402
 import torch  # noqa: E402
 import torch.nn.functional as F  # noqa: E402
 import zarr  # noqa: E402
-
 from biohub_tracking.models import TemporalUNet3D  # noqa: E402
 
 from celltrack.linefit_smoother import LinefitSmoother  # noqa: E402
 from celltrack.motion_linking import MotionHungarianLinker  # noqa: E402
 from celltrack.short_track_filter import ShortTrackFilter  # noqa: E402
-from core.data.submission import Submission  # noqa: E402
 from core.data.tracks import TrackGraph  # noqa: E402
 from core.geometry import Spacing  # noqa: E402
 
-_TEST_GLOB = "/kaggle/input/**/biohub-cell-tracking-during-development/test/*.zarr"
+
+# Kaggle mounts nest under /kaggle/input/{datasets,competitions}/... — anchor the weight lookup on a known file.
+def _find(pattern: str) -> str:
+    return next(iter(glob.glob(f"/kaggle/input/**/{pattern}", recursive=True)))
+
+
+_WEIGHTS = Path(_find("weights/unet_transformer/split_0/config.json")).parent
+
 _DOWNSAMPLE = (1, 4, 4)
 _WINDOW_UM, _THRESHOLD = 5.0, 0.5
 _DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -88,7 +84,7 @@ def _peaks(logits: torch.Tensor, threshold: float, pool_kernel: tuple[int, ...])
     return torch.nonzero(is_peak, as_tuple=False).cpu().numpy()
 
 
-def _detections(model: _Detector, path: str) -> tuple[TrackGraph, Spacing]:
+def _detections(model: _Detector, path: Path) -> tuple[TrackGraph, Spacing]:
     group = zarr.open_group(path, mode="r")
     array, quantiles = group["0"], group.attrs["image_statistics"]["quantiles"]
     q_low, q_high = float(quantiles["0.001"]), float(quantiles["0.999"])
@@ -114,24 +110,19 @@ def _detections(model: _Detector, path: str) -> tuple[TrackGraph, Spacing]:
 
 
 def main() -> None:
-    tests = sorted(glob.glob(_TEST_GLOB, recursive=True))
-    print(f"test videos: {len(tests)} on {_DEVICE}", flush=True)
     config = json.loads((_WEIGHTS / "config.json").read_text())
     state = torch.load(_WEIGHTS / "edge_predictor_best.pth", map_location=_DEVICE, weights_only=True)
     model = _Detector(config["unet_out_channels"], config["unet_layers"]).to(_DEVICE).eval()
     model.load_state_dict({k: v for k, v in state.items() if k.startswith(("unet.", "detect_head."))})
     short, smooth = ShortTrackFilter(min_length=3), LinefitSmoother(strength=0.8)
-    graphs = {}
-    for path in tests:
+
+    def predict(_name: str, path: Path) -> TrackGraph:
         with torch.no_grad():
             detections, spacing = _detections(model, path)
         linker = MotionHungarianLinker(spacing=spacing, tight_gate_um=6.0, loose_gate_um=10.0)
-        graph = smooth.transform(short.transform(linker.link(detections)))
-        name = os.path.basename(path)[: -len(".zarr")]
-        graphs[name] = graph
-        print(f"  {name}: {len(graph.node_ids)} nodes, {len(graph.edges)} edges", flush=True)
-    Submission(graphs=graphs).write_csv("/kaggle/working/submission.csv")
-    print("wrote /kaggle/working/submission.csv", flush=True)
+        return smooth.transform(short.transform(linker.link(detections)))
+
+    run_submission(predict, test_videos())
 
 
 main()

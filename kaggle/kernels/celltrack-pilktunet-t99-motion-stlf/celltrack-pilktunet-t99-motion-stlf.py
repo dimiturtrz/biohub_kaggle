@@ -17,36 +17,27 @@ real detections, whose unparented false positives the sister gate cannot tell fr
 (fold-0 nodiv 0.907 vs div 0.898). The frontier gates its post-link divisions behind a DeepCenter veto we
 have not mounted; without that second opinion the pass invents more false forks than true ones.
 
-Two mounts: the pilkwang support pack (their model code + weights) and celltrack-kit (our pipeline).
+Two mounts: the pilkwang support pack (their model code + weights) and celltrack-kit (our pipeline). The
+kit-mount, wheel-install and submission-write ceremony lives in `celltrack.kernel_runtime`; this file is the
+bootstrap plus the one assembly it tests.
 """
 
 import glob
+import logging
 import os
-import subprocess
 import sys
 from pathlib import Path
 
-_INPUTS = os.listdir("/kaggle/input")
-print("INPUT DIRS:", _INPUTS, flush=True)
+logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-
-# Kaggle mounts nest under /kaggle/input/{datasets,competitions}/... — anchor every lookup on a known file.
-def _find(pattern: str) -> str:
-    return next(iter(glob.glob(f"/kaggle/input/**/{pattern}", recursive=True)))
-
-
-_PACK = Path(_find("weights/unet_transformer/split_0/config.json")).parent
-_PACK_SRC = Path(_find("repo/src/biohub_tracking/models/__init__.py")).parents[2]
-_MARKER = _find("celltrack/motion_linking.py")
-
-# The detector is pure torch, but celltrack (zarr/jaxtyping/beartype/numcodecs) needs the kit's offline wheels.
+_MARKER = next(iter(glob.glob("/kaggle/input/**/celltrack/motion_linking.py", recursive=True)))
 _KIT_ROOT = os.path.dirname(os.path.dirname(_MARKER))
-_WHEELS = sorted(glob.glob(f"{Path(_KIT_ROOT).parent}/**/*.whl", recursive=True))
-print("WHEELS:", [os.path.basename(w) for w in _WHEELS], flush=True)
-subprocess.run([sys.executable, "-m", "pip", "install", "--no-index", "--no-deps", *_WHEELS], check=True)
-
 sys.path.insert(0, _KIT_ROOT)
-sys.path.insert(0, str(_PACK_SRC))
+
+from celltrack.kernel_runtime import install_wheels, pack_source, run_submission, test_videos  # noqa: E402
+
+install_wheels(Path(_KIT_ROOT))
+sys.path.insert(0, str(pack_source()))
 
 import torch  # noqa: E402
 import zarr  # noqa: E402
@@ -55,16 +46,23 @@ from celltrack.linefit_smoother import LinefitSmoother  # noqa: E402
 from celltrack.motion_linking import MotionHungarianLinker  # noqa: E402
 from celltrack.short_track_filter import ShortTrackFilter  # noqa: E402
 from celltrack.tunet import TemporalUNetDetector  # noqa: E402
-from core.data.submission import Submission  # noqa: E402
+from core.data.tracks import TrackGraph  # noqa: E402
 from core.geometry import Spacing  # noqa: E402
 
-_TEST_GLOB = "/kaggle/input/**/biohub-cell-tracking-during-development/test/*.zarr"
+
+# Kaggle mounts nest under /kaggle/input/{datasets,competitions}/... — anchor the weight lookup on a known file.
+def _find(pattern: str) -> str:
+    return next(iter(glob.glob(f"/kaggle/input/**/{pattern}", recursive=True)))
+
+
+_PACK = Path(_find("weights/unet_transformer/split_0/config.json")).parent
+
 _THRESHOLD = 0.99
 _TIGHT_GATE_UM, _LOOSE_GATE_UM = 6.0, 8.5
 _DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
-def _spacing(path: str) -> Spacing:
+def _spacing(path: Path) -> Spacing:
     """The video's physical voxel spacing, read from its OME coordinate transform."""
     scale = zarr.open_group(path, mode="r").attrs["multiscales"][0]["datasets"][0]["coordinateTransformations"][0][
         "scale"
@@ -73,23 +71,18 @@ def _spacing(path: str) -> Spacing:
 
 
 def main() -> None:
-    tests = sorted(glob.glob(_TEST_GLOB, recursive=True))
-    print(f"test videos: {len(tests)} on {_DEVICE}", flush=True)
     detector, recipe = TemporalUNetDetector.from_pack(_PACK, map_location=_DEVICE)
     detector = detector.to(_DEVICE).eval()
     short, smooth = ShortTrackFilter(min_length=3), LinefitSmoother(strength=0.8)
-    graphs = {}
-    for path in tests:
-        detections = detector.detections(Path(path), _THRESHOLD, recipe, _DEVICE)
+
+    def predict(_name: str, path: Path) -> TrackGraph:
+        detections = detector.detections(path, _THRESHOLD, recipe, _DEVICE)
         linker = MotionHungarianLinker(
             spacing=_spacing(path), tight_gate_um=_TIGHT_GATE_UM, loose_gate_um=_LOOSE_GATE_UM
         )
-        graph = smooth.transform(short.transform(linker.link(detections)))
-        name = os.path.basename(path)[: -len(".zarr")]
-        graphs[name] = graph
-        print(f"  {name}: {len(graph.node_ids)} nodes, {len(graph.edges)} edges", flush=True)
-    Submission(graphs=graphs).write_csv("/kaggle/working/submission.csv")
-    print("wrote /kaggle/working/submission.csv", flush=True)
+        return smooth.transform(short.transform(linker.link(detections)))
+
+    run_submission(predict, test_videos())
 
 
 main()
