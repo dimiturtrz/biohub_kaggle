@@ -24,6 +24,7 @@ from celltrack.motion_linking import EdgeAffinity
 from celltrack.pipeline import BlendDetectorScorer
 from celltrack.response_cache import ResponseCache
 from celltrack.short_track_filter import ShortTrackFilter
+from celltrack.topology_repair import TopologyRepair
 from celltrack.tunet import TemporalUNetDetector
 from core.data.tracks import TrackGraph
 from core.data.video import CellVideo
@@ -66,6 +67,12 @@ class TrackerConfig:
     min_track_length: int = 6
     bridge_reach_um: float = 10.0
     bridge_max_added_fraction: float = 0.05
+    # Off by default: on the shipped path `AssignmentLinker` already guarantees consecutive-frame + single-parent
+    # edges and a tighter gate than `topology_edge_max_um`, and `ShortTrackFilter` drops the unbacked nodes, so
+    # the repair is a measured no-op (proxy 0.9344 either way). Enable it behind a linker that lacks those
+    # invariants (nearest-neighbour, motion) — it is the frontier's output filter, available not orphaned.
+    topology_repair: bool = False
+    topology_edge_max_um: float = 14.0
     smooth_strength: float = 0.8
 
 
@@ -117,24 +124,27 @@ class CellTracker:
         one-frame dropouts the pruning leaves in real tracks. Reversing them (bridge then prune) lets the bridge
         splice fragments that the filter would have removed, and scores lower.
         """
-        return (
-            LinkerStage(
-                AssignmentLinker(
-                    spacing=spacing,
-                    max_distance_um=self.config.gate_um,
-                    affinity=affinity,
-                    affinity_bonus=self.config.edge_bonus,
-                    disappearance_cost=self.config.disappearance_cost,
-                )
-            ),
-            ShortTrackFilter(min_length=self.config.min_track_length),
-            DensityGapBridge(
+        link = LinkerStage(
+            AssignmentLinker(
                 spacing=spacing,
-                reach_um=self.config.bridge_reach_um,
-                max_added_fraction=self.config.bridge_max_added_fraction,
-            ),
-            LinefitSmoother(strength=self.config.smooth_strength),
+                max_distance_um=self.config.gate_um,
+                affinity=affinity,
+                affinity_bonus=self.config.edge_bonus,
+                disappearance_cost=self.config.disappearance_cost,
+            )
         )
+        short = ShortTrackFilter(min_length=self.config.min_track_length)
+        bridge = DensityGapBridge(
+            spacing=spacing,
+            reach_um=self.config.bridge_reach_um,
+            max_added_fraction=self.config.bridge_max_added_fraction,
+        )
+        smooth = LinefitSmoother(strength=self.config.smooth_strength)
+        # Topology repair (enforce-next-frame, single-parent, prune-isolated) runs after the graph's edges are
+        # final — after bridging — so it prunes exactly the nodes the finished edge set leaves unbacked. It is
+        # the frontier's output filter; optional because prune-isolated changes the node count the metric reads.
+        repair = (TopologyRepair(spacing, self.config.topology_edge_max_um),) if self.config.topology_repair else ()
+        return (link, short, bridge, *repair, smooth)
 
     def spacing(self, path: Path) -> Spacing:
         """The video's physical voxel spacing — exposed so a caller can build a matching metric matcher."""

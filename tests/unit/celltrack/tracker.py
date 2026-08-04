@@ -69,6 +69,13 @@ def test_run(monkeypatch: pytest.MonkeyPatch):
     assert graph.edges.tolist() == [[0, 1]]
 
 
+def test_run_with_topology_repair(monkeypatch: pytest.MonkeyPatch):
+    """Enabling `topology_repair` folds the invariant-enforcing stage in without breaking a valid chain."""
+    tracker = _tracker(monkeypatch, TrackerConfig(min_track_length=1, smooth_strength=0.0, topology_repair=True))
+    graph = tracker.run("m.zarr", Path("m.zarr"))
+    assert graph.edges.tolist() == [[0, 1]]  # the single consecutive, single-parent edge survives the repair
+
+
 def test_with_config(monkeypatch: pytest.MonkeyPatch):
     """`with_config` swaps the operating point while keeping the same mounted models."""
     tracker = _tracker(monkeypatch, TrackerConfig())

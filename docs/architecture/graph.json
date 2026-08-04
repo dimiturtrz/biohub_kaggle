@@ -705,6 +705,12 @@
     {
       "kind": "import",
       "source": "celltrack.tracker",
+      "target": "celltrack.topology_repair",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.tracker",
       "target": "celltrack.tunet",
       "weight": 1
     },
@@ -3646,6 +3652,12 @@
       "kind": "construct",
       "source": "celltrack.tracker.CellTracker._stages",
       "target": "celltrack.short_track_filter.ShortTrackFilter",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.tracker.CellTracker._stages",
+      "target": "celltrack.topology_repair.TopologyRepair",
       "weight": 1
     },
     {
