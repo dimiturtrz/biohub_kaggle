@@ -1,8 +1,51 @@
+from pathlib import Path
+
 import numpy as np
+import pytest
 import torch
 
-from celltrack.training.edge_finetune import _frontier_loss, _gt_matrix, _mine_hard_negatives
+from celltrack.training import edge_finetune
+from celltrack.training.edge_finetune import (
+    EdgeFinetuneConfig,
+    EdgeHardNegativeFinetuner,
+    GapSupervision,
+    _frontier_loss,
+    _gt_matrix,
+    _mine_hard_negatives,
+)
 from core.metrics.matching import UNMATCHED
+
+
+class _StubScorer:
+    """A scorer whose UNet is frozen and whose transformer is one weight, so a step provably moves that weight."""
+
+    def __init__(self) -> None:
+        self.detector = torch.nn.Linear(1, 1)
+        self.transformer = torch.nn.Linear(1, 1)
+
+    def _gap_logits(self, source, timepoint, source_positions, target_positions, device):
+        pairs = torch.ones(len(source_positions), len(target_positions))
+        return self.transformer.weight.reshape(()) * pairs  # (s, t) logits carrying the transformer's grad
+
+
+def test_finetune(monkeypatch: pytest.MonkeyPatch):
+    """One optimisation over a supervised gap moves the transformer weight (and leaves the frozen UNet untouched)."""
+    monkeypatch.setattr(edge_finetune.TemporalUNetDetector, "_open_source", staticmethod(lambda path: "src"))
+    gap = GapSupervision(
+        timepoint=0,
+        source_positions=np.zeros((2, 3), dtype=np.float32),
+        target_positions=np.ones((2, 3), dtype=np.float32),
+        gt_matrix=np.array([[1.0, 0.0], [0.0, 0.0]], dtype=np.float32),  # source 0 -> target 0 is the true edge
+        hard_negatives=np.array([[0, 1]], dtype=np.int64),  # source 0 -> target 1 is a mined hard negative
+    )
+    scorer = _StubScorer()
+    before = scorer.transformer.weight.detach().clone()
+    detector_frozen_before = scorer.detector.weight.requires_grad
+
+    EdgeHardNegativeFinetuner(scorer, EdgeFinetuneConfig(device="cpu", steps=3)).finetune([(Path("video"), gap)])
+
+    assert not torch.equal(scorer.transformer.weight, before)  # the head learned
+    assert detector_frozen_before and not scorer.detector.weight.requires_grad  # the UNet was frozen
 
 
 def test_gt_matrix():

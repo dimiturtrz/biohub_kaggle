@@ -166,7 +166,7 @@ class EdgeHardNegativeFinetuner:
             loss.backward()
             optimizer.step()
             if step % 50 == 0:
-                logger.info("step %4d  loss=%.4f", step, float(loss))
+                logger.info("step %4d  loss=%.4f", step, loss.item())
         self._scorer.transformer.eval()
 
     def _loss(self, source: object, gap: GapSupervision) -> torch.Tensor:
