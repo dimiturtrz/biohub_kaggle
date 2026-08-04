@@ -30,9 +30,10 @@ from pathlib import Path
 import numpy as np
 from jaxtyping import Int
 
+from celltrack.motion_linking import EdgeAffinity
 from celltrack.proxy import TestMovieProxy
 from celltrack.tracker import CellTracker
-from core.data.tracks import TrackGraph
+from core.data.tracks import Adjacency, TrackGraph
 from core.metrics.matching import UNMATCHED, DistanceMatcher, NodeMatching
 from core.paths import DataRoot
 
@@ -53,6 +54,18 @@ class Fate(IntEnum):
     ENDPOINT_MISSING = 4
 
 
+def _invert(matching: NodeMatching, truth_count: int) -> Int[np.ndarray, "g"]:
+    """For each ground-truth node, the predicted row matched to it, or `UNMATCHED` — the matching reversed.
+
+    The per-timepoint assignment is one-to-one, so no ground-truth node is claimed by two detections; the
+    inverse is well defined and lets a ground-truth edge be looked up as the detections standing in for it.
+    """
+    predicted_of_truth = np.full(truth_count, UNMATCHED, dtype=np.int64)
+    matched = np.flatnonzero(matching.is_matched())
+    predicted_of_truth[matching.gt_rows[matched]] = matched
+    return predicted_of_truth
+
+
 @dataclass(frozen=True)
 class DenseFateDiagnosis:
     """Each annotated edge tagged with the `Fate` the tracker landed it in — the dense loss decomposed."""
@@ -68,7 +81,7 @@ class DenseFateDiagnosis:
         detection standing in for it — and the tracker's own edges then say whether that detection linked to the
         truth's target, to a wrong neighbour, or to nothing.
         """
-        predicted_of_truth = cls._invert(matching, len(truth.node_ids))
+        predicted_of_truth = _invert(matching, len(truth.node_ids))
         truth_edges = truth.edge_rows()
         source = predicted_of_truth[truth_edges[:, 0]]
         target = predicted_of_truth[truth_edges[:, 1]]
@@ -93,14 +106,6 @@ class DenseFateDiagnosis:
         return {fate: int(tally[fate]) for fate in Fate}
 
     @staticmethod
-    def _invert(matching: NodeMatching, truth_count: int) -> Int[np.ndarray, "g"]:
-        """For each ground-truth node, the predicted row matched to it, or `UNMATCHED` — the matching reversed."""
-        predicted_of_truth = np.full(truth_count, UNMATCHED, dtype=np.int64)
-        matched = np.flatnonzero(matching.is_matched())
-        predicted_of_truth[matching.gt_rows[matched]] = matched
-        return predicted_of_truth
-
-    @staticmethod
     def _label(both, reproduced, source_linked, target_claimed):
         """Fold the per-edge boolean masks into one exclusive `Fate` code, most-specific outcome first."""
         fates = np.full(len(both), Fate.ENDPOINT_MISSING, dtype=np.int64)
@@ -112,8 +117,60 @@ class DenseFateDiagnosis:
         return fates
 
 
-def _diagnose(root: DataRoot, device: str, movie: str) -> DenseFateDiagnosis:
-    """Mount the shipped tracker, run it on `movie`, and decompose its annotated-edge fates."""
+@dataclass(frozen=True)
+class MislinkSignal:
+    """For each mislinked edge, the affinity's probability of the true successor vs the wrong one it chose.
+
+    A mislink is either a *signal* error — the edge transformer itself scores the wrong neighbour above the
+    true successor (`p_chosen > p_true`), which only a better-trained affinity (bead zni) can fix — or a
+    *cost* error — the affinity ranks the true successor higher, but the nearer wrong neighbour won on the
+    distance term of `distance - bonus*P` anyway (`p_true >= p_chosen`), which is the bonus/gate cost lever
+    already swept and refuted (e9b). The inverted fraction is the share a retrain could even target.
+    """
+
+    p_true: Float[np.ndarray, "m"]
+    p_chosen: Float[np.ndarray, "m"]
+
+    @classmethod
+    def of(
+        cls, prediction: TrackGraph, truth: TrackGraph, matching: NodeMatching, affinity: EdgeAffinity
+    ) -> "MislinkSignal":
+        """Read the affinity's true- and chosen-target probability for every mislinked annotated edge."""
+        fates = DenseFateDiagnosis.of(prediction, truth, matching).fates
+        predicted_of_truth = _invert(matching, len(truth.node_ids))
+        successors = Adjacency.of(prediction).successors
+        timepoints = prediction.timepoints()
+        mislinked = np.flatnonzero((fates == Fate.MISLINK_CONFLICT) | (fates == Fate.MISLINK_FREE))
+        edges = truth.edge_rows()[mislinked]
+        pairs = [
+            cls._probabilities(predicted_of_truth[source], predicted_of_truth[target], successors, timepoints, affinity)
+            for source, target in edges
+        ]
+        return cls(
+            p_true=np.array([true for true, _ in pairs], dtype=np.float64),
+            p_chosen=np.array([chosen for _, chosen in pairs], dtype=np.float64),
+        )
+
+    def inverted_fraction(self) -> float:
+        """The share of mislinks the affinity itself gets wrong (chosen scored above true) — the retrain target."""
+        return float(np.mean(self.p_chosen > self.p_true)) if len(self.p_true) else float("nan")
+
+    @staticmethod
+    def _probabilities(source_row, true_row, successors, timepoints, affinity) -> tuple[float, float]:
+        """The affinity probability of the true successor and of the (first) successor the linker actually chose."""
+        chosen_row = successors[source_row][0]
+        timepoint = int(timepoints[source_row])
+        probability = affinity.probabilities(timepoint)
+        sources = np.flatnonzero(timepoints == timepoint)
+        targets = np.flatnonzero(timepoints == timepoint + 1)
+        source_local = int(np.searchsorted(sources, source_row))
+        true_local = int(np.searchsorted(targets, true_row))
+        chosen_local = int(np.searchsorted(targets, chosen_row))
+        return float(probability[source_local, true_local]), float(probability[source_local, chosen_local])
+
+
+def _diagnose(root: DataRoot, device: str, movie: str) -> tuple[DenseFateDiagnosis, MislinkSignal]:
+    """Mount the shipped tracker, run it on `movie`, and decompose its annotated-edge fates and mislink signal."""
     proc = root.processed("biohub_cell_tracking")
     proxy = TestMovieProxy.load(root, (movie,))
     tracker = CellTracker.from_packs(
@@ -125,7 +182,10 @@ def _diagnose(root: DataRoot, device: str, movie: str) -> DenseFateDiagnosis:
     path, truth = proxy.paths[0], proxy.truths[0]
     prediction = tracker.run(path.name, path)
     matching = DistanceMatcher(spacing=proxy.spacing).match(prediction, truth.graph)
-    return DenseFateDiagnosis.of(prediction, truth.graph, matching)
+    affinity = tracker.edge_scorer.affinities(path, prediction, device)
+    return DenseFateDiagnosis.of(prediction, truth.graph, matching), MislinkSignal.of(
+        prediction, truth.graph, matching, affinity
+    )
 
 
 def main() -> None:
@@ -137,11 +197,19 @@ def main() -> None:
     parser.add_argument("--movie", default=DENSE_MOVIE, help="the movie stem to decompose")
     args = parser.parse_args()
 
-    counts = _diagnose(DataRoot.from_config(args.config), args.device, args.movie).counts()
+    diagnosis, signal = _diagnose(DataRoot.from_config(args.config), args.device, args.movie)
+    counts = diagnosis.counts()
     total = sum(counts.values())
     logger.info("movie=%s  annotated edges=%d", args.movie, total)
     for fate, count in counts.items():
         logger.info("  %-18s %5d  %5.1f%%", fate.name, count, 100.0 * count / max(total, 1))
+    logger.info(
+        "mislink signal: %d edges, affinity-inverted (retrain target) = %.1f%%  [mean P_true=%.3f vs P_chosen=%.3f]",
+        len(signal.p_true),
+        100.0 * signal.inverted_fraction(),
+        float(np.mean(signal.p_true)) if len(signal.p_true) else float("nan"),
+        float(np.mean(signal.p_chosen)) if len(signal.p_true) else float("nan"),
+    )
 
 
 if __name__ == "__main__":

@@ -74,10 +74,30 @@ choice — a fraction of an already-small set. The global-over-time paradigm is 
 not the dense lever. `FlowLinker` stays wired as a selectable strategy (`LinkerConfig(name="flow")`), the
 network-simplex solve on 65k nodes runs in ~90 s, but the shipped default remains the assignment linker.
 
-## Conclusion: the dense mislink is exhausted; the lever is recall
+## The mislink signal gate (bead zni)
 
-Post-NMS-fix the dense movie is 94.8 % correct, and every residual bucket is either irreducible with current
-assets (detection), signal-limited to ~9 edges (zni), or noise-level to a re-assignment (flow). No dense
-post-processing lever cracks the pack. The measured, transferable lever is the detection **recall** the
-leaderboard rewards and the sparse local proxy cannot see — the threshold ladder (0.99→0.97 = 0.887→0.892)
-and the NMS un-merge, which are independent and should stack. Wall-time belongs there, not on the dense tail.
+Before retraining anything, `MislinkSignal` (in `dense_diagnosis`) asks whether the affinity even *can* be the
+problem: for every mislinked edge it reads the edge transformer's probability of the true successor versus the
+wrong neighbour the tracker chose. If the affinity ranks the true successor higher (`p_true ≥ p_chosen`) the
+mislink is a *cost* error — the nearer wrong cell won on the distance term — which the bonus/gate sweep already
+refuted (e9b). If it ranks the wrong one higher (`p_chosen > p_true`) the affinity itself is wrong, and only a
+better-trained affinity can fix it.
+
+Post-NMS-fix, on the dense movie's 35 mislinks: **100 % are affinity-inverted**, mean `p_true = 0.134` vs
+`p_chosen = 0.686`. The edge transformer is not merely losing on distance — it is *confidently* scoring the
+wrong near-neighbour far above the true far-successor on exactly the hard crowding cases (the 1.4 % AUC tail
+the aggregate 0.986 hides). This is a signal error, and its shape — a confident wrong *near* neighbour — is
+exactly what **hard-negative mining** targets: teach the transformer that the spatially-proximate competitor is
+*not* the successor. The earlier edge-retrain refutations (bead lna) used synthetic pairs and real
+positives-only; neither mined these near-neighbour hard negatives. So substrate C (real detections + mined
+hard-negatives) is both untested and the correctly-aimed fix — the gate passes, and zni is worth building.
+
+## Conclusion
+
+Post-NMS-fix the dense movie is 94.8 % correct. The *linker/post-processing* levers on the residual are
+exhausted: global-over-time flow nets noise (+0.0007), the conflict subset is a fraction of 2.2 %, and detection
+misses (1.0 %) are irreducible. But the mislinks are not linker-limited — they are affinity-limited, 100 %
+inverted with a wide margin, and hard-negative-shaped. Two live levers remain, on different axes: the detection
+**recall** the leaderboard rewards and the proxy cannot see (threshold 0.99→0.97 = 0.887→0.892, stacking with
+the NMS un-merge — banked now), and a **hard-negative edge-transformer retrain** (zni) aimed at the measured
+100 %-inverted mislink signal.
