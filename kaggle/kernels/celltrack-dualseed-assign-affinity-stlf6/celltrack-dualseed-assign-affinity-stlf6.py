@@ -40,19 +40,14 @@ subprocess.run([sys.executable, "-m", "pip", "install", "--no-index", "--no-deps
 sys.path.insert(0, _KIT_ROOT)
 sys.path.insert(0, str(_PACK_SRC))
 
-import numpy as np  # noqa: E402
 import torch  # noqa: E402
-import zarr  # noqa: E402
 
-from celltrack.assignment_linking import AssignmentLinker  # noqa: E402
 from celltrack.blended_edge_scoring import BlendedEdgeTransformerScorer  # noqa: E402
-from celltrack.gap_closer import DensityGapBridge  # noqa: E402
-from celltrack.linefit_smoother import LinefitSmoother  # noqa: E402
-from celltrack.short_track_filter import ShortTrackFilter  # noqa: E402
+from celltrack.champion import ChampionConfig, ChampionPipeline  # noqa: E402
+from celltrack.pipeline import BlendDetectorScorer  # noqa: E402
+from celltrack.response_cache import ResponseCache  # noqa: E402
 from celltrack.tunet import TemporalUNetDetector  # noqa: E402
 from core.data.submission import Submission  # noqa: E402
-from core.data.tracks import TrackGraph  # noqa: E402
-from core.geometry import Spacing  # noqa: E402
 
 _TEST_GLOB = "/kaggle/input/**/biohub-cell-tracking-during-development/test/*.zarr"
 # 0.98 (recall probe, bead 26l): the node-count bonus-farm at 0.995 was REFUTED on the LB — matched A/B, only
@@ -77,23 +72,9 @@ _EDGE_BLEND = (0.8, 0.2)
 _DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
-def _spacing(path: str) -> Spacing:
-    """The video's physical voxel spacing, read from its OME coordinate transform."""
-    scale = zarr.open_group(path, mode="r").attrs["multiscales"][0]["datasets"][0]["coordinateTransformations"][0][
-        "scale"
-    ]
-    return Spacing(z=float(scale[1]), y=float(scale[2]), x=float(scale[3]))
-
-
-def _blend_nodes(det1: TemporalUNetDetector, det2: TemporalUNetDetector, recipe: object, path: Path) -> TrackGraph:
-    """Average the two seeds' per-frame logits on the device, sigmoid, and read the peaks into an edge-free graph."""
-    logits1 = det1.logit_volumes(path, recipe, _DEVICE)
-    logits2 = det2.logit_volumes(path, recipe, _DEVICE)
-    blended = [
-        torch.sigmoid(torch.as_tensor(np.stack([a, b]), device=_DEVICE).mean(dim=0)).cpu().numpy()
-        for a, b in zip(logits1, logits2)
-    ]
-    return TemporalUNetDetector.graph_from_volumes(blended, det1.voxel_scale(path), _THRESHOLD, recipe, _DEVICE)
+# The shipped recipe's operating point, carried on the one config object ChampionPipeline consumes; the
+# remaining knobs (min_track_length=6, bridge_reach_um=10, smooth_strength=0.8) are its defaults.
+_CHAMPION = ChampionConfig(threshold=_THRESHOLD, gate_um=_GATE_UM, edge_bonus=_EDGE_BONUS, edge_blend=_EDGE_BLEND)
 
 
 def main() -> None:
@@ -101,24 +82,20 @@ def main() -> None:
     print(f"test videos: {len(tests)} on {_DEVICE}", flush=True)
     det1, recipe = TemporalUNetDetector.from_pack(_PACK1, map_location=_DEVICE)
     det2, _ = TemporalUNetDetector.from_pack(_PACK2, map_location=_DEVICE)
-    det1, det2 = det1.to(_DEVICE).eval(), det2.to(_DEVICE).eval()
+    detector = BlendDetectorScorer(
+        detectors=(
+            (det1.to(_DEVICE).eval(), ResponseCache(Path("/kaggle/working/cache"), "seed1")),
+            (det2.to(_DEVICE).eval(), ResponseCache(Path("/kaggle/working/cache"), "seed2")),
+        ),
+        recipe=recipe,
+        device=_DEVICE,
+    )
     edge_scorer = BlendedEdgeTransformerScorer.from_packs((_PACK1, _PACK2), _EDGE_BLEND, _DEVICE)
-    short, smooth = ShortTrackFilter(min_length=6), LinefitSmoother(strength=0.8)
+    pipeline = ChampionPipeline(detector=detector, edge_scorer=edge_scorer, device=_DEVICE, config=_CHAMPION)
     graphs = {}
     for path in tests:
-        spacing = _spacing(path)
-        nodes = _blend_nodes(det1, det2, recipe, Path(path))
-        affinity = edge_scorer.affinities(Path(path), nodes, _DEVICE)
-        linker = AssignmentLinker(
-            spacing=spacing,
-            max_distance_um=_GATE_UM,
-            affinity=affinity,
-            affinity_bonus=_EDGE_BONUS,
-        )
-        bridge = DensityGapBridge(spacing=spacing, reach_um=10.0, max_added_fraction=0.05)
-        linked = bridge.transform(short.transform(linker.link(nodes)))
-        graph = smooth.transform(linked)
         name = os.path.basename(path)[: -len(".zarr")]
+        graph = pipeline.run(name, Path(path))
         graphs[name] = graph
         print(f"  {name}: {len(graph.node_ids)} nodes, {len(graph.edges)} edges", flush=True)
     Submission(graphs=graphs).write_csv("/kaggle/working/submission.csv")
