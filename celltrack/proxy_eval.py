@@ -36,6 +36,7 @@ class TrackerProxyEval:
     thresholds: tuple[float, ...] = (0.99,)
     disappearance_costs: tuple[float, ...] = (0.0,)
     stems: tuple[str, ...] = TEST_MOVIES
+    linker: str = "assignment"
 
     def _mount(self, root: DataRoot) -> tuple[TestMovieProxy, CellTracker]:
         """The loaded proxy and the tracker mounted once — models and per-seed caches shared across the sweep."""
@@ -55,15 +56,16 @@ class TrackerProxyEval:
         results: dict[tuple[float, float], float] = {}
         for threshold in self.thresholds:
             for cost in self.disappearance_costs:
-                config = TrackerConfig(threshold=threshold, linker=LinkerConfig(disappearance_cost=cost))
-                variant = pipeline.with_config(config)
+                linker = LinkerConfig(name=self.linker, disappearance_cost=cost)
+                variant = pipeline.with_config(TrackerConfig(threshold=threshold, linker=linker))
                 results[(threshold, cost)] = proxy.score(variant).score
         return results
 
     def breakdown(self, root: DataRoot) -> dict[str, VideoMetrics]:
         """Per-movie metrics of the tracker at its first swept threshold — separates recall from bonus-farming."""
         proxy, pipeline = self._mount(root)
-        variant = pipeline.with_config(TrackerConfig(threshold=self.thresholds[0]))
+        linker = LinkerConfig(name=self.linker, disappearance_cost=self.disappearance_costs[0])
+        variant = pipeline.with_config(TrackerConfig(threshold=self.thresholds[0], linker=linker))
         return proxy.metrics(variant)
 
     @staticmethod
@@ -89,6 +91,7 @@ class _Args:
     thresholds: tuple[float, ...]
     disappearance_costs: tuple[float, ...]
     stems: tuple[str, ...]
+    linker: str = field(default="assignment")
     stems_label: str = field(default="test")
     per_movie: bool = field(default=False)
 
@@ -102,6 +105,7 @@ class _Args:
         parser.add_argument("--disappearance", default="0.0", help="comma-separated disappearance costs to sweep")
         parser.add_argument("--cv", action="store_true", help="score the fixed-8 CV instead of the four test movies")
         parser.add_argument("--per-movie", action="store_true", help="also log each movie's raw Jaccard and node ratio")
+        parser.add_argument("--linker", default="assignment", help="the linker to score (e.g. assignment, flow)")
         parsed = parser.parse_args()
         return cls(
             config=parsed.config,
@@ -109,6 +113,7 @@ class _Args:
             thresholds=tuple(float(value) for value in parsed.threshold.split(",")),
             disappearance_costs=tuple(float(value) for value in parsed.disappearance.split(",")),
             stems=CV_MOVIES if parsed.cv else TEST_MOVIES,
+            linker=parsed.linker,
             stems_label="cv-8" if parsed.cv else "test-4",
             per_movie=parsed.per_movie,
         )
@@ -119,8 +124,8 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     args = _Args.from_argv()
     root = DataRoot.from_config(args.config)
-    evaluator = TrackerProxyEval(args.device, args.thresholds, args.disappearance_costs, args.stems)
-    logger.info("proxy=%s", args.stems_label)
+    evaluator = TrackerProxyEval(args.device, args.thresholds, args.disappearance_costs, args.stems, args.linker)
+    logger.info("proxy=%s linker=%s", args.stems_label, args.linker)
     if args.per_movie:
         breakdown = evaluator.breakdown(root)
         for stem, metric in breakdown.items():

@@ -101,7 +101,7 @@ class DenseFateDiagnosis:
         return predicted_of_truth
 
     @staticmethod
-    def _label(both, reproduced, source_linked, target_claimed):  # noqa: ANN001, ANN205
+    def _label(both, reproduced, source_linked, target_claimed):
         """Fold the per-edge boolean masks into one exclusive `Fate` code, most-specific outcome first."""
         fates = np.full(len(both), Fate.ENDPOINT_MISSING, dtype=np.int64)
         mislink = both & ~reproduced & source_linked

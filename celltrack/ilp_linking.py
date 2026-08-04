@@ -18,9 +18,6 @@ from dataclasses import dataclass
 import networkx as nx
 import numpy as np
 from jaxtyping import Float, Int
-from motile import Solver, TrackGraph
-from motile.constraints import MaxChildren, MaxParents
-from motile.costs import EdgeSelectedCost, NodeSelectedCost
 from scipy.spatial import KDTree
 
 from celltrack.motion_linking import EdgeAffinity
@@ -57,6 +54,13 @@ class ILPLinker:
 
     def link(self, detections: CellTrackGraph) -> CellTrackGraph:
         """Select the globally cheapest edge set over all frames, then return the detections wired by it."""
+        # motile pulls in the ilpy/SCIP stack, which the SCIP-free submission kernel does not bundle. Importing it
+        # lazily keeps `celltrack.linkers` (and so every kernel) importable without motile — only an actual ILP
+        # solve needs it, which the kernel never runs (it selects the assignment/flow linkers).
+        from motile import Solver, TrackGraph  # noqa: PLC0415
+        from motile.constraints import MaxChildren, MaxParents  # noqa: PLC0415
+        from motile.costs import EdgeSelectedCost, NodeSelectedCost  # noqa: PLC0415
+
         link_reward = 0.0 if self.affinity is not None else _LINK_REWARD
         solver = Solver(TrackGraph(self._candidate_graph(detections), frame_attribute=_FRAME))
         solver.add_cost(NodeSelectedCost(constant=_KEEP_NODE_REWARD))

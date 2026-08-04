@@ -18,12 +18,13 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from celltrack.assignment_linking import AssignmentLinker
 from celltrack.division_linking import DivisionAwareLinker
+from celltrack.flow_linking import FlowLinker
 from celltrack.ilp_linking import ILPLinker
 from celltrack.linking import Linker, NearestNeighbourLinker
 from celltrack.motion_linking import EdgeAffinity, MotionHungarianLinker
 from core.geometry import Spacing
 
-LINKER_NAMES = ("assignment", "nn", "motion", "ilp", "division")
+LINKER_NAMES = ("assignment", "nn", "motion", "ilp", "division", "flow")
 
 
 class LinkerConfig(BaseModel):
@@ -68,5 +69,15 @@ _BUILDERS: dict[str, _Builder] = {
     "ilp": lambda config, spacing, affinity: ILPLinker(spacing=spacing, max_distance_um=config.gate_um),
     "division": lambda config, spacing, affinity: DivisionAwareLinker(
         spacing=spacing, max_distance_um=config.gate_um, division_distance_um=config.division_um
+    ),
+    # The global min-cost-flow linker reads the same gate, affinity and bonus as `assignment`; its extra lever is
+    # the track-boundary cost, which it draws from `disappearance_cost` (the appearance+disappearance charged per
+    # track). At `disappearance_cost = 0` it reduces to `assignment` — that is the A/B baseline for the sweep.
+    "flow": lambda config, spacing, affinity: FlowLinker(
+        spacing=spacing,
+        max_distance_um=config.gate_um,
+        affinity=affinity,
+        affinity_bonus=config.affinity_bonus,
+        boundary_cost=config.disappearance_cost,
     ),
 }
