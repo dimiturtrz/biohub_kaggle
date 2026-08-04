@@ -1,11 +1,14 @@
+from typing import cast
+
 import pytest
 from pydantic import ValidationError
 
+from celltrack.assignment_linking import AssignmentLinker
 from celltrack.division_linking import DivisionAwareLinker
 from celltrack.ilp_linking import ILPLinker
 from celltrack.linkers import LINKER_NAMES, LinkerConfig
 from celltrack.linking import NearestNeighbourLinker
-from celltrack.motion_linking import MotionHungarianLinker
+from celltrack.motion_linking import EdgeAffinity, MotionHungarianLinker
 from core.geometry import Spacing
 
 SPACING = Spacing(z=2.0, y=1.0, x=1.0)
@@ -37,6 +40,17 @@ def test_config_rejects_a_non_positive_radius():
     """Radii cross the same trust boundary — a zero/negative gate is caught at construction."""
     with pytest.raises(ValidationError):
         LinkerConfig(name="nn", gate_um=0.0)
+
+
+def test_build_wires_the_assignment_linker_and_passes_affinity():
+    """The default `assignment` row builds AssignmentLinker with its bonus/disappearance and the given affinity."""
+    affinity = cast(EdgeAffinity, object())
+    linker = LinkerConfig(name="assignment", gate_um=9.0, affinity_bonus=18.0, disappearance_cost=2.0)
+    built = linker.build(SPACING, affinity)
+
+    assert isinstance(built, AssignmentLinker)
+    assert built.affinity is affinity  # the per-video learned affinity is threaded through
+    assert (built.max_distance_um, built.affinity_bonus, built.disappearance_cost) == (9.0, 18.0, 2.0)
 
 
 def test_build_wires_ilp_and_division_gates():

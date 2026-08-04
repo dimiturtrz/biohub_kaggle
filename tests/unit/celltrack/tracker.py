@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from celltrack import tracker as tracker_module
+from celltrack.linkers import LinkerConfig
 from celltrack.linking import Linker
 from celltrack.pipeline import BlendDetectorScorer
 from celltrack.tracker import CellTracker, LinkerStage, TrackerConfig
@@ -79,8 +80,8 @@ def test_run_with_topology_repair(monkeypatch: pytest.MonkeyPatch):
 def test_with_config(monkeypatch: pytest.MonkeyPatch):
     """`with_config` swaps the operating point while keeping the same mounted models."""
     tracker = _tracker(monkeypatch, TrackerConfig())
-    swapped = tracker.with_config(TrackerConfig(disappearance_cost=5.0))
-    assert swapped.config.disappearance_cost == 5.0
+    swapped = tracker.with_config(TrackerConfig(linker=LinkerConfig(disappearance_cost=5.0)))
+    assert swapped.config.linker.disappearance_cost == 5.0
     assert swapped.detector is tracker.detector
 
 
@@ -96,9 +97,9 @@ def test_from_packs(monkeypatch: pytest.MonkeyPatch):
         "from_packs",
         staticmethod(lambda packs, weights, device: _StubEdgeScorer()),
     )
-    config = TrackerConfig(disappearance_cost=3.0)
+    config = TrackerConfig(linker=LinkerConfig(disappearance_cost=3.0))
     tracker = CellTracker.from_packs(Path("p1"), Path("p2"), Path("cache"), "cpu", config)
-    assert tracker.config.disappearance_cost == 3.0
+    assert tracker.config.linker.disappearance_cost == 3.0
     assert isinstance(tracker.detector, BlendDetectorScorer)
 
 

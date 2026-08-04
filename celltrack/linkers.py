@@ -6,22 +6,24 @@ it, not construct it. This is that seam: a validated config carries the union of
 speaks, and `build` dispatches the name to the concrete linker, passing only the radii that one uses. Adding
 a linker means adding one row to the table, not another `if` at every call site.
 
-The config is pydantic (not a plain dataclass) because it crosses a trust boundary — a `--set linker.name=`
-override or a loaded config.json is user input; an unknown name or a non-positive radius is rejected AT
-construction with a clear error, not deep inside `build`.
+`build` takes the per-video edge `affinity` because the shipped `assignment` linker scores each candidate edge
+by a learned `P(s->t)`; the geometry-only linkers ignore it. The config is pydantic (not a plain dataclass)
+because it crosses a trust boundary — a `--set linker.name=` override or a loaded config.json is user input;
+an unknown name or a non-positive radius is rejected AT construction with a clear error, not deep inside `build`.
 """
 
 from collections.abc import Callable
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from celltrack.assignment_linking import AssignmentLinker
 from celltrack.division_linking import DivisionAwareLinker
 from celltrack.ilp_linking import ILPLinker
 from celltrack.linking import Linker, NearestNeighbourLinker
-from celltrack.motion_linking import MotionHungarianLinker
+from celltrack.motion_linking import EdgeAffinity, MotionHungarianLinker
 from core.geometry import Spacing
 
-LINKER_NAMES = ("nn", "motion", "ilp", "division")
+LINKER_NAMES = ("assignment", "nn", "motion", "ilp", "division")
 
 
 class LinkerConfig(BaseModel):
@@ -30,10 +32,12 @@ class LinkerConfig(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    name: str = "nn"
+    name: str = "assignment"
     gate_um: float = Field(10.0, gt=0)
     tight_um: float = Field(6.0, gt=0)
     division_um: float = Field(8.0, gt=0)
+    affinity_bonus: float = Field(20.0, ge=0)
+    disappearance_cost: float = Field(0.0, ge=0)
 
     @field_validator("name")
     @classmethod
@@ -42,18 +46,27 @@ class LinkerConfig(BaseModel):
             raise ValueError(f"unknown linker {name!r}; choose from {LINKER_NAMES}")
         return name
 
-    def build(self, spacing: Spacing) -> Linker:
-        """The concrete linker named by this config, wired with the gates it uses."""
-        return _BUILDERS[self.name](self, spacing)
+    def build(self, spacing: Spacing, affinity: EdgeAffinity | None = None) -> Linker:
+        """The concrete linker named by this config, wired with the gates it uses (and the affinity if it reads one)."""
+        return _BUILDERS[self.name](self, spacing, affinity)
 
 
-_BUILDERS: dict[str, Callable[[LinkerConfig, Spacing], Linker]] = {
-    "nn": lambda config, spacing: NearestNeighbourLinker(spacing=spacing, max_distance_um=config.gate_um),
-    "motion": lambda config, spacing: MotionHungarianLinker(
+_Builder = Callable[[LinkerConfig, Spacing, EdgeAffinity | None], Linker]
+
+_BUILDERS: dict[str, _Builder] = {
+    "assignment": lambda config, spacing, affinity: AssignmentLinker(
+        spacing=spacing,
+        max_distance_um=config.gate_um,
+        affinity=affinity,
+        affinity_bonus=config.affinity_bonus,
+        disappearance_cost=config.disappearance_cost,
+    ),
+    "nn": lambda config, spacing, affinity: NearestNeighbourLinker(spacing=spacing, max_distance_um=config.gate_um),
+    "motion": lambda config, spacing, affinity: MotionHungarianLinker(
         spacing=spacing, tight_gate_um=config.tight_um, loose_gate_um=config.gate_um
     ),
-    "ilp": lambda config, spacing: ILPLinker(spacing=spacing, max_distance_um=config.gate_um),
-    "division": lambda config, spacing: DivisionAwareLinker(
+    "ilp": lambda config, spacing, affinity: ILPLinker(spacing=spacing, max_distance_um=config.gate_um),
+    "division": lambda config, spacing, affinity: DivisionAwareLinker(
         spacing=spacing, max_distance_um=config.gate_um, division_distance_um=config.division_um
     ),
 }

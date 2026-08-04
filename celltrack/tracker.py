@@ -15,10 +15,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
-from celltrack.assignment_linking import AssignmentLinker
 from celltrack.blended_edge_scoring import BlendedEdgeTransformerScorer
 from celltrack.gap_closer import DensityGapBridge
 from celltrack.linefit_smoother import LinefitSmoother
+from celltrack.linkers import LinkerConfig
 from celltrack.linking import Linker
 from celltrack.motion_linking import EdgeAffinity
 from celltrack.pipeline import BlendDetectorScorer
@@ -60,9 +60,7 @@ class TrackerConfig:
     """Every operating-point knob of the tracker recipe, so a sweep varies one object, not a call site."""
 
     threshold: float = 0.99
-    gate_um: float = 10.0
-    edge_bonus: float = 20.0
-    disappearance_cost: float = 0.0
+    linker: LinkerConfig = field(default_factory=LinkerConfig)
     edge_blend: tuple[float, float] = (0.8, 0.2)
     min_track_length: int = 6
     bridge_reach_um: float = 10.0
@@ -124,15 +122,7 @@ class CellTracker:
         one-frame dropouts the pruning leaves in real tracks. Reversing them (bridge then prune) lets the bridge
         splice fragments that the filter would have removed, and scores lower.
         """
-        link = LinkerStage(
-            AssignmentLinker(
-                spacing=spacing,
-                max_distance_um=self.config.gate_um,
-                affinity=affinity,
-                affinity_bonus=self.config.edge_bonus,
-                disappearance_cost=self.config.disappearance_cost,
-            )
-        )
+        link = LinkerStage(self.config.linker.build(spacing, affinity))
         short = ShortTrackFilter(min_length=self.config.min_track_length)
         bridge = DensityGapBridge(
             spacing=spacing,

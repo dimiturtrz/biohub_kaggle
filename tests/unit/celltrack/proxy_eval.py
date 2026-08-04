@@ -33,7 +33,7 @@ class _FakeProxy:
     """A loaded proxy scoring a pipeline by its threshold and disappearance, so the wiring runs without data."""
 
     def score(self, pipeline: _FakePipeline) -> _Score:
-        return _Score(pipeline.config.threshold + pipeline.config.disappearance_cost)
+        return _Score(pipeline.config.threshold + pipeline.config.linker.disappearance_cost)
 
     def metrics(self, pipeline: _FakePipeline) -> dict[str, float]:
         return {"movie": pipeline.config.threshold}

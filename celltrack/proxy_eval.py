@@ -15,6 +15,7 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from celltrack.linkers import LinkerConfig
 from celltrack.proxy import CV_MOVIES, TEST_MOVIES, TestMovieProxy
 from celltrack.tracker import CellTracker, TrackerConfig
 from core.metrics.score import SplitScore, VideoMetrics
@@ -54,7 +55,8 @@ class TrackerProxyEval:
         results: dict[tuple[float, float], float] = {}
         for threshold in self.thresholds:
             for cost in self.disappearance_costs:
-                variant = pipeline.with_config(TrackerConfig(threshold=threshold, disappearance_cost=cost))
+                config = TrackerConfig(threshold=threshold, linker=LinkerConfig(disappearance_cost=cost))
+                variant = pipeline.with_config(config)
                 results[(threshold, cost)] = proxy.score(variant).score
         return results
 

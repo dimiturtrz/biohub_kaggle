@@ -2715,6 +2715,12 @@
     {
       "kind": "references",
       "source": "celltrack.linkers.LinkerConfig",
+      "target": "celltrack.motion_linking.EdgeAffinity",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.linkers.LinkerConfig",
       "target": "core.geometry.Spacing",
       "weight": 1
     },
@@ -3133,6 +3139,12 @@
       "weight": 1
     },
     {
+      "kind": "construct",
+      "source": "celltrack.proxy_eval.TrackerProxyEval.scores",
+      "target": "celltrack.linkers.LinkerConfig",
+      "weight": 1
+    },
+    {
       "kind": "calls",
       "source": "celltrack.proxy_eval.TrackerProxyEval.scores",
       "target": "celltrack.proxy_eval.TrackerProxyEval._mount",
@@ -3447,12 +3459,6 @@
     {
       "kind": "construct",
       "source": "celltrack.tracker.CellTracker._stages",
-      "target": "celltrack.assignment_linking.AssignmentLinker",
-      "weight": 1
-    },
-    {
-      "kind": "construct",
-      "source": "celltrack.tracker.CellTracker._stages",
       "target": "celltrack.gap_closer.DensityGapBridge",
       "weight": 1
     },
@@ -3562,6 +3568,12 @@
       "kind": "calls",
       "source": "celltrack.tracker.LinkerStage.transform",
       "target": "celltrack.linking.Linker.link",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.tracker.TrackerConfig",
+      "target": "celltrack.linkers.LinkerConfig",
       "weight": 1
     },
     {
