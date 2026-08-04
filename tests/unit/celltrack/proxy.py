@@ -83,6 +83,9 @@ def test_load(monkeypatch: pytest.MonkeyPatch):
 def test_load_selects_a_custom_stem_set(monkeypatch: pytest.MonkeyPatch):
     """`load` resolves whatever stems it is given — the CV set, not only the default four test movies."""
 
+    class _Video:
+        spacing = Spacing(z=1.0, y=1.0, x=1.0)
+
     class _Root:
         def videos(self, split: str) -> list[Path]:
             return [Path(f"{stem}.zarr") for stem in (*TEST_MOVIES, "44b6_extra")]
@@ -91,7 +94,7 @@ def test_load_selects_a_custom_stem_set(monkeypatch: pytest.MonkeyPatch):
             return path.with_suffix(".geff")
 
     monkeypatch.setattr(proxy.AnnotatedTracks, "from_geff", staticmethod(lambda store: store.stem))
-    monkeypatch.setattr(proxy.CellVideo, "from_ome_zarr", staticmethod(lambda path: cast(object, type("V", (), {"spacing": Spacing(1.0, 1.0, 1.0)})())))
+    monkeypatch.setattr(proxy.CellVideo, "from_ome_zarr", staticmethod(lambda path: _Video()))
 
     subject = TestMovieProxy.load(cast(DataRoot, _Root()), ("44b6_extra", "44b6_0113de3b"))
 
