@@ -212,6 +212,66 @@
     },
     {
       "kind": "import",
+      "source": "celltrack.detectors",
+      "target": "celltrack.detection",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.detectors",
+      "target": "celltrack.dog_detection",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.detectors",
+      "target": "celltrack.inference",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.detectors",
+      "target": "celltrack.peaks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.detectors",
+      "target": "celltrack.pipeline",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.detectors",
+      "target": "celltrack.response_cache",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.detectors",
+      "target": "celltrack.training.model",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.detectors",
+      "target": "celltrack.tunet",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.detectors",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.detectors",
+      "target": "core.data.video",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "celltrack.division_linking",
       "target": "celltrack.linking",
       "weight": 1
@@ -1858,6 +1918,96 @@
       "kind": "holds",
       "source": "celltrack.detection_eval.RecallComparison",
       "target": "core.metrics.recall.DetectionRecall",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.detectors.Detector",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.detectors.DetectorConfig",
+      "target": "celltrack.detectors.Detector",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.detectors.DetectorConfig",
+      "target": "celltrack.detectors.DetectorContext",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.detectors._DogDetector",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.detectors._DogDetector.nodes",
+      "target": "celltrack.dog_detection.DoGDetector",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.detectors._DogDetector.nodes",
+      "target": "core.data.video.CellVideo.from_ome_zarr",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.detectors._LearnedDetector",
+      "target": "celltrack.training.model.DetectionUNet",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.detectors._LearnedDetector",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.detectors._LearnedDetector.nodes",
+      "target": "celltrack.inference.LearnedDetector",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.detectors._LearnedDetector.nodes",
+      "target": "celltrack.inference.LearnedDetector.detect_above",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.detectors._LearnedDetector.nodes",
+      "target": "celltrack.peaks.PeakExtractor",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.detectors._LearnedDetector.nodes",
+      "target": "core.data.video.CellVideo.from_ome_zarr",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.detectors._ScorerDetector",
+      "target": "celltrack.pipeline.BlendDetectorScorer",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.detectors._ScorerDetector",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.detectors._ScorerDetector.nodes",
+      "target": "celltrack.pipeline.BlendDetectorScorer.nodes",
       "weight": 1
     },
     {
@@ -4995,7 +5145,7 @@
   ],
   "nodes": [
     {
-      "descendants": 44,
+      "descendants": 45,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -5062,6 +5212,14 @@
       "descendants": 0,
       "id": "celltrack.detection_eval",
       "label": "detection_eval",
+      "level": "module",
+      "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.detectors",
+      "label": "detectors",
       "level": "module",
       "parent": "celltrack",
       "role": null
@@ -5640,6 +5798,54 @@
       "label": "RecallComparison",
       "level": "class",
       "parent": "celltrack.detection_eval",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.detectors.Detector",
+      "label": "Detector",
+      "level": "class",
+      "parent": "celltrack.detectors",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.detectors.DetectorConfig",
+      "label": "DetectorConfig",
+      "level": "class",
+      "parent": "celltrack.detectors",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.detectors.DetectorContext",
+      "label": "DetectorContext",
+      "level": "class",
+      "parent": "celltrack.detectors",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.detectors._DogDetector",
+      "label": "_DogDetector",
+      "level": "class",
+      "parent": "celltrack.detectors",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.detectors._LearnedDetector",
+      "label": "_LearnedDetector",
+      "level": "class",
+      "parent": "celltrack.detectors",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.detectors._ScorerDetector",
+      "label": "_ScorerDetector",
+      "level": "class",
+      "parent": "celltrack.detectors",
       "role": "satellite"
     },
     {
@@ -6816,6 +7022,54 @@
       "label": "report",
       "level": "method",
       "parent": "celltrack.detection_eval.DetectionComparison",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.detectors.Detector.nodes",
+      "label": "nodes",
+      "level": "method",
+      "parent": "celltrack.detectors.Detector",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.detectors.DetectorConfig._known_name",
+      "label": "_known_name",
+      "level": "method",
+      "parent": "celltrack.detectors.DetectorConfig",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.detectors.DetectorConfig.build",
+      "label": "build",
+      "level": "method",
+      "parent": "celltrack.detectors.DetectorConfig",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.detectors._DogDetector.nodes",
+      "label": "nodes",
+      "level": "method",
+      "parent": "celltrack.detectors._DogDetector",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.detectors._LearnedDetector.nodes",
+      "label": "nodes",
+      "level": "method",
+      "parent": "celltrack.detectors._LearnedDetector",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.detectors._ScorerDetector.nodes",
+      "label": "nodes",
+      "level": "method",
+      "parent": "celltrack.detectors._ScorerDetector",
       "role": null
     },
     {
