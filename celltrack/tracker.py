@@ -83,7 +83,9 @@ class TrackerConfig:
     # invariants (nearest-neighbour, motion) — it is the frontier's output filter, available not orphaned.
     topology_repair: bool = False
     topology_edge_max_um: float = 14.0
-    smooth_strength: float = 0.8
+    # Swept proxy peak (0.3-0.4); the earlier 0.8 over-smoothed the crowded dense movie off the match radius
+    # (dense raw Jaccard 0.892 -> 0.906 at 0.3). A light de-jitter, not a heavy pull toward the neighbour line.
+    smooth_strength: float = 0.3
 
 
 @dataclass(frozen=True)

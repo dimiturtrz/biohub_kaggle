@@ -15,9 +15,12 @@ from jaxtyping import Float, Int
 
 from core.data.tracks import Adjacency, TrackGraph
 
-# How far each interior node is pulled toward the line between its neighbours: mostly the smoothed position,
-# a little of the original, so a genuinely moving cell is still tracked but the frame-to-frame wobble is gone.
-_SMOOTHING = 0.8
+# How far each interior node is pulled toward the line between its neighbours — a light de-jitter, not a
+# heavy pull. Swept on the proxy: 0.0/0.3/0.4/0.8/1.0 -> 0.9417/0.9426/0.9426/0.9344/0.9340, a broad peak at
+# 0.3-0.4. The earlier 0.8 over-smoothed — on the crowded dense movie it dragged genuinely-moving nodes off
+# their path past the 7um match radius (dense raw Jaccard 0.892 at 0.8 vs 0.906 at 0.3, +0.014), while the
+# sparse movies were unaffected. 0.3 keeps the wobble-removal without the crowding bias.
+_SMOOTHING = 0.3
 
 
 @dataclass(frozen=True)
