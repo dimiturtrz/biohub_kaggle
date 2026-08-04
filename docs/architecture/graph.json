@@ -122,6 +122,72 @@
     },
     {
       "kind": "import",
+      "source": "celltrack.champion",
+      "target": "celltrack.assignment_linking",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.champion",
+      "target": "celltrack.blended_edge_scoring",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.champion",
+      "target": "celltrack.gap_closer",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.champion",
+      "target": "celltrack.linefit_smoother",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.champion",
+      "target": "celltrack.pipeline",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.champion",
+      "target": "celltrack.response_cache",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.champion",
+      "target": "celltrack.short_track_filter",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.champion",
+      "target": "celltrack.tunet",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.champion",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.champion",
+      "target": "core.data.video",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.champion",
+      "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "celltrack.detection",
       "target": "celltrack.peaks",
       "weight": 1
@@ -1732,6 +1798,144 @@
       "kind": "calls",
       "source": "celltrack.center_prior.CenterVetoConfig.resolve",
       "target": "celltrack.center_prior.CenterPriorVeto.for_gate",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.champion.ChampionPipeline",
+      "target": "celltrack.blended_edge_scoring.BlendedEdgeTransformerScorer",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.champion.ChampionPipeline",
+      "target": "celltrack.champion.ChampionConfig",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.champion.ChampionPipeline",
+      "target": "celltrack.champion.ChampionPipeline",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.champion.ChampionPipeline",
+      "target": "celltrack.pipeline.BlendDetectorScorer",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.champion.ChampionPipeline",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.champion.ChampionPipeline",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.champion.ChampionPipeline.from_packs",
+      "target": "celltrack.blended_edge_scoring.BlendedEdgeTransformerScorer.from_packs",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.champion.ChampionPipeline.from_packs",
+      "target": "celltrack.champion.ChampionConfig",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.champion.ChampionPipeline.from_packs",
+      "target": "celltrack.pipeline.BlendDetectorScorer",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.champion.ChampionPipeline.from_packs",
+      "target": "celltrack.response_cache.ResponseCache",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.champion.ChampionPipeline.from_packs",
+      "target": "celltrack.tunet.TemporalUNetDetector.from_pack",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.champion.ChampionPipeline.run",
+      "target": "celltrack.assignment_linking.AssignmentLinker",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.champion.ChampionPipeline.run",
+      "target": "celltrack.assignment_linking.AssignmentLinker.link",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.champion.ChampionPipeline.run",
+      "target": "celltrack.blended_edge_scoring.BlendedEdgeTransformerScorer.affinities",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.champion.ChampionPipeline.run",
+      "target": "celltrack.gap_closer.DensityGapBridge",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.champion.ChampionPipeline.run",
+      "target": "celltrack.gap_closer.DensityGapBridge.transform",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.champion.ChampionPipeline.run",
+      "target": "celltrack.linefit_smoother.LinefitSmoother",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.champion.ChampionPipeline.run",
+      "target": "celltrack.linefit_smoother.LinefitSmoother.transform",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.champion.ChampionPipeline.run",
+      "target": "celltrack.pipeline.BlendDetectorScorer.nodes",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.champion.ChampionPipeline.run",
+      "target": "celltrack.short_track_filter.ShortTrackFilter",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.champion.ChampionPipeline.run",
+      "target": "celltrack.short_track_filter.ShortTrackFilter.transform",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.champion.ChampionPipeline.run",
+      "target": "core.data.video.CellVideo.from_ome_zarr",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.champion.ChampionPipeline.spacing",
+      "target": "core.data.video.CellVideo.from_ome_zarr",
       "weight": 1
     },
     {
@@ -3379,18 +3583,6 @@
       "weight": 1
     },
     {
-      "kind": "holds",
-      "source": "celltrack.proxy_eval.ChampionProxyEval",
-      "target": "celltrack.pipeline.PipelineConfig",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.proxy_eval.ChampionProxyEval",
-      "target": "celltrack.pipeline.Scorer",
-      "weight": 1
-    },
-    {
       "kind": "references",
       "source": "celltrack.proxy_eval.ChampionProxyEval",
       "target": "core.paths.DataRoot",
@@ -3398,44 +3590,20 @@
     },
     {
       "kind": "construct",
-      "source": "celltrack.proxy_eval.ChampionProxyEval._scorers",
-      "target": "celltrack.pipeline.BlendDetectorScorer",
-      "weight": 1
-    },
-    {
-      "kind": "construct",
-      "source": "celltrack.proxy_eval.ChampionProxyEval._scorers",
-      "target": "celltrack.pipeline.DetectorScorer",
-      "weight": 1
-    },
-    {
-      "kind": "construct",
-      "source": "celltrack.proxy_eval.ChampionProxyEval._scorers",
-      "target": "celltrack.response_cache.ResponseCache",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.proxy_eval.ChampionProxyEval._scorers",
-      "target": "celltrack.tunet.TemporalUNetDetector.from_pack",
+      "source": "celltrack.proxy_eval.ChampionProxyEval.scores",
+      "target": "celltrack.champion.ChampionConfig",
       "weight": 1
     },
     {
       "kind": "calls",
       "source": "celltrack.proxy_eval.ChampionProxyEval.scores",
-      "target": "celltrack.pipeline.PipelineConfig.build",
+      "target": "celltrack.champion.ChampionPipeline.from_packs",
       "weight": 1
     },
     {
       "kind": "calls",
       "source": "celltrack.proxy_eval.ChampionProxyEval.scores",
       "target": "celltrack.proxy.TestMovieProxy.load",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.proxy_eval.ChampionProxyEval.scores",
-      "target": "celltrack.proxy_eval.ChampionProxyEval._scorers",
       "weight": 1
     },
     {
@@ -5325,7 +5493,7 @@
   ],
   "nodes": [
     {
-      "descendants": 43,
+      "descendants": 44,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -5368,6 +5536,14 @@
       "descendants": 0,
       "id": "celltrack.center_prior",
       "label": "center_prior",
+      "level": "module",
+      "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.champion",
+      "label": "champion",
       "level": "module",
       "parent": "celltrack",
       "role": null
@@ -5922,6 +6098,22 @@
       "label": "CenterVetoConfig",
       "level": "class",
       "parent": "celltrack.center_prior",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.champion.ChampionConfig",
+      "label": "ChampionConfig",
+      "level": "class",
+      "parent": "celltrack.champion",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.champion.ChampionPipeline",
+      "label": "ChampionPipeline",
+      "level": "class",
+      "parent": "celltrack.champion",
       "role": "satellite"
     },
     {
@@ -7134,6 +7326,38 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.champion.ChampionPipeline.from_packs",
+      "label": "from_packs",
+      "level": "method",
+      "parent": "celltrack.champion.ChampionPipeline",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.champion.ChampionPipeline.run",
+      "label": "run",
+      "level": "method",
+      "parent": "celltrack.champion.ChampionPipeline",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.champion.ChampionPipeline.spacing",
+      "label": "spacing",
+      "level": "method",
+      "parent": "celltrack.champion.ChampionPipeline",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.champion.ChampionPipeline.with_config",
+      "label": "with_config",
+      "level": "method",
+      "parent": "celltrack.champion.ChampionPipeline",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.detection.BlobDetector.centres",
       "label": "centres",
       "level": "method",
@@ -7938,14 +8162,6 @@
       "label": "score",
       "level": "method",
       "parent": "celltrack.proxy.TestMovieProxy",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.proxy_eval.ChampionProxyEval._scorers",
-      "label": "_scorers",
-      "level": "method",
-      "parent": "celltrack.proxy_eval.ChampionProxyEval",
       "role": null
     },
     {

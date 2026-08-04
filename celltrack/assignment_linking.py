@@ -49,6 +49,11 @@ class AssignmentLinker:
     max_distance_um: float
     affinity: EdgeAffinity | None = None
     affinity_bonus: float = 0.0
+    # The cost of leaving a source unlinked (the ILP's disappearance weight). Zero lets a track end freely, so
+    # an edge links only where `distance - bonus*P` is negative; a positive value makes the linker prefer to
+    # continue a track — it takes an edge whose cost is up to `disappearance_cost`, recovering a true successor
+    # the pure-negative rule drops as a track break. The frontier prices this (appearance stays free).
+    disappearance_cost: float = 0.0
 
     def link(self, detections: TrackGraph) -> TrackGraph:
         """Assign each cell to at most one successor, frame pair by frame pair, minimising total edge cost."""
@@ -98,15 +103,16 @@ class AssignmentLinker:
     def _augment_with_skips(self, cost: Float[np.ndarray, "s t"]) -> Float[np.ndarray, "s+t s+t"]:
         """Embed the `s×t` cost in a square matrix giving every node a zero-cost dummy partner (stay unlinked).
 
-        A source's skip dummies occupy the right block, a target's the bottom block, each zero on its own
-        diagonal and forbidden off it; the dummy-dummy corner is free. A source pairs a real target only when
-        that costs less than its zero skip — exactly the ILP's "select an edge only where its cost is negative".
+        A source's skip dummies occupy the right block, a target's the bottom block, each forbidden off its
+        diagonal; the dummy-dummy corner is free. A target's skip is free (appearance costs nothing) while a
+        source's skip costs `disappearance_cost`, so a source pairs a real target only when that costs less
+        than leaving the track to end — the ILP's "select an edge only where its cost beats disappearance".
         """
         s, t = cost.shape
         augmented = np.zeros((s + t, s + t), dtype=np.float64)
         augmented[:s, :t] = cost
         source_skip = np.full((s, s), _FORBIDDEN)
-        np.fill_diagonal(source_skip, 0.0)
+        np.fill_diagonal(source_skip, self.disappearance_cost)
         augmented[:s, t:] = source_skip
         target_skip = np.full((t, t), _FORBIDDEN)
         np.fill_diagonal(target_skip, 0.0)

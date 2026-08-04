@@ -63,3 +63,20 @@ def test_link_with_a_high_affinity_overrides_the_nearer_target():
     )
     graph = linker.link(detections([[0, 0, 0, 0], [1, 0, 1, 0], [1, 0, 4, 0]]))
     assert graph.edges.tolist() == [[0, 20]]
+
+
+def test_disappearance_cost_recovers_a_track_break():
+    """A positive disappearance cost links a source whose only successor costs more than a free skip would.
+
+    With an affinity wired the link reward is zero, so a probability-0 pair five units apart costs 5 — above a
+    free skip, so the default linker ends the track. Charging 6 to disappear makes continuing the cheaper
+    option, recovering the edge; this is the frontier's disappearance weight preferring an unbroken lineage.
+    """
+    affinity = _StubAffinity(np.array([[0.0]], dtype=np.float64))  # affinity present → no link reward, cost = distance
+    coordinates = detections([[0, 0, 0, 0], [1, 0, 5, 0]])
+    ends = AssignmentLinker(spacing=Spacing(z=1.0, y=1.0, x=1.0), max_distance_um=10.0, affinity=affinity)
+    assert ends.link(coordinates).edges.tolist() == []
+    continues = AssignmentLinker(
+        spacing=Spacing(z=1.0, y=1.0, x=1.0), max_distance_um=10.0, affinity=affinity, disappearance_cost=6.0
+    )
+    assert continues.link(coordinates).edges.tolist() == [[0, 10]]
