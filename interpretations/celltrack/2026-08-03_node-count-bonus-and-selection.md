@@ -1,5 +1,16 @@
 # Node-count bonus: split-invariance, productionizability, and final selection (a0u)
 
+> **UPDATE 2026-08-04 — THE CENTRAL CLAIM IS EMPIRICALLY REFUTED ON THE LEADERBOARD.**
+> Matched A/B, only threshold differs: Assignment @thr0.99 (proxy 0.9227) → **LB 0.887**; same @thr0.995
+> node-count-bonus (proxy 0.9287) → **LB 0.880**. Raising the threshold to farm the node-count factor gave
+> +0.006 proxy but **−0.007 LB**. So the factor is NOT split-invariant in practice — trimming detections
+> drops true cells that live in the hidden annotation subset, lowering hidden jaccard. **Do not bonus-farm;
+> do not submit the aggressive per-video-oracle config (it would hurt LB).** New champion = Assignment
+> @thr0.99 = **0.887** (best public). New lever direction: the LB rewards *recall*, so a *lower* threshold
+> (more detections) is the candidate to try — the opposite of what the proxy's node-count signal says. The
+> proxy ranks linker-structure changes correctly but is actively misleading on threshold/node-count.
+> See memory `NODE-COUNT-BONUS-FARMING-ANTI-TRANSFERS-2026-08-04`.
+
 ## The mechanism, exactly
 
 Per video the score is `adjusted_edge_jaccard = max(0, jaccard · (1 − 0.1·ratio))`, with
