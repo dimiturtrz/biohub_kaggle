@@ -3,13 +3,14 @@
 `python -m celltrack.proxy_eval` mounts the published pilkwang packs (single seed and the dual-seed logit
 blend), runs each through the champion post-detection stack on the four test movies, and prints the proxy
 score. The reusable pieces live elsewhere — `TestMovieProxy` owns the movies and the score loop, `PipelineConfig`
-owns the stack — so this is only the wiring that says which detectors and which config to compare.
+owns the stack — so this only says which detectors and which config to compare.
 """
 
 from __future__ import annotations
 
 import argparse
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 
 from celltrack.linkers import LinkerConfig
@@ -32,33 +33,39 @@ _CHAMPION = PipelineConfig(
 )
 
 
-def _scorers(proc: Path, device: str) -> dict[str, Scorer]:  # pragma: no cover - needs the published weight packs
-    """The published-pack scorers to compare: a single seed and the two-seed logit blend."""
-    responses = proc / "cache/responses"
-    split0 = proc / "reference/pilkwang/split_0"
-    seed1, recipe = TemporalUNetDetector.from_pack(split0, map_location=device)
-    seed1 = seed1.to(device).eval()
-    seed2, _ = TemporalUNetDetector.from_pack(
-        proc / "reference/pilkwang/seed2/weights/unet_transformer/split_0", map_location=device
-    )
-    seed2 = seed2.to(device).eval()
-    single = DetectorScorer(seed1, recipe, ResponseCache(responses, "pilkwang_split0_t99"), device)
-    blend = BlendDetectorScorer(
-        detectors=(
-            (seed1, ResponseCache(responses, "pilkwang_seed1_logits")),
-            (seed2, ResponseCache(responses, "pilkwang_seed2_logits")),
-        ),
-        recipe=recipe,
-        device=device,
-    )
-    return {"single-seed": single, "dual-seed": blend}
+@dataclass(frozen=True)
+class ChampionProxyEval:
+    """Scores the champion pipeline on the four test movies for each published-pack scorer."""
 
+    device: str
+    config: PipelineConfig = _CHAMPION
 
-def evaluate(root: DataRoot, device: str) -> dict[str, float]:
-    """The champion-config proxy score for each mounted scorer, keyed by its label."""
-    proxy = TestMovieProxy.load(root)
-    scorers = _scorers(root.processed("biohub_cell_tracking"), device)
-    return {label: proxy.score(_CHAMPION.build(scorer, proxy.spacing)).score for label, scorer in scorers.items()}
+    def _scorers(self, proc: Path) -> dict[str, Scorer]:  # pragma: no cover - needs the published weight packs
+        """The published-pack scorers to compare: a single seed and the two-seed logit blend."""
+        responses = proc / "cache/responses"
+        split0 = proc / "reference/pilkwang/split_0"
+        seed1, recipe = TemporalUNetDetector.from_pack(split0, map_location=self.device)
+        seed1 = seed1.to(self.device).eval()
+        seed2, _ = TemporalUNetDetector.from_pack(
+            proc / "reference/pilkwang/seed2/weights/unet_transformer/split_0", map_location=self.device
+        )
+        seed2 = seed2.to(self.device).eval()
+        single = DetectorScorer(seed1, recipe, ResponseCache(responses, "pilkwang_split0_t99"), self.device)
+        blend = BlendDetectorScorer(
+            detectors=(
+                (seed1, ResponseCache(responses, "pilkwang_seed1_logits")),
+                (seed2, ResponseCache(responses, "pilkwang_seed2_logits")),
+            ),
+            recipe=recipe,
+            device=self.device,
+        )
+        return {"single-seed": single, "dual-seed": blend}
+
+    def scores(self, root: DataRoot) -> dict[str, float]:
+        """The champion-config proxy score for each mounted scorer, keyed by its label."""
+        proxy = TestMovieProxy.load(root)
+        scorers = self._scorers(root.processed("biohub_cell_tracking"))
+        return {label: proxy.score(self.config.build(scorer, proxy.spacing)).score for label, scorer in scorers.items()}
 
 
 def main() -> None:
@@ -69,7 +76,7 @@ def main() -> None:
     parser.add_argument("--device", default="cuda")
     args = parser.parse_args()
     root = DataRoot.from_config(args.config)
-    for label, score in evaluate(root, args.device).items():
+    for label, score in ChampionProxyEval(args.device).scores(root).items():
         logger.info("%-12s proxy score=%.4f", label, score)
 
 

@@ -6,6 +6,7 @@ from typing import cast
 import pytest
 
 from celltrack import proxy_eval
+from celltrack.proxy_eval import ChampionProxyEval
 from core.geometry import Spacing
 from core.paths import DataRoot
 
@@ -18,7 +19,7 @@ class _Score:
 
 
 class _FakeProxy:
-    """A loaded proxy whose score is fixed, so the CLI wiring can be exercised without data or GPU."""
+    """A loaded proxy whose score is fixed, so the CLI wiring runs without data or GPU."""
 
     spacing = Spacing(z=1.0, y=1.0, x=1.0)
 
@@ -35,13 +36,15 @@ class _Root:
 
 def _patch_loads(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(proxy_eval.TestMovieProxy, "load", classmethod(lambda cls, root: _FakeProxy()))
-    monkeypatch.setattr(proxy_eval, "_scorers", lambda proc, device: {"single-seed": object(), "dual-seed": object()})
+    monkeypatch.setattr(
+        ChampionProxyEval, "_scorers", lambda self, proc: {"single-seed": object(), "dual-seed": object()}
+    )
 
 
-def test_evaluate(monkeypatch: pytest.MonkeyPatch):
-    """`evaluate` builds the champion pipeline per scorer and returns each one's proxy score."""
+def test_scores(monkeypatch: pytest.MonkeyPatch):
+    """`scores` builds the champion pipeline per scorer and returns each one's proxy score."""
     _patch_loads(monkeypatch)
-    result = proxy_eval.evaluate(cast(DataRoot, _Root()), "cpu")
+    result = ChampionProxyEval("cpu").scores(cast(DataRoot, _Root()))
     assert result == {"single-seed": 0.9, "dual-seed": 0.9}
 
 
