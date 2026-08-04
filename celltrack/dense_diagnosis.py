@@ -34,6 +34,7 @@ from celltrack.motion_linking import EdgeAffinity
 from celltrack.proxy import TestMovieProxy
 from celltrack.tracker import CellTracker
 from core.data.tracks import Adjacency, TrackGraph
+from core.geometry import Spacing
 from core.metrics.matching import UNMATCHED, DistanceMatcher, NodeMatching
 from core.paths import DataRoot
 
@@ -169,6 +170,20 @@ class MislinkSignal:
         return float(probability[source_local, true_local]), float(probability[source_local, chosen_local])
 
 
+def diagnose(
+    tracker: CellTracker, path: Path, truth: TrackGraph, spacing: Spacing, device: str
+) -> tuple[DenseFateDiagnosis, MislinkSignal]:
+    """Run a tracker on one movie and decompose its annotated-edge fates and mislink signal — the reusable core.
+
+    Takes the tracker so a caller can score a *modified* one (e.g. a finetuned edge head) against the same
+    movie, not only the shipped mount `_diagnose` builds.
+    """
+    prediction = tracker.run(path.name, path)
+    matching = DistanceMatcher(spacing=spacing).match(prediction, truth)
+    affinity = tracker.edge_scorer.affinities(path, prediction, device)
+    return DenseFateDiagnosis.of(prediction, truth, matching), MislinkSignal.of(prediction, truth, matching, affinity)
+
+
 def _diagnose(root: DataRoot, device: str, movie: str) -> tuple[DenseFateDiagnosis, MislinkSignal]:
     """Mount the shipped tracker, run it on `movie`, and decompose its annotated-edge fates and mislink signal."""
     proc = root.processed("biohub_cell_tracking")
@@ -179,13 +194,7 @@ def _diagnose(root: DataRoot, device: str, movie: str) -> tuple[DenseFateDiagnos
         proc / "cache/responses",
         device,
     )
-    path, truth = proxy.paths[0], proxy.truths[0]
-    prediction = tracker.run(path.name, path)
-    matching = DistanceMatcher(spacing=proxy.spacing).match(prediction, truth.graph)
-    affinity = tracker.edge_scorer.affinities(path, prediction, device)
-    return DenseFateDiagnosis.of(prediction, truth.graph, matching), MislinkSignal.of(
-        prediction, truth.graph, matching, affinity
-    )
+    return diagnose(tracker, proxy.paths[0], proxy.truths[0].graph, proxy.spacing, device)
 
 
 def main() -> None:
