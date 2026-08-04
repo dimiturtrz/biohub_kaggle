@@ -23,6 +23,10 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-cov"]
+# The official Kaggle CLI, used only by kaggle/ to push submission kernels + submit. Declared so a bare
+# `uv sync` stops silently uninstalling it (the .exe lands in .venv/Scripts/kaggle.exe; the repo's kaggle/
+# dir shadows the import path, so we invoke the exe by path, never `python -m kaggle`).
+submit = ["kaggle"]
 # The guardrail ANALYZERS are an installed package pinned by scaffold tag (not vendored source) — an engine
 # update is a one-line `devtools_ref` bump on `copier update`, no source diff in your PRs. Imports as
 # `devtools` (`python -m devtools.graph.fitness …`); grimp/networkx arrive transitively. ast-grep/jscpd configs are
