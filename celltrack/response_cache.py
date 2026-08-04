@@ -22,9 +22,48 @@ the NMS reads through. Disk is out-of-repo and cheap; a wrong number replayed fa
 
 from collections.abc import Callable
 from pathlib import Path
+from typing import Protocol
 
 import numpy as np
 from jaxtyping import Float
+
+
+class ResponseStore(Protocol):
+    """A detector's response-volume store: a first forward computes the volumes, later calls decide whether to
+    replay or recompute. The read-out (blend, threshold, link) speaks this contract, not a concrete cache."""
+
+    def responses(
+        self,
+        video_key: str,
+        forward: Callable[[], list[Float[np.ndarray, "z y x"]]],
+        *,
+        kind: str,
+        fingerprint: str,
+    ) -> list[Float[np.ndarray, "z y x"]]:
+        """The response volumes for a video, computing them via `forward` when this store has nothing to replay."""
+        ...
+
+
+class EphemeralResponseStore:
+    """Forwards on every call and persists nothing — the store a single-pass submission mounts.
+
+    A submission forwards each video once and reads it out once; there is no later threshold or linker sweep to
+    amortise, so persisting the full-precision volumes to disk buys nothing and only fills the kernel's bounded
+    working disk (the frontier's dense movie is gigabytes of fp32 logits per seed). This satisfies the same
+    `ResponseStore` contract as `ResponseCache`, but hands the freshly forwarded volumes straight to the read-out
+    and drops them — the equality-NMS still reads them at full precision, in memory, never through disk.
+    """
+
+    def responses(
+        self,
+        video_key: str,
+        forward: Callable[[], list[Float[np.ndarray, "z y x"]]],
+        *,
+        kind: str,
+        fingerprint: str,
+    ) -> list[Float[np.ndarray, "z y x"]]:
+        """Forward the volumes once and return them unpersisted — no replay to amortise in a single pass."""
+        return forward()
 
 
 class ResponseCache:

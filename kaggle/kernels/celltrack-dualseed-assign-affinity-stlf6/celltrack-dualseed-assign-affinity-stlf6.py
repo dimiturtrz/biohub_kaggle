@@ -41,7 +41,7 @@ import torch  # noqa: E402
 from celltrack.blended_edge_scoring import BlendedEdgeTransformerScorer  # noqa: E402
 from celltrack.linkers import LinkerConfig  # noqa: E402
 from celltrack.pipeline import BlendDetectorScorer  # noqa: E402
-from celltrack.response_cache import ResponseCache  # noqa: E402
+from celltrack.response_cache import EphemeralResponseStore  # noqa: E402
 from celltrack.tracker import CellTracker, TrackerConfig  # noqa: E402
 from celltrack.tunet import TemporalUNetDetector  # noqa: E402
 
@@ -70,10 +70,13 @@ def main() -> None:
     pack1, pack2 = pilkwang_packs()
     det1, recipe = TemporalUNetDetector.from_pack(pack1, map_location=_DEVICE)
     det2, _ = TemporalUNetDetector.from_pack(pack2, map_location=_DEVICE)
+    # A submission forwards each video once and reads it out once; an EphemeralResponseStore keeps the fp32
+    # logits in memory for that single NMS read and drops them, so the gigabyte-per-seed volumes never touch
+    # the kernel's bounded /kaggle/working disk (the disk-full failure the caching store caused here).
     detector = BlendDetectorScorer(
         detectors=(
-            (det1.to(_DEVICE).eval(), ResponseCache(Path("/kaggle/working/cache"), "seed1")),
-            (det2.to(_DEVICE).eval(), ResponseCache(Path("/kaggle/working/cache"), "seed2")),
+            (det1.to(_DEVICE).eval(), EphemeralResponseStore()),
+            (det2.to(_DEVICE).eval(), EphemeralResponseStore()),
         ),
         recipe=recipe,
         device=_DEVICE,

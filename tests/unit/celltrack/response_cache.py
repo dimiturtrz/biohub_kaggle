@@ -2,10 +2,29 @@ from pathlib import Path
 
 import numpy as np
 
-from celltrack.response_cache import ResponseCache
+from celltrack.response_cache import EphemeralResponseStore, ResponseCache
 
 
-def test_responses(tmp_path: Path):
+def test_ephemeral_response_store_responses(tmp_path: Path):
+    """The single-pass store recomputes on each request and writes no file — the submission path that fills no disk."""
+    volumes = [np.full((2, 2, 2), 0.7, dtype=np.float32)]
+    calls = 0
+
+    def forward():
+        nonlocal calls
+        calls += 1
+        return volumes
+
+    store = EphemeralResponseStore()
+    first = store.responses("video_x", forward, kind="logit", fingerprint="f")
+    store.responses("video_x", forward, kind="logit", fingerprint="f")
+
+    assert calls == 2  # nothing replayed — every call forwards
+    assert np.array_equal(np.stack(first), np.stack(volumes))
+    assert list(tmp_path.iterdir()) == []  # no volumes persisted to disk
+
+
+def test_response_cache_responses(tmp_path: Path):
     """A first request forwards and persists; a second replays the stored volumes *exactly*, without forwarding.
 
     Exactly, not approximately: `0.99998` is not representable in float16, so a half-precision store would

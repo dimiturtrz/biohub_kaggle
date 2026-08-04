@@ -13,7 +13,7 @@ import numpy as np
 import torch
 from jaxtyping import Float
 
-from celltrack.response_cache import ResponseCache
+from celltrack.response_cache import ResponseStore
 from celltrack.tunet import DetectorRecipe, TemporalUNetDetector
 from core.data.tracks import TrackGraph
 
@@ -29,7 +29,7 @@ class BlendDetectorScorer:
     logit volume returns to the host for the peak read-out.
     """
 
-    detectors: tuple[tuple[TemporalUNetDetector, ResponseCache], ...]
+    detectors: tuple[tuple[TemporalUNetDetector, ResponseStore], ...]
     recipe: DetectorRecipe
     device: str
 
@@ -41,7 +41,7 @@ class BlendDetectorScorer:
         return TemporalUNetDetector.graph_from_volumes(blended, scale, threshold, self.recipe, self.device)
 
     def _cached_logits(
-        self, video_key: str, path: Path, detector: TemporalUNetDetector, cache: ResponseCache
+        self, video_key: str, path: Path, detector: TemporalUNetDetector, cache: ResponseStore
     ) -> list[Float[np.ndarray, "z y x"]]:
         return cache.responses(
             video_key,
