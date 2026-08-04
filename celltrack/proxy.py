@@ -13,9 +13,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from celltrack.linking import Linker
 from core.data.tracks import AnnotatedTracks, TrackGraph
 from core.data.video import CellVideo
 from core.geometry import Spacing
+from core.metrics.edges import EdgeCounts
 from core.metrics.matching import DistanceMatcher
 from core.metrics.score import SplitScore, VideoMetrics
 from core.paths import DataRoot
@@ -56,3 +58,17 @@ class TestMovieProxy:
             for path, truth in zip(self.paths, self.truths, strict=True)
         ]
         return SplitScore.of(metrics)
+
+    def linker_ceiling(self, linker: Linker) -> dict[str, float]:
+        """Per-movie edge-jaccard ceiling: link each movie's GT nodes directly (perfect detection).
+
+        Isolates the linker from the detector — a high ceiling next to a low real-detection score means the
+        loss is real-detection crowding the linker, not missed or false detection.
+        """
+        matcher = DistanceMatcher(spacing=self.spacing)
+        ceilings: dict[str, float] = {}
+        for path, truth in zip(self.paths, self.truths, strict=True):
+            linked = linker.link(truth.graph.without_edges())
+            counts = EdgeCounts.of(linked, truth.graph, matcher.match(linked, truth.graph))
+            ceilings[path.stem] = counts.jaccard()
+        return ceilings

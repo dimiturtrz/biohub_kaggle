@@ -1,6 +1,8 @@
+from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
+import numpy as np
 import pytest
 
 from celltrack import proxy
@@ -8,6 +10,13 @@ from celltrack.proxy import TEST_MOVIES, TestMovieProxy
 from core.data.tracks import AnnotatedTracks, TrackGraph
 from core.geometry import Spacing
 from core.paths import DataRoot
+
+
+@dataclass
+class _Truth:
+    """A stand-in for AnnotatedTracks exposing only the `.graph` the ceiling probe reads."""
+
+    graph: TrackGraph
 
 
 class _StubPipeline:
@@ -69,6 +78,28 @@ def test_load(monkeypatch: pytest.MonkeyPatch):
     assert tuple(p.stem for p in subject.paths) == TEST_MOVIES
     assert subject.truths == tuple(f"truth:{stem}" for stem in TEST_MOVIES)
     assert subject.spacing == spacing
+
+
+def test_linker_ceiling():
+    """A perfect linker (returns the GT edges) scores a ceiling of 1.0 on each movie's GT nodes."""
+    gt = TrackGraph(
+        node_ids=np.array([0, 1], dtype=np.int64),
+        coordinates=np.array([[0, 0, 0, 0], [1, 0, 1, 0]], dtype=np.int64),
+        edges=np.array([[0, 1]], dtype=np.int64),
+    )
+
+    class _PerfectLinker:
+        def link(self, detections: TrackGraph) -> TrackGraph:
+            return TrackGraph(node_ids=detections.node_ids, coordinates=detections.coordinates, edges=gt.edges)
+
+    subject = TestMovieProxy(
+        paths=(Path("m0.zarr"), Path("m1.zarr")),
+        truths=cast(tuple[AnnotatedTracks, ...], (_Truth(gt), _Truth(gt))),
+        spacing=Spacing(z=1.0, y=1.0, x=1.0),
+    )
+    ceilings = subject.linker_ceiling(_PerfectLinker())
+
+    assert ceilings == {"m0": 1.0, "m1": 1.0}
 
 
 def test_load_raises_if_a_movie_is_absent():
