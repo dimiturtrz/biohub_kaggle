@@ -54,6 +54,21 @@ def test_score(monkeypatch: pytest.MonkeyPatch):
     assert seen == [("graph:a.zarr", "truth-a"), ("graph:b.zarr", "truth-b")]
 
 
+def test_metrics(monkeypatch: pytest.MonkeyPatch):
+    """`metrics` runs the pipeline once per movie and keys each movie's metrics by its stem."""
+    monkeypatch.setattr(proxy.VideoMetrics, "of", staticmethod(lambda graph, truth, matcher: (graph, truth)))
+    pipeline = _StubPipeline()
+    subject = TestMovieProxy(
+        paths=(Path("a.zarr"), Path("b.zarr")),
+        truths=cast(tuple[AnnotatedTracks, ...], ("truth-a", "truth-b")),
+        spacing=Spacing(z=1.0, y=1.0, x=1.0),
+    )
+    result = subject.metrics(pipeline)
+
+    assert result == {"a": ("graph:a.zarr", "truth-a"), "b": ("graph:b.zarr", "truth-b")}
+    assert pipeline.calls == [("a.zarr", Path("a.zarr")), ("b.zarr", Path("b.zarr"))]
+
+
 def test_load(monkeypatch: pytest.MonkeyPatch):
     """`load` picks the four movies out of the train set, reads their GEFF truths, and the shared spacing."""
 

@@ -35,6 +35,9 @@ class _FakeProxy:
     def score(self, pipeline: _FakePipeline) -> _Score:
         return _Score(pipeline.config.threshold + pipeline.config.disappearance_cost)
 
+    def metrics(self, pipeline: _FakePipeline) -> dict[str, float]:
+        return {"movie": pipeline.config.threshold}
+
 
 class _Root:
     """A data root exposing only `.processed`, which the mocked pipeline mount ignores."""
@@ -57,6 +60,13 @@ def test_scores(monkeypatch: pytest.MonkeyPatch):
     _patch(monkeypatch)
     result = ChampionProxyEval("cpu", (0.98, 0.99), (0.0,)).scores(cast(DataRoot, _Root()))
     assert result == {(0.98, 0.0): 0.98, (0.99, 0.0): 0.99}
+
+
+def test_breakdown(monkeypatch: pytest.MonkeyPatch):
+    """`breakdown` mounts the champion at its first swept threshold and returns each movie's metrics."""
+    _patch(monkeypatch)
+    result = ChampionProxyEval("cpu", (0.98, 0.99)).breakdown(cast(DataRoot, _Root()))
+    assert result == {"movie": 0.98}
 
 
 def test_from_argv(monkeypatch: pytest.MonkeyPatch):

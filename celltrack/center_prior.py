@@ -117,8 +117,8 @@ class CenterConfirmer:
 class CenterVetoConfig(BaseModel):
     """A stage's centre-prior gate — the confirm threshold and the anisotropic max-pool window (pooled voxels).
 
-    Carried on a division/gap spec so a `PipelineConfig` expresses the vetoed stage declaratively; it is
-    resolved to a `CenterConfirmer` once a video's `CenterPriorVeto` is in hand. The window is anisotropic
+    Carried on a division/gap stage so the veto is expressed declaratively; it is resolved to a
+    `CenterConfirmer` once a video's `CenterPriorVeto` is in hand. The window is anisotropic
     because Z is already at full resolution while Y/X are pooled — the frontier's `(1, 2, 2)` default.
     """
 
@@ -248,8 +248,8 @@ class CenterPrior(nn.Module):
 class CenterPriorScorer:
     """A mounted centre prior plus its heatmap cache: forwards each video once, replays the veto after.
 
-    The parallel of `DetectorScorer` for the veto family — the expensive forward is a pure function of
-    (weights, video) and is cached by video key, so every stage's confirmation replays a cheap max-pool.
+    The parallel of the cache-backed detector scorer for the veto family — the expensive forward is a pure
+    function of (weights, video) and is cached by video key, so every stage's confirmation replays a cheap max-pool.
     """
 
     model: CenterPrior

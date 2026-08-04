@@ -202,7 +202,7 @@ class TemporalUNetDetector(nn.Module):
         sigmoid) recovers one centre per cell. The prob-space `threshold` becomes the equivalent logit floor.
         """
         extractor = cls._extractor(scale, recipe, device)
-        floor = math.log(threshold / (1.0 - threshold))
+        floor = cls._logit_floor(threshold)
         stamped: list[np.ndarray] = []
         for timepoint, volume in enumerate(volumes):
             peaks = cls._capped_peaks(extractor, volume, floor, recipe.keep_per_frame)
@@ -233,6 +233,15 @@ class TemporalUNetDetector(nn.Module):
             x=scale[2] * recipe.downsample[2],
         )
         return PeakExtractor(spacing, scale_um=recipe.pool_kernel_um / 2.0, device=device)
+
+    @staticmethod
+    def _logit_floor(threshold: float) -> float:
+        """The logit-space floor for a probability `threshold` — total over `[0, 1]` (0 keeps all, 1 keeps none)."""
+        if threshold <= 0.0:
+            return -math.inf
+        if threshold >= 1.0:
+            return math.inf
+        return math.log(threshold / (1.0 - threshold))
 
     @staticmethod
     def _capped_peaks(
