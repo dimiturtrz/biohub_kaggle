@@ -101,7 +101,7 @@ def test_detections(tmp_path: Path):
     group.attrs["multiscales"] = [{"datasets": [{"coordinateTransformations": [{"scale": [1.0, 1.0, 1.0, 1.0]}]}]}]
     recipe = DetectorRecipe(downsample=(1, 1, 1), pool_kernel_um=1.0, tta=False)
     video = _video(tmp_path, [1.0, 1.0, 1.0, 1.0])
-    graph = _tiny_detector().detections(video, threshold=0.0, recipe=recipe, device="cpu")
+    graph = _tiny_detector().detections(video, threshold=1e-6, recipe=recipe, device="cpu")
     assert graph.coordinates.shape[1] == 4
     assert graph.edges.shape == (0, 2)
     assert set(graph.timepoints().tolist()) <= {0, 1}

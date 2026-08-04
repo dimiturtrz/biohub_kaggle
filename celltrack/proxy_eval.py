@@ -17,6 +17,7 @@ from pathlib import Path
 
 from celltrack.champion import ChampionConfig, ChampionPipeline
 from celltrack.proxy import CV_MOVIES, TEST_MOVIES, TestMovieProxy
+from core.metrics.score import VideoMetrics
 from core.paths import DataRoot
 
 logger = logging.getLogger(__name__)
@@ -31,8 +32,8 @@ class ChampionProxyEval:
     disappearance_costs: tuple[float, ...] = (0.0,)
     stems: tuple[str, ...] = TEST_MOVIES
 
-    def scores(self, root: DataRoot) -> dict[tuple[float, float], float]:
-        """The proxy score for each `(threshold, disappearance)` pair — the champion mounted once, cache replayed."""
+    def _mount(self, root: DataRoot) -> tuple[TestMovieProxy, ChampionPipeline]:
+        """The loaded proxy and the champion mounted once — models and per-seed caches shared across the sweep."""
         proc = root.processed("biohub_cell_tracking")
         proxy = TestMovieProxy.load(root, self.stems)
         pipeline = ChampionPipeline.from_packs(
@@ -41,12 +42,23 @@ class ChampionProxyEval:
             proc / "cache/responses",
             self.device,
         )
+        return proxy, pipeline
+
+    def scores(self, root: DataRoot) -> dict[tuple[float, float], float]:
+        """The proxy score for each `(threshold, disappearance)` pair — the champion mounted once, cache replayed."""
+        proxy, pipeline = self._mount(root)
         results: dict[tuple[float, float], float] = {}
         for threshold in self.thresholds:
             for cost in self.disappearance_costs:
                 variant = pipeline.with_config(ChampionConfig(threshold=threshold, disappearance_cost=cost))
                 results[(threshold, cost)] = proxy.score(variant).score
         return results
+
+    def breakdown(self, root: DataRoot) -> dict[str, VideoMetrics]:
+        """Per-movie metrics of the champion at its first swept threshold — separates recall from bonus-farming."""
+        proxy, pipeline = self._mount(root)
+        variant = pipeline.with_config(ChampionConfig(threshold=self.thresholds[0]))
+        return proxy.metrics(variant)
 
 
 @dataclass(frozen=True)
@@ -59,6 +71,7 @@ class _Args:
     disappearance_costs: tuple[float, ...]
     stems: tuple[str, ...]
     stems_label: str = field(default="test")
+    per_movie: bool = field(default=False)
 
     @classmethod
     def from_argv(cls) -> "_Args":
@@ -69,6 +82,7 @@ class _Args:
         parser.add_argument("--threshold", default="0.99", help="comma-separated detection thresholds to sweep")
         parser.add_argument("--disappearance", default="0.0", help="comma-separated disappearance costs to sweep")
         parser.add_argument("--cv", action="store_true", help="score the fixed-8 CV instead of the four test movies")
+        parser.add_argument("--per-movie", action="store_true", help="also log each movie's raw Jaccard and node ratio")
         parsed = parser.parse_args()
         return cls(
             config=parsed.config,
@@ -77,6 +91,7 @@ class _Args:
             disappearance_costs=tuple(float(value) for value in parsed.disappearance.split(",")),
             stems=CV_MOVIES if parsed.cv else TEST_MOVIES,
             stems_label="cv-8" if parsed.cv else "test-4",
+            per_movie=parsed.per_movie,
         )
 
 
@@ -87,6 +102,16 @@ def main() -> None:
     root = DataRoot.from_config(args.config)
     evaluator = ChampionProxyEval(args.device, args.thresholds, args.disappearance_costs, args.stems)
     logger.info("proxy=%s", args.stems_label)
+    if args.per_movie:
+        for stem, metric in evaluator.breakdown(root).items():
+            logger.info(
+                "  %-16s raw_jac=%.4f adj_jac=%.4f nodes=%-6d ratio=%+.3f",
+                stem,
+                metric.edges.jaccard(),
+                metric.adjusted_edge_jaccard(),
+                metric.predicted_nodes,
+                metric.total_node_ratio(),
+            )
     for (threshold, cost), score in evaluator.scores(root).items():
         logger.info("threshold=%-6.4f disappearance=%-6.2f proxy score=%.4f", threshold, cost, score)
 

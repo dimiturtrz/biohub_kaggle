@@ -64,14 +64,21 @@ class TestMovieProxy:
         spacing = CellVideo.from_ome_zarr(paths[0]).spacing
         return cls(paths=paths, truths=truths, spacing=spacing)
 
+    def metrics(self, pipeline: LinkingPipeline) -> dict[str, VideoMetrics]:
+        """Each movie's metrics, keyed by stem — the per-video breakdown a split score aggregates away.
+
+        Exposes raw edge Jaccard, node counts and the node-count ratio per movie, so an experiment can tell a
+        real recall/linking gain (raw Jaccard up) from a node-count-bonus artefact (only the ratio moved).
+        """
+        matcher = DistanceMatcher(spacing=self.spacing)
+        return {
+            path.stem: VideoMetrics.of(pipeline.run(path.name, path), truth, matcher)
+            for path, truth in zip(self.paths, self.truths, strict=True)
+        }
+
     def score(self, pipeline: LinkingPipeline) -> SplitScore:
         """Run the pipeline on each movie and aggregate the per-movie metrics into one split score."""
-        matcher = DistanceMatcher(spacing=self.spacing)
-        metrics = [
-            VideoMetrics.of(pipeline.run(path.name, path), truth, matcher)
-            for path, truth in zip(self.paths, self.truths, strict=True)
-        ]
-        return SplitScore.of(metrics)
+        return SplitScore.of(list(self.metrics(pipeline).values()))
 
     def linker_ceiling(self, linker: Linker) -> dict[str, float]:
         """Per-movie edge-jaccard ceiling: link each movie's GT nodes directly (perfect detection).

@@ -58,7 +58,7 @@ class _FakeDetector:
 
     forwards: list[int] = field(default_factory=list)
 
-    def probability_volumes(self, path: Path, recipe: DetectorRecipe, device: str) -> list[np.ndarray]:
+    def logit_volumes(self, path: Path, recipe: DetectorRecipe, device: str) -> list[np.ndarray]:
         self.forwards.append(1)
         return [np.zeros((2, 2, 2), dtype=np.float32)]
 
@@ -92,7 +92,7 @@ class _FakeSeed:
 
 
 def test_blend_detector_scorer_nodes(tmp_path: Path):
-    """The blend averages both seeds' logits, sigmoids, and reads a peak both seeds fire on into a node."""
+    """The blend averages both seeds' logits and reads a peak both seeds fire on into a node."""
     recipe = DetectorRecipe(downsample=(1, 1, 1), pool_kernel_um=1.0, tta=False)
     seeds = (
         (cast(TemporalUNetDetector, _FakeSeed(10.0)), ResponseCache(tmp_path, "seed1")),

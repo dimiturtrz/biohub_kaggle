@@ -14,6 +14,7 @@ not vendored); everything around it — the inference recipe, the peak read-out,
 from __future__ import annotations
 
 import json
+import math
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -147,11 +148,11 @@ class TemporalUNetDetector(nn.Module):
         """Detect cell centres in every frame of a video, returned as an edge-free `TrackGraph`.
 
         The forward pass and the peak read-out are split so the response can be cached (see
-        `probability_volumes`): here they run back to back, the live path. Coordinates come back in the
+        `logit_volumes`): here they run back to back, the live path. Coordinates come back in the
         original full-resolution voxel grid (peaks scaled by the downsample), so the graph drops straight
         into a linker built for the video's native spacing.
         """
-        volumes = self.probability_volumes(path, recipe, device)
+        volumes = self.logit_volumes(path, recipe, device)
         return self.graph_from_volumes(volumes, self.voxel_scale(path), threshold, recipe, device)
 
     def logit_volumes(self, path: Path, recipe: DetectorRecipe, device: str) -> list[Float[np.ndarray, "z y x"]]:
@@ -192,11 +193,19 @@ class TemporalUNetDetector(nn.Module):
         recipe: DetectorRecipe,
         device: str,
     ) -> TrackGraph:
-        """Read cell centres out of cached probability volumes — the cheap, replayable half of detection."""
+        """Read cell centres out of cached **logit** volumes — the cheap, replayable half of detection.
+
+        Suppression runs on the logits, not their sigmoid: `sigmoid` saturates every confident logit (>~16)
+        to an identical fp32 `1.0`, so the valley separating two touching nuclei collapses into the same flat
+        plateau as their peaks and the connected-component labelling merges both cells into one centre. The
+        logits keep that valley, so the reference read-out (`max_pool3d(logits)` equality, threshold on the
+        sigmoid) recovers one centre per cell. The prob-space `threshold` becomes the equivalent logit floor.
+        """
         extractor = cls._extractor(scale, recipe, device)
+        floor = math.log(threshold / (1.0 - threshold))
         stamped: list[np.ndarray] = []
         for timepoint, volume in enumerate(volumes):
-            peaks = cls._capped_peaks(extractor, volume, threshold, recipe.keep_per_frame)
+            peaks = cls._capped_peaks(extractor, volume, floor, recipe.keep_per_frame)
             scaled = peaks * np.array(recipe.downsample)
             stamped.append(np.column_stack([np.full(len(scaled), timepoint), scaled]).astype(np.int64))
         nodes = np.concatenate(stamped) if stamped else np.empty((0, 4), dtype=np.int64)
@@ -227,10 +236,10 @@ class TemporalUNetDetector(nn.Module):
 
     @staticmethod
     def _capped_peaks(
-        extractor: PeakExtractor, probs: Float[np.ndarray, "z y x"], threshold: float, keep: int
+        extractor: PeakExtractor, logits: Float[np.ndarray, "z y x"], floor: float, keep: int
     ) -> Int[np.ndarray, "k 3"]:
-        """Suppressed maxima above `threshold`, capped to the `keep` strongest — bounds the linker's cost matrix."""
-        coordinates, values = extractor.maxima(probs, floor=threshold)
+        """Suppressed logit maxima above the logit `floor`, capped to the `keep` strongest — bounds the cost matrix."""
+        coordinates, values = extractor.maxima(logits, floor=floor)
         if len(coordinates) > keep:
             coordinates = coordinates[np.argsort(values)[::-1][:keep]]
         return coordinates

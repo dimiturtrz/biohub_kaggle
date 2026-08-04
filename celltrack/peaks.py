@@ -78,7 +78,14 @@ class PeakExtractor:
         the linker's pairwise cost matrix. Collapsing each connected component of maxima to its single
         strongest voxel recovers one centre per cell whatever the response looks like.
         """
-        radius = np.ceil(self.spacing.anisotropic_radius(self.scale_um)).astype(int)
+        # Suppression radius = half the rounded cell *diameter* (2 * scale_um) in voxels — the reference
+        # read-out (predict_unet_transformer.py: `k = round(diameter / spacing); pad = k // 2`, an effective
+        # radius of `k // 2`). Rounding the diameter first then halving, rather than ceiling a half-diameter
+        # radius, keeps the window from inflating a whole voxel per axis: at 1.625um isotropic a 5um cell gives
+        # radius 1 (a 3^3 kernel), where `ceil(radius)` gave radius 2 (5^3) and merged cells two voxels apart.
+        # Doubling then halving keeps the kernel odd, so stride-1 symmetric padding is size-preserving (an even
+        # kernel would grow the pooled volume by one voxel). Integer spacing ratios are unchanged by the round.
+        radius = np.rint(2.0 * self.spacing.anisotropic_radius(self.scale_um)).astype(int) // 2
         kernel = tuple(int(2 * axis + 1) for axis in radius)
         padding = tuple(int(axis) for axis in radius)
         pooled = functional.max_pool3d(volume, kernel_size=kernel, stride=1, padding=padding)

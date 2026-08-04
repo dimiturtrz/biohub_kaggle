@@ -603,6 +603,12 @@
     {
       "kind": "import",
       "source": "celltrack.proxy",
+      "target": "celltrack.linking",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.proxy",
       "target": "core.data.tracks",
       "weight": 1
     },
@@ -616,6 +622,12 @@
       "kind": "import",
       "source": "celltrack.proxy",
       "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.proxy",
+      "target": "core.metrics.edges",
       "weight": 1
     },
     {
@@ -639,13 +651,7 @@
     {
       "kind": "import",
       "source": "celltrack.proxy_eval",
-      "target": "celltrack.linkers",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.proxy_eval",
-      "target": "celltrack.pipeline",
+      "target": "celltrack.champion",
       "weight": 1
     },
     {
@@ -657,19 +663,7 @@
     {
       "kind": "import",
       "source": "celltrack.proxy_eval",
-      "target": "celltrack.response_cache",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.proxy_eval",
-      "target": "celltrack.stages",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.proxy_eval",
-      "target": "celltrack.tunet",
+      "target": "core.metrics.score",
       "weight": 1
     },
     {
@@ -1011,6 +1005,12 @@
     {
       "kind": "import",
       "source": "celltrack.tunet",
+      "target": "celltrack.peaks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.tunet",
       "target": "core.data.tracks",
       "weight": 1
     },
@@ -1018,6 +1018,12 @@
       "kind": "import",
       "source": "celltrack.tunet",
       "target": "core.data.video",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.tunet",
+      "target": "core.geometry",
       "weight": 1
     },
     {
@@ -3363,7 +3369,7 @@
     {
       "kind": "calls",
       "source": "celltrack.pipeline.DetectorScorer.nodes",
-      "target": "celltrack.tunet.TemporalUNetDetector.probability_volumes",
+      "target": "celltrack.tunet.TemporalUNetDetector.logit_volumes",
       "weight": 1
     },
     {
@@ -3507,6 +3513,12 @@
     {
       "kind": "references",
       "source": "celltrack.proxy.TestMovieProxy",
+      "target": "core.metrics.score.VideoMetrics",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.proxy.TestMovieProxy",
       "target": "core.paths.DataRoot",
       "weight": 1
     },
@@ -3560,14 +3572,26 @@
     },
     {
       "kind": "calls",
-      "source": "celltrack.proxy.TestMovieProxy.score",
+      "source": "celltrack.proxy.TestMovieProxy.metrics",
       "target": "celltrack.proxy.LinkingPipeline.run",
       "weight": 1
     },
     {
       "kind": "construct",
-      "source": "celltrack.proxy.TestMovieProxy.score",
+      "source": "celltrack.proxy.TestMovieProxy.metrics",
       "target": "core.metrics.matching.DistanceMatcher",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.proxy.TestMovieProxy.metrics",
+      "target": "core.metrics.score.VideoMetrics.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.proxy.TestMovieProxy.score",
+      "target": "celltrack.proxy.TestMovieProxy.metrics",
       "weight": 1
     },
     {
@@ -3577,15 +3601,57 @@
       "weight": 1
     },
     {
-      "kind": "calls",
-      "source": "celltrack.proxy.TestMovieProxy.score",
-      "target": "core.metrics.score.VideoMetrics.of",
+      "kind": "references",
+      "source": "celltrack.proxy_eval.ChampionProxyEval",
+      "target": "celltrack.champion.ChampionPipeline",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.proxy_eval.ChampionProxyEval",
+      "target": "celltrack.proxy.TestMovieProxy",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.proxy_eval.ChampionProxyEval",
+      "target": "core.metrics.score.VideoMetrics",
       "weight": 1
     },
     {
       "kind": "references",
       "source": "celltrack.proxy_eval.ChampionProxyEval",
       "target": "core.paths.DataRoot",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.proxy_eval.ChampionProxyEval._mount",
+      "target": "celltrack.champion.ChampionPipeline.from_packs",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.proxy_eval.ChampionProxyEval._mount",
+      "target": "celltrack.proxy.TestMovieProxy.load",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.proxy_eval.ChampionProxyEval._mount",
+      "target": "core.paths.DataRoot.processed",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.proxy_eval.ChampionProxyEval.breakdown",
+      "target": "celltrack.champion.ChampionConfig",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.proxy_eval.ChampionProxyEval.breakdown",
+      "target": "celltrack.proxy_eval.ChampionProxyEval._mount",
       "weight": 1
     },
     {
@@ -3597,19 +3663,7 @@
     {
       "kind": "calls",
       "source": "celltrack.proxy_eval.ChampionProxyEval.scores",
-      "target": "celltrack.champion.ChampionPipeline.from_packs",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.proxy_eval.ChampionProxyEval.scores",
-      "target": "celltrack.proxy.TestMovieProxy.load",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.proxy_eval.ChampionProxyEval.scores",
-      "target": "core.paths.DataRoot.processed",
+      "target": "celltrack.proxy_eval.ChampionProxyEval._mount",
       "weight": 1
     },
     {
@@ -4743,7 +4797,7 @@
     {
       "kind": "calls",
       "source": "celltrack.tunet.TemporalUNetDetector.detections",
-      "target": "celltrack.tunet.TemporalUNetDetector.probability_volumes",
+      "target": "celltrack.tunet.TemporalUNetDetector.logit_volumes",
       "weight": 1
     },
     {
@@ -8172,10 +8226,34 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.proxy.TestMovieProxy.metrics",
+      "label": "metrics",
+      "level": "method",
+      "parent": "celltrack.proxy.TestMovieProxy",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.proxy.TestMovieProxy.score",
       "label": "score",
       "level": "method",
       "parent": "celltrack.proxy.TestMovieProxy",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.proxy_eval.ChampionProxyEval._mount",
+      "label": "_mount",
+      "level": "method",
+      "parent": "celltrack.proxy_eval.ChampionProxyEval",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.proxy_eval.ChampionProxyEval.breakdown",
+      "label": "breakdown",
+      "level": "method",
+      "parent": "celltrack.proxy_eval.ChampionProxyEval",
       "role": null
     },
     {
