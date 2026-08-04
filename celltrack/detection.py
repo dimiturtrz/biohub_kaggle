@@ -14,6 +14,7 @@ what a learned detector reaches is the budget the model has to win.
 
 from collections.abc import Iterable
 from dataclasses import dataclass
+from typing import Protocol
 
 import numpy as np
 from jaxtyping import Float, Int
@@ -32,6 +33,41 @@ LOW, HIGH = 0.001, 0.999
 CELL_SCALE_UM = 4.0
 
 
+class _FrameResponder(Protocol):
+    """A response-and-suppress blob detector — the two steps `detect_over_frames` drives per frame."""
+
+    def response(self, frame_normalised: Float[np.ndarray, "z y x"]) -> Float[np.ndarray, "z y x"]:
+        """The per-voxel cellness response for one normalised frame."""
+        ...
+
+    def centres(self, response: Float[np.ndarray, "z y x"], keep: int) -> Int[np.ndarray, "k 3"]:
+        """The `keep` strongest suppressed maxima of a response, as `(z, y, x)` voxel indices."""
+        ...
+
+
+def detect_over_frames(
+    detector: _FrameResponder, frames: Iterable[Float[np.ndarray, "z y x"]], frame_count: int, keep: int
+) -> TrackGraph:
+    """Detect the `keep` strongest cell centres across a video's frames, as an edgeless track graph.
+
+    `keep` is spread evenly over the timepoints — the annotation gives a per-video budget, not a per-frame
+    one, and cells are present throughout, so an even split is the assumption-free default. Shared by every
+    response-and-suppress detector (LoG, DoG); the network detector caches its response instead.
+    """
+    per_frame = max(1, round(keep / frame_count))
+    coordinates = [
+        np.column_stack([np.full(len(centres), timepoint), centres])
+        for timepoint, frame in enumerate(frames)
+        for centres in [detector.centres(detector.response(frame), per_frame)]
+    ]
+    stacked = np.concatenate(coordinates).astype(np.int64) if coordinates else np.empty((0, 4), np.int64)
+    return TrackGraph(
+        node_ids=np.arange(len(stacked), dtype=np.int64),
+        coordinates=stacked,
+        edges=np.empty((0, 2), dtype=np.int64),
+    )
+
+
 @dataclass(frozen=True)
 class BlobDetector:
     """Single-scale Laplacian-of-Gaussian blob detection at a physical cell scale."""
@@ -40,23 +76,8 @@ class BlobDetector:
     scale_um: float = CELL_SCALE_UM
 
     def detect(self, frames: Iterable[Float[np.ndarray, "z y x"]], frame_count: int, keep: int) -> TrackGraph:
-        """Detect the `keep` strongest cell centres across a video's frames, as an edgeless track graph.
-
-        `keep` is spread evenly over the timepoints — the annotation gives a per-video budget, not a
-        per-frame one, and cells are present throughout, so an even split is the assumption-free default.
-        """
-        per_frame = max(1, round(keep / frame_count))
-        coordinates = [
-            np.column_stack([np.full(len(centres), timepoint), centres])
-            for timepoint, frame in enumerate(frames)
-            for centres in [self.centres(self.response(frame), per_frame)]
-        ]
-        stacked = np.concatenate(coordinates).astype(np.int64) if coordinates else np.empty((0, 4), np.int64)
-        return TrackGraph(
-            node_ids=np.arange(len(stacked), dtype=np.int64),
-            coordinates=stacked,
-            edges=np.empty((0, 2), dtype=np.int64),
-        )
+        """Detect the `keep` strongest cell centres across a video's frames, as an edgeless track graph."""
+        return detect_over_frames(self, frames, frame_count, keep)
 
     def response(self, frame_normalised: Float[np.ndarray, "z y x"]) -> Float[np.ndarray, "z y x"]:
         """The scale-normalised LoG response — high at a bright blob of about the cell scale.

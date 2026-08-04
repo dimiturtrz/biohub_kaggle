@@ -2,12 +2,29 @@ from pathlib import Path
 
 import numpy as np
 
-from celltrack.detection import BlobDetector
+from celltrack.detection import BlobDetector, detect_over_frames
 from core.data.video import CellVideo
 from core.geometry import Spacing
 
 ISOTROPIC = Spacing(z=1.0, y=1.0, x=1.0)
 DETECTOR = BlobDetector(spacing=ISOTROPIC, scale_um=2.0)
+
+
+def test_detect_over_frames():
+    """The shared loop splits the budget over frames and stamps each frame's centres into an edgeless graph."""
+
+    class _Stub:
+        def response(self, frame: np.ndarray) -> np.ndarray:
+            return frame
+
+        def centres(self, response: np.ndarray, keep: int) -> np.ndarray:
+            return np.array([[0, 0, int(response[0, 0, 0])]], dtype=np.int64)
+
+    frames = [np.full((1, 1, 1), 5, dtype=np.float64), np.full((1, 1, 1), 7, dtype=np.float64)]
+    graph = detect_over_frames(_Stub(), frames, frame_count=2, keep=2)
+
+    assert graph.coordinates.tolist() == [[0, 0, 0, 5], [1, 0, 0, 7]]  # (t, z, y, x), one centre stamped per frame
+    assert graph.edges.shape == (0, 2)
 
 
 def a_blob(shape: tuple[int, int, int], centre: tuple[int, int, int], sigma: float) -> np.ndarray:

@@ -23,7 +23,7 @@ import torch
 from jaxtyping import Float, Int
 from torch.nn import functional
 
-from celltrack.detection import CELL_SCALE_UM
+from celltrack.detection import CELL_SCALE_UM, detect_over_frames
 from celltrack.peaks import PeakExtractor
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
@@ -52,23 +52,8 @@ class DoGDetector:
     device: str = "cuda"
 
     def detect(self, frames: Iterable[Float[np.ndarray, "z y x"]], frame_count: int, keep: int) -> TrackGraph:
-        """Detect the `keep` strongest cell centres across a video's frames, as an edgeless track graph.
-
-        `keep` is spread evenly over the timepoints — the annotation gives a per-video budget, not a
-        per-frame one, and cells are present throughout, so an even split is the assumption-free default.
-        """
-        per_frame = max(1, round(keep / frame_count))
-        coordinates = [
-            np.column_stack([np.full(len(centres), timepoint), centres])
-            for timepoint, frame in enumerate(frames)
-            for centres in [self.centres(self.response(frame), per_frame)]
-        ]
-        stacked = np.concatenate(coordinates).astype(np.int64) if coordinates else np.empty((0, 4), np.int64)
-        return TrackGraph(
-            node_ids=np.arange(len(stacked), dtype=np.int64),
-            coordinates=stacked,
-            edges=np.empty((0, 2), dtype=np.int64),
-        )
+        """Detect the `keep` strongest cell centres across a video's frames, as an edgeless track graph."""
+        return detect_over_frames(self, frames, frame_count, keep)
 
     def response(self, frame_normalised: Float[np.ndarray, "z y x"]) -> Float[np.ndarray, "z y x"]:
         """The per-voxel maximum Difference-of-Gaussians response over the band — high at a blob of any scale in it."""
