@@ -92,12 +92,33 @@ exactly what **hard-negative mining** targets: teach the transformer that the sp
 positives-only; neither mined these near-neighbour hard negatives. So substrate C (real detections + mined
 hard-negatives) is both untested and the correctly-aimed fix — the gate passes, and zni is worth building.
 
+### The hard-negative finetune — refuted
+
+`celltrack/training/edge_finetune.py` runs the probe the gate motivated: detections on three denser 6bba
+movies, each annotated source's nearest wrong targets mined as hard negatives, the transformer finetuned
+(UNet frozen) with the frontier focal-BCE plus a term pushing `P(source → near-decoy) → 0`, evaluated on the
+held-out dense movie. Both weight settings degrade:
+
+| arm | correct | mislink | inversion | P_true | P_chosen |
+|---|---|---|---|---|---|
+| before | 1122 | 35 | 100 % | 0.134 | 0.686 |
+| hard-neg wt 1.0 | 948 | 29 | 96.6 % | 0.017 | 0.501 |
+| hard-neg wt 0.3 | 1046 | 31 | 93.5 % | 0.032 | 0.606 |
+
+The hard-negative term does deflate `P_chosen`, but it crushes `P_true` at least as hard — the finetune
+*flattens* the column rather than re-ranking it, and every arm loses far more correct edges (76–174) than the
+mislinks it fixes (4–6). The mechanism is clear: the wrong near-neighbour and the true far-successor share the
+frozen UNet features, so suppressing the near one's probability drags the whole softmax column — including the
+true edge — down with it. The features at (1,4,4) resolution genuinely favour the near cell; no re-weighting of
+the head separates them. This is the third substrate to refute an edge-retrain (after `lna`'s synthetic and
+real-positives-only), and it rules out the hard-negative shape the gate specifically pointed at.
+
 ## Conclusion
 
-Post-NMS-fix the dense movie is 94.8 % correct. The *linker/post-processing* levers on the residual are
-exhausted: global-over-time flow nets noise (+0.0007), the conflict subset is a fraction of 2.2 %, and detection
-misses (1.0 %) are irreducible. But the mislinks are not linker-limited — they are affinity-limited, 100 %
-inverted with a wide margin, and hard-negative-shaped. Two live levers remain, on different axes: the detection
-**recall** the leaderboard rewards and the proxy cannot see (threshold 0.99→0.97 = 0.887→0.892, stacking with
-the NMS un-merge — banked now), and a **hard-negative edge-transformer retrain** (zni) aimed at the measured
-100 %-inverted mislink signal.
+Every lever on the dense mislink is now exhausted with a mechanism: per-frame cost knobs (`e9b`), global-flow
+linking (`tf5`, +0.0007), complementary/retrained detectors (`884`/`ksv`/`slw`/`fcd`), and affinity retraining
+across three substrates (`lna`×2, `zni`). The dense crowding mislinks are irreducible with the current detector,
+edge model, and (1,4,4) resolution — cracking them needs assets we lack (a stronger detector or edge model, or
+finer resolution), not another post-processing or retraining pass. The one live, transferable lever is the
+detection **recall** the leaderboard rewards and the sparse proxy cannot see: the threshold ladder
+(0.99→0.97 = 0.887→0.892) stacked with the NMS un-merge. That is where the wall-time goes.
