@@ -111,7 +111,12 @@ class CellTracker:
         return graph
 
     def _stages(self, spacing: Spacing, affinity: EdgeAffinity | None) -> tuple[GraphStage, ...]:
-        """The ordered post-detection passes at this video's spacing — link, bridge gaps, drop short, smooth."""
+        """The ordered post-detection passes at this video's spacing — link, drop short tracks, bridge gaps, smooth.
+
+        The short-track filter runs *before* the gap bridge: prune spurious fragments first, then reconnect the
+        one-frame dropouts the pruning leaves in real tracks. Reversing them (bridge then prune) lets the bridge
+        splice fragments that the filter would have removed, and scores lower.
+        """
         return (
             LinkerStage(
                 AssignmentLinker(
@@ -122,12 +127,12 @@ class CellTracker:
                     disappearance_cost=self.config.disappearance_cost,
                 )
             ),
+            ShortTrackFilter(min_length=self.config.min_track_length),
             DensityGapBridge(
                 spacing=spacing,
                 reach_um=self.config.bridge_reach_um,
                 max_added_fraction=self.config.bridge_max_added_fraction,
             ),
-            ShortTrackFilter(min_length=self.config.min_track_length),
             LinefitSmoother(strength=self.config.smooth_strength),
         )
 
