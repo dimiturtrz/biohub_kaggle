@@ -6,9 +6,9 @@ from typing import cast
 import pytest
 
 from celltrack import proxy_eval
-from celltrack.champion import ChampionConfig, ChampionPipeline
 from celltrack.proxy import CV_MOVIES
-from celltrack.proxy_eval import ChampionProxyEval, _Args
+from celltrack.proxy_eval import TrackerProxyEval, _Args
+from celltrack.tracker import CellTracker, TrackerConfig
 from core.paths import DataRoot
 
 
@@ -20,12 +20,12 @@ class _Score:
 
 
 class _FakePipeline:
-    """A mounted champion whose score depends on the config, so the grid produces distinct values."""
+    """A mounted tracker whose score depends on the config, so the grid produces distinct values."""
 
-    def __init__(self, config: ChampionConfig) -> None:
+    def __init__(self, config: TrackerConfig) -> None:
         self.config = config
 
-    def with_config(self, config: ChampionConfig) -> "_FakePipeline":
+    def with_config(self, config: TrackerConfig) -> "_FakePipeline":
         return _FakePipeline(config)
 
 
@@ -49,23 +49,23 @@ class _Root:
 def _patch(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(proxy_eval.TestMovieProxy, "load", classmethod(lambda cls, root, stems=(): _FakeProxy()))
     monkeypatch.setattr(
-        ChampionPipeline,
+        CellTracker,
         "from_packs",
-        classmethod(lambda cls, p1, p2, responses, device, config=None: _FakePipeline(ChampionConfig())),
+        classmethod(lambda cls, p1, p2, responses, device, config=None: _FakePipeline(TrackerConfig())),
     )
 
 
 def test_scores(monkeypatch: pytest.MonkeyPatch):
     """`scores` mounts once and returns the proxy score for every `(threshold, disappearance)` in the grid."""
     _patch(monkeypatch)
-    result = ChampionProxyEval("cpu", (0.98, 0.99), (0.0,)).scores(cast(DataRoot, _Root()))
+    result = TrackerProxyEval("cpu", (0.98, 0.99), (0.0,)).scores(cast(DataRoot, _Root()))
     assert result == {(0.98, 0.0): 0.98, (0.99, 0.0): 0.99}
 
 
 def test_breakdown(monkeypatch: pytest.MonkeyPatch):
-    """`breakdown` mounts the champion at its first swept threshold and returns each movie's metrics."""
+    """`breakdown` mounts the tracker at its first swept threshold and returns each movie's metrics."""
     _patch(monkeypatch)
-    result = ChampionProxyEval("cpu", (0.98, 0.99)).breakdown(cast(DataRoot, _Root()))
+    result = TrackerProxyEval("cpu", (0.98, 0.99)).breakdown(cast(DataRoot, _Root()))
     assert result == {"movie": 0.98}
 
 

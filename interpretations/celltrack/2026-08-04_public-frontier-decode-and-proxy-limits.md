@@ -56,7 +56,7 @@ different detector — the assets the 0.93–0.947 pack presumably has and we do
 
 - **Reachable now:** ~0.90–0.908 via the detection threshold alone (dropped toward 0.96875). Submitted probes
   `thr0.98`/`thr0.97` are pending Kaggle's scoring backlog; they test exactly this.
-- **Infrastructure built this session:** `ChampionPipeline` (the shipped recipe as one runnable, validated to
+- **Infrastructure built this session:** `CellTracker` (the shipped recipe as one runnable, validated to
   reproduce 0.9227) and a generalized `proxy_eval` sweep — every future config is now evaluable in-repo,
   ending the scratchpad-eval era.
 - **Beyond 0.908:** needs a better detector (higher resolution / no-response-cell recovery), not another

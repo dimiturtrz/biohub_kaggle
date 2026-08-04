@@ -1,11 +1,11 @@
-"""CLI: score the shipped champion pipeline across an operating-point sweep on the local proxy.
+"""CLI: score the shipped tracker pipeline across an operating-point sweep on the local proxy.
 
-`python -m celltrack.proxy_eval` mounts the dual-seed AssignmentLinker champion (`ChampionPipeline`) once and
+`python -m celltrack.proxy_eval` mounts the dual-seed AssignmentLinker tracker (`CellTracker`) once and
 scores it over a range rather than at a single guessed point — `--threshold 0.97,0.98,0.99` sweeps the
 detection operating point, `--disappearance a,b,c` the linker's disappearance cost. `--cv` scores the
 fixed-8 local CV (four test movies plus four denser-annotated train videos) instead of the four test movies
 alone; the broader set is not recall-saturated, so its threshold sweep is not flat. `TestMovieProxy` owns the
-movies and the score loop; `ChampionPipeline` owns the recipe.
+movies and the score loop; `CellTracker` owns the recipe.
 """
 
 from __future__ import annotations
@@ -15,8 +15,8 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from celltrack.champion import ChampionConfig, ChampionPipeline
 from celltrack.proxy import CV_MOVIES, TEST_MOVIES, TestMovieProxy
+from celltrack.tracker import CellTracker, TrackerConfig
 from core.metrics.score import VideoMetrics
 from core.paths import DataRoot
 
@@ -24,19 +24,19 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
-class ChampionProxyEval:
-    """Scores the champion across a threshold × disappearance grid on a chosen proxy, mounting once."""
+class TrackerProxyEval:
+    """Scores the tracker across a threshold × disappearance grid on a chosen proxy, mounting once."""
 
     device: str
     thresholds: tuple[float, ...] = (0.99,)
     disappearance_costs: tuple[float, ...] = (0.0,)
     stems: tuple[str, ...] = TEST_MOVIES
 
-    def _mount(self, root: DataRoot) -> tuple[TestMovieProxy, ChampionPipeline]:
-        """The loaded proxy and the champion mounted once — models and per-seed caches shared across the sweep."""
+    def _mount(self, root: DataRoot) -> tuple[TestMovieProxy, CellTracker]:
+        """The loaded proxy and the tracker mounted once — models and per-seed caches shared across the sweep."""
         proc = root.processed("biohub_cell_tracking")
         proxy = TestMovieProxy.load(root, self.stems)
-        pipeline = ChampionPipeline.from_packs(
+        pipeline = CellTracker.from_packs(
             proc / "reference/pilkwang/split_0",
             proc / "reference/pilkwang/seed2/weights/unet_transformer/split_0",
             proc / "cache/responses",
@@ -45,19 +45,19 @@ class ChampionProxyEval:
         return proxy, pipeline
 
     def scores(self, root: DataRoot) -> dict[tuple[float, float], float]:
-        """The proxy score for each `(threshold, disappearance)` pair — the champion mounted once, cache replayed."""
+        """The proxy score for each `(threshold, disappearance)` pair — the tracker mounted once, cache replayed."""
         proxy, pipeline = self._mount(root)
         results: dict[tuple[float, float], float] = {}
         for threshold in self.thresholds:
             for cost in self.disappearance_costs:
-                variant = pipeline.with_config(ChampionConfig(threshold=threshold, disappearance_cost=cost))
+                variant = pipeline.with_config(TrackerConfig(threshold=threshold, disappearance_cost=cost))
                 results[(threshold, cost)] = proxy.score(variant).score
         return results
 
     def breakdown(self, root: DataRoot) -> dict[str, VideoMetrics]:
-        """Per-movie metrics of the champion at its first swept threshold — separates recall from bonus-farming."""
+        """Per-movie metrics of the tracker at its first swept threshold — separates recall from bonus-farming."""
         proxy, pipeline = self._mount(root)
-        variant = pipeline.with_config(ChampionConfig(threshold=self.thresholds[0]))
+        variant = pipeline.with_config(TrackerConfig(threshold=self.thresholds[0]))
         return proxy.metrics(variant)
 
 
@@ -76,7 +76,7 @@ class _Args:
     @classmethod
     def from_argv(cls) -> "_Args":
         """Read the sweep options — threshold and disappearance ranges, and which proxy to score."""
-        parser = argparse.ArgumentParser(description="Sweep the champion's operating point on the local proxy.")
+        parser = argparse.ArgumentParser(description="Sweep the tracker's operating point on the local proxy.")
         parser.add_argument("--config", type=Path, default=Path("paths.yaml"), help="paths.yaml locating the data root")
         parser.add_argument("--device", default="cuda")
         parser.add_argument("--threshold", default="0.99", help="comma-separated detection thresholds to sweep")
@@ -96,11 +96,11 @@ class _Args:
 
 
 def main() -> None:
-    """Mount the champion, sweep its operating point on the chosen proxy, and log each cell of the grid."""
+    """Mount the tracker, sweep its operating point on the chosen proxy, and log each cell of the grid."""
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     args = _Args.from_argv()
     root = DataRoot.from_config(args.config)
-    evaluator = ChampionProxyEval(args.device, args.thresholds, args.disappearance_costs, args.stems)
+    evaluator = TrackerProxyEval(args.device, args.thresholds, args.disappearance_costs, args.stems)
     logger.info("proxy=%s", args.stems_label)
     if args.per_movie:
         for stem, metric in evaluator.breakdown(root).items():

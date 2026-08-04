@@ -3,7 +3,7 @@
 Detection is two moves. The forward — the expensive, GPU, weights-and-video-determined half — runs once per
 seed and is cached, so every later read-out replays cheaply off the host. The read-out — blend the seeds'
 logits, suppress, threshold — is the cheap half a threshold change re-runs alone. `BlendDetectorScorer` is
-that pairing: the frontier's dual-seed detector, no retraining, mounted for `ChampionPipeline`.
+that pairing: the frontier's dual-seed detector, no retraining, mounted for `CellTracker`.
 """
 
 from dataclasses import dataclass

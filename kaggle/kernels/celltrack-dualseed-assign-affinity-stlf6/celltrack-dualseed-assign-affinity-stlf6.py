@@ -43,7 +43,7 @@ sys.path.insert(0, str(_PACK_SRC))
 import torch  # noqa: E402
 
 from celltrack.blended_edge_scoring import BlendedEdgeTransformerScorer  # noqa: E402
-from celltrack.champion import ChampionConfig, ChampionPipeline  # noqa: E402
+from celltrack.tracker import CellTracker, TrackerConfig  # noqa: E402
 from celltrack.pipeline import BlendDetectorScorer  # noqa: E402
 from celltrack.response_cache import ResponseCache  # noqa: E402
 from celltrack.tunet import TemporalUNetDetector  # noqa: E402
@@ -71,9 +71,9 @@ _EDGE_BLEND = (0.8, 0.2)
 _DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
-# The shipped recipe's operating point, carried on the one config object ChampionPipeline consumes; the
+# The shipped recipe's operating point, carried on the one config object CellTracker consumes; the
 # remaining knobs (min_track_length=6, bridge_reach_um=10, smooth_strength=0.8) are its defaults.
-_CHAMPION = ChampionConfig(threshold=_THRESHOLD, gate_um=_GATE_UM, edge_bonus=_EDGE_BONUS, edge_blend=_EDGE_BLEND)
+_CONFIG = TrackerConfig(threshold=_THRESHOLD, gate_um=_GATE_UM, edge_bonus=_EDGE_BONUS, edge_blend=_EDGE_BLEND)
 
 
 def main() -> None:
@@ -90,7 +90,7 @@ def main() -> None:
         device=_DEVICE,
     )
     edge_scorer = BlendedEdgeTransformerScorer.from_packs((_PACK1, _PACK2), _EDGE_BLEND, _DEVICE)
-    pipeline = ChampionPipeline(detector=detector, edge_scorer=edge_scorer, device=_DEVICE, config=_CHAMPION)
+    pipeline = CellTracker(detector=detector, edge_scorer=edge_scorer, device=_DEVICE, config=_CONFIG)
     graphs = {}
     for path in tests:
         name = os.path.basename(path)[: -len(".zarr")]
