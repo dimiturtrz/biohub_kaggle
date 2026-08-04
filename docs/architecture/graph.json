@@ -572,6 +572,48 @@
     },
     {
       "kind": "import",
+      "source": "celltrack.proxy_eval",
+      "target": "celltrack.linkers",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.proxy_eval",
+      "target": "celltrack.pipeline",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.proxy_eval",
+      "target": "celltrack.proxy",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.proxy_eval",
+      "target": "celltrack.response_cache",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.proxy_eval",
+      "target": "celltrack.stages",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.proxy_eval",
+      "target": "celltrack.tunet",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.proxy_eval",
+      "target": "core.paths",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "celltrack.short_track_filter",
       "target": "core.data.tracks",
       "weight": 1
@@ -3225,6 +3267,12 @@
     {
       "kind": "references",
       "source": "celltrack.proxy.TestMovieProxy",
+      "target": "celltrack.linking.Linker",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.proxy.TestMovieProxy",
       "target": "celltrack.proxy.LinkingPipeline",
       "weight": 1
     },
@@ -3256,6 +3304,30 @@
       "kind": "references",
       "source": "celltrack.proxy.TestMovieProxy",
       "target": "core.paths.DataRoot",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.proxy.TestMovieProxy.linker_ceiling",
+      "target": "celltrack.linking.Linker.link",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.proxy.TestMovieProxy.linker_ceiling",
+      "target": "core.metrics.edges.EdgeCounts.of",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.proxy.TestMovieProxy.linker_ceiling",
+      "target": "core.metrics.matching.DistanceMatcher",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.proxy.TestMovieProxy.linker_ceiling",
+      "target": "core.metrics.matching.DistanceMatcher.match",
       "weight": 1
     },
     {
@@ -5187,7 +5259,7 @@
   ],
   "nodes": [
     {
-      "descendants": 42,
+      "descendants": 43,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -5374,6 +5446,14 @@
       "descendants": 0,
       "id": "celltrack.proxy",
       "label": "proxy",
+      "level": "module",
+      "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.proxy_eval",
+      "label": "proxy_eval",
       "level": "module",
       "parent": "celltrack",
       "role": null
@@ -7760,6 +7840,14 @@
       "label": "run",
       "level": "method",
       "parent": "celltrack.proxy.LinkingPipeline",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.proxy.TestMovieProxy.linker_ceiling",
+      "label": "linker_ceiling",
+      "level": "method",
+      "parent": "celltrack.proxy.TestMovieProxy",
       "role": null
     },
     {
