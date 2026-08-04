@@ -1633,6 +1633,12 @@
       "weight": 1
     },
     {
+      "kind": "calls",
+      "source": "celltrack.center_prior.CenterPriorScorer.veto",
+      "target": "celltrack.center_prior.CenterPriorRecipe.fingerprint",
+      "weight": 1
+    },
+    {
       "kind": "construct",
       "source": "celltrack.center_prior.CenterPriorScorer.veto",
       "target": "celltrack.center_prior.CenterPriorVeto",
@@ -2938,6 +2944,12 @@
       "kind": "calls",
       "source": "celltrack.pipeline.BlendDetectorScorer._cached_logits",
       "target": "celltrack.response_cache.ResponseCache.responses",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.pipeline.BlendDetectorScorer._cached_logits",
+      "target": "celltrack.tunet.DetectorRecipe.fingerprint",
       "weight": 1
     },
     {
@@ -6696,6 +6708,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.center_prior.CenterPriorRecipe.fingerprint",
+      "label": "fingerprint",
+      "level": "method",
+      "parent": "celltrack.center_prior.CenterPriorRecipe",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.center_prior.CenterPriorRecipe.from_config",
       "label": "from_config",
       "level": "method",
@@ -8130,6 +8150,14 @@
       "descendants": 0,
       "id": "celltrack.tunet.DetectorRecipe.as_config",
       "label": "as_config",
+      "level": "method",
+      "parent": "celltrack.tunet.DetectorRecipe",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.tunet.DetectorRecipe.fingerprint",
+      "label": "fingerprint",
       "level": "method",
       "parent": "celltrack.tunet.DetectorRecipe",
       "role": null

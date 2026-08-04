@@ -45,6 +45,17 @@ def test_from_config():
     assert recipe.tta is True  # defaulted when absent
 
 
+def test_fingerprint():
+    """The cache fingerprint changes with downsample/TTA (they change the forward), not the read-out params."""
+    base = DetectorRecipe(downsample=(1, 4, 4), tta=True, pool_kernel_um=5.0, keep_per_frame=2000)
+    assert (
+        base.fingerprint()
+        == DetectorRecipe(downsample=(1, 4, 4), tta=True, pool_kernel_um=9.0, keep_per_frame=50).fingerprint()
+    )
+    assert base.fingerprint() != DetectorRecipe(downsample=(1, 2, 2), tta=True).fingerprint()
+    assert base.fingerprint() != DetectorRecipe(downsample=(1, 4, 4), tta=False).fingerprint()
+
+
 def test_recipe_defaults_are_pilkwangs_input_pipeline():
     """The zero-argument recipe is the ×4 Y/X downsample the detector was trained under."""
     assert DetectorRecipe().downsample == (1, 4, 4)

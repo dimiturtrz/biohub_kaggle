@@ -46,6 +46,14 @@ class DetectorRecipe:
     # can fire on noise everywhere; without a cap that flood explodes the linker's per-frame O(N^3) assignment.
     keep_per_frame: int = 2000
 
+    def fingerprint(self) -> str:
+        """A short cache key of the inputs that change the forward response — the downsample and the TTA.
+
+        The read-out params (`pool_kernel_um`, `keep_per_frame`) shape peaks, not the cached logit volumes, so
+        they are excluded: a threshold or NMS-radius change must replay the same cache, not re-forward.
+        """
+        return f"ds{'x'.join(map(str, self.downsample))}_tta{int(self.tta)}"
+
     def as_config(self) -> dict[str, object]:
         """The recipe as a JSON-serialisable dict, saved beside the weights so inference is reproducible."""
         return {

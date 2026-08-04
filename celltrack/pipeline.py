@@ -43,7 +43,12 @@ class BlendDetectorScorer:
     def _cached_logits(
         self, video_key: str, path: Path, detector: TemporalUNetDetector, cache: ResponseCache
     ) -> list[Float[np.ndarray, "z y x"]]:
-        return cache.responses(video_key, lambda: detector.logit_volumes(path, self.recipe, self.device))
+        return cache.responses(
+            video_key,
+            lambda: detector.logit_volumes(path, self.recipe, self.device),
+            kind="logit",
+            fingerprint=self.recipe.fingerprint(),
+        )
 
     def _blend(self, frames: tuple[Float[np.ndarray, "z y x"], ...]) -> Float[np.ndarray, "z y x"]:
         """Mean the seeds' logits on the device — the unsaturated volume the equality-NMS suppresses on."""

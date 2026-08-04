@@ -49,6 +49,10 @@ class CenterPriorRecipe:
     clip_lo: float = -0.5
     clip_hi: float = 6.0
 
+    def fingerprint(self) -> str:
+        """A short cache key of the preprocessing that shapes the heatmap response — every field feeds it."""
+        return f"pf{self.pool_factor}_n{self.norm_lo_pct}-{self.norm_hi_pct}_c{self.clip_lo}-{self.clip_hi}"
+
     @classmethod
     def from_config(cls, config: dict[str, object]) -> "CenterPriorRecipe":
         """Rebuild the recipe from a saved DeepCenter config, tolerating its superset of training keys."""
@@ -259,5 +263,10 @@ class CenterPriorScorer:
 
     def veto(self, video_key: str, path: Path) -> CenterPriorVeto:
         """This video's heatmaps as a `CenterPriorVeto`, forwarding-and-caching on a first miss."""
-        heatmaps = self.cache.responses(video_key, lambda: self.model.heatmaps(path, self.recipe, self.device))
+        heatmaps = self.cache.responses(
+            video_key,
+            lambda: self.model.heatmaps(path, self.recipe, self.device),
+            kind="heatmap",
+            fingerprint=self.recipe.fingerprint(),
+        )
         return CenterPriorVeto(heatmaps=tuple(heatmaps), recipe=self.recipe)

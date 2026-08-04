@@ -43,6 +43,13 @@ def _peaked_heatmap() -> np.ndarray:
     return heatmap
 
 
+def test_fingerprint():
+    """The cache fingerprint distinguishes recipes whose preprocessing differs, and is stable for equal ones."""
+    assert CenterPriorRecipe().fingerprint() == CenterPriorRecipe().fingerprint()
+    assert CenterPriorRecipe().fingerprint() != CenterPriorRecipe(pool_factor=2).fingerprint()
+    assert CenterPriorRecipe().fingerprint() != CenterPriorRecipe(norm_hi_pct=99.9).fingerprint()
+
+
 def test_from_config():
     """The saved DeepCenter config maps to the inference recipe, reading only the preprocessing keys it needs."""
     recipe = CenterPriorRecipe.from_config(
