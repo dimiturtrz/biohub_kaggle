@@ -8,7 +8,7 @@ import pytest
 from celltrack import champion as champion_module
 from celltrack.champion import ChampionConfig, ChampionPipeline
 from celltrack.pipeline import BlendDetectorScorer
-from celltrack.tunet import DetectorRecipe, TemporalUNetDetector
+from celltrack.tunet import DetectorRecipe
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
 
