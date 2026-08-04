@@ -7,9 +7,25 @@ import pytest
 
 from celltrack import proxy_eval
 from celltrack.proxy import CV_MOVIES
-from celltrack.proxy_eval import TrackerProxyEval, _Args
+from celltrack.proxy_eval import TrackerProxyEval, _Args, _override
 from celltrack.tracker import CellTracker, TrackerConfig
 from core.paths import DataRoot
+
+
+def test_override():
+    """`--set` overrides keep each field's type, and a dotted key reaches the nested (pydantic) linker config."""
+    base = TrackerConfig()
+    assert _override(base, "smooth_strength=0.5").smooth_strength == 0.5
+    assert _override(base, "min_track_length=5").min_track_length == 5  # cast to int, not float
+    assert _override(base, "reuse_gap=true").reuse_gap is True  # bool parsed, not the truthy string "true"
+    assert _override(base, "reuse_gap=false").reuse_gap is False
+    assert _override(base, "linker.name=flow").linker.name == "flow"  # dotted key updates the nested config
+
+
+def test_override_rejects_a_bare_key():
+    """An override without `=` is a usage error, caught before it silently no-ops."""
+    with pytest.raises(ValueError, match="key=value"):
+        _override(TrackerConfig(), "smooth_strength")
 
 
 @dataclass
