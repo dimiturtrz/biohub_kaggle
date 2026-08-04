@@ -45,11 +45,11 @@ from celltrack.response_cache import EphemeralResponseStore  # noqa: E402
 from celltrack.tracker import CellTracker, TrackerConfig  # noqa: E402
 from celltrack.tunet import TemporalUNetDetector  # noqa: E402
 
-# 0.99: the known-good threshold (this exact config at 0.99 = LB 0.887, sub 55218808), held fixed so this
-# submission is a clean A/B isolating the reference NMS-window fix (bead 83r: 3^3 suppression, not 5^3, which
-# un-merges crowded cells — proxy 0.9227 -> 0.9344, all raw-Jaccard recall on the dense movie). Threshold
-# recall (0.98/0.97) is a separate LB-only lever probed by other subs; keep one variable moving at a time.
-_THRESHOLD = 0.99
+# 0.97: stack the two independent recall levers the leaderboard rewards. Threshold is a recall lever the sparse
+# proxy cannot see — public 0.99/0.98/0.97 = 0.887/0.891/0.892, matching the disclosed clean-baseline ~0.96875;
+# the 83r NMS 3^3 window fix un-merges crowded cells (more raw-Jaccard recall on the dense bottleneck). Both are
+# recall, so the NMS fix at 0.97 combines them; A/B is vs 55240719 (thr0.97 pre-NMS-fix = 0.892).
+_THRESHOLD = 0.97
 # The gate is the maximum single-frame cell travel: annotated-edge displacement maxes at 9.96um across the four
 # movies (p99.9 = 9.78), so 10um admits every true successor; the proxy is flat 0.929-0.930 over gate 10-15
 # (bead i0a). bonus = 2·gate: a certain association must overpower up to two gate-widths where the nearest-
