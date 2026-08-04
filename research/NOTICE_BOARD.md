@@ -2,6 +2,22 @@
 
 ## Open Questions & Investigation Status
 
+### Online Recheck: Kaggle Notebooks, Discussions, SOTA Models (Aug 2026)
+
+**Status**: 🔶 **PARTIAL** (2026-08-04; notebooks >0.90 unverified, forum activity recent but unsummarized, SOTA models listed)
+**Deep-dive**: [`2026-08-04_kaggle_online_recheck.md`](deep_dives/2026-08-04_kaggle_online_recheck.md)
+
+**Question**: (1) Any public notebooks >0.90? (2) Recent forum posts (since 2026-08-01) on methods? (3) Available pretrained 3D models?
+
+**Findings**:
+- **Q1 — Notebooks >0.90**: UNVERIFIED. No scores >0.90 detected in indexed search; known notebooks (kaiwalyaatulraut, xiaoleilian, pilkwang) have no disclosed scores. Kaggle leaderboard is JavaScript-rendered; direct visit required. [S1, S2]
+- **Q2 — Recent posts**: Confirmed recent activity (José Freitas, Davit Khantadze, Aug 3–4 2026). Topics: synthetic dataset, training time, ensemble diversity. Specific method details NOT indexed; forum visit needed for post titles/content. [S3]
+- **Q3 — Pretrained SOTA**: CONFIRMED. Ultrack (Nature Methods 2025, torch weights downloadable); Cell-TRACTR (Zenodo weights); CellSeg3D (HuggingFace); SAM2-based (zero-shot); CELLECT (2025, 50× faster). Cellpose3D (generalist, slower). StarDist3D (high-precision, limited 3D weights). [S4–S11]
+
+**Next**: Manual Kaggle leaderboard + forum visit for notebook scores + specific post titles. Ultrack + Cell-TRACTR merit testing on fold-0 for ensemble gain.
+
+---
+
 ### Kaggle Metric Scoring & Test Set Split
 
 **Status**: 🔶 **PARTIAL** (2026-08-03; metric formulas confirmed, test overlap unresolved)
