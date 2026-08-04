@@ -17,10 +17,14 @@ from pathlib import Path
 
 from celltrack.proxy import CV_MOVIES, TEST_MOVIES, TestMovieProxy
 from celltrack.tracker import CellTracker, TrackerConfig
-from core.metrics.score import VideoMetrics
+from core.metrics.score import SplitScore, VideoMetrics
 from core.paths import DataRoot
 
 logger = logging.getLogger(__name__)
+
+# The acquisition a movie belongs to is its filename prefix; the two acquisitions differ by ~10x in
+# annotation density, and the node-count term of the score bites hardest where annotation is densest.
+_ACQUISITION_PREFIX = 4
 
 
 @dataclass(frozen=True)
@@ -59,6 +63,19 @@ class TrackerProxyEval:
         proxy, pipeline = self._mount(root)
         variant = pipeline.with_config(TrackerConfig(threshold=self.thresholds[0]))
         return proxy.metrics(variant)
+
+    @staticmethod
+    def by_acquisition(breakdown: dict[str, VideoMetrics]) -> dict[str, SplitScore]:
+        """The split score per acquisition — the operating point read where the node-count term bites unevenly.
+
+        The two acquisitions differ by ~10x in annotation density, so a pooled number hides a shift that helps
+        one and hurts the other; grouping the per-movie metrics by prefix is the density-stratified operating
+        point the old node-budget sweep reported (now on the shipped tracker, not a fold-0 own-detector).
+        """
+        groups: dict[str, list[VideoMetrics]] = {}
+        for stem, metric in breakdown.items():
+            groups.setdefault(stem[:_ACQUISITION_PREFIX], []).append(metric)
+        return {prefix: SplitScore.of(metrics) for prefix, metrics in groups.items()}
 
 
 @dataclass(frozen=True)
@@ -103,7 +120,8 @@ def main() -> None:
     evaluator = TrackerProxyEval(args.device, args.thresholds, args.disappearance_costs, args.stems)
     logger.info("proxy=%s", args.stems_label)
     if args.per_movie:
-        for stem, metric in evaluator.breakdown(root).items():
+        breakdown = evaluator.breakdown(root)
+        for stem, metric in breakdown.items():
             logger.info(
                 "  %-16s raw_jac=%.4f adj_jac=%.4f nodes=%-6d ratio=%+.3f",
                 stem,
@@ -112,6 +130,8 @@ def main() -> None:
                 metric.predicted_nodes,
                 metric.total_node_ratio(),
             )
+        for prefix, split in evaluator.by_acquisition(breakdown).items():
+            logger.info("  acquisition %-6s score=%.4f", prefix, split.score)
     for (threshold, cost), score in evaluator.scores(root).items():
         logger.info("threshold=%-6.4f disappearance=%-6.2f proxy score=%.4f", threshold, cost, score)
 

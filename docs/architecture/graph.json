@@ -416,84 +416,6 @@
     },
     {
       "kind": "import",
-      "source": "celltrack.operating_point",
-      "target": "celltrack.bracket",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.operating_point",
-      "target": "celltrack.detection",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.operating_point",
-      "target": "celltrack.inference",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.operating_point",
-      "target": "celltrack.linking",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.operating_point",
-      "target": "celltrack.peaks",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.operating_point",
-      "target": "celltrack.training.model",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.operating_point",
-      "target": "core.data.split",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.operating_point",
-      "target": "core.data.tracks",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.operating_point",
-      "target": "core.data.video",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.operating_point",
-      "target": "core.geometry",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.operating_point",
-      "target": "core.metrics.matching",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.operating_point",
-      "target": "core.metrics.score",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.operating_point",
-      "target": "core.paths",
-      "weight": 1
-    },
-    {
-      "kind": "import",
       "source": "celltrack.peaks",
       "target": "core.geometry",
       "weight": 1
@@ -2912,126 +2834,6 @@
     },
     {
       "kind": "holds",
-      "source": "celltrack.operating_point.OperatingPointSweep",
-      "target": "celltrack.inference.LearnedDetector",
-      "weight": 1
-    },
-    {
-      "kind": "holds",
-      "source": "celltrack.operating_point.OperatingPointSweep",
-      "target": "celltrack.linking.Linker",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.operating_point.OperatingPointSweep",
-      "target": "celltrack.operating_point.OperatingPointSweep",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.operating_point.OperatingPointSweep",
-      "target": "celltrack.operating_point.SweepPoint",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.operating_point.OperatingPointSweep",
-      "target": "celltrack.training.model.Checkpoint",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.operating_point.OperatingPointSweep",
-      "target": "core.data.tracks.AnnotatedTracks",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.operating_point.OperatingPointSweep",
-      "target": "core.data.video.CellVideo",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.operating_point.OperatingPointSweep",
-      "target": "core.geometry.Spacing",
-      "weight": 1
-    },
-    {
-      "kind": "holds",
-      "source": "celltrack.operating_point.OperatingPointSweep",
-      "target": "core.metrics.matching.DistanceMatcher",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.operating_point.OperatingPointSweep.at",
-      "target": "celltrack.inference.LearnedDetector.detect",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.operating_point.OperatingPointSweep.at",
-      "target": "celltrack.linking.Linker.link",
-      "weight": 1
-    },
-    {
-      "kind": "construct",
-      "source": "celltrack.operating_point.OperatingPointSweep.at",
-      "target": "celltrack.operating_point.SweepPoint",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.operating_point.OperatingPointSweep.at",
-      "target": "core.metrics.score.VideoMetrics.of",
-      "weight": 1
-    },
-    {
-      "kind": "construct",
-      "source": "celltrack.operating_point.OperatingPointSweep.from_checkpoint",
-      "target": "celltrack.inference.LearnedDetector",
-      "weight": 1
-    },
-    {
-      "kind": "construct",
-      "source": "celltrack.operating_point.OperatingPointSweep.from_checkpoint",
-      "target": "celltrack.linking.NearestNeighbourLinker",
-      "weight": 1
-    },
-    {
-      "kind": "construct",
-      "source": "celltrack.operating_point.OperatingPointSweep.from_checkpoint",
-      "target": "celltrack.peaks.PeakExtractor",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.operating_point.OperatingPointSweep.from_checkpoint",
-      "target": "celltrack.training.model.DetectionUNet.from_checkpoint",
-      "weight": 1
-    },
-    {
-      "kind": "construct",
-      "source": "celltrack.operating_point.OperatingPointSweep.from_checkpoint",
-      "target": "core.metrics.matching.DistanceMatcher",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.operating_point.OperatingPointSweep.report",
-      "target": "core.metrics.score.SplitScore.of",
-      "weight": 1
-    },
-    {
-      "kind": "holds",
-      "source": "celltrack.operating_point.SweepPoint",
-      "target": "core.metrics.score.VideoMetrics",
-      "weight": 1
-    },
-    {
-      "kind": "holds",
       "source": "celltrack.peaks.PeakExtractor",
       "target": "core.geometry.Spacing",
       "weight": 1
@@ -3279,6 +3081,12 @@
     {
       "kind": "references",
       "source": "celltrack.proxy_eval.TrackerProxyEval",
+      "target": "core.metrics.score.SplitScore",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.proxy_eval.TrackerProxyEval",
       "target": "core.metrics.score.VideoMetrics",
       "weight": 1
     },
@@ -3316,6 +3124,12 @@
       "kind": "construct",
       "source": "celltrack.proxy_eval.TrackerProxyEval.breakdown",
       "target": "celltrack.tracker.TrackerConfig",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.proxy_eval.TrackerProxyEval.by_acquisition",
+      "target": "core.metrics.score.SplitScore.of",
       "weight": 1
     },
     {
@@ -5151,7 +4965,7 @@
   ],
   "nodes": [
     {
-      "descendants": 44,
+      "descendants": 43,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -5314,14 +5128,6 @@
       "descendants": 0,
       "id": "celltrack.motion_linking",
       "label": "motion_linking",
-      "level": "module",
-      "parent": "celltrack",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.operating_point",
-      "label": "operating_point",
       "level": "module",
       "parent": "celltrack",
       "role": null
@@ -5964,22 +5770,6 @@
       "label": "MotionHungarianLinker",
       "level": "class",
       "parent": "celltrack.motion_linking",
-      "role": "satellite"
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.operating_point.OperatingPointSweep",
-      "label": "OperatingPointSweep",
-      "level": "class",
-      "parent": "celltrack.operating_point",
-      "role": "satellite"
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.operating_point.SweepPoint",
-      "label": "SweepPoint",
-      "level": "class",
-      "parent": "celltrack.operating_point",
       "role": "satellite"
     },
     {
@@ -7528,30 +7318,6 @@
     },
     {
       "descendants": 0,
-      "id": "celltrack.operating_point.OperatingPointSweep.at",
-      "label": "at",
-      "level": "method",
-      "parent": "celltrack.operating_point.OperatingPointSweep",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.operating_point.OperatingPointSweep.from_checkpoint",
-      "label": "from_checkpoint",
-      "level": "method",
-      "parent": "celltrack.operating_point.OperatingPointSweep",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.operating_point.OperatingPointSweep.report",
-      "label": "report",
-      "level": "method",
-      "parent": "celltrack.operating_point.OperatingPointSweep",
-      "role": null
-    },
-    {
-      "descendants": 0,
       "id": "celltrack.peaks.PeakExtractor._local_maxima",
       "label": "_local_maxima",
       "level": "method",
@@ -7666,6 +7432,14 @@
       "descendants": 0,
       "id": "celltrack.proxy_eval.TrackerProxyEval.breakdown",
       "label": "breakdown",
+      "level": "method",
+      "parent": "celltrack.proxy_eval.TrackerProxyEval",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.proxy_eval.TrackerProxyEval.by_acquisition",
+      "label": "by_acquisition",
       "level": "method",
       "parent": "celltrack.proxy_eval.TrackerProxyEval",
       "role": null

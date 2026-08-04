@@ -69,6 +69,14 @@ def test_breakdown(monkeypatch: pytest.MonkeyPatch):
     assert result == {"movie": 0.98}
 
 
+def test_by_acquisition(monkeypatch: pytest.MonkeyPatch):
+    """`by_acquisition` groups the per-movie metrics by their filename prefix into one split score each."""
+    monkeypatch.setattr(proxy_eval.SplitScore, "of", staticmethod(lambda metrics: metrics))
+    breakdown = {"44b6_a": "m1", "44b6_b": "m2", "6bba_c": "m3"}
+    result = TrackerProxyEval.by_acquisition(cast(dict, breakdown))
+    assert result == {"44b6": ["m1", "m2"], "6bba": ["m3"]}
+
+
 def test_from_argv(monkeypatch: pytest.MonkeyPatch):
     """`from_argv` parses the threshold and disappearance ranges and selects the CV proxy under `--cv`."""
     monkeypatch.setattr(sys, "argv", ["proxy_eval", "--threshold", "0.97,0.99", "--disappearance", "0.0,2.0", "--cv"])
