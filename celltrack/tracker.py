@@ -17,7 +17,7 @@ from typing import Protocol
 
 from celltrack.affinity_division import AffinityDivisionConfig
 from celltrack.blended_edge_scoring import BlendedEdgeTransformerScorer
-from celltrack.gap_closer import DensityGapBridge
+from celltrack.gap_closer import DensityGapBridge, GapCloser
 from celltrack.linefit_smoother import LinefitSmoother
 from celltrack.linkers import LinkerConfig
 from celltrack.linking import Linker
@@ -69,6 +69,14 @@ class TrackerConfig:
     min_track_length: int = 6
     bridge_reach_um: float = 10.0
     bridge_max_added_fraction: float = 0.05
+    # Off by default: reuse an existing isolated detection at t+1 to bridge a one-frame gap (geometry only, no
+    # invented node), complementary to the motion-synthetic DensityGapBridge. Inert at thr0.99 (few isolated
+    # nodes survive), but the lower-threshold recall regime (thr0.97) leaves more isolated detections to reuse —
+    # enable it there to A/B whether the precision-safe reuse recovers dropped edges the synthetic bridge misses.
+    reuse_gap: bool = False
+    reuse_gate_um: float = 6.0
+    reuse_radius_um: float = 3.2
+    reuse_max_added_fraction: float = 0.05
     # Off by default: on the shipped path `AssignmentLinker` already guarantees consecutive-frame + single-parent
     # edges and a tighter gate than `topology_edge_max_um`, and `ShortTrackFilter` drops the unbacked nodes, so
     # the repair is a measured no-op (proxy 0.9344 either way). Enable it behind a linker that lacks those
@@ -134,6 +142,20 @@ class CellTracker:
             if self.config.division is not None and affinity is not None
             else ()
         )
+        # Reuse-bridge runs before the short-track filter so the isolated t+1 nodes it links through survive as
+        # part of a bridged track rather than being pruned as length-1 fragments first.
+        reuse = (
+            (
+                GapCloser(
+                    spacing=spacing,
+                    gate_um=self.config.reuse_gate_um,
+                    reuse_um=self.config.reuse_radius_um,
+                    max_added_fraction=self.config.reuse_max_added_fraction,
+                ),
+            )
+            if self.config.reuse_gap
+            else ()
+        )
         short = ShortTrackFilter(min_length=self.config.min_track_length)
         bridge = DensityGapBridge(
             spacing=spacing,
@@ -145,7 +167,7 @@ class CellTracker:
         # final — after bridging — so it prunes exactly the nodes the finished edge set leaves unbacked. It is
         # the frontier's output filter; optional because prune-isolated changes the node count the metric reads.
         repair = (TopologyRepair(spacing, self.config.topology_edge_max_um),) if self.config.topology_repair else ()
-        return (link, *divide, short, bridge, *repair, smooth)
+        return (link, *reuse, *divide, short, bridge, *repair, smooth)
 
     def spacing(self, path: Path) -> Spacing:
         """The video's physical voxel spacing — exposed so a caller can build a matching metric matcher."""

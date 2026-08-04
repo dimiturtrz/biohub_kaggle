@@ -37,6 +37,7 @@ class TrackerProxyEval:
     disappearance_costs: tuple[float, ...] = (0.0,)
     stems: tuple[str, ...] = TEST_MOVIES
     linker: str = "assignment"
+    reuse_gap: bool = False
 
     def _mount(self, root: DataRoot) -> tuple[TestMovieProxy, CellTracker]:
         """The loaded proxy and the tracker mounted once — models and per-seed caches shared across the sweep."""
@@ -57,16 +58,16 @@ class TrackerProxyEval:
         for threshold in self.thresholds:
             for cost in self.disappearance_costs:
                 linker = LinkerConfig(name=self.linker, disappearance_cost=cost)
-                variant = pipeline.with_config(TrackerConfig(threshold=threshold, linker=linker))
-                results[(threshold, cost)] = proxy.score(variant).score
+                config = TrackerConfig(threshold=threshold, linker=linker, reuse_gap=self.reuse_gap)
+                results[(threshold, cost)] = proxy.score(pipeline.with_config(config)).score
         return results
 
     def breakdown(self, root: DataRoot) -> dict[str, VideoMetrics]:
         """Per-movie metrics of the tracker at its first swept threshold — separates recall from bonus-farming."""
         proxy, pipeline = self._mount(root)
         linker = LinkerConfig(name=self.linker, disappearance_cost=self.disappearance_costs[0])
-        variant = pipeline.with_config(TrackerConfig(threshold=self.thresholds[0], linker=linker))
-        return proxy.metrics(variant)
+        config = TrackerConfig(threshold=self.thresholds[0], linker=linker, reuse_gap=self.reuse_gap)
+        return proxy.metrics(pipeline.with_config(config))
 
     @staticmethod
     def by_acquisition(breakdown: dict[str, VideoMetrics]) -> dict[str, SplitScore]:
@@ -92,6 +93,7 @@ class _Args:
     disappearance_costs: tuple[float, ...]
     stems: tuple[str, ...]
     linker: str = field(default="assignment")
+    reuse_gap: bool = field(default=False)
     stems_label: str = field(default="test")
     per_movie: bool = field(default=False)
 
@@ -106,6 +108,7 @@ class _Args:
         parser.add_argument("--cv", action="store_true", help="score the fixed-8 CV instead of the four test movies")
         parser.add_argument("--per-movie", action="store_true", help="also log each movie's raw Jaccard and node ratio")
         parser.add_argument("--linker", default="assignment", help="the linker to score (e.g. assignment, flow)")
+        parser.add_argument("--reuse-gap", action="store_true", help="enable the reuse gap-bridge stage (GapCloser)")
         parsed = parser.parse_args()
         return cls(
             config=parsed.config,
@@ -114,6 +117,7 @@ class _Args:
             disappearance_costs=tuple(float(value) for value in parsed.disappearance.split(",")),
             stems=CV_MOVIES if parsed.cv else TEST_MOVIES,
             linker=parsed.linker,
+            reuse_gap=parsed.reuse_gap,
             stems_label="cv-8" if parsed.cv else "test-4",
             per_movie=parsed.per_movie,
         )
@@ -124,8 +128,10 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     args = _Args.from_argv()
     root = DataRoot.from_config(args.config)
-    evaluator = TrackerProxyEval(args.device, args.thresholds, args.disappearance_costs, args.stems, args.linker)
-    logger.info("proxy=%s linker=%s", args.stems_label, args.linker)
+    evaluator = TrackerProxyEval(
+        args.device, args.thresholds, args.disappearance_costs, args.stems, args.linker, args.reuse_gap
+    )
+    logger.info("proxy=%s linker=%s reuse_gap=%s", args.stems_label, args.linker, args.reuse_gap)
     if args.per_movie:
         breakdown = evaluator.breakdown(root)
         for stem, metric in breakdown.items():
