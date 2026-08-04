@@ -16,6 +16,7 @@ import argparse
 import logging
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+from typing import get_args, get_type_hints
 
 from celltrack.linkers import LinkerConfig
 from celltrack.proxy import CV_MOVIES, TEST_MOVIES, TestMovieProxy
@@ -37,6 +38,19 @@ def _cast(current: object, raw: str) -> object:
     return type(current)(raw)
 
 
+def _nested(config: TrackerConfig, head: str) -> object:
+    """The nested config at `head`, instantiating an optional one left at `None` from its declared type.
+
+    So `--set rescue.min_mean_probability=0.9` can reach into an off-by-default sub-config, not only one that
+    is already set — the config's default for that field's type stands in, then the dotted key updates it.
+    """
+    current = getattr(config, head)
+    if current is not None:
+        return current
+    annotation = get_type_hints(type(config))[head]
+    return next(argument for argument in get_args(annotation) if argument is not type(None))()
+
+
 def _override(config: TrackerConfig, assignment: str) -> TrackerConfig:
     """Apply one `key=value` override to a config; a dotted `linker.x` reaches the nested (pydantic) linker config."""
     key, separator, raw = assignment.partition("=")
@@ -44,7 +58,7 @@ def _override(config: TrackerConfig, assignment: str) -> TrackerConfig:
         raise ValueError(f"--set expects key=value, got {assignment!r}")
     if "." in key:
         head, tail = key.split(".", 1)
-        nested = getattr(config, head)
+        nested = _nested(config, head)
         return replace(config, **{head: nested.model_copy(update={tail: _cast(getattr(nested, tail), raw)})})
     return replace(config, **{key: _cast(getattr(config, key), raw)})
 

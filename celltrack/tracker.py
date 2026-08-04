@@ -24,7 +24,7 @@ from celltrack.linking import Linker
 from celltrack.motion_linking import EdgeAffinity
 from celltrack.pipeline import BlendDetectorScorer
 from celltrack.response_cache import ResponseCache
-from celltrack.short_track_filter import ShortTrackFilter
+from celltrack.short_track_filter import ShortTrackFilter, ShortTrackRescueConfig
 from celltrack.topology_repair import TopologyRepair
 from celltrack.tunet import TemporalUNetDetector
 from core.data.tracks import TrackGraph
@@ -67,6 +67,11 @@ class TrackerConfig:
     # daughter is often undetected, so the fork cannot be placed). Set it to A/B the division-jaccard term.
     division: AffinityDivisionConfig | None = None
     min_track_length: int = 6
+    # Off by default: the confidence rescue that keeps a short high-probability, tight-step component the length
+    # rule would drop. It reads the edge head, so it needs an affinity; enable it (with an aggressive
+    # min_track_length) to recover the true short tracks the blunt cut removes — a recall lever the sparse proxy
+    # understates but the denser hidden annotation rewards. The frontier pairs min_track_length 7 with this.
+    rescue: ShortTrackRescueConfig | None = None
     bridge_reach_um: float = 10.0
     bridge_max_added_fraction: float = 0.05
     # Off by default: reuse an existing isolated detection at t+1 to bridge a one-frame gap (geometry only, no
@@ -158,7 +163,8 @@ class CellTracker:
             if self.config.reuse_gap
             else ()
         )
-        short = ShortTrackFilter(min_length=self.config.min_track_length)
+        rescue = self.config.rescue.build(spacing, affinity) if self.config.rescue is not None and affinity else None
+        short = ShortTrackFilter(min_length=self.config.min_track_length, rescue=rescue)
         bridge = DensityGapBridge(
             spacing=spacing,
             reach_um=self.config.bridge_reach_um,
