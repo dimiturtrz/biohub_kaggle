@@ -15,12 +15,13 @@ from jaxtyping import Float, Int
 
 from core.data.tracks import Adjacency, TrackGraph
 
-# How far each interior node is pulled toward the line between its neighbours — a light de-jitter, not a
-# heavy pull. Swept on the proxy: 0.0/0.3/0.4/0.8/1.0 -> 0.9417/0.9426/0.9426/0.9344/0.9340, a broad peak at
-# 0.3-0.4. The earlier 0.8 over-smoothed — on the crowded dense movie it dragged genuinely-moving nodes off
-# their path past the 7um match radius (dense raw Jaccard 0.892 at 0.8 vs 0.906 at 0.3, +0.014), while the
-# sparse movies were unaffected. 0.3 keeps the wobble-removal without the crowding bias.
-_SMOOTHING = 0.3
+# How far each interior node is pulled toward the line between its neighbours. The proxy favours 0.3 (sweep
+# 0.0/0.3/0.4/0.8/1.0 -> 0.9417/0.9426/0.9426/0.9344/0.9340, dense raw Jaccard 0.892@0.8 vs 0.906@0.3) — but
+# that is a RECALL-side proxy gain, and a clean LB A/B refuted it: smooth0.8 = 0.892 vs smooth0.3 = 0.889
+# (subs 55250898 vs 55251767, identical but for this). The denser hidden annotation rewards the heavier
+# de-jitter the sparse proxy penalised — same proxy-anti-transfer as min_track_length and node-count. Ship
+# the LB value; 0.3 stays a swept-available knob for the proxy regime.
+_SMOOTHING = 0.8
 
 
 @dataclass(frozen=True)

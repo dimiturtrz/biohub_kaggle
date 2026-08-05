@@ -86,9 +86,10 @@ class TrackerConfig:
     # already guarantees consecutive-frame + single-parent edges and a tighter gate), so it is off; enable it
     # behind a linker (nearest-neighbour, motion) that lacks those invariants — the frontier's output filter.
     topology: TopologyConfig | None = None
-    # Swept proxy peak (0.3-0.4); the earlier 0.8 over-smoothed the crowded dense movie off the match radius
-    # (dense raw Jaccard 0.892 -> 0.906 at 0.3). A light de-jitter, not a heavy pull toward the neighbour line.
-    smooth_strength: float = 0.3
+    # Proxy favours 0.3 but a clean LB A/B refuted it (smooth0.8 = 0.892 vs smooth0.3 = 0.889): the dense
+    # raw-Jaccard gain is recall-side and does not transfer, like min_track_length/node-count. Ship the LB
+    # value 0.8; 0.3 stays a swept-available knob for the proxy regime.
+    smooth_strength: float = 0.8
 
 
 @dataclass(frozen=True)

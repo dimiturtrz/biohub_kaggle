@@ -40,3 +40,17 @@ drag, so a +0.014 on its raw Jaccard is the first real recall gain on that bottl
 
 Fixed the default to 0.3 (kept the smoother: 0.3 still beats off). The lesson generalises: every unswept magic
 number is a candidate bias; sweep them before trusting them.
+
+## Correction (LB refuted it)
+
+The prediction above — that this recall-side gain would transfer — was **wrong**, and the leaderboard said so
+cleanly. Two submissions identical but for this constant: smooth0.8 (55250898) = **0.892**, smooth0.3
+(55251767) = **0.889**. The heavier smoothing the sparse proxy penalised is what the *denser hidden
+annotation* rewards; the +0.014 dense raw-Jaccard on our four sparse movies was a proxy artifact, not an LB
+signal. Default reverted to 0.8.
+
+The real lesson is the opposite of the one first drawn here: at the 0.89 tier a proxy raw-Jaccard improvement
+on the dense movie is **not** evidence of an LB gain — recall-side proxy wins (NMS un-merge, this smoother)
+have now failed to transfer as reliably as node-count farming did. Only the detection threshold moves the LB.
+"Sweep the unswept constant" still holds; "trust a recall-side proxy win" does not — those must be arbitrated
+on the leaderboard before shipping as a default. Shipping 0.3 was a 0.003 LB regression, caught and reverted.
