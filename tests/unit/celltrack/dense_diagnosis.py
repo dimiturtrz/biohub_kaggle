@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 
 from celltrack.dense_diagnosis import DenseFateDiagnosis, Fate, MislinkSignal
@@ -36,7 +38,10 @@ def test_dense_fate_diagnosis_of():
       - 3->7: source 3 links to 6, and target 7 sits unclaimed       -> MISLINK_FREE
     """
     truth = _graph(
-        [[0, 0, 0, 0], [0, 0, 0, 9], [0, 0, 9, 0], [0, 0, 9, 9], [1, 0, 0, 0], [1, 0, 0, 9], [1, 0, 9, 0], [1, 0, 9, 9], [1, 0, 5, 5]],
+        [
+            [0, 0, 0, 0], [0, 0, 0, 9], [0, 0, 9, 0], [0, 0, 9, 9], [1, 0, 0, 0],
+            [1, 0, 0, 9], [1, 0, 9, 0], [1, 0, 9, 9], [1, 0, 5, 5],
+        ],
         [[0, 4], [1, 5], [2, 6], [3, 7]],
     )
     prediction = _graph(truth.coordinates.tolist(), [[0, 4], [2, 8], [3, 6]])
@@ -65,7 +70,13 @@ def test_counts():
     """`counts` reports every fate, defaulting absent ones to zero so the decomposition is total over the family."""
     diagnosis = DenseFateDiagnosis(fates=np.array([Fate.CORRECT, Fate.CORRECT, Fate.SKIP], dtype=np.int64))
     counts = diagnosis.counts()
-    assert counts == {Fate.CORRECT: 2, Fate.SKIP: 1, Fate.MISLINK_CONFLICT: 0, Fate.MISLINK_FREE: 0, Fate.ENDPOINT_MISSING: 0}
+    assert counts == {
+        Fate.CORRECT: 2,
+        Fate.SKIP: 1,
+        Fate.MISLINK_CONFLICT: 0,
+        Fate.MISLINK_FREE: 0,
+        Fate.ENDPOINT_MISSING: 0,
+    }
 
 
 def test_mislink_signal_of():
@@ -97,4 +108,4 @@ def test_means():
     signal = MislinkSignal(p_true=np.array([0.2, 0.4]), p_chosen=np.array([0.6, 0.8]))
     assert signal.means() == (0.30000000000000004, 0.7)
     empty = MislinkSignal(p_true=np.array([]), p_chosen=np.array([]))
-    assert all(value != value for value in empty.means())  # both NaN (NaN != itself)
+    assert all(math.isnan(value) for value in empty.means())  # both NaN on empty input
