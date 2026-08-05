@@ -421,3 +421,40 @@ class DensityGapBridge:
         coordinates = np.concatenate([graph.coordinates, np.asarray(new_coordinates, dtype=graph.coordinates.dtype)])
         edges = np.concatenate([graph.edges, np.asarray(new_edges, dtype=graph.edges.dtype)])
         return TrackGraph(node_ids=node_ids, coordinates=coordinates, edges=edges)
+
+
+class BridgeConfig(BaseModel):
+    """The one-frame motion-synthetic gap bridge as a nested config, so the tracker composes it like a linker.
+
+    `reach_um` is the linker's one-frame motion gate (the most prediction error a real step can leave) and
+    caps the per-end Voronoi radius; `max_added_fraction` bounds the synthetic nodes as a share of the graph.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    reach_um: float = Field(10.0, gt=0)
+    max_added_fraction: float = Field(0.05, ge=0)
+
+    def build(self, spacing: Spacing) -> DensityGapBridge:
+        """The bridge stage at this video's spacing."""
+        return DensityGapBridge(spacing=spacing, reach_um=self.reach_um, max_added_fraction=self.max_added_fraction)
+
+
+class ReuseConfig(BaseModel):
+    """Reuse an existing isolated t+1 detection to bridge a one-frame gap — geometry only, no invented node.
+
+    Complementary to the motion-synthetic `BridgeConfig`; being present (non-None) turns the stage on. Inert
+    at thr0.99 (few isolated nodes survive); the lower-threshold recall regime leaves more detections to reuse.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    gate_um: float = Field(6.0, gt=0)
+    radius_um: float = Field(3.2, gt=0)
+    max_added_fraction: float = Field(0.05, ge=0)
+
+    def build(self, spacing: Spacing) -> GapCloser:
+        """The reuse-bridge stage at this video's spacing."""
+        return GapCloser(
+            spacing=spacing, gate_um=self.gate_um, reuse_um=self.radius_um, max_added_fraction=self.max_added_fraction
+        )

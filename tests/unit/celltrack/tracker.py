@@ -9,6 +9,7 @@ from celltrack import tracker as tracker_module
 from celltrack.linkers import LinkerConfig
 from celltrack.linking import Linker
 from celltrack.pipeline import BlendDetectorScorer
+from celltrack.topology_repair import TopologyConfig
 from celltrack.tracker import CellTracker, LinkerStage, TrackerConfig
 from celltrack.tunet import DetectorRecipe
 from core.data.tracks import TrackGraph
@@ -73,8 +74,8 @@ def test_run(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_run_with_topology_repair(monkeypatch: pytest.MonkeyPatch):
-    """Enabling `topology_repair` folds the invariant-enforcing stage in without breaking a valid chain."""
-    tracker = _tracker(monkeypatch, TrackerConfig(min_track_length=1, smooth_strength=0.0, topology_repair=True))
+    """A present `topology` config folds the invariant-enforcing stage in without breaking a valid chain."""
+    tracker = _tracker(monkeypatch, TrackerConfig(min_track_length=1, smooth_strength=0.0, topology=TopologyConfig()))
     graph = tracker.run("m.zarr", Path("m.zarr"))
     assert graph.edges.tolist() == [[0, 1]]  # the single consecutive, single-parent edge survives the repair
 

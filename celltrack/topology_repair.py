@@ -17,6 +17,7 @@ from dataclasses import dataclass
 
 import numpy as np
 from jaxtyping import Bool, Float, Int
+from pydantic import BaseModel, ConfigDict, Field
 
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
@@ -62,3 +63,20 @@ class TopologyRepair:
         keep: Bool[np.ndarray, "n"] = np.zeros(len(graph.node_ids), dtype=bool)
         keep[graph.rows_of(np.unique(edges.reshape(-1)))] = True
         return TrackGraph(node_ids=graph.node_ids[keep], coordinates=graph.coordinates[keep], edges=edges)
+
+
+class TopologyConfig(BaseModel):
+    """The frontier output filter (enforce-next-frame, single-parent, prune-isolated) as a nested config.
+
+    Being present (non-None) turns it on. On the shipped AssignmentLinker path it is a measured no-op — the
+    linker already guarantees these invariants — so it is off by default; enable it behind a linker (nearest-
+    neighbour, motion) that lacks them.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    edge_max_um: float = Field(14.0, gt=0)
+
+    def build(self, spacing: Spacing) -> TopologyRepair:
+        """The topology-repair stage at this video's spacing."""
+        return TopologyRepair(spacing=spacing, edge_max_um=self.edge_max_um)

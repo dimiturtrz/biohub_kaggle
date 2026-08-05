@@ -1,7 +1,7 @@
 import numpy as np
 
 from celltrack.center_prior import CenterConfirmer
-from celltrack.gap_closer import DensityGapBridge, GapCloser, SyntheticGap
+from celltrack.gap_closer import BridgeConfig, DensityGapBridge, GapCloser, ReuseConfig, SyntheticGap
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
 
@@ -165,3 +165,17 @@ def test_density_bridge_leaves_a_gapless_graph_unchanged():
     """No qualifying end means the graph is returned as-is."""
     linked = graph([[0, 0, 0, 0], [1, 0, 0, 0]], [[0, 1]])
     assert bridger().transform(linked).edges.tolist() == [[0, 10]]
+
+
+def test_bridge_config_build():
+    """`BridgeConfig.build` carries its knobs into a `DensityGapBridge` at the given spacing."""
+    stage = BridgeConfig(reach_um=8.0, max_added_fraction=0.03).build(Spacing(1.0, 1.0, 1.0))
+    assert isinstance(stage, DensityGapBridge)
+    assert (stage.reach_um, stage.max_added_fraction) == (8.0, 0.03)
+
+
+def test_reuse_config_build():
+    """`ReuseConfig.build` maps `radius_um` onto the `GapCloser`'s `reuse_um` and carries the gate + cap."""
+    stage = ReuseConfig(gate_um=5.0, radius_um=2.0, max_added_fraction=0.04).build(Spacing(1.0, 1.0, 1.0))
+    assert isinstance(stage, GapCloser)
+    assert (stage.gate_um, stage.reuse_um, stage.max_added_fraction) == (5.0, 2.0, 0.04)

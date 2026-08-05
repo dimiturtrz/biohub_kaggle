@@ -1,6 +1,6 @@
 import numpy as np
 
-from celltrack.topology_repair import TopologyRepair
+from celltrack.topology_repair import TopologyConfig, TopologyRepair
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
 
@@ -23,3 +23,10 @@ def test_transform():
     repaired = TopologyRepair(spacing=Spacing(1.0, 1.0, 1.0), edge_max_um=14.0).transform(messy)
     assert set(repaired.node_ids.tolist()) == {0, 10, 20}
     assert repaired.edges.tolist() == [[0, 10], [10, 20]]
+
+
+def test_build():
+    """`TopologyConfig.build` carries `edge_max_um` into a `TopologyRepair` at the given spacing."""
+    stage = TopologyConfig(edge_max_um=12.0).build(Spacing(1.0, 1.0, 1.0))
+    assert isinstance(stage, TopologyRepair)
+    assert stage.edge_max_um == 12.0

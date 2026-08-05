@@ -17,9 +17,9 @@ def test_override():
     base = TrackerConfig()
     assert _override(base, "smooth_strength=0.5").smooth_strength == 0.5
     assert _override(base, "min_track_length=5").min_track_length == 5  # cast to int, not float
-    assert _override(base, "reuse_gap=true").reuse_gap is True  # bool parsed, not the truthy string "true"
-    assert _override(base, "reuse_gap=false").reuse_gap is False
     assert _override(base, "linker.name=flow").linker.name == "flow"  # dotted key updates the nested config
+    # A dotted key reaches an off-by-default nested config, instantiating it from its declared type first.
+    assert _override(base, "reuse.gate_um=7.5").reuse.gate_um == 7.5
     assert _override(base, "detector_blend=0.6").detector_blend == 0.6  # None-default scalar cast via its annotation
 
 
