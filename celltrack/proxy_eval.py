@@ -31,11 +31,22 @@ logger = logging.getLogger(__name__)
 _ACQUISITION_PREFIX = 4
 
 
-def _cast(current: object, raw: str) -> object:
-    """Parse a `--set` string into the type of the field it overrides, so a config value keeps its type."""
-    if isinstance(current, bool):  # before int: bool is an int subclass, "false" must not become the int-cast
+def _concrete_type(owner: type, field: str, current: object) -> type:
+    """The field's concrete type — from its value, or (when that is None) the non-None half of its annotation.
+
+    An optional field left at its `None` default carries no runtime type, so the declared annotation
+    (`float | None`, `ShortTrackRescueConfig | None`) is the only place the real type lives.
+    """
+    if current is not None:
+        return type(current)
+    return next(argument for argument in get_args(get_type_hints(owner)[field]) if argument is not type(None))
+
+
+def _cast(target: type, raw: str) -> object:
+    """Parse a `--set` string into `target`, so an overridden config value keeps its declared type."""
+    if target is bool:  # bool is an int subclass, so "false" must parse as a flag, not int("false")
         return raw.lower() in ("1", "true", "yes")
-    return type(current)(raw)
+    return target(raw)
 
 
 def _nested(config: TrackerConfig, head: str) -> object:
@@ -45,10 +56,7 @@ def _nested(config: TrackerConfig, head: str) -> object:
     is already set — the config's default for that field's type stands in, then the dotted key updates it.
     """
     current = getattr(config, head)
-    if current is not None:
-        return current
-    annotation = get_type_hints(type(config))[head]
-    return next(argument for argument in get_args(annotation) if argument is not type(None))()
+    return current if current is not None else _concrete_type(type(config), head, None)()
 
 
 def _override(config: TrackerConfig, assignment: str) -> TrackerConfig:
@@ -59,8 +67,9 @@ def _override(config: TrackerConfig, assignment: str) -> TrackerConfig:
     if "." in key:
         head, tail = key.split(".", 1)
         nested = _nested(config, head)
-        return replace(config, **{head: nested.model_copy(update={tail: _cast(getattr(nested, tail), raw)})})
-    return replace(config, **{key: _cast(getattr(config, key), raw)})
+        value = _cast(_concrete_type(type(nested), tail, getattr(nested, tail)), raw)
+        return replace(config, **{head: nested.model_copy(update={tail: value})})
+    return replace(config, **{key: _cast(_concrete_type(type(config), key, getattr(config, key)), raw)})
 
 
 @dataclass(frozen=True)

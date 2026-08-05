@@ -20,6 +20,7 @@ def test_override():
     assert _override(base, "reuse_gap=true").reuse_gap is True  # bool parsed, not the truthy string "true"
     assert _override(base, "reuse_gap=false").reuse_gap is False
     assert _override(base, "linker.name=flow").linker.name == "flow"  # dotted key updates the nested config
+    assert _override(base, "detector_blend=0.6").detector_blend == 0.6  # None-default scalar cast via its annotation
 
 
 def test_override_rejects_a_bare_key():
