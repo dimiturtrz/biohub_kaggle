@@ -34,6 +34,11 @@ bug. Everything else is at a swept peak, physically argued, self-balancing, or a
 - **Detection recall** — the one live, transferable lever the leaderboard rewards and the sparse proxy cannot
   see. Two independent, stacking recall gains shipped this session: the NMS un-merge and the smooth-bias fix,
   both raw-Jaccard on the dense bottleneck; plus the threshold ladder (0.99→0.97).
+- **Synthetic detector-pretrain** — the last untried detector-side lever, refuted by its own pre-gate. The
+  mounted detector already recalls synthetic dense cells 0.952/0.99/0.99 at thr 0.99/0.9/0.5, so synthetic
+  cells are not the no-response kind the detector misses on real data — pretraining on them teaches nothing
+  about the real misses. Closes every detector-recall lever (884/ksv/slw/fcd/tms + synthetic); the real
+  no-response cells are crowd-buried at (1,4,4) resolution, an asset gap, not a training-data gap.
 - **Short-track rescue** — the frontier's min7+rescue lever, built and Kaggle-de-risked this session, off by
   default. Proxy-anti-informative (it re-adds short tracks the sparse proxy penalizes) but high-precision
   (−0.0005 on the proxy = the re-added tracks are almost all free/true). A blind-but-high-prior LB bet.
