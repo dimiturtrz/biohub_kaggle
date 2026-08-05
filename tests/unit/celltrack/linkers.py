@@ -53,6 +53,14 @@ def test_build_wires_the_assignment_linker_and_passes_affinity():
     assert (built.max_distance_um, built.affinity_bonus, built.disappearance_cost) == (9.0, 18.0, 2.0)
 
 
+def test_effective_bonus():
+    """Unset, the bonus derives as 2·gate (so P-weighting holds when the gate moves); a pinned value wins."""
+    assert LinkerConfig(gate_um=14.0).effective_bonus == 28.0
+    assert LinkerConfig(gate_um=10.0).effective_bonus == 20.0  # the shipped default, unchanged
+    assert LinkerConfig(gate_um=14.0, affinity_bonus=20.0).effective_bonus == 20.0
+    assert LinkerConfig(name="assignment", gate_um=14.0).build(SPACING).affinity_bonus == 28.0
+
+
 def test_build_wires_ilp_and_division_gates():
     """The ILP and division rows pass their radii through to the concrete linkers."""
     assert ILPLinker(spacing=SPACING, max_distance_um=10.0) == LinkerConfig(name="ilp").build(SPACING)

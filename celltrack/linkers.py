@@ -26,6 +26,12 @@ from core.geometry import Spacing
 
 LINKER_NAMES = ("assignment", "nn", "motion", "ilp", "division", "flow")
 
+# The affinity bonus self-balances to this multiple of the gate. `cost = distance - bonus·P` trades a [0,1]
+# probability against a micrometre distance, so the bonus carries gate-scale units; at 2·gate a P=0.5 edge
+# earns a one-gate-width discount. The swept proxy optimum at gate 10 (=20, bead 88x) IS this ratio — deriving
+# it keeps P-weighting constant when the gate moves instead of silently under-weighting P at a wider gate.
+_BONUS_GATE_RATIO = 2.0
+
 
 class LinkerConfig(BaseModel):
     """A linker choice and the gate radii the family draws from, resolved to a concrete linker by `build`.
@@ -37,8 +43,14 @@ class LinkerConfig(BaseModel):
     gate_um: float = Field(10.0, gt=0)
     tight_um: float = Field(6.0, gt=0)
     division_um: float = Field(8.0, gt=0)
-    affinity_bonus: float = Field(20.0, ge=0)
+    # None self-balances to `_BONUS_GATE_RATIO · gate_um` (see the ratio's note); pin a float to override.
+    affinity_bonus: float | None = Field(None, ge=0)
     disappearance_cost: float = Field(0.0, ge=0)
+
+    @property
+    def effective_bonus(self) -> float:
+        """The affinity bonus, self-balancing to 2·gate (the dimensional P-vs-distance coupling) when unset."""
+        return self.affinity_bonus if self.affinity_bonus is not None else _BONUS_GATE_RATIO * self.gate_um
 
     @field_validator("name")
     @classmethod
@@ -59,7 +71,7 @@ _BUILDERS: dict[str, _Builder] = {
         spacing=spacing,
         max_distance_um=config.gate_um,
         affinity=affinity,
-        affinity_bonus=config.affinity_bonus,
+        affinity_bonus=config.effective_bonus,
         disappearance_cost=config.disappearance_cost,
     ),
     "nn": lambda config, spacing, affinity: NearestNeighbourLinker(spacing=spacing, max_distance_um=config.gate_um),
@@ -77,7 +89,7 @@ _BUILDERS: dict[str, _Builder] = {
         spacing=spacing,
         max_distance_um=config.gate_um,
         affinity=affinity,
-        affinity_bonus=config.affinity_bonus,
+        affinity_bonus=config.effective_bonus,
         boundary_cost=config.disappearance_cost,
     ),
 }
