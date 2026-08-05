@@ -63,6 +63,9 @@ class TrackerConfig:
     threshold: float = 0.99
     linker: LinkerConfig = field(default_factory=LinkerConfig)
     edge_blend: tuple[float, float] = (0.8, 0.2)
+    # The seed-1 fraction of the detector's logit blend; None is the equal mean the frontier ships. The edge
+    # blend favours seed 1 (0.8), so the detector blend may too — a value w tilts the two seeds to (w, 1-w).
+    detector_blend: float | None = None
     # Off by default: recovering the edge head's second-daughter fork is a detection-limited lever (the second
     # daughter is often undetected, so the fork cannot be placed). Set it to A/B the division-jaccard term.
     division: AffinityDivisionConfig | None = None
@@ -127,7 +130,9 @@ class CellTracker:
 
     def run(self, video_key: str, path: Path) -> TrackGraph:
         """Detect, score edges, and fold the post-proc stages over one video into a linked track graph."""
-        nodes = self.detector.nodes(video_key, path, self.config.threshold)
+        seed1 = self.config.detector_blend
+        blend = None if seed1 is None else (seed1, 1 - seed1)
+        nodes = self.detector.nodes(video_key, path, self.config.threshold, blend)
         affinity = self.edge_scorer.affinities(path, nodes, self.device)
         graph = nodes
         for stage in self._stages(self.spacing(path), affinity):

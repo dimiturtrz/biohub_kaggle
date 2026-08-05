@@ -39,7 +39,9 @@ class _StubDetector:
 class _StubBlend:
     """A blend detector that returns a fixed two-cell chain, so the linker + post-proc run without a forward."""
 
-    def nodes(self, video_key: str, path: Path, threshold: float) -> TrackGraph:
+    def nodes(
+        self, video_key: str, path: Path, threshold: float, weights: tuple[float, ...] | None = None
+    ) -> TrackGraph:
         return _CHAIN
 
 

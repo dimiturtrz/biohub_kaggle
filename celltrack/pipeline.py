@@ -33,10 +33,16 @@ class BlendDetectorScorer:
     recipe: DetectorRecipe
     device: str
 
-    def nodes(self, video_key: str, path: Path, threshold: float) -> TrackGraph:
-        """Blend every seed's cached logits on the device and read the peaks out as an edge-free graph."""
+    def nodes(
+        self, video_key: str, path: Path, threshold: float, weights: tuple[float, ...] | None = None
+    ) -> TrackGraph:
+        """Blend every seed's cached logits on the device and read the peaks out as an edge-free graph.
+
+        `weights` (summing to one, one per seed) tilts the logit blend toward a stronger seed; None is the equal
+        mean the frontier ships. The blend is in logit space either way — probabilities saturate and lose peaks.
+        """
         stacks = [self._cached_logits(video_key, path, detector, cache) for detector, cache in self.detectors]
-        blended = [self._blend(frames) for frames in zip(*stacks, strict=True)]
+        blended = [self._blend(frames, weights) for frames in zip(*stacks, strict=True)]
         scale = self.detectors[0][0].voxel_scale(path)
         return TemporalUNetDetector.graph_from_volumes(blended, scale, threshold, self.recipe, self.device)
 
@@ -50,7 +56,13 @@ class BlendDetectorScorer:
             fingerprint=self.recipe.fingerprint(),
         )
 
-    def _blend(self, frames: tuple[Float[np.ndarray, "z y x"], ...]) -> Float[np.ndarray, "z y x"]:
-        """Mean the seeds' logits on the device — the unsaturated volume the equality-NMS suppresses on."""
+    def _blend(
+        self, frames: tuple[Float[np.ndarray, "z y x"], ...], weights: tuple[float, ...] | None
+    ) -> Float[np.ndarray, "z y x"]:
+        """Combine the seeds' logits on the device — an equal mean, or a weighted sum when weights are given."""
         stacked = torch.as_tensor(np.stack(frames), device=self.device)
-        return stacked.mean(dim=0).cpu().numpy()
+        if weights is None:
+            return stacked.mean(dim=0).cpu().numpy()
+        shape = (-1, *([1] * (stacked.ndim - 1)))
+        tilt = torch.as_tensor(weights, device=self.device, dtype=stacked.dtype).reshape(shape)
+        return (stacked * tilt).sum(dim=0).cpu().numpy()
