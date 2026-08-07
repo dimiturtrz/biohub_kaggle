@@ -62,7 +62,7 @@ class DenseFateDiagnosis:
     fates: Int[np.ndarray, "e"]
 
     @staticmethod
-    def _invert(matching: NodeMatching, truth_count: int) -> Int[np.ndarray, "g"]:
+    def invert(matching: NodeMatching, truth_count: int) -> Int[np.ndarray, "g"]:
         """For each ground-truth node, the predicted row matched to it, or `UNMATCHED` — the matching reversed.
 
         The per-timepoint assignment is one-to-one, so no ground-truth node is claimed by two detections; the
@@ -82,7 +82,7 @@ class DenseFateDiagnosis:
         detection standing in for it — and the tracker's own edges then say whether that detection linked to the
         truth's target, to a wrong neighbour, or to nothing.
         """
-        predicted_of_truth = cls._invert(matching, len(truth.node_ids))
+        predicted_of_truth = cls.invert(matching, len(truth.node_ids))
         truth_edges = truth.edge_rows()
         source = predicted_of_truth[truth_edges[:, 0]]
         target = predicted_of_truth[truth_edges[:, 1]]
@@ -138,7 +138,7 @@ class MislinkSignal:
     ) -> "MislinkSignal":
         """Read the affinity's true- and chosen-target probability for every mislinked annotated edge."""
         fates = DenseFateDiagnosis.of(prediction, truth, matching).fates
-        predicted_of_truth = DenseFateDiagnosis._invert(matching, len(truth.node_ids))
+        predicted_of_truth = DenseFateDiagnosis.invert(matching, len(truth.node_ids))
         successors = Adjacency.of(prediction).successors
         timepoints = prediction.timepoints()
         mislinked = np.flatnonzero((fates == Fate.MISLINK_CONFLICT) | (fates == Fate.MISLINK_FREE))

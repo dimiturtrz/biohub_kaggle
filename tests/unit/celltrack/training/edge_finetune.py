@@ -9,9 +9,6 @@ from celltrack.training.edge_finetune import (
     EdgeFinetuneConfig,
     EdgeHardNegativeFinetuner,
     GapSupervision,
-    _frontier_loss,
-    _gt_matrix,
-    _mine_hard_negatives,
 )
 from core.metrics.matching import UNMATCHED
 
@@ -54,7 +51,7 @@ def test_gt_matrix():
     target_gt = np.array([20, 21], dtype=np.int64)
     gt_edge_codes = {10 * 100 + 20}  # GT links node 10 -> node 20
 
-    matrix = _gt_matrix(source_gt, target_gt, gt_edge_codes, count=100)
+    matrix = GapSupervision._gt_matrix(source_gt, target_gt, gt_edge_codes, count=100)
 
     assert matrix.tolist() == [[1.0, 0.0], [0.0, 0.0]]  # only (source 0 -> target 0) is an annotated edge
 
@@ -66,7 +63,7 @@ def test_mine_hard_negatives():
     # target 0 is nearest, target 2 next, target 1 (the true one) is far and must be excluded as a negative.
     target_positions = np.array([[0.0, 0.0, 1.0], [0.0, 0.0, 9.0], [0.0, 0.0, 2.0]], dtype=np.float32)
 
-    mined = _mine_hard_negatives(gt_matrix, source_positions, target_positions, keep=2)
+    mined = GapSupervision._mine_hard_negatives(gt_matrix, source_positions, target_positions, keep=2)
 
     assert mined.tolist() == [[0, 0], [0, 2]]  # the two nearest wrong targets, nearest first; never the true one
 
@@ -77,14 +74,14 @@ def test_mine_hard_negatives_ignores_a_source_without_a_true_successor():
     positions = np.zeros((1, 3), dtype=np.float32)
     targets = np.ones((3, 3), dtype=np.float32)
 
-    assert _mine_hard_negatives(gt_matrix, positions, targets, keep=2).shape == (0, 2)
+    assert GapSupervision._mine_hard_negatives(gt_matrix, positions, targets, keep=2).shape == (0, 2)
 
 
 def test_frontier_loss():
     """The focal-BCE (softmax over sources) is far lower when the logits already place mass on the true parent."""
     target = torch.tensor([[1.0, 0.0], [0.0, 0.0]])  # source 0 is the parent of target 0
-    right = _frontier_loss(torch.tensor([[9.0, 0.0], [-9.0, 0.0]]), target)  # source 0 dominates column 0
-    wrong = _frontier_loss(torch.tensor([[-9.0, 0.0], [9.0, 0.0]]), target)  # the other source dominates
+    right = EdgeHardNegativeFinetuner._frontier_loss(torch.tensor([[9.0, 0.0], [-9.0, 0.0]]), target)  # src0 wins col0
+    wrong = EdgeHardNegativeFinetuner._frontier_loss(torch.tensor([[-9.0, 0.0], [9.0, 0.0]]), target)  # other src wins
 
     assert right < wrong
     assert right < 0.1

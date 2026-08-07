@@ -2,7 +2,7 @@ from pathlib import Path
 
 import numpy as np
 
-from celltrack.detectors.detection import BlobDetector, detect_over_frames
+from celltrack.detectors.detection import BlobDetector
 from core.data.video import CellVideo
 from core.geometry import Spacing
 
@@ -21,7 +21,7 @@ def test_detect_over_frames():
             return np.array([[0, 0, int(response[0, 0, 0])]], dtype=np.int64)
 
     frames = [np.full((1, 1, 1), 5, dtype=np.float64), np.full((1, 1, 1), 7, dtype=np.float64)]
-    graph = detect_over_frames(_Stub(), frames, frame_count=2, keep=2)
+    graph = BlobDetector.detect_over_frames(_Stub(), frames, frame_count=2, keep=2)
 
     assert graph.coordinates.tolist() == [[0, 0, 0, 5], [1, 0, 0, 7]]  # (t, z, y, x), one centre stamped per frame
     assert graph.edges.shape == (0, 2)

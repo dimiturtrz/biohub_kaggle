@@ -26,28 +26,6 @@ from core.data.tracks import Adjacency, TrackGraph
 from core.geometry import Spacing
 
 
-def _edge_probabilities(graph: TrackGraph, affinity: EdgeAffinity) -> Float[np.ndarray, "e"]:
-    """The transformer's association probability for each of the graph's edges, aligned to `graph.edges`.
-
-    Each edge's probability is read from its source frame's `s x t` matrix at the source and target's
-    within-frame positions, so a component's mean edge probability can gate whether it is a confident track.
-    """
-    edges = graph.edge_rows()
-    timepoints = graph.timepoints()
-    probabilities = np.zeros(len(edges), dtype=np.float64)
-    for timepoint in np.unique(timepoints[edges[:, 0]]) if len(edges) else np.empty(0, dtype=timepoints.dtype):
-        matrix = affinity.probabilities(int(timepoint))
-        if matrix is None:
-            continue
-        sources = np.flatnonzero(timepoints == timepoint)
-        targets = np.flatnonzero(timepoints == timepoint + 1)
-        for edge in np.flatnonzero(timepoints[edges[:, 0]] == timepoint):
-            source_local = int(np.searchsorted(sources, edges[edge, 0]))
-            target_local = int(np.searchsorted(targets, edges[edge, 1]))
-            probabilities[edge] = matrix[source_local, target_local]
-    return probabilities
-
-
 @dataclass(frozen=True)
 class ShortTrackRescue:
     """The confidence carve-out: which short components to keep because the head is sure and the steps are tight."""
@@ -60,6 +38,28 @@ class ShortTrackRescue:
     budget_fraction: float
     budget_cap: int
 
+    @staticmethod
+    def _edge_probabilities(graph: TrackGraph, affinity: EdgeAffinity) -> Float[np.ndarray, "e"]:
+        """The transformer's association probability for each of the graph's edges, aligned to `graph.edges`.
+
+        Each edge's probability is read from its source frame's `s x t` matrix at the source and target's
+        within-frame positions, so a component's mean edge probability can gate whether it is a confident track.
+        """
+        edges = graph.edge_rows()
+        timepoints = graph.timepoints()
+        probabilities = np.zeros(len(edges), dtype=np.float64)
+        for timepoint in np.unique(timepoints[edges[:, 0]]) if len(edges) else np.empty(0, dtype=timepoints.dtype):
+            matrix = affinity.probabilities(int(timepoint))
+            if matrix is None:
+                continue
+            sources = np.flatnonzero(timepoints == timepoint)
+            targets = np.flatnonzero(timepoints == timepoint + 1)
+            for edge in np.flatnonzero(timepoints[edges[:, 0]] == timepoint):
+                source_local = int(np.searchsorted(sources, edges[edge, 0]))
+                target_local = int(np.searchsorted(targets, edges[edge, 1]))
+                probabilities[edge] = matrix[source_local, target_local]
+        return probabilities
+
     def protected(
         self,
         graph: TrackGraph,
@@ -69,7 +69,7 @@ class ShortTrackRescue:
     ) -> Bool[np.ndarray, "c"]:
         """The component labels to rescue: short, not already kept, confident, and tight — the tightest first."""
         edge_labels = labels[graph.edge_rows()[:, 0]]
-        probabilities = _edge_probabilities(graph, self.affinity)
+        probabilities = ShortTrackRescue._edge_probabilities(graph, self.affinity)
         steps = graph.link_displacements(self.spacing)
         eligible = (~kept) & (sizes > 0) & (sizes <= self.max_length)
         proposals: list[tuple[float, int]] = []

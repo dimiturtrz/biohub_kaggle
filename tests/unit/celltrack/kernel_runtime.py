@@ -3,12 +3,13 @@ from pathlib import Path
 import pytest
 
 from celltrack import kernel_runtime
+from celltrack.kernel_runtime import KernelRuntime
 
 
 def test_find(monkeypatch: pytest.MonkeyPatch):
     """`find` returns the first mounted path matching the pattern under /kaggle/input."""
     monkeypatch.setattr(kernel_runtime.glob, "glob", lambda pattern, recursive: ["/kaggle/input/a/celltrack/x.py"])
-    assert kernel_runtime.find("celltrack/x.py") == "/kaggle/input/a/celltrack/x.py"
+    assert KernelRuntime.find("celltrack/x.py") == "/kaggle/input/a/celltrack/x.py"
 
 
 def test_install_wheels(monkeypatch: pytest.MonkeyPatch):
@@ -17,7 +18,7 @@ def test_install_wheels(monkeypatch: pytest.MonkeyPatch):
     seen: list[list[str]] = []
     monkeypatch.setattr(kernel_runtime.subprocess, "run", lambda command, check: seen.append(command))
 
-    wheels = kernel_runtime.install_wheels(Path("/kit/celltrack_src"))
+    wheels = KernelRuntime.install_wheels(Path("/kit/celltrack_src"))
 
     assert wheels == ["/kit/a.whl", "/kit/b.whl"]
     assert seen[0][1:5] == ["-m", "pip", "install", "--no-index"]
@@ -32,7 +33,7 @@ def test_pilkwang_packs(monkeypatch: pytest.MonkeyPatch):
     ]
     monkeypatch.setattr(kernel_runtime.glob, "glob", lambda pattern, recursive: configs)
 
-    pack1, pack2 = kernel_runtime.pilkwang_packs()
+    pack1, pack2 = KernelRuntime.pilkwang_packs()
 
     assert "support-pack" in str(pack1)
     assert "seed314159" in str(pack2)
@@ -41,15 +42,15 @@ def test_pilkwang_packs(monkeypatch: pytest.MonkeyPatch):
 def test_pack_source(monkeypatch: pytest.MonkeyPatch):
     """`pack_source` resolves the mounted pack's src/ root, three levels above the models package init."""
     monkeypatch.setattr(
-        kernel_runtime, "find", lambda pattern: "/kaggle/input/p/repo/src/biohub_tracking/models/__init__.py"
+        KernelRuntime, "find", lambda pattern: "/kaggle/input/p/repo/src/biohub_tracking/models/__init__.py"
     )
-    assert kernel_runtime.pack_source() == Path("/kaggle/input/p/repo/src")
+    assert KernelRuntime.pack_source() == Path("/kaggle/input/p/repo/src")
 
 
 def test_test_videos(monkeypatch: pytest.MonkeyPatch):
     """`test_videos` returns the competition test zarrs as sorted Paths."""
     monkeypatch.setattr(kernel_runtime.glob, "glob", lambda pattern, recursive: ["/in/b.zarr", "/in/a.zarr"])
-    assert kernel_runtime.test_videos() == [Path("/in/a.zarr"), Path("/in/b.zarr")]
+    assert KernelRuntime.test_videos() == [Path("/in/a.zarr"), Path("/in/b.zarr")]
 
 
 def test_run_submission(monkeypatch: pytest.MonkeyPatch):
@@ -75,7 +76,7 @@ def test_run_submission(monkeypatch: pytest.MonkeyPatch):
         calls.append((name, path))
         return _Graph()
 
-    kernel_runtime.run_submission(predict, [Path("/in/m1.zarr"), Path("/in/m2.zarr")], out="/out/s.csv")
+    KernelRuntime.run_submission(predict, [Path("/in/m1.zarr"), Path("/in/m2.zarr")], out="/out/s.csv")
 
     assert calls == [("m1", Path("/in/m1.zarr")), ("m2", Path("/in/m2.zarr"))]
     assert written == {"out": "/out/s.csv", "keys": ("m1", "m2")}

@@ -43,10 +43,11 @@ class KernelRuntime:
 
     @staticmethod
     def install_wheels(kit_root: Path) -> list[str]:
-        """Offline-install every wheel bundled beside the kit, returning their names — the kernel's dependency mount."""
+        """Offline-install the wheels bundled beside the kit, returning their names — the kernel's dependency mount."""
         wheels = sorted(glob.glob(f"{kit_root.parent}/**/*.whl", recursive=True))
         if wheels:
-            subprocess.run([sys.executable, "-m", "pip", "install", "--no-index", "--no-deps", *wheels], check=True)  # noqa: S603
+            install = [sys.executable, "-m", "pip", "install", "--no-index", "--no-deps", *wheels]
+            subprocess.run(install, check=True)  # noqa: S603
         logger.info("installed wheels: %s", [os.path.basename(wheel) for wheel in wheels])
         return wheels
 
@@ -61,7 +62,7 @@ class KernelRuntime:
 
     @staticmethod
     def pack_source() -> Path:
-        """The mounted pack's `src/` root, so the kernel imports the same `TemporalUNet3D` the weights were trained in."""
+        """The mounted pack's `src/` root, so the kernel imports the `TemporalUNet3D` the weights were trained in."""
         return Path(KernelRuntime.find("repo/src/biohub_tracking/models/__init__.py")).parents[2]
 
     @staticmethod

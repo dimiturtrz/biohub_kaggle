@@ -32,7 +32,7 @@ from core.data.tracks import TrackGraph
 from core.data.video import ImageStatistics, Multiscale
 from core.geometry import Spacing
 
-_EXT_SRC = Path(__file__).parents[1] / "external" / "kaggle-cell-tracking-competition" / "src"
+_EXT_SRC = Path(__file__).parents[2] / "external" / "kaggle-cell-tracking-competition" / "src"
 
 
 @dataclass(frozen=True)

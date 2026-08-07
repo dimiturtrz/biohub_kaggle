@@ -23,7 +23,7 @@ import torch
 from jaxtyping import Float, Int
 from torch.nn import functional
 
-from celltrack.detectors.detection import CELL_SCALE_UM, detect_over_frames
+from celltrack.detectors.detection import CELL_SCALE_UM, BlobDetector
 from celltrack.detectors.peaks import PeakExtractor
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
@@ -53,7 +53,7 @@ class DoGDetector:
 
     def detect(self, frames: Iterable[Float[np.ndarray, "z y x"]], frame_count: int, keep: int) -> TrackGraph:
         """Detect the `keep` strongest cell centres across a video's frames, as an edgeless track graph."""
-        return detect_over_frames(self, frames, frame_count, keep)
+        return BlobDetector.detect_over_frames(self, frames, frame_count, keep)
 
     def response(self, frame_normalised: Float[np.ndarray, "z y x"]) -> Float[np.ndarray, "z y x"]:
         """The per-voxel maximum Difference-of-Gaussians response over the band — high at a blob of any scale in it."""
