@@ -18,6 +18,8 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import get_args, get_type_hints
 
+from pydantic import BaseModel
+
 from celltrack.eval.proxy import CV_MOVIES, TEST_MOVIES, TestMovieProxy
 from celltrack.linkers.linkers import LinkerConfig
 from celltrack.tracker import CellTracker, TrackerConfig
@@ -53,7 +55,7 @@ class _ConfigOverride:
         return target(raw)
 
     @staticmethod
-    def nested(config: TrackerConfig, head: str) -> object:
+    def nested(config: TrackerConfig, head: str) -> BaseModel:
         """The nested config at `head`, instantiating an optional one left at `None` from its declared type.
 
         So `--set rescue.min_mean_probability=0.9` can reach into an off-by-default sub-config, not only one that
@@ -68,13 +70,16 @@ class _ConfigOverride:
         key, separator, raw = assignment.partition("=")
         if not separator:
             raise ValueError(f"--set expects key=value, got {assignment!r}")
+        # `replace` here is dynamic dispatch: the field name is a runtime string, so the value's static type
+        # cannot match the specific field it lands in — an untyped boundary the checker can't see through.
         if "." in key:
             head, tail = key.split(".", 1)
             nested = _ConfigOverride.nested(config, head)
             value = _ConfigOverride.cast(_ConfigOverride.concrete_type(type(nested), tail, getattr(nested, tail)), raw)
-            return replace(config, **{head: nested.model_copy(update={tail: value})})
-        base_type = _ConfigOverride.concrete_type(type(config), key, getattr(config, key))
-        return replace(config, **{key: _ConfigOverride.cast(base_type, raw)})
+            updated = nested.model_copy(update={tail: value})
+            return replace(config, **{head: updated})  # pyrefly: ignore[bad-argument-type]
+        base_value = _ConfigOverride.cast(_ConfigOverride.concrete_type(type(config), key, getattr(config, key)), raw)
+        return replace(config, **{key: base_value})  # pyrefly: ignore[bad-argument-type]
 
 
 @dataclass(frozen=True)

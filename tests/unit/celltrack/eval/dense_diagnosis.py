@@ -1,9 +1,13 @@
 import math
+from pathlib import Path
+from typing import cast
 
 import numpy as np
 
-from celltrack.eval.dense_diagnosis import DenseFateDiagnosis, Fate, MislinkSignal
+from celltrack.eval.dense_diagnosis import DenseDiagnosis, DenseFateDiagnosis, Fate, MislinkSignal
+from celltrack.tracker import CellTracker
 from core.data.tracks import TrackGraph
+from core.geometry import Spacing
 from core.metrics.matching import NodeMatching
 
 
@@ -24,6 +28,47 @@ def _graph(coordinates: list[list[int]], edges: list[list[int]]) -> TrackGraph:
         coordinates=np.array(coordinates, dtype=np.int64),
         edges=np.array(edges, dtype=np.int64).reshape(-1, 2),
     )
+
+
+class _FakeScorer:
+    """The tracker's edge scorer, exposing only the `affinities` diagnose reads — a fixed per-gap probability."""
+
+    def __init__(self, affinity: _Affinity) -> None:
+        self._affinity = affinity
+
+    def affinities(self, path: Path, prediction: TrackGraph, device: str) -> _Affinity:
+        return self._affinity
+
+
+class _FakeTracker:
+    """A tracker returning a canned prediction and affinity, so `diagnose`'s wiring runs without real inference."""
+
+    def __init__(self, prediction: TrackGraph, affinity: _Affinity) -> None:
+        self._prediction = prediction
+        self.edge_scorer = _FakeScorer(affinity)
+
+    def run(self, name: str, path: Path) -> TrackGraph:
+        return self._prediction
+
+
+def test_diagnose():
+    """`diagnose` runs the tracker, matches, and decomposes both the fates and the mislink affinity signal.
+
+    Truth links cell 0 (t0) to cell 2 (t1); the tracker mislinks 0->1 with target 2 left unclaimed (MISLINK_FREE),
+    and the affinity scores the chosen neighbour above the true successor — the read-out diagnose returns.
+    """
+    truth = _graph([[0, 0, 0, 0], [1, 0, 0, 3], [1, 0, 0, 9]], [[0, 2]])
+    prediction = _graph(truth.coordinates.tolist(), [[0, 1]])
+    affinity = _Affinity({0: np.array([[0.7, 0.2]], dtype=np.float64)})  # source 0 -> [target 1, target 2]
+    tracker = _FakeTracker(prediction, affinity)
+
+    fate, signal = DenseDiagnosis.diagnose(
+        cast(CellTracker, tracker), Path("v.zarr"), truth, Spacing(1.0, 1.0, 1.0), "cpu"
+    )
+
+    assert fate.counts()[Fate.MISLINK_FREE] == 1
+    assert signal.p_true.tolist() == [0.2]
+    assert signal.p_chosen.tolist() == [0.7]
 
 
 def test_dense_fate_diagnosis_of():

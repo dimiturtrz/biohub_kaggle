@@ -26,9 +26,10 @@ import logging
 from dataclasses import dataclass
 from enum import IntEnum
 from pathlib import Path
+from typing import cast
 
 import numpy as np
-from jaxtyping import Int
+from jaxtyping import Bool, Float, Int
 
 from celltrack.affinity import EdgeAffinity
 from celltrack.eval.proxy import TestMovieProxy
@@ -62,7 +63,7 @@ class DenseFateDiagnosis:
     fates: Int[np.ndarray, "e"]
 
     @staticmethod
-    def invert(matching: NodeMatching, truth_count: int) -> Int[np.ndarray, "g"]:
+    def _invert(matching: NodeMatching, truth_count: int) -> Int[np.ndarray, "g"]:
         """For each ground-truth node, the predicted row matched to it, or `UNMATCHED` — the matching reversed.
 
         The per-timepoint assignment is one-to-one, so no ground-truth node is claimed by two detections; the
@@ -82,7 +83,7 @@ class DenseFateDiagnosis:
         detection standing in for it — and the tracker's own edges then say whether that detection linked to the
         truth's target, to a wrong neighbour, or to nothing.
         """
-        predicted_of_truth = cls.invert(matching, len(truth.node_ids))
+        predicted_of_truth = cls._invert(matching, len(truth.node_ids))
         truth_edges = truth.edge_rows()
         source = predicted_of_truth[truth_edges[:, 0]]
         target = predicted_of_truth[truth_edges[:, 1]]
@@ -107,7 +108,12 @@ class DenseFateDiagnosis:
         return {fate: int(tally[fate]) for fate in Fate}
 
     @staticmethod
-    def _label(both, reproduced, source_linked, target_claimed):
+    def _label(
+        both: Bool[np.ndarray, "e"],
+        reproduced: Bool[np.ndarray, "e"],
+        source_linked: Bool[np.ndarray, "e"],
+        target_claimed: Bool[np.ndarray, "e"],
+    ) -> Int[np.ndarray, "e"]:
         """Fold the per-edge boolean masks into one exclusive `Fate` code, most-specific outcome first."""
         fates = np.full(len(both), Fate.ENDPOINT_MISSING, dtype=np.int64)
         mislink = both & ~reproduced & source_linked
@@ -138,7 +144,7 @@ class MislinkSignal:
     ) -> "MislinkSignal":
         """Read the affinity's true- and chosen-target probability for every mislinked annotated edge."""
         fates = DenseFateDiagnosis.of(prediction, truth, matching).fates
-        predicted_of_truth = DenseFateDiagnosis.invert(matching, len(truth.node_ids))
+        predicted_of_truth = DenseFateDiagnosis._invert(matching, len(truth.node_ids))  # noqa: SLF001
         successors = Adjacency.of(prediction).successors
         timepoints = prediction.timepoints()
         mislinked = np.flatnonzero((fates == Fate.MISLINK_CONFLICT) | (fates == Fate.MISLINK_FREE))
@@ -163,11 +169,18 @@ class MislinkSignal:
         return float(np.mean(self.p_true)), float(np.mean(self.p_chosen))
 
     @staticmethod
-    def _probabilities(source_row, true_row, successors, timepoints, affinity) -> tuple[float, float]:
+    def _probabilities(
+        source_row: int,
+        true_row: int,
+        successors: dict[int, tuple[int, ...]],
+        timepoints: Int[np.ndarray, "n"],
+        affinity: EdgeAffinity,
+    ) -> tuple[float, float]:
         """The affinity probability of the true successor and of the (first) successor the linker actually chose."""
         chosen_row = successors[source_row][0]
         timepoint = int(timepoints[source_row])
-        probability = affinity.probabilities(timepoint)
+        # A mislinked source has an out-edge, so its gap carried candidates and the affinity is populated here.
+        probability = cast(Float[np.ndarray, "s t"], affinity.probabilities(timepoint))
         sources = np.flatnonzero(timepoints == timepoint)
         targets = np.flatnonzero(timepoints == timepoint + 1)
         source_local = int(np.searchsorted(sources, source_row))
@@ -197,7 +210,7 @@ class DenseDiagnosis:
         )
 
     @staticmethod
-    def mounted(root: DataRoot, device: str, movie: str) -> tuple[DenseFateDiagnosis, MislinkSignal]:
+    def _mounted(root: DataRoot, device: str, movie: str) -> tuple[DenseFateDiagnosis, MislinkSignal]:
         """Mount the shipped tracker, run it on `movie`, and decompose its annotated-edge fates and mislink signal."""
         proc = root.processed("biohub_cell_tracking")
         proxy = TestMovieProxy.load(root, (movie,))
@@ -219,7 +232,7 @@ def main() -> None:
     parser.add_argument("--movie", default=DENSE_MOVIE, help="the movie stem to decompose")
     args = parser.parse_args()
 
-    diagnosis, signal = DenseDiagnosis.mounted(DataRoot.from_config(args.config), args.device, args.movie)
+    diagnosis, signal = DenseDiagnosis._mounted(DataRoot.from_config(args.config), args.device, args.movie)  # noqa: SLF001
     counts = diagnosis.counts()
     total = sum(counts.values())
     logger.info("movie=%s  annotated edges=%d", args.movie, total)

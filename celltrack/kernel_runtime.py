@@ -85,5 +85,5 @@ class KernelRuntime:
             graph = predict(name, path)
             graphs[name] = graph
             logger.info("  %s: %d nodes, %d edges", name, len(graph.node_ids), len(graph.edges))
-        Submission(graphs=graphs).write_csv(out)
+        Submission(graphs=graphs).write_csv(Path(out))
         logger.info("wrote %s", out)

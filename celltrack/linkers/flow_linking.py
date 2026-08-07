@@ -35,6 +35,9 @@ from core.geometry import Spacing
 _COST_SCALE = 1000
 _SOURCE, _SINK = "source", "sink"
 
+# A flow node is either a boundary marker (`_SOURCE`/`_SINK`) or an `("in"|"out", detection_row)` split node.
+type _Node = str | tuple[str, int]
+
 
 @dataclass(frozen=True)
 class FlowLinker:
@@ -62,10 +65,10 @@ class FlowLinker:
 
     def _network(
         self, count: int, positions_um: Float[np.ndarray, "n 3"], timepoints: Int[np.ndarray, "n"]
-    ) -> nx.DiGraph:
+    ) -> "nx.DiGraph[_Node]":
         """The flow network: a unit-capacity node per detection, boundary arcs to source/sink, gated transitions."""
         boundary = round(_COST_SCALE * self.boundary_cost)
-        graph = nx.DiGraph()
+        graph: nx.DiGraph[_Node] = nx.DiGraph()
         for row in range(count):
             graph.add_edge(("in", row), ("out", row), capacity=1, weight=0)  # 1-to-1: at most one link through a cell
             graph.add_edge(_SOURCE, ("in", row), capacity=1, weight=boundary)  # appearance
@@ -103,7 +106,7 @@ class FlowLinker:
         return np.where(distance <= self.max_distance_um, cost, np.inf)
 
     @staticmethod
-    def _selected_links(flow: dict, node_ids: Int[np.ndarray, "n"]) -> Int[np.ndarray, "e 2"]:
+    def _selected_links(flow: dict[_Node, dict[_Node, int]], node_ids: Int[np.ndarray, "n"]) -> Int[np.ndarray, "e 2"]:
         """The transition arcs carrying a unit of flow, translated from rows back to node ids — the chosen links.
 
         The flow dict also keys the string source/sink nodes, so a node is a transition endpoint only when it is

@@ -142,25 +142,26 @@ class CellTracker:
         one-frame dropouts the pruning leaves in real tracks. Reversing them (bridge then prune) lets the bridge
         splice fragments that the filter would have removed, and scores lower.
         """
-        link = LinkerStage(self.config.linker.build(spacing, affinity))
+        config = self.config
+        link = LinkerStage(config.linker.build(spacing, affinity))
         # Division recovery reads the edge affinity, so it needs a learned head and runs before the short-track
         # filter (whose division-preserving carve-out can only protect a fork that already exists).
         divide = (
-            (self.config.division.build(spacing, affinity),)
-            if self.config.division is not None and affinity is not None
+            (config.division.build(spacing, affinity),)
+            if config.division is not None and affinity is not None
             else ()
         )
         # Reuse-bridge runs before the short-track filter so the isolated t+1 nodes it links through survive as
         # part of a bridged track rather than being pruned as length-1 fragments first.
-        reuse = (self.config.reuse.build(spacing),) if self.config.reuse is not None else ()
-        rescue = self.config.rescue.build(spacing, affinity) if self.config.rescue is not None and affinity else None
-        short = ShortTrackFilter(min_length=self.config.min_track_length, rescue=rescue)
-        bridge = self.config.bridge.build(spacing)
-        smooth = LinefitSmoother(strength=self.config.smooth_strength)
+        reuse = (config.reuse.build(spacing),) if config.reuse is not None else ()
+        rescue = config.rescue.build(spacing, affinity) if config.rescue is not None and affinity else None
+        short = ShortTrackFilter(min_length=config.min_track_length, rescue=rescue)
+        bridge = config.bridge.build(spacing)
+        smooth = LinefitSmoother(strength=config.smooth_strength)
         # Topology repair (enforce-next-frame, single-parent, prune-isolated) runs after the graph's edges are
         # final — after bridging — so it prunes exactly the nodes the finished edge set leaves unbacked. It is
         # the frontier's output filter; optional because prune-isolated changes the node count the metric reads.
-        repair = (self.config.topology.build(spacing),) if self.config.topology is not None else ()
+        repair = (config.topology.build(spacing),) if config.topology is not None else ()
         return (link, *reuse, *divide, short, bridge, *repair, smooth)
 
     def spacing(self, path: Path) -> Spacing:

@@ -4,15 +4,17 @@ from pathlib import Path
 from typing import cast
 
 import pytest
+from pydantic import BaseModel
 
 from celltrack.eval import proxy_eval
 from celltrack.eval.proxy import CV_MOVIES
 from celltrack.eval.proxy_eval import TrackerProxyEval, _Args, _ConfigOverride
 from celltrack.tracker import CellTracker, TrackerConfig
+from core.metrics.score import VideoMetrics
 from core.paths import DataRoot
 
 
-def test_override():
+def test_apply():
     """`--set` overrides keep each field's type, and a dotted key reaches the nested (pydantic) linker config."""
     base = TrackerConfig()
     assert _ConfigOverride.apply(base, "smooth_strength=0.5").smooth_strength == 0.5
@@ -21,6 +23,28 @@ def test_override():
     # A dotted key reaches an off-by-default nested config, instantiating it from its declared type first.
     assert _ConfigOverride.apply(base, "reuse.gate_um=7.5").reuse.gate_um == 7.5
     assert _ConfigOverride.apply(base, "detector_blend=0.6").detector_blend == 0.6  # None-default cast via annotation
+
+
+def test_cast():
+    """`cast` parses a raw string into the target type, treating bool as a flag rather than an int subclass."""
+    assert _ConfigOverride.cast(int, "5") == 5
+    assert _ConfigOverride.cast(float, "0.5") == 0.5
+    assert _ConfigOverride.cast(bool, "true") is True
+    assert _ConfigOverride.cast(bool, "false") is False  # not int("false"): bool is parsed as a flag
+
+
+def test_concrete_type():
+    """`concrete_type` reads a set field's type from its value, and an unset optional's from its annotation."""
+    assert _ConfigOverride.concrete_type(TrackerConfig, "threshold", 0.99) is float
+    # detector_blend defaults to None, so its real type lives only in the `float | None` annotation.
+    assert _ConfigOverride.concrete_type(TrackerConfig, "detector_blend", None) is float
+
+
+def test_nested():
+    """`nested` returns the live sub-config, instantiating an off-by-default one from its declared type."""
+    base = TrackerConfig()
+    assert _ConfigOverride.nested(base, "linker") is base.linker  # the already-set linker config, unchanged
+    assert isinstance(_ConfigOverride.nested(base, "reuse"), BaseModel)  # reuse is None by default -> instantiated
 
 
 def test_override_rejects_a_bare_key():
@@ -90,7 +114,7 @@ def test_by_acquisition(monkeypatch: pytest.MonkeyPatch):
     """`by_acquisition` groups the per-movie metrics by their filename prefix into one split score each."""
     monkeypatch.setattr(proxy_eval.SplitScore, "of", staticmethod(lambda metrics: metrics))
     breakdown = {"44b6_a": "m1", "44b6_b": "m2", "6bba_c": "m3"}
-    result = TrackerProxyEval.by_acquisition(cast(dict, breakdown))
+    result = TrackerProxyEval.by_acquisition(cast(dict[str, VideoMetrics], breakdown))
     assert result == {"44b6": ["m1", "m2"], "6bba": ["m3"]}
 
 

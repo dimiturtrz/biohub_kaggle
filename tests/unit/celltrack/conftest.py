@@ -9,6 +9,8 @@ classes for tiny torch modules honouring that contract, so construction and forw
 
 from __future__ import annotations
 
+from typing import override
+
 import pytest
 from torch import Tensor, nn
 
@@ -28,6 +30,7 @@ class _StubBackbone(nn.Module):
         super().__init__()
         self.conv = nn.Conv3d(in_channels, out_channels, kernel_size=1)
 
+    @override
     def forward(self, window: Tensor) -> Tensor:
         batch, frames = window.shape[:2]
         merged = window.reshape(batch * frames, *window.shape[2:])
@@ -49,6 +52,7 @@ class _StubTransformer(nn.Module):
         super().__init__()
         self.proj = nn.Linear(feat_dim, hidden_dim)
 
+    @override
     def forward(self, feat_src: Tensor, feat_tgt: Tensor, src_voxel: Tensor, tgt_voxel: Tensor) -> Tensor:
         return self.proj(feat_src) @ self.proj(feat_tgt).T  # (s, t) logits
 

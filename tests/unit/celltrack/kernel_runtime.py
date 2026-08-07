@@ -1,9 +1,12 @@
+from collections.abc import Callable
 from pathlib import Path
+from typing import cast
 
 import pytest
 
 from celltrack import kernel_runtime
 from celltrack.kernel_runtime import KernelRuntime
+from core.data.tracks import TrackGraph
 
 
 def test_find(monkeypatch: pytest.MonkeyPatch):
@@ -12,13 +15,13 @@ def test_find(monkeypatch: pytest.MonkeyPatch):
     assert KernelRuntime.find("celltrack/x.py") == "/kaggle/input/a/celltrack/x.py"
 
 
-def test_install_wheels(monkeypatch: pytest.MonkeyPatch):
+def test_install_wheels(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """`install_wheels` pip-installs every bundled wheel offline and returns their names."""
     monkeypatch.setattr(kernel_runtime.glob, "glob", lambda pattern, recursive: ["/kit/a.whl", "/kit/b.whl"])
     seen: list[list[str]] = []
     monkeypatch.setattr(kernel_runtime.subprocess, "run", lambda command, check: seen.append(command))
 
-    wheels = KernelRuntime.install_wheels(Path("/kit/celltrack_src"))
+    wheels = KernelRuntime.install_wheels(tmp_path / "celltrack_src")
 
     assert wheels == ["/kit/a.whl", "/kit/b.whl"]
     assert seen[0][1:5] == ["-m", "pip", "install", "--no-index"]
@@ -39,21 +42,21 @@ def test_pilkwang_packs(monkeypatch: pytest.MonkeyPatch):
     assert "seed314159" in str(pack2)
 
 
-def test_pack_source(monkeypatch: pytest.MonkeyPatch):
+def test_pack_source(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """`pack_source` resolves the mounted pack's src/ root, three levels above the models package init."""
-    monkeypatch.setattr(
-        KernelRuntime, "find", lambda pattern: "/kaggle/input/p/repo/src/biohub_tracking/models/__init__.py"
-    )
-    assert KernelRuntime.pack_source() == Path("/kaggle/input/p/repo/src")
+    init = tmp_path / "repo/src/biohub_tracking/models/__init__.py"
+    monkeypatch.setattr(KernelRuntime, "find", lambda pattern: str(init))
+    assert KernelRuntime.pack_source() == tmp_path / "repo/src"
 
 
-def test_test_videos(monkeypatch: pytest.MonkeyPatch):
+def test_test_videos(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """`test_videos` returns the competition test zarrs as sorted Paths."""
-    monkeypatch.setattr(kernel_runtime.glob, "glob", lambda pattern, recursive: ["/in/b.zarr", "/in/a.zarr"])
-    assert KernelRuntime.test_videos() == [Path("/in/a.zarr"), Path("/in/b.zarr")]
+    unsorted = [str(tmp_path / "b.zarr"), str(tmp_path / "a.zarr")]
+    monkeypatch.setattr(kernel_runtime.glob, "glob", lambda pattern, recursive: unsorted)
+    assert KernelRuntime.test_videos() == [tmp_path / "a.zarr", tmp_path / "b.zarr"]
 
 
-def test_run_submission(monkeypatch: pytest.MonkeyPatch):
+def test_run_submission(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """`run_submission` runs the predictor over each video and writes the graphs to a submission CSV."""
 
     class _Graph:
@@ -64,7 +67,7 @@ def test_run_submission(monkeypatch: pytest.MonkeyPatch):
         def __init__(self, graphs: dict[str, object]) -> None:
             self.graphs = graphs
 
-        def write_csv(self, out: str) -> None:
+        def write_csv(self, out: Path) -> None:
             written["out"] = out
             written["keys"] = tuple(self.graphs)
 
@@ -76,7 +79,9 @@ def test_run_submission(monkeypatch: pytest.MonkeyPatch):
         calls.append((name, path))
         return _Graph()
 
-    KernelRuntime.run_submission(predict, [Path("/in/m1.zarr"), Path("/in/m2.zarr")], out="/out/s.csv")
+    videos = [tmp_path / "m1.zarr", tmp_path / "m2.zarr"]
+    out = tmp_path / "s.csv"
+    KernelRuntime.run_submission(cast(Callable[[str, Path], TrackGraph], predict), videos, out=str(out))
 
-    assert calls == [("m1", Path("/in/m1.zarr")), ("m2", Path("/in/m2.zarr"))]
-    assert written == {"out": "/out/s.csv", "keys": ("m1", "m2")}
+    assert calls == [("m1", videos[0]), ("m2", videos[1])]
+    assert written == {"out": out, "keys": ("m1", "m2")}

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
+from typing import cast, override
 
 import numpy as np
 
@@ -42,6 +42,7 @@ def test_blend_detector_scorer_forwards_each_seed_once(tmp_path: Path):
     class _CountingSeed(_FakeSeed):
         forwards: list[int] | None = None
 
+        @override
         def logit_volumes(self, path: Path, recipe: DetectorRecipe, device: str) -> list[np.ndarray]:
             assert self.forwards is not None
             self.forwards.append(1)

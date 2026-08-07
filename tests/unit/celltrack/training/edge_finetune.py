@@ -1,16 +1,29 @@
 from pathlib import Path
+from typing import cast
 
 import numpy as np
 import pytest
 import torch
 
+from celltrack.edges.edge_scoring import EdgeTransformerScorer
 from celltrack.training import edge_finetune
 from celltrack.training.edge_finetune import (
     EdgeFinetuneConfig,
     EdgeHardNegativeFinetuner,
     GapSupervision,
 )
-from core.metrics.matching import UNMATCHED
+from core.data.tracks import TrackGraph
+from core.geometry import Spacing
+from core.metrics.matching import UNMATCHED, DistanceMatcher
+
+
+def _graph(coordinates: list[list[int]], edges: list[list[int]]) -> TrackGraph:
+    """A track graph whose node ids are its row indices, so edge ids and rows coincide for the fixture."""
+    return TrackGraph(
+        node_ids=np.arange(len(coordinates), dtype=np.int64),
+        coordinates=np.array(coordinates, dtype=np.int64),
+        edges=np.array(edges, dtype=np.int64).reshape(-1, 2),
+    )
 
 
 class _StubScorer:
@@ -20,7 +33,14 @@ class _StubScorer:
         self.detector = torch.nn.Linear(1, 1)
         self.transformer = torch.nn.Linear(1, 1)
 
-    def _gap_logits(self, source, timepoint, source_positions, target_positions, device):
+    def _gap_logits(
+        self,
+        source: object,
+        timepoint: int,
+        source_positions: np.ndarray,
+        target_positions: np.ndarray,
+        device: str,
+    ) -> torch.Tensor:
         pairs = torch.ones(len(source_positions), len(target_positions))
         return self.transformer.weight.reshape(()) * pairs  # (s, t) logits carrying the transformer's grad
 
@@ -39,10 +59,29 @@ def test_finetune(monkeypatch: pytest.MonkeyPatch):
     before = scorer.transformer.weight.detach().clone()
     detector_frozen_before = scorer.detector.weight.requires_grad
 
-    EdgeHardNegativeFinetuner(scorer, EdgeFinetuneConfig(device="cpu", steps=3)).finetune([(Path("video"), gap)])
+    typed_scorer = cast(EdgeTransformerScorer, scorer)
+    EdgeHardNegativeFinetuner(typed_scorer, EdgeFinetuneConfig(device="cpu", steps=3)).finetune([(Path("video"), gap)])
 
     assert not torch.equal(scorer.transformer.weight, before)  # the head learned
     assert detector_frozen_before and not scorer.detector.weight.requires_grad  # the UNet was frozen
+
+
+def test_of():
+    """`of` builds one supervised gap per frame: the GT edge matrix by matching, plus its mined hard negatives."""
+    # Two cells per frame, far apart so the identity matching is unambiguous; only node 0 -> node 2 is annotated.
+    graph = _graph(
+        [[0, 0, 0, 0], [0, 0, 0, 10], [1, 0, 0, 0], [1, 0, 0, 10]],
+        [[0, 2]],
+    )
+    matcher = DistanceMatcher(spacing=Spacing(1.0, 1.0, 1.0))
+
+    gaps = GapSupervision.of(graph, graph, matcher, hard_negatives=1)
+
+    assert len(gaps) == 1
+    gap = gaps[0]
+    assert gap.timepoint == 0
+    assert gap.gt_matrix.tolist() == [[1.0, 0.0], [0.0, 0.0]]  # only source 0 -> target 0 is an annotated edge
+    assert gap.hard_negatives.tolist() == [[0, 1]]  # source 0's nearest wrong target is the far decoy at local col 1
 
 
 def test_gt_matrix():

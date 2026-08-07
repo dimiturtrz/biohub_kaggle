@@ -30,7 +30,7 @@ from jaxtyping import Float, Int
 from scipy.spatial.distance import cdist
 from torch.nn import functional
 
-from celltrack.detectors.tunet import TemporalUNetDetector
+from celltrack.detectors.tunet import TemporalUNetDetector, _VideoSource
 from celltrack.edges.edge_scoring import EdgeTransformerScorer
 from celltrack.eval.dense_diagnosis import DenseDiagnosis, DenseFateDiagnosis, Fate, MislinkSignal
 from celltrack.eval.proxy import TestMovieProxy
@@ -145,12 +145,13 @@ class EdgeHardNegativeFinetuner:
     def __init__(self, scorer: EdgeTransformerScorer, config: EdgeFinetuneConfig) -> None:
         self._scorer = scorer
         self._config = config
-        self._scorer.detector.requires_grad_(requires_grad=False)  # the UNet features are the fixed substrate
+        scorer.detector.requires_grad_(requires_grad=False)  # the UNet features are the fixed substrate
 
     def finetune(self, gaps: list[tuple[Path, GapSupervision]]) -> None:
         """Run the probe's optimisation: sample gaps, deflate hard-negative probabilities, keep the annotated edges."""
-        self._scorer.transformer.train()
-        optimizer = torch.optim.AdamW(self._scorer.transformer.parameters(), lr=self._config.learning_rate)
+        transformer = self._scorer.transformer
+        transformer.train()
+        optimizer = torch.optim.AdamW(transformer.parameters(), lr=self._config.learning_rate)
         sources = {path: TemporalUNetDetector._open_source(path) for path in {path for path, _ in gaps}}  # noqa: SLF001
         for step in range(self._config.steps):
             path, gap = gaps[step % len(gaps)]
@@ -160,9 +161,9 @@ class EdgeHardNegativeFinetuner:
             optimizer.step()
             if step % 50 == 0:
                 logger.info("step %4d  loss=%.4f", step, loss.item())
-        self._scorer.transformer.eval()
+        transformer.eval()
 
-    def _loss(self, source: object, gap: GapSupervision) -> torch.Tensor:
+    def _loss(self, source: _VideoSource, gap: GapSupervision) -> Float[torch.Tensor, ""]:
         """Frontier focal-BCE on the annotated edges plus the hard-negative probability the mislinks inflate."""
         logits = self._scorer._gap_logits(  # noqa: SLF001  (finetuning the scorer's own head; UNet frozen)
             source, gap.timepoint, gap.source_positions, gap.target_positions, self._config.device
@@ -177,7 +178,9 @@ class EdgeHardNegativeFinetuner:
         return loss
 
     @staticmethod
-    def _frontier_loss(logits: Float[torch.Tensor, "s t"], target: Float[torch.Tensor, "s t"]) -> torch.Tensor:
+    def _frontier_loss(
+        logits: Float[torch.Tensor, "s t"], target: Float[torch.Tensor, "s t"]
+    ) -> Float[torch.Tensor, ""]:
         """The reference focal-BCE over annotated rows and columns, softmax over sources (one parent per target)."""
         active = (target.sum(dim=1) > 0).unsqueeze(1) | (target.sum(dim=0) > 0).unsqueeze(0)
         if not active.any():
@@ -189,7 +192,7 @@ class EdgeHardNegativeFinetuner:
 
     # CLI orchestration of the zni probe: mount the training proxy + tracker, mine gaps, report the read-out.
     @staticmethod
-    def mount(root: DataRoot, device: str) -> tuple[TestMovieProxy, CellTracker]:
+    def _mount(root: DataRoot, device: str) -> tuple[TestMovieProxy, CellTracker]:
         """The training proxy and the shipped tracker mounted once — the tracker is finetuned in place, then scored."""
         proc = root.processed("biohub_cell_tracking")
         proxy = TestMovieProxy.load(root, _TRAIN_STEMS)
@@ -202,7 +205,7 @@ class EdgeHardNegativeFinetuner:
         return proxy, tracker
 
     @staticmethod
-    def report(label: str, fate: DenseFateDiagnosis, signal: MislinkSignal) -> None:
+    def _report(label: str, fate: DenseFateDiagnosis, signal: MislinkSignal) -> None:
         """Log the held-out movie's correct/mislink counts and the affinity inversion — the probe's read-out."""
         counts = fate.counts()
         mean_true, mean_chosen = signal.means()
@@ -217,7 +220,7 @@ class EdgeHardNegativeFinetuner:
         )
 
     @staticmethod
-    def training_gaps(
+    def _training_gaps(
         proxy: TestMovieProxy, tracker: CellTracker, config: EdgeFinetuneConfig
     ) -> list[tuple[Path, GapSupervision]]:
         """Real-detection supervision for every training video — detections cached, matched, hard-negatives mined."""
@@ -249,19 +252,19 @@ def main() -> None:
         save_to=parsed.save_to,
     )
     root = DataRoot.from_config(parsed.config)
-    proxy, tracker = EdgeHardNegativeFinetuner.mount(root, config.device)
-    gaps = EdgeHardNegativeFinetuner.training_gaps(proxy, tracker, config)
+    proxy, tracker = EdgeHardNegativeFinetuner._mount(root, config.device)  # noqa: SLF001
+    gaps = EdgeHardNegativeFinetuner._training_gaps(proxy, tracker, config)  # noqa: SLF001
     logger.info("mined %d supervised gaps over %d train videos", len(gaps), len(config.train_stems))
 
     evaluation = TestMovieProxy.load(root, (_EVAL_STEM,))
     eval_path, eval_truth = evaluation.paths[0], evaluation.truths[0].graph
-    EdgeHardNegativeFinetuner.report(
+    EdgeHardNegativeFinetuner._report(  # noqa: SLF001
         "before", *DenseDiagnosis.diagnose(tracker, eval_path, eval_truth, evaluation.spacing, config.device)
     )
 
     seed1 = tracker.edge_scorer.scorers[0]
     EdgeHardNegativeFinetuner(seed1, config).finetune(gaps)
-    EdgeHardNegativeFinetuner.report(
+    EdgeHardNegativeFinetuner._report(  # noqa: SLF001
         "after", *DenseDiagnosis.diagnose(tracker, eval_path, eval_truth, evaluation.spacing, config.device)
     )
 
