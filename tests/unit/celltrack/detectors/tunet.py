@@ -8,37 +8,10 @@ import json
 from pathlib import Path
 
 import numpy as np
-import pytest
 import torch
 import zarr
-from torch import Tensor, nn
 
 from celltrack.detectors.tunet import DetectorRecipe, TemporalUNetDetector
-
-
-class _StubBackbone(nn.Module):
-    """A 1x1x1-conv stand-in for the third-party `TemporalUNet3D`, so construction/forward run without it.
-
-    It honours the same window contract — `(B, T, C_in, Z, Y, X)` in, `(B, T, C_out, Z, Y, X)` out — which
-    is all the detector's forward/inference path depends on; the real backbone is exercised in the field, not
-    in CI (it lives in the pinned `external/` checkout, absent here).
-    """
-
-    def __init__(self, in_channels: int, out_channels: int, layers: list[int]) -> None:
-        super().__init__()
-        self.conv = nn.Conv3d(in_channels, out_channels, kernel_size=1)
-
-    def forward(self, window: Tensor) -> Tensor:
-        batch, frames = window.shape[:2]
-        merged = window.reshape(batch * frames, *window.shape[2:])
-        out = self.conv(merged)
-        return out.reshape(batch, frames, *out.shape[1:])
-
-
-@pytest.fixture(autouse=True)
-def _stub_backbone(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Swap the external `TemporalUNet3D` for `_StubBackbone` so no test reaches the absent third-party dep."""
-    monkeypatch.setattr(TemporalUNetDetector, "_backbone_cls", staticmethod(lambda: _StubBackbone))
 
 
 def _tiny_detector() -> TemporalUNetDetector:

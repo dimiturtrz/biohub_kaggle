@@ -12,7 +12,8 @@ def config(tmp_path: Path) -> Path:
     return written
 
 
-def test_from_config(config: Path, tmp_path: Path):
+def test_from_config(config: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("CELLTRACK_DATA", raising=False)  # env override wins when set — resolve from paths.yaml here
     assert DataRoot.from_config(config).raw("x") == tmp_path / "root" / "raw" / "x"
 
 
