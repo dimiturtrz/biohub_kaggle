@@ -62,8 +62,10 @@ python_classes = []
 # project dep) so it's excluded from the scan.
 [tool.deptry]
 # `tools/oracle` runs under a separate venv holding the organizers' package (see tools/oracle/README.md);
-# its imports are deliberately not project deps.
-extend_exclude = ["noxfile.py", "tools/oracle"]
+# its imports are deliberately not project deps. `kaggle/` holds deploy scripts + Kaggle kernels that import
+# the MOUNTED pack (biohub_tracking) and sibling modules (survey) resolved in the kernel/deploy runtime, not
+# as project deps.
+extend_exclude = ["noxfile.py", "tools/oracle", "kaggle"]
 
 # deptry does not scan tests/ (its default exclude), so DEP002 (declared-but-unused) fires for anything
 # only exercised by the test suite or by tooling. PERMANENT ignores (never imported in scanned source by
@@ -71,8 +73,12 @@ extend_exclude = ["noxfile.py", "tools/oracle"]
 # `python -m devtools.*`). STARTERS: the runtime deps the scaffold ships for you to build on
 # (numpy/jaxtyping/beartype/pydantic) — they read as unused until you import them.
 [tool.deptry.per_rule_ignores]
+# `tracking_cellmot`/`biohub_tracking` are the pinned external/ checkout (gitignored, imported lazily by the
+# detector backbone + edge scorer), not a declared/published dependency — the external-deps convention.
+DEP001 = ["tracking_cellmot", "biohub_tracking"]
 # >>> LOCAL-SLOT: deptry-unused — PRUNE a starter once you wire it (keep pytest/pytest-cov/sdlc-devtools)
-DEP002 = ["pytest", "pytest-cov", "sdlc-devtools", "beartype", "pydantic"]
+# `kaggle` is the submit-extra CLI (`.venv/Scripts/kaggle.exe`), invoked never imported -> reads as unused.
+DEP002 = ["pytest", "pytest-cov", "sdlc-devtools", "beartype", "pydantic", "kaggle"]
 # <<< LOCAL-SLOT: deptry-unused
 
 [tool.ruff]
