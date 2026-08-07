@@ -187,10 +187,7 @@ class EdgeHardNegativeFinetuner:
         p_t = probability * target + (1 - probability) * (1 - target)
         return (((1 - p_t) ** _FOCAL_POWER) * bce)[active].mean()
 
-
-class EdgeFinetuneProbe:
-    """The CLI orchestration of the zni probe: mount the training proxy and tracker, mine gaps, report the read-out."""
-
+    # CLI orchestration of the zni probe: mount the training proxy + tracker, mine gaps, report the read-out.
     @staticmethod
     def mount(root: DataRoot, device: str) -> tuple[TestMovieProxy, CellTracker]:
         """The training proxy and the shipped tracker mounted once — the tracker is finetuned in place, then scored."""
@@ -252,19 +249,19 @@ def main() -> None:
         save_to=parsed.save_to,
     )
     root = DataRoot.from_config(parsed.config)
-    proxy, tracker = EdgeFinetuneProbe.mount(root, config.device)
-    gaps = EdgeFinetuneProbe.training_gaps(proxy, tracker, config)
+    proxy, tracker = EdgeHardNegativeFinetuner.mount(root, config.device)
+    gaps = EdgeHardNegativeFinetuner.training_gaps(proxy, tracker, config)
     logger.info("mined %d supervised gaps over %d train videos", len(gaps), len(config.train_stems))
 
     evaluation = TestMovieProxy.load(root, (_EVAL_STEM,))
     eval_path, eval_truth = evaluation.paths[0], evaluation.truths[0].graph
-    EdgeFinetuneProbe.report(
+    EdgeHardNegativeFinetuner.report(
         "before", *DenseDiagnosis.diagnose(tracker, eval_path, eval_truth, evaluation.spacing, config.device)
     )
 
     seed1 = tracker.edge_scorer.scorers[0]
     EdgeHardNegativeFinetuner(seed1, config).finetune(gaps)
-    EdgeFinetuneProbe.report(
+    EdgeHardNegativeFinetuner.report(
         "after", *DenseDiagnosis.diagnose(tracker, eval_path, eval_truth, evaluation.spacing, config.device)
     )
 
