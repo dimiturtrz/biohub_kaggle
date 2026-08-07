@@ -41,11 +41,11 @@ import numpy as np  # noqa: E402
 import torch  # noqa: E402
 import zarr  # noqa: E402
 
-from celltrack.edge_scoring import EdgeTransformerScorer  # noqa: E402
-from celltrack.linefit_smoother import LinefitSmoother  # noqa: E402
-from celltrack.motion_linking import MotionHungarianLinker  # noqa: E402
-from celltrack.short_track_filter import ShortTrackFilter  # noqa: E402
-from celltrack.tunet import TemporalUNetDetector  # noqa: E402
+from celltrack.edges.edge_scoring import EdgeTransformerScorer  # noqa: E402
+from celltrack.postproc.linefit_smoother import LinefitSmoother  # noqa: E402
+from celltrack.linkers.motion_linking import MotionHungarianLinker  # noqa: E402
+from celltrack.postproc.short_track_filter import ShortTrackFilter  # noqa: E402
+from celltrack.detectors.tunet import TemporalUNetDetector  # noqa: E402
 from core.data.tracks import TrackGraph  # noqa: E402
 from core.geometry import Spacing  # noqa: E402
 

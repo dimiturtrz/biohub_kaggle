@@ -27,12 +27,12 @@ import zarr
 from jaxtyping import Float, Int
 from torch import Tensor, nn
 
-from celltrack.bracket import ValidationFold
-from celltrack.linefit_smoother import LinefitSmoother
-from celltrack.linkers import LinkerConfig
-from celltrack.short_track_filter import ShortTrackFilter
+from celltrack.detectors.tunet import DetectorRecipe, TemporalUNetDetector
+from celltrack.eval.bracket import ValidationFold
+from celltrack.linkers.linkers import LinkerConfig
+from celltrack.postproc.linefit_smoother import LinefitSmoother
+from celltrack.postproc.short_track_filter import ShortTrackFilter
 from celltrack.training.tunet_dataset import Augmentation, FrameDataset, FrameTarget
-from celltrack.tunet import DetectorRecipe, TemporalUNetDetector
 from core.data.split import AcquisitionFolds
 from core.data.tracks import AnnotatedTracks
 from core.data.video import ImageStatistics

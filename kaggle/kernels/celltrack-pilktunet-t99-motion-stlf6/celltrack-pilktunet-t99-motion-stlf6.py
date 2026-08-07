@@ -15,10 +15,10 @@ Three changes from `celltrack-pilktunet-motion-stlf` (LB 0.859), all operating-p
 Two frontier post-proc stages were built, measured and **left off** because they do not pay on our
 detections without the model half we have not mounted:
 
-- **Division recovery** (`celltrack.division_recovery`, frontier gates 4.7/7.2/7.8): +0.045 on ground-truth
+- **Division recovery** (`celltrack.postproc.division_recovery`, frontier gates 4.7/7.2/7.8): +0.045 on ground-truth
   nodes but detection-limited on real detections (div_jaccard only 0.0114 — most second daughters are never
   detected), and net-negative once short-track(6) already prunes the false chains it adds (0.9090 -> 0.9085).
-- **Gap-close reuse** (`celltrack.gap_closer`): inert here (0.9090 -> 0.9090) — at 0.99 there are few isolated
+- **Gap-close reuse** (`celltrack.postproc.gap_closer`): inert here (0.9090 -> 0.9090) — at 0.99 there are few isolated
   detections near a gap midpoint to reuse; the frontier's gain comes from *synthetic* insertion, gated by a
   DeepCenter centre-prior veto not mounted here.
 
@@ -47,10 +47,10 @@ sys.path.insert(0, str(pack_source()))
 import torch  # noqa: E402
 import zarr  # noqa: E402
 
-from celltrack.linefit_smoother import LinefitSmoother  # noqa: E402
-from celltrack.motion_linking import MotionHungarianLinker  # noqa: E402
-from celltrack.short_track_filter import ShortTrackFilter  # noqa: E402
-from celltrack.tunet import TemporalUNetDetector  # noqa: E402
+from celltrack.postproc.linefit_smoother import LinefitSmoother  # noqa: E402
+from celltrack.linkers.motion_linking import MotionHungarianLinker  # noqa: E402
+from celltrack.postproc.short_track_filter import ShortTrackFilter  # noqa: E402
+from celltrack.detectors.tunet import TemporalUNetDetector  # noqa: E402
 from core.data.tracks import TrackGraph  # noqa: E402
 from core.geometry import Spacing  # noqa: E402
 

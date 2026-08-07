@@ -40,10 +40,10 @@ import torch.nn.functional as F  # noqa: E402
 import zarr  # noqa: E402
 from biohub_tracking.models import TemporalUNet3D  # noqa: E402
 
-from celltrack.division_recovery import DivisionRecovery  # noqa: E402
-from celltrack.linefit_smoother import LinefitSmoother  # noqa: E402
-from celltrack.motion_linking import MotionHungarianLinker  # noqa: E402
-from celltrack.short_track_filter import ShortTrackFilter  # noqa: E402
+from celltrack.postproc.division_recovery import DivisionRecovery  # noqa: E402
+from celltrack.postproc.linefit_smoother import LinefitSmoother  # noqa: E402
+from celltrack.linkers.motion_linking import MotionHungarianLinker  # noqa: E402
+from celltrack.postproc.short_track_filter import ShortTrackFilter  # noqa: E402
 from core.data.tracks import TrackGraph  # noqa: E402
 from core.geometry import Spacing  # noqa: E402
 

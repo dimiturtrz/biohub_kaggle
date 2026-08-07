@@ -6,12 +6,12 @@ import numpy as np
 import pytest
 
 from celltrack import tracker as tracker_module
-from celltrack.linkers import LinkerConfig
-from celltrack.linking import Linker
-from celltrack.pipeline import BlendDetectorScorer
-from celltrack.topology_repair import TopologyConfig
+from celltrack.detectors.pipeline import BlendDetectorScorer
+from celltrack.detectors.tunet import DetectorRecipe
+from celltrack.linkers.linkers import LinkerConfig
+from celltrack.linkers.linking import Linker
+from celltrack.postproc.topology_repair import TopologyConfig
 from celltrack.tracker import CellTracker, LinkerStage, TrackerConfig
-from celltrack.tunet import DetectorRecipe
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
 

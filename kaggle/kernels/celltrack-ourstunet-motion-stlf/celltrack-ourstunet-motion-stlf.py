@@ -1,7 +1,7 @@
 """Submission kernel — our-trained temporal-U-Net detector + our motion linker.
 
 The detector is the pilkwang architecture (`TemporalUNet3D` + detection head) with weights WE trained on our
-fold split (`detector_tunet_ours.pt`), not the published ones. Inference is the shared `celltrack.tunet`
+fold split (`detector_tunet_ours.pt`), not the published ones. Inference is the shared `celltrack.detectors.tunet`
 path — ×4 Y/X downsample, per-video quantile-norm, fake-pair forward, flip-TTA, max-pool peaks — feeding OUR
 MotionHungarianLinker + short-track + linefit. The support pack is mounted only for the architecture class;
 the weights and the whole pipeline are ours.
@@ -30,10 +30,10 @@ sys.path.insert(0, str(pack_source()))
 import torch  # noqa: E402
 import zarr  # noqa: E402
 
-from celltrack.linefit_smoother import LinefitSmoother  # noqa: E402
-from celltrack.motion_linking import MotionHungarianLinker  # noqa: E402
-from celltrack.short_track_filter import ShortTrackFilter  # noqa: E402
-from celltrack.tunet import TemporalUNetDetector  # noqa: E402
+from celltrack.postproc.linefit_smoother import LinefitSmoother  # noqa: E402
+from celltrack.linkers.motion_linking import MotionHungarianLinker  # noqa: E402
+from celltrack.postproc.short_track_filter import ShortTrackFilter  # noqa: E402
+from celltrack.detectors.tunet import TemporalUNetDetector  # noqa: E402
 from core.data.tracks import TrackGraph  # noqa: E402
 from core.geometry import Spacing  # noqa: E402
 

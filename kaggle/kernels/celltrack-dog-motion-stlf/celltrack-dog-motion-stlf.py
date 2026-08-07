@@ -26,11 +26,11 @@ install_wheels(Path(_KIT_ROOT))
 
 import torch  # noqa: E402
 
-from celltrack.detection import HIGH, LOW  # noqa: E402
-from celltrack.dog_detection import DoGDetector  # noqa: E402
-from celltrack.linefit_smoother import LinefitSmoother  # noqa: E402
-from celltrack.motion_linking import MotionHungarianLinker  # noqa: E402
-from celltrack.short_track_filter import ShortTrackFilter  # noqa: E402
+from celltrack.detectors.detection import HIGH, LOW  # noqa: E402
+from celltrack.detectors.dog_detection import DoGDetector  # noqa: E402
+from celltrack.postproc.linefit_smoother import LinefitSmoother  # noqa: E402
+from celltrack.linkers.motion_linking import MotionHungarianLinker  # noqa: E402
+from celltrack.postproc.short_track_filter import ShortTrackFilter  # noqa: E402
 from core.data.tracks import TrackGraph  # noqa: E402
 from core.data.video import CellVideo  # noqa: E402
 

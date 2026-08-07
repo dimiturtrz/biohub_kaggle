@@ -203,6 +203,19 @@ name = "core is an independent kernel (imports none of the other packages)"
 type = "forbidden"
 source_modules = ["core"]
 forbidden_modules = ["celltrack"]
+
+[[tool.importlinter.contracts]]
+name = "celltrack layers: detectors is the base; edges/linkers/postproc are independent siblings above it; tracker over those; eval/training on top"
+type = "layers"
+containers = ["celltrack"]
+layers = [
+    "training",
+    "eval",
+    "tracker",
+    "edges | linkers | postproc",
+    "detectors",
+    "affinity",
+]
 # <<< LOCAL-SLOT: import-contracts
 
 

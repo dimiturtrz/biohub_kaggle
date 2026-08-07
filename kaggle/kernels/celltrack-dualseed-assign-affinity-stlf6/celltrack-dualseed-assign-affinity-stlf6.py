@@ -38,12 +38,12 @@ sys.path.insert(0, str(pack_source()))
 
 import torch  # noqa: E402
 
-from celltrack.blended_edge_scoring import BlendedEdgeTransformerScorer  # noqa: E402
-from celltrack.linkers import LinkerConfig  # noqa: E402
-from celltrack.pipeline import BlendDetectorScorer  # noqa: E402
-from celltrack.response_cache import EphemeralResponseStore  # noqa: E402
+from celltrack.edges.blended_edge_scoring import BlendedEdgeTransformerScorer  # noqa: E402
+from celltrack.linkers.linkers import LinkerConfig  # noqa: E402
+from celltrack.detectors.pipeline import BlendDetectorScorer  # noqa: E402
+from celltrack.detectors.response_cache import EphemeralResponseStore  # noqa: E402
 from celltrack.tracker import CellTracker, TrackerConfig  # noqa: E402
-from celltrack.tunet import TemporalUNetDetector  # noqa: E402
+from celltrack.detectors.tunet import TemporalUNetDetector  # noqa: E402
 
 # 0.97: stack the two independent recall levers the leaderboard rewards. Threshold is a recall lever the sparse
 # proxy cannot see — public 0.99/0.98/0.97 = 0.887/0.891/0.892, matching the disclosed clean-baseline ~0.96875;

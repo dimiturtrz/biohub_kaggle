@@ -11,7 +11,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from celltrack.bracket import Ceiling, ValidationFold
+from celltrack.eval.bracket import Ceiling, ValidationFold
 from core.data.split import AcquisitionFolds
 from core.data.submission import Submission
 from core.data.tracks import AnnotatedTracks, TrackGraph

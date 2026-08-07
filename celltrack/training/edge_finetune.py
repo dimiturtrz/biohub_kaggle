@@ -30,11 +30,11 @@ from jaxtyping import Float, Int
 from scipy.spatial.distance import cdist
 from torch.nn import functional
 
-from celltrack.dense_diagnosis import DenseFateDiagnosis, Fate, MislinkSignal, diagnose
-from celltrack.edge_scoring import EdgeTransformerScorer
-from celltrack.proxy import TestMovieProxy
+from celltrack.detectors.tunet import TemporalUNetDetector
+from celltrack.edges.edge_scoring import EdgeTransformerScorer
+from celltrack.eval.dense_diagnosis import DenseFateDiagnosis, Fate, MislinkSignal, diagnose
+from celltrack.eval.proxy import TestMovieProxy
 from celltrack.tracker import CellTracker
-from celltrack.tunet import TemporalUNetDetector
 from core.data.tracks import TrackGraph
 from core.metrics.matching import UNMATCHED, DistanceMatcher
 from core.paths import DataRoot

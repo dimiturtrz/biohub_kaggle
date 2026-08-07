@@ -12,9 +12,10 @@ import numpy as np
 import torch
 import zarr
 
-from celltrack.linefit_smoother import LinefitSmoother
-from celltrack.linkers import LinkerConfig
-from celltrack.short_track_filter import ShortTrackFilter
+from celltrack.detectors.tunet import DetectorRecipe
+from celltrack.linkers.linkers import LinkerConfig
+from celltrack.postproc.linefit_smoother import LinefitSmoother
+from celltrack.postproc.short_track_filter import ShortTrackFilter
 from celltrack.training.tunet_dataset import FrameTarget
 from celltrack.training.tunet_detector import (
     TUNetDetectorTrainer,
@@ -22,7 +23,6 @@ from celltrack.training.tunet_detector import (
     _FoldEval,
     _Optimization,
 )
-from celltrack.tunet import DetectorRecipe
 from core.data.tracks import AnnotatedTracks
 from core.data.video import ImageStatistics
 from core.geometry import Spacing

@@ -15,18 +15,18 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
-from celltrack.affinity_division import AffinityDivisionConfig
-from celltrack.blended_edge_scoring import BlendedEdgeTransformerScorer
-from celltrack.gap_closer import BridgeConfig, ReuseConfig
-from celltrack.linefit_smoother import LinefitSmoother
-from celltrack.linkers import LinkerConfig
-from celltrack.linking import Linker
-from celltrack.motion_linking import EdgeAffinity
-from celltrack.pipeline import BlendDetectorScorer
-from celltrack.response_cache import ResponseCache
-from celltrack.short_track_filter import ShortTrackFilter, ShortTrackRescueConfig
-from celltrack.topology_repair import TopologyConfig
-from celltrack.tunet import TemporalUNetDetector
+from celltrack.affinity import EdgeAffinity
+from celltrack.detectors.pipeline import BlendDetectorScorer
+from celltrack.detectors.response_cache import ResponseCache
+from celltrack.detectors.tunet import TemporalUNetDetector
+from celltrack.edges.affinity_division import AffinityDivisionConfig
+from celltrack.edges.blended_edge_scoring import BlendedEdgeTransformerScorer
+from celltrack.linkers.linkers import LinkerConfig
+from celltrack.linkers.linking import Linker
+from celltrack.postproc.gap_closer import BridgeConfig, ReuseConfig
+from celltrack.postproc.linefit_smoother import LinefitSmoother
+from celltrack.postproc.short_track_filter import ShortTrackFilter, ShortTrackRescueConfig
+from celltrack.postproc.topology_repair import TopologyConfig
 from core.data.tracks import TrackGraph
 from core.data.video import CellVideo
 from core.geometry import Spacing
