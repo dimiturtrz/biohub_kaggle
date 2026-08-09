@@ -24,6 +24,7 @@ from dataclasses import dataclass
 
 import numpy as np
 from jaxtyping import Bool, Float, Int
+from pydantic import BaseModel, ConfigDict
 
 from celltrack.affinity import EdgeAffinity
 from core.data.tracks import Adjacency, TrackGraph
@@ -151,13 +152,15 @@ class AffinityDivisionRecovery:
         return float(np.linalg.norm(positions_um[a] - positions_um[b]))
 
 
-@dataclass(frozen=True)
-class AffinityDivisionConfig:
+class AffinityDivisionConfig(BaseModel):
     """The gates for `AffinityDivisionRecovery`, resolved to the stage once a video's affinity is in hand.
 
     Distances follow the frontier's safe-division bracket (parent 4.7um, sister 7.2um); the probability floors
     and the budget are what a caller sweeps. `build` binds the per-video edge affinity the recovery reads.
+    Pydantic (like the other nested stage configs) so a `--set division.x=v` override reaches it.
     """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     min_second_prob: float = 0.5
     parent_gate_um: float = 4.7
