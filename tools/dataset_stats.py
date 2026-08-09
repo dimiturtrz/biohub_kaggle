@@ -141,8 +141,7 @@ class BlobScaleSurvey:
             for timepoint in rng.choice(timepoints, sample_size, replace=False):
                 frame = cell.quantiles.normalise(cell.frame(int(timepoint)), self._config.low, self._config.high)
                 peaks.extend(
-                    self.peak_sigma_at(frame, cell.spacing, point)
-                    for point in coords[coords[:, 0] == timepoint][:, 1:]
+                    self.peak_sigma_at(frame, cell.spacing, point) for point in coords[coords[:, 0] == timepoint][:, 1:]
                 )
         return np.array(peaks)
 

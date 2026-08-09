@@ -66,7 +66,7 @@ class TUNetTrainConfig:
     threads: int = 12
     prefetch: int = 24
     grad_clip: float = 1.0
-    eval_every: int = 250
+    eval_every: int = 500  # subset eval is a full-frame forward per video, serial with training — keep it sparse
     eval_subset: int = 2
     eval_threshold: float = 0.5
     seed: int = 0
@@ -132,6 +132,7 @@ class TUNetDetectorTrainer:
         repeated spawn on this box. A full resume snapshot (weights, optimiser, schedule, step, best) is written
         beside the checkpoint every window; ``resume=True`` picks the latest up where a killed run left off.
         """
+        torch.set_float32_matmul_precision("high")  # TF32 on the fp32 matmuls the bf16 autocast leaves alone
         detector = self._detector(warm_start=warm_start).to(self.config.device)
         optimizer = torch.optim.AdamW(detector.parameters(), lr=self.config.lr)
         optimization = _Optimization(optimizer, self._scheduler(optimizer))
@@ -236,7 +237,7 @@ class TUNetDetectorTrainer:
         """One optimisation step over a single frame and its GT voxel centres; returns the scalar loss."""
         frame = frame.to(self.config.device, non_blocking=True)
         coords = coords.to(self.config.device, non_blocking=True)
-        with torch.autocast(device_type="cuda", enabled=self.config.device == "cuda"):
+        with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=self.config.device == "cuda"):
             logits = detector(frame)
             loss = self._detection_loss(logits, coords, self.config.neg_weight)
         optimization.zero_grad()
@@ -281,7 +282,7 @@ def main() -> None:
     parser.add_argument("--neg-weight", type=float, default=1e-2)
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--threads", type=int, default=12, help="parallel frame-decompress threads")
-    parser.add_argument("--eval-every", type=int, default=250)
+    parser.add_argument("--eval-every", type=int, default=500)
     parser.add_argument("--eval-subset", type=int, default=2)
     parser.add_argument("--eval-threshold", type=float, default=0.5)
     parser.add_argument("--warm-start", action="store_true", help="initialise from the published pilkwang weights")

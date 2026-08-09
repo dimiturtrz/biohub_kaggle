@@ -165,7 +165,11 @@ class _Args:
         parser.add_argument("--cv", action="store_true", help="score the fixed-8 CV instead of the four test movies")
         parser.add_argument("--per-movie", action="store_true", help="also log each movie's raw Jaccard and node ratio")
         parser.add_argument(
-            "--set", dest="overrides", action="append", default=[], metavar="KEY=VALUE",
+            "--set",
+            dest="overrides",
+            action="append",
+            default=[],
+            metavar="KEY=VALUE",
             help="override any tracker knob (repeatable, dotted keys reach the linker), e.g. --set smooth_strength=0.3",
         )
         parsed = parser.parse_args()
@@ -186,9 +190,7 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     args = _Args.from_argv()
     root = DataRoot.from_config(args.config)
-    evaluator = TrackerProxyEval(
-        args.device, args.thresholds, args.disappearance_costs, args.stems, args.overrides
-    )
+    evaluator = TrackerProxyEval(args.device, args.thresholds, args.disappearance_costs, args.stems, args.overrides)
     logger.info("proxy=%s set=%s", args.stems_label, list(args.overrides))
     if args.per_movie:
         breakdown = evaluator.breakdown(root)
