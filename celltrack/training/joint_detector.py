@@ -99,6 +99,11 @@ class JointTrainConfig:
     # sit in, while an annealed one explores early and settles. `_Optimization` already advances and
     # persists a scheduler — the joint loop simply never built one.
     cosine_lr: bool = False
+    # WHICH published pack to continue. Warm-starting from seed1 produces that seed's descendant, and a
+    # descendant adds nothing to an ensemble containing its parent (measured: +0.0075 alone, but 0.9315
+    # against the pair's 0.9334). Training the same recipe from a DIFFERENT parent is how the result
+    # earns a place — ensembles pay for disagreement, not for quality alone.
+    warm_pack: Path = _PACK_REL
     compile_backbone: bool = False  # torch.compile the U-Net (static shape); one-time warmup, then fused kernels
 
 
@@ -229,7 +234,7 @@ class JointTrainer:
     def _model(self, *, warm_start: bool) -> JointModel:
         """A joint model to train — warm-started from the published pack, or fresh at the configured size."""
         if warm_start:
-            pack = DataRoot.from_config(_CONFIG).processed(_DATASET) / _PACK_REL
+            pack = DataRoot.from_config(_CONFIG).processed(_DATASET) / self.config.warm_pack
             scorer = EdgeTransformerScorer.from_pack(pack, self.config.device)
             logger.info("warm-started from pilkwang pack at %s", pack)
             return JointModel(scorer.detector, scorer.transformer, self.config.downsample)
@@ -375,6 +380,9 @@ def main() -> None:
     # variable of the experiment rather than an inherited constant.
     parser.add_argument("--lr", type=float, default=1e-4, help="learning rate; lower it when warm-starting")
     parser.add_argument("--cosine-lr", action="store_true", help="decay the rate to zero over the run")
+    parser.add_argument(
+        "--warm-pack", choices=("seed1", "seed2"), default="seed1", help="which published pack to continue"
+    )
     parser.add_argument("--compile-backbone", action="store_true", help="torch.compile the U-Net (static shape)")
     parser.add_argument("--patience", type=int, default=5, help="stop after N non-improving evals (<1 disables)")
     parser.add_argument("--device", type=str, default="cuda")
@@ -389,6 +397,7 @@ def main() -> None:
         det_weight=args.det_weight,
         lr=args.lr,
         cosine_lr=args.cosine_lr,
+        warm_pack=_PACK_REL if args.warm_pack == "seed1" else _PACK2_REL,
         device=args.device,
         patience=args.patience,
         eval_threshold=args.eval_threshold,
