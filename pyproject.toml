@@ -42,6 +42,9 @@ compile = [
     "triton-windows ; sys_platform == 'win32'",
     "triton ; sys_platform == 'linux'",
 ]
+# Feature-attribution tooling (captum) for interpreting what the detector and edge models attend to — an
+# opt-in devtool, not a runtime dep. `uv sync --extra attribution`, then run the attribution entrypoint.
+attribution = ["captum"]
 
 [build-system]
 requires = ["setuptools>=68"]
