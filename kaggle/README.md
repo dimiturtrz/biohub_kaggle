@@ -59,10 +59,21 @@ grid is what is tried vs untried. Each kernel is a subdir `kernels/<slug>/` hold
   default GPU is a P100 (`sm_60`, Pascal), which our torch build (2.10, compiled for `sm_70`+) refuses with
   *"no kernel image is available for execution on the device"*. The `--accelerator` CLI flag does **not**
   override it; only the metadata field does. Valid tokens: `NvidiaTeslaT4`, `NvidiaTeslaP100`, `Tpu1VmV38`.
-- **fp16 inference, not bf16.** The forward autocasts in fp16 (CUDA autocast's default — `torch.autocast(
-  device_type="cuda")` with no `dtype`). Do **not** switch it to bf16: the peak NMS collapses a plateau of
-  *bit-identical* maxima to one centre, and bf16's 8-bit mantissa rounds distinct neighbouring peaks into
-  false plateaus that then merge away, halving the score. bf16 is a *training*-only choice (gradient range).
+  **Do not invent one** — an unrecognised token is not rejected, it silently degrades to the P100, and the
+  only symptom is that `sm_60` error thrown hours later from the first forward (this cost a run: `NvidiaTeslaT4x2`).
+- **`NvidiaTeslaT4` gives you TWO T4s.** Measured by `celltrack-gpu-probe`: `device_count() == 2`, each a
+  `Tesla T4 sm_75` with 14.6 GB, torch arch list `sm_70…sm_120`. `MultiGpuSubmission` shards the videos over
+  both, so there is no separate "x2" shape to ask for. Accelerator questions are answerable in a minute —
+  kernel *pushes* are unlimited, only *submissions* are 5/day, so probe rather than learn it 6 hours in.
+- **fp16 inference, not bf16.** `celltrack/precision.py` (`AutocastPolicy`) wraps both GPU stages — the
+  detection forward and the edge affinity — and casts back to fp32 for the read-out. Do **not** switch it to
+  bf16: the peak NMS collapses a plateau of *bit-identical* maxima to one centre, and bf16's 8-bit mantissa
+  rounds distinct neighbouring peaks into false plateaus that then merge away. bf16 is a *training*-only
+  choice (gradient range); a forward has no gradients, so it buys nothing and costs mantissa. Measured on the
+  four-movie proxy: fp32 0.9334, fp16 0.9334 (identical), bf16 0.9309. The T4's `sm_75` has no bf16 anyway.
+  *This paragraph once described the deleted `LearnedDetector` and stayed true-sounding for weeks after the
+  pilkwang graft dropped the autocast — the forward really did run fp32 until it was restored. If you change
+  the inference dtype, change this line in the same commit.*
 - **keep-N vs threshold is now a free choice.** The kernel reads out with `peaks.centres(response, ~250)` — a
   bounded per-frame budget. It used to be *mandatory*: a saturated detector's flat plateaus made threshold-NMS
   emit ~1e5 "peaks" whose `N×N` linker `cdist` swapped the machine to death. `peaks.py` now collapses each
