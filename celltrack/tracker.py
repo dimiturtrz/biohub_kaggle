@@ -19,7 +19,7 @@ from typing import Protocol
 
 from celltrack.affinity import EdgeAffinity
 from celltrack.detectors.pipeline import BlendDetectorScorer
-from celltrack.detectors.response_cache import ResponseCache
+from celltrack.detectors.response_cache import EphemeralResponseStore, ResponseCache, ResponseStore
 from celltrack.detectors.tunet import TemporalUNetDetector
 from celltrack.edges.blended_edge_scoring import BlendedEdgeTransformerScorer
 from celltrack.linkers.linkers import LinkerConfig
@@ -110,14 +110,37 @@ class CellTracker:
         cls, pack1: Path, pack2: Path, responses: Path, device: str, config: TrackerConfig | None = None
     ) -> "CellTracker":
         """Mount both detector packs (cache-backed) and the blended edge scorer from their support packs."""
+        stores = (ResponseCache(responses, _SEED1_CACHE), ResponseCache(responses, _SEED2_CACHE))
+        return cls._mounted(pack1, pack2, stores, device, config)
+
+    @classmethod
+    def ephemeral(cls, pack1: Path, pack2: Path, device: str, config: TrackerConfig | None = None) -> "CellTracker":
+        """The same mount as `from_packs` but persisting nothing — the tracker a single-pass submission runs.
+
+        A submission forwards each video once and reads it out once, so there is no later threshold or linker
+        sweep for a cache to amortise: the disk write buys nothing and the gigabyte-per-seed fp32 logit volumes
+        fill the kernel's bounded `/kaggle/working` (the disk-full failure the caching store caused there). Each
+        seed therefore gets an `EphemeralResponseStore`, and no responses directory is needed at all.
+
+        Its arguments are exactly two paths, a device string and a config — all picklable — so a spawned
+        per-GPU worker can rebuild the identical tracker from them rather than inheriting mounted CUDA models.
+        """
+        return cls._mounted(pack1, pack2, (EphemeralResponseStore(), EphemeralResponseStore()), device, config)
+
+    @classmethod
+    def _mounted(
+        cls,
+        pack1: Path,
+        pack2: Path,
+        stores: tuple[ResponseStore, ResponseStore],
+        device: str,
+        config: TrackerConfig | None,
+    ) -> "CellTracker":
         config = config or TrackerConfig()
         seed1, recipe = TemporalUNetDetector.from_pack(pack1, map_location=device)
         seed2, _ = TemporalUNetDetector.from_pack(pack2, map_location=device)
         detector = BlendDetectorScorer(
-            detectors=(
-                (seed1.to(device).eval(), ResponseCache(responses, _SEED1_CACHE)),
-                (seed2.to(device).eval(), ResponseCache(responses, _SEED2_CACHE)),
-            ),
+            detectors=((seed1.to(device).eval(), stores[0]), (seed2.to(device).eval(), stores[1])),
             recipe=recipe,
             device=device,
         )

@@ -7,8 +7,9 @@ set the motile/ilpy/SCIP program did, verified edge-for-edge on the dense test m
 the offline SCIP wheel stack for numpy and scipy already in the base image. Edge cost per candidate =
 distance - bonus * P(s->t); an edge is taken only where the learned association beats its distance.
 
-The kit-mount, pack-discovery, wheel-install and submission-write ceremony lives in `celltrack.kernel_runtime`;
-this file is the bootstrap plus the one assembly it tests.
+The kit-mount, pack-discovery and wheel-install ceremony lives in `celltrack.kernel_runtime`, and the mounting
+plus per-GPU execution of the submission in `celltrack.multi_gpu_submission`; this file is the bootstrap plus
+the one operating point it tests.
 """
 
 import glob
@@ -32,21 +33,15 @@ from celltrack.kernel_runtime import KernelRuntime  # noqa: E402
 install_wheels = KernelRuntime.install_wheels
 pack_source = KernelRuntime.pack_source
 pilkwang_packs = KernelRuntime.pilkwang_packs
-run_submission = KernelRuntime.run_submission
 test_videos = KernelRuntime.test_videos
 
 install_wheels(Path(_KIT_ROOT))
 sys.path.insert(0, str(pack_source()))
 
-import torch  # noqa: E402
-
-from celltrack.edges.blended_edge_scoring import BlendedEdgeTransformerScorer  # noqa: E402
 from celltrack.linkers.linkers import LinkerConfig  # noqa: E402
-from celltrack.detectors.pipeline import BlendDetectorScorer  # noqa: E402
-from celltrack.detectors.response_cache import EphemeralResponseStore  # noqa: E402
-from celltrack.tracker import CellTracker, TrackerConfig  # noqa: E402
-from celltrack.detectors.tunet import TemporalUNetDetector  # noqa: E402
+from celltrack.multi_gpu_submission import MultiGpuSubmission  # noqa: E402
 from celltrack.postproc.short_track_filter import ShortTrackRescueConfig  # noqa: E402
+from celltrack.tracker import TrackerConfig  # noqa: E402
 
 # 0.97: stack the two independent recall levers the leaderboard rewards. Threshold is a recall lever the sparse
 # proxy cannot see — public 0.99/0.98/0.97 = 0.887/0.891/0.892, matching the disclosed clean-baseline ~0.96875;
@@ -64,7 +59,6 @@ _GATE_UM = 10.0
 _EDGE_BONUS = 20.0
 # Two edge-transformer seeds blended in logit space; 0.8·seed1 + 0.2·seed2 is the proxy peak (bead 88x).
 _EDGE_BLEND = (0.8, 0.2)
-_DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 # LB probe on the confirmed-best base (thr0.97, gate10, bonus20, smooth0.8 = LB 0.892): the frontier's short-track
 # CUT-AND-RESCUE (min_track_length 7 with a confidence carve-out — keep a short component whose mean edge prob
 # >= 0.90 and mean step <= 2.75um). min7 alone is LB-anti (drops true short tracks); the rescue recovers exactly
@@ -78,26 +72,18 @@ _CONFIG = TrackerConfig(
     min_track_length=7,
     rescue=ShortTrackRescueConfig(),
 )
+_SUBMISSION = Path("/kaggle/working/submission.csv")
 
 
 def main() -> None:
-    pack1, pack2 = pilkwang_packs()
-    det1, recipe = TemporalUNetDetector.from_pack(pack1, map_location=_DEVICE)
-    det2, _ = TemporalUNetDetector.from_pack(pack2, map_location=_DEVICE)
-    # A submission forwards each video once and reads it out once; an EphemeralResponseStore keeps the fp32
-    # logits in memory for that single NMS read and drops them, so the gigabyte-per-seed volumes never touch
-    # the kernel's bounded /kaggle/working disk (the disk-full failure the caching store caused here).
-    detector = BlendDetectorScorer(
-        detectors=(
-            (det1.to(_DEVICE).eval(), EphemeralResponseStore()),
-            (det2.to(_DEVICE).eval(), EphemeralResponseStore()),
-        ),
-        recipe=recipe,
-        device=_DEVICE,
-    )
-    edge_scorer = BlendedEdgeTransformerScorer.from_packs((pack1, pack2), _EDGE_BLEND, _DEVICE)
-    tracker = CellTracker(detector=detector, edge_scorer=edge_scorer, device=_DEVICE, config=_CONFIG)
-    run_submission(tracker.run, test_videos())
+    # Kaggle gives this kernel two T4s and the videos are independent, so MultiGpuSubmission shards them over
+    # every visible device and runs the identical ephemeral-store tracker per shard — same weights, same config,
+    # same per-video result, ~Nx the throughput. With one device it stays in-process.
+    MultiGpuSubmission(packs=pilkwang_packs(), config=_CONFIG).run(test_videos(), _SUBMISSION)
 
 
-main()
+# The per-GPU workers are spawned (CUDA cannot be forked). A spawn child that re-enters this module does so
+# under the name `__mp_main__`, so excluding exactly that name stops a child from launching a submission of its
+# own without assuming the host runs this file as `__main__` (a notebook host may not).
+if __name__ != "__mp_main__":
+    main()

@@ -266,6 +266,66 @@
     },
     {
       "kind": "import",
+      "source": "celltrack.eval.model_evaluator",
+      "target": "celltrack.detectors.pipeline",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.model_evaluator",
+      "target": "celltrack.detectors.response_cache",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.model_evaluator",
+      "target": "celltrack.detectors.tunet",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.model_evaluator",
+      "target": "celltrack.edges.blended_edge_scoring",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.model_evaluator",
+      "target": "celltrack.eval.proxy",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.model_evaluator",
+      "target": "celltrack.tracker",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.model_evaluator",
+      "target": "core.metrics.detection",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.model_evaluator",
+      "target": "core.metrics.matching",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.model_evaluator",
+      "target": "core.metrics.score",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.model_evaluator",
+      "target": "core.paths",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "celltrack.eval.proxy",
       "target": "celltrack.linkers.linking",
       "weight": 1
@@ -562,6 +622,24 @@
       "kind": "import",
       "source": "celltrack.models.temporal_unet_detector",
       "target": "core.data.video",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.multi_gpu_submission",
+      "target": "celltrack.tracker",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.multi_gpu_submission",
+      "target": "core.data.submission",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.multi_gpu_submission",
+      "target": "core.data.tracks",
       "weight": 1
     },
     {
@@ -2228,6 +2306,132 @@
     },
     {
       "kind": "references",
+      "source": "celltrack.eval.model_evaluator.ModelEvaluator",
+      "target": "celltrack.detectors.tunet.TemporalUNetDetector",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.eval.model_evaluator.ModelEvaluator",
+      "target": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.model_evaluator.ModelEvaluator",
+      "target": "celltrack.eval.model_evaluator.EvalResult",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.model_evaluator.ModelEvaluator",
+      "target": "celltrack.eval.model_evaluator.ModelEvaluator",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.eval.model_evaluator.ModelEvaluator",
+      "target": "celltrack.eval.proxy.TestMovieProxy",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.model_evaluator.ModelEvaluator",
+      "target": "celltrack.tracker.CellTracker",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.eval.model_evaluator.ModelEvaluator",
+      "target": "celltrack.tracker.TrackerConfig",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.model_evaluator.ModelEvaluator",
+      "target": "core.paths.DataRoot",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.eval.model_evaluator.ModelEvaluator._tracker",
+      "target": "celltrack.detectors.pipeline.BlendDetectorScorer",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.eval.model_evaluator.ModelEvaluator._tracker",
+      "target": "celltrack.detectors.response_cache.EphemeralResponseStore",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.eval.model_evaluator.ModelEvaluator._tracker",
+      "target": "celltrack.tracker.CellTracker",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.eval.model_evaluator.ModelEvaluator.evaluate",
+      "target": "celltrack.eval.model_evaluator.EvalResult",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.model_evaluator.ModelEvaluator.evaluate",
+      "target": "celltrack.eval.model_evaluator.ModelEvaluator._tracker",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.model_evaluator.ModelEvaluator.evaluate",
+      "target": "core.metrics.detection.NodeCounts.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.model_evaluator.ModelEvaluator.evaluate",
+      "target": "core.metrics.detection.NodeCounts.pooled",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.eval.model_evaluator.ModelEvaluator.evaluate",
+      "target": "core.metrics.matching.DistanceMatcher",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.model_evaluator.ModelEvaluator.evaluate",
+      "target": "core.metrics.matching.DistanceMatcher.match",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.model_evaluator.ModelEvaluator.evaluate",
+      "target": "core.metrics.score.SplitScore.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.model_evaluator.ModelEvaluator.evaluate",
+      "target": "core.metrics.score.VideoMetrics.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.model_evaluator.ModelEvaluator.mount",
+      "target": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer.from_packs",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.model_evaluator.ModelEvaluator.mount",
+      "target": "celltrack.eval.proxy.TestMovieProxy.load",
+      "weight": 1
+    },
+    {
+      "kind": "references",
       "source": "celltrack.eval.proxy.LinkingPipeline",
       "target": "core.data.tracks.TrackGraph",
       "weight": 1
@@ -3080,6 +3284,114 @@
     },
     {
       "kind": "references",
+      "source": "celltrack.multi_gpu_submission.MultiGpuSubmission",
+      "target": "celltrack.multi_gpu_submission.VideoShard",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.multi_gpu_submission.MultiGpuSubmission",
+      "target": "celltrack.tracker.TrackerConfig",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.multi_gpu_submission.MultiGpuSubmission",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.multi_gpu_submission.MultiGpuSubmission._drained",
+      "target": "celltrack.multi_gpu_submission.MultiGpuSubmission._raise_on_dead",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.multi_gpu_submission.MultiGpuSubmission._keyed",
+      "target": "celltrack.multi_gpu_submission.MultiGpuSubmission._key",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.multi_gpu_submission.MultiGpuSubmission._spawned_graphs",
+      "target": "celltrack.multi_gpu_submission.MultiGpuSubmission._drained",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.multi_gpu_submission.MultiGpuSubmission._spawned_graphs",
+      "target": "celltrack.multi_gpu_submission.MultiGpuSubmission._raise_on_dead",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.multi_gpu_submission.MultiGpuSubmission._spawned_graphs",
+      "target": "celltrack.multi_gpu_submission.MultiGpuSubmission._start",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.multi_gpu_submission.MultiGpuSubmission._worker",
+      "target": "celltrack.multi_gpu_submission.MultiGpuSubmission.shard_graphs",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.multi_gpu_submission.MultiGpuSubmission.run",
+      "target": "celltrack.multi_gpu_submission.MultiGpuSubmission._key",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.multi_gpu_submission.MultiGpuSubmission.run",
+      "target": "celltrack.multi_gpu_submission.MultiGpuSubmission._spawned_graphs",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.multi_gpu_submission.MultiGpuSubmission.run",
+      "target": "celltrack.multi_gpu_submission.MultiGpuSubmission.shard_graphs",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.multi_gpu_submission.MultiGpuSubmission.run",
+      "target": "celltrack.multi_gpu_submission.MultiGpuSubmission.shards",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.multi_gpu_submission.MultiGpuSubmission.run",
+      "target": "core.data.submission.Submission",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.multi_gpu_submission.MultiGpuSubmission.run",
+      "target": "core.data.submission.Submission.write_csv",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.multi_gpu_submission.MultiGpuSubmission.shard_graphs",
+      "target": "celltrack.tracker.CellTracker.ephemeral",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.multi_gpu_submission.MultiGpuSubmission.shards",
+      "target": "celltrack.multi_gpu_submission.MultiGpuSubmission._keyed",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.multi_gpu_submission.MultiGpuSubmission.shards",
+      "target": "celltrack.multi_gpu_submission.VideoShard",
+      "weight": 1
+    },
+    {
+      "kind": "references",
       "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig",
       "target": "celltrack.affinity.EdgeAffinity",
       "weight": 1
@@ -3901,6 +4213,12 @@
       "weight": 1
     },
     {
+      "kind": "references",
+      "source": "celltrack.tracker.CellTracker",
+      "target": "celltrack.detectors.response_cache.ResponseStore",
+      "weight": 1
+    },
+    {
       "kind": "holds",
       "source": "celltrack.tracker.CellTracker",
       "target": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer",
@@ -3938,6 +4256,24 @@
     },
     {
       "kind": "construct",
+      "source": "celltrack.tracker.CellTracker._mounted",
+      "target": "celltrack.detectors.pipeline.BlendDetectorScorer",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.tracker.CellTracker._mounted",
+      "target": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer.from_packs",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.tracker.CellTracker._mounted",
+      "target": "celltrack.tracker.TrackerConfig",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
       "source": "celltrack.tracker.CellTracker._stages",
       "target": "celltrack.postproc.linefit_smoother.LinefitSmoother",
       "weight": 1
@@ -3956,26 +4292,14 @@
     },
     {
       "kind": "construct",
-      "source": "celltrack.tracker.CellTracker.from_packs",
-      "target": "celltrack.detectors.pipeline.BlendDetectorScorer",
+      "source": "celltrack.tracker.CellTracker.ephemeral",
+      "target": "celltrack.detectors.response_cache.EphemeralResponseStore",
       "weight": 1
     },
     {
       "kind": "construct",
       "source": "celltrack.tracker.CellTracker.from_packs",
       "target": "celltrack.detectors.response_cache.ResponseCache",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.tracker.CellTracker.from_packs",
-      "target": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer.from_packs",
-      "weight": 1
-    },
-    {
-      "kind": "construct",
-      "source": "celltrack.tracker.CellTracker.from_packs",
-      "target": "celltrack.tracker.TrackerConfig",
       "weight": 1
     },
     {
@@ -4495,21 +4819,15 @@
       "weight": 1
     },
     {
+      "kind": "references",
+      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer",
+      "target": "celltrack.eval.model_evaluator.ModelEvaluator",
+      "weight": 1
+    },
+    {
       "kind": "holds",
       "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer",
       "target": "celltrack.training.tunet_detector.TUNetTrainConfig",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer",
-      "target": "celltrack.training.tunet_detector._EvalResult",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer",
-      "target": "celltrack.training.tunet_detector._FoldEval",
       "weight": 1
     },
     {
@@ -4562,42 +4880,6 @@
     },
     {
       "kind": "calls",
-      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._score_fold",
-      "target": "celltrack.detectors.tunet.TemporalUNetDetector.detections",
-      "weight": 1
-    },
-    {
-      "kind": "construct",
-      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._score_fold",
-      "target": "celltrack.training.tunet_detector._EvalResult",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._score_fold",
-      "target": "core.metrics.detection.NodeCounts.of",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._score_fold",
-      "target": "core.metrics.detection.NodeCounts.pooled",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._score_fold",
-      "target": "core.metrics.score.SplitScore.of",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._score_fold",
-      "target": "core.metrics.score.VideoMetrics.of",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
       "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._step",
       "target": "celltrack.losses.balanced_bce.BalancedBCE.of",
       "weight": 1
@@ -4612,6 +4894,12 @@
       "kind": "calls",
       "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._step",
       "target": "celltrack.training.tunet_detector._Optimization.zero_grad",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer.train",
+      "target": "celltrack.eval.model_evaluator.ModelEvaluator.evaluate",
       "weight": 1
     },
     {
@@ -4651,12 +4939,6 @@
       "weight": 1
     },
     {
-      "kind": "calls",
-      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer.train",
-      "target": "celltrack.training.tunet_detector.TUNetDetectorTrainer._score_fold",
-      "weight": 1
-    },
-    {
       "kind": "construct",
       "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer.train",
       "target": "celltrack.training.tunet_detector._Optimization",
@@ -4666,42 +4948,6 @@
       "kind": "holds",
       "source": "celltrack.training.tunet_detector.TUNetTrainConfig",
       "target": "celltrack.data.tunet_dataset.Augmentation",
-      "weight": 1
-    },
-    {
-      "kind": "holds",
-      "source": "celltrack.training.tunet_detector._FoldEval",
-      "target": "celltrack.linkers.linkers.LinkerConfig",
-      "weight": 1
-    },
-    {
-      "kind": "holds",
-      "source": "celltrack.training.tunet_detector._FoldEval",
-      "target": "celltrack.postproc.linefit_smoother.LinefitSmoother",
-      "weight": 1
-    },
-    {
-      "kind": "holds",
-      "source": "celltrack.training.tunet_detector._FoldEval",
-      "target": "celltrack.postproc.short_track_filter.ShortTrackFilter",
-      "weight": 1
-    },
-    {
-      "kind": "holds",
-      "source": "celltrack.training.tunet_detector._FoldEval",
-      "target": "core.data.tracks.AnnotatedTracks",
-      "weight": 1
-    },
-    {
-      "kind": "holds",
-      "source": "celltrack.training.tunet_detector._FoldEval",
-      "target": "core.geometry.Spacing",
-      "weight": 1
-    },
-    {
-      "kind": "holds",
-      "source": "celltrack.training.tunet_detector._FoldEval",
-      "target": "core.metrics.matching.DistanceMatcher",
       "weight": 1
     },
     {
@@ -5143,6 +5389,12 @@
       "weight": 1
     },
     {
+      "kind": "calls",
+      "source": "core.metrics.edge_auc.EdgeAUC.of",
+      "target": "core.metrics.edge_auc.EdgeAUC._average_precision",
+      "weight": 1
+    },
+    {
       "kind": "references",
       "source": "core.metrics.edges.EdgeCounts",
       "target": "core.data.tracks.TrackGraph",
@@ -5439,7 +5691,7 @@
   ],
   "nodes": [
     {
-      "descendants": 70,
+      "descendants": 72,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -5631,7 +5883,7 @@
       "role": null
     },
     {
-      "descendants": 4,
+      "descendants": 5,
       "id": "celltrack.eval",
       "label": "eval",
       "level": "module",
@@ -5650,6 +5902,14 @@
       "descendants": 0,
       "id": "celltrack.eval.dense_diagnosis",
       "label": "dense_diagnosis",
+      "level": "module",
+      "parent": "celltrack.eval",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.model_evaluator",
+      "label": "model_evaluator",
       "level": "module",
       "parent": "celltrack.eval",
       "role": null
@@ -5840,6 +6100,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.multi_gpu_submission",
+      "label": "multi_gpu_submission",
+      "level": "module",
+      "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.pipeline",
       "label": "pipeline",
       "level": "module",
@@ -6007,7 +6275,7 @@
       "role": null
     },
     {
-      "descendants": 17,
+      "descendants": 18,
       "id": "core",
       "label": "core",
       "level": "module",
@@ -6071,7 +6339,7 @@
       "role": null
     },
     {
-      "descendants": 6,
+      "descendants": 7,
       "id": "core.metrics",
       "label": "metrics",
       "level": "module",
@@ -6090,6 +6358,14 @@
       "descendants": 0,
       "id": "core.metrics.divisions",
       "label": "divisions",
+      "level": "module",
+      "parent": "core.metrics",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.edge_auc",
+      "label": "edge_auc",
       "level": "module",
       "parent": "core.metrics",
       "role": null
@@ -6416,6 +6692,22 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.eval.model_evaluator.EvalResult",
+      "label": "EvalResult",
+      "level": "class",
+      "parent": "celltrack.eval.model_evaluator",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.model_evaluator.ModelEvaluator",
+      "label": "ModelEvaluator",
+      "level": "class",
+      "parent": "celltrack.eval.model_evaluator",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.eval.proxy.LinkingPipeline",
       "label": "LinkingPipeline",
       "level": "class",
@@ -6588,6 +6880,22 @@
       "label": "_VideoSource",
       "level": "class",
       "parent": "celltrack.models.temporal_unet_detector",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.multi_gpu_submission.MultiGpuSubmission",
+      "label": "MultiGpuSubmission",
+      "level": "class",
+      "parent": "celltrack.multi_gpu_submission",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.multi_gpu_submission.VideoShard",
+      "label": "VideoShard",
+      "level": "class",
+      "parent": "celltrack.multi_gpu_submission",
       "role": "satellite"
     },
     {
@@ -6864,22 +7172,6 @@
     },
     {
       "descendants": 0,
-      "id": "celltrack.training.tunet_detector._EvalResult",
-      "label": "_EvalResult",
-      "level": "class",
-      "parent": "celltrack.training.tunet_detector",
-      "role": "satellite"
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.tunet_detector._FoldEval",
-      "label": "_FoldEval",
-      "level": "class",
-      "parent": "celltrack.training.tunet_detector",
-      "role": "satellite"
-    },
-    {
-      "descendants": 0,
       "id": "celltrack.training.tunet_detector._Optimization",
       "label": "_Optimization",
       "level": "class",
@@ -7077,6 +7369,14 @@
       "level": "class",
       "parent": "core.metrics.divisions",
       "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.edge_auc.EdgeAUC",
+      "label": "EdgeAUC",
+      "level": "class",
+      "parent": "core.metrics.edge_auc",
+      "role": "primary"
     },
     {
       "descendants": 0,
@@ -7976,6 +8276,30 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.eval.model_evaluator.ModelEvaluator._tracker",
+      "label": "_tracker",
+      "level": "method",
+      "parent": "celltrack.eval.model_evaluator.ModelEvaluator",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.model_evaluator.ModelEvaluator.evaluate",
+      "label": "evaluate",
+      "level": "method",
+      "parent": "celltrack.eval.model_evaluator.ModelEvaluator",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.model_evaluator.ModelEvaluator.mount",
+      "label": "mount",
+      "level": "method",
+      "parent": "celltrack.eval.model_evaluator.ModelEvaluator",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.eval.proxy.LinkingPipeline.run",
       "label": "run",
       "level": "method",
@@ -8560,6 +8884,94 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.multi_gpu_submission.MultiGpuSubmission._drained",
+      "label": "_drained",
+      "level": "method",
+      "parent": "celltrack.multi_gpu_submission.MultiGpuSubmission",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.multi_gpu_submission.MultiGpuSubmission._key",
+      "label": "_key",
+      "level": "method",
+      "parent": "celltrack.multi_gpu_submission.MultiGpuSubmission",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.multi_gpu_submission.MultiGpuSubmission._keyed",
+      "label": "_keyed",
+      "level": "method",
+      "parent": "celltrack.multi_gpu_submission.MultiGpuSubmission",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.multi_gpu_submission.MultiGpuSubmission._raise_on_dead",
+      "label": "_raise_on_dead",
+      "level": "method",
+      "parent": "celltrack.multi_gpu_submission.MultiGpuSubmission",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.multi_gpu_submission.MultiGpuSubmission._spawned_graphs",
+      "label": "_spawned_graphs",
+      "level": "method",
+      "parent": "celltrack.multi_gpu_submission.MultiGpuSubmission",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.multi_gpu_submission.MultiGpuSubmission._start",
+      "label": "_start",
+      "level": "method",
+      "parent": "celltrack.multi_gpu_submission.MultiGpuSubmission",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.multi_gpu_submission.MultiGpuSubmission._worker",
+      "label": "_worker",
+      "level": "method",
+      "parent": "celltrack.multi_gpu_submission.MultiGpuSubmission",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.multi_gpu_submission.MultiGpuSubmission.available_devices",
+      "label": "available_devices",
+      "level": "method",
+      "parent": "celltrack.multi_gpu_submission.MultiGpuSubmission",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.multi_gpu_submission.MultiGpuSubmission.run",
+      "label": "run",
+      "level": "method",
+      "parent": "celltrack.multi_gpu_submission.MultiGpuSubmission",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.multi_gpu_submission.MultiGpuSubmission.shard_graphs",
+      "label": "shard_graphs",
+      "level": "method",
+      "parent": "celltrack.multi_gpu_submission.MultiGpuSubmission",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.multi_gpu_submission.MultiGpuSubmission.shards",
+      "label": "shards",
+      "level": "method",
+      "parent": "celltrack.multi_gpu_submission.MultiGpuSubmission",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig.build",
       "label": "build",
       "level": "method",
@@ -8952,8 +9364,24 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.tracker.CellTracker._mounted",
+      "label": "_mounted",
+      "level": "method",
+      "parent": "celltrack.tracker.CellTracker",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.tracker.CellTracker._stages",
       "label": "_stages",
+      "level": "method",
+      "parent": "celltrack.tracker.CellTracker",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.tracker.CellTracker.ephemeral",
+      "label": "ephemeral",
       "level": "method",
       "parent": "celltrack.tracker.CellTracker",
       "role": null
@@ -9266,14 +9694,6 @@
       "descendants": 0,
       "id": "celltrack.training.tunet_detector.TUNetDetectorTrainer._scheduler",
       "label": "_scheduler",
-      "level": "method",
-      "parent": "celltrack.training.tunet_detector.TUNetDetectorTrainer",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.tunet_detector.TUNetDetectorTrainer._score_fold",
-      "label": "_score_fold",
       "level": "method",
       "parent": "celltrack.training.tunet_detector.TUNetDetectorTrainer",
       "role": null
@@ -9780,6 +10200,22 @@
       "label": "of",
       "level": "method",
       "parent": "core.metrics.divisions.DivisionScoring",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.edge_auc.EdgeAUC._average_precision",
+      "label": "_average_precision",
+      "level": "method",
+      "parent": "core.metrics.edge_auc.EdgeAUC",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.edge_auc.EdgeAUC.of",
+      "label": "of",
+      "level": "method",
+      "parent": "core.metrics.edge_auc.EdgeAUC",
       "role": null
     },
     {

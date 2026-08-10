@@ -7,6 +7,7 @@ import pytest
 
 from celltrack import tracker as tracker_module
 from celltrack.detectors.pipeline import BlendDetectorScorer
+from celltrack.detectors.response_cache import EphemeralResponseStore
 from celltrack.detectors.tunet import DetectorRecipe
 from celltrack.linkers.linkers import LinkerConfig
 from celltrack.linkers.linking import Linker
@@ -104,6 +105,24 @@ def test_from_packs(monkeypatch: pytest.MonkeyPatch):
     tracker = CellTracker.from_packs(Path("p1"), Path("p2"), Path("cache"), "cpu", config)
     assert tracker.config.linker.disappearance_cost == 3.0
     assert isinstance(tracker.detector, BlendDetectorScorer)
+
+
+def test_ephemeral(monkeypatch: pytest.MonkeyPatch):
+    """`ephemeral` mounts the same pair of packs with a non-persisting store per seed and no responses dir."""
+    monkeypatch.setattr(
+        tracker_module.TemporalUNetDetector,
+        "from_pack",
+        classmethod(lambda cls, pack, map_location: (_StubDetector(), DetectorRecipe())),
+    )
+    monkeypatch.setattr(
+        tracker_module.BlendedEdgeTransformerScorer,
+        "from_packs",
+        staticmethod(lambda packs, weights, device: _StubEdgeScorer()),
+    )
+    tracker = CellTracker.ephemeral(Path("p1"), Path("p2"), "cpu", TrackerConfig(threshold=0.97))
+
+    assert tracker.config.threshold == 0.97
+    assert [type(store) for _, store in tracker.detector.detectors] == [EphemeralResponseStore] * 2
 
 
 def test_spacing(monkeypatch: pytest.MonkeyPatch):
