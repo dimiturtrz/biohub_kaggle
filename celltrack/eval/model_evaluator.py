@@ -39,7 +39,12 @@ from core.metrics.score import SplitScore, VideoMetrics
 
 @dataclass(frozen=True)
 class EvalResult:
-    """One eval's pooled numbers — the LB-aligned split score the run selects on, plus the detector's own levers.
+    """One eval's pooled numbers — the faithful LB metric, the clamped score a run selects on, and the node levers.
+
+    `score` is the competition metric exactly, so a log line stays comparable to the leaderboard;
+    `selection_score` is `SplitScore.selection_score`, the same number with the node-count factor capped at its
+    neutral 1.0 so under-detection earns nothing (see `VideoMetrics.clamped_edge_jaccard`). Both ride along
+    because a run should report the honest score AND what its checkpoint choice actually maximised.
 
     Node *recall* (over annotated cells) is the real detector lever; node precision against the sparse annotation
     is ~meaningless (most true detections land on unannotated cells), so the over-detection signal is the
@@ -47,6 +52,7 @@ class EvalResult:
     """
 
     score: float
+    selection_score: float
     node_recall: float
     node_ratio: float
 
@@ -139,7 +145,8 @@ class ModelEvaluator:
         predicted = sum(metric.predicted_nodes for metric in metrics)
         estimated = sum(metric.estimated_nodes for metric in metrics)
         ratio = (predicted - estimated) / estimated if estimated > 0 else float("nan")
-        return EvalResult(SplitScore.of(metrics).score, NodeCounts.pooled(nodes).recall(), ratio)
+        split = SplitScore.of(metrics)
+        return EvalResult(split.score, split.selection_score, NodeCounts.pooled(nodes).recall(), ratio)
 
     def _tracker(self, detector: TemporalUNetDetector, edge_scorer: BlendedEdgeTransformerScorer) -> CellTracker:
         """Mount the trained detector into the shipped tracker behind the given edge affinity — one assembly."""

@@ -15,9 +15,12 @@ channels_last / optional torch.compile speed setup — and selects on the same L
 VALIDATION movies (`celltrack.eval.proxy`), with the TEST four held out of training and out of selection so
 they remain a clean leaderboard estimate. Held-out loss does not transfer, and it hides which half moved; the
 pipeline score is the metric the leaderboard reports, with the edge PRC-AUC over the same validation movies'
-pairs logged beside it as the association half's own diagnostic.
+pairs logged beside it as the association half's own diagnostic. Selection reads the CLAMPED form of that score
+(`SplitScore.selection_score`) — the faithful metric pays a bonus for under-detection which our sparsely
+annotated proxy does not charge for and the dense hidden evaluation does — while the faithful number is logged
+beside it unchanged, as `proxy X (sel Y)`.
 Warm-starting (`--warm-start`) continues pilkwang's published detector+transformer; from scratch it is the honest
-own-trained baseline. Either way the best checkpoint by proxy score is saved.
+own-trained baseline. Either way the best checkpoint by selection score is saved.
 """
 
 from __future__ import annotations
@@ -215,9 +218,16 @@ class _PairOutcome:
 
 @dataclass(frozen=True)
 class _EvalResult:
-    """One eval window's numbers — the LB-aligned proxy score selected on, its node levers, and the edge AUC."""
+    """One eval window's numbers — the faithful proxy score, the clamped score selected on, levers, and edge AUC.
+
+    Selection reads `selection_score`, never `score`: the faithful metric rewards under-detection through its
+    node-count factor, and that reward is the piece of this pipeline measured to anti-transfer to the hidden,
+    densely-annotated evaluation (see `VideoMetrics.clamped_edge_jaccard`). `score` is still carried and logged
+    so a window's line stays comparable to the leaderboard.
+    """
 
     score: float
+    selection_score: float
     node_recall: float
     node_ratio: float
     edge_auc: float
@@ -230,7 +240,7 @@ class JointTrainer:
         self.config = config
 
     def train(self, pairs: PairSplit, evaluator: ModelEvaluator, setup: RunSetup) -> float:
-        """Train (or fine-tune) on the GT pairs, saving the best proxy-pipeline score. Returns that best score.
+        """Train (or fine-tune) on the GT pairs, saving the best SELECTION score. Returns that best score.
 
         The loop runs in eval-sized windows; each window streams `eval_every` GT pairs (one at a time — node
         counts are ragged, so there is no batching across pairs). A full resume snapshot (both heads, the
@@ -272,17 +282,18 @@ class JointTrainer:
             losses = self._run_window(model, optimization, dataset, sampler)
             done += window
             result = self._evaluate(model, evaluator, pairs.val)
-            improved = stop.update(result.score) if stop is not None else result.score >= best
+            selected = result.selection_score
+            improved = stop.update(selected) if stop is not None else selected >= best
             marker = ""
             if improved:
-                best, marker = result.score, " *saved"
+                best, marker = selected, " *saved"
                 self._save_checkpoint(save_to, model)
             self._save_resume(resume_path, model, optimization, done, best)
             run.window(done, {**self._metrics(result, best), **losses})
             rate = losses["it_per_s"]
             eta_hours = (self.config.steps - done) / rate / _SECONDS_PER_HOUR if rate else 0.0
             logger.info(
-                "epoch %g/%g | step %5d/%d | train loss %.4f (edge %.4f det %.4f nce %.4f) | proxy %.4f | "
+                "epoch %g/%g | step %5d/%d | train loss %.4f (edge %.4f det %.4f nce %.4f) | proxy %.4f (sel %.4f) | "
                 "best %.4f%s | node R %.3f ratio %+.2f | edge AUC %.4f | %.1f it/s | elapsed %.2fh ETA %.2fh",
                 round(done / steps_per_epoch, 2),
                 round(self.config.steps / steps_per_epoch, 2),
@@ -293,6 +304,7 @@ class JointTrainer:
                 losses["det_loss"],
                 losses["contrastive_loss"],
                 result.score,
+                selected,
                 best,
                 marker,
                 result.node_recall,
@@ -308,7 +320,7 @@ class JointTrainer:
                 logger.info("early stop: %d evals no gain (step %d, best %.4f)", self.config.patience, done, best)
                 break
 
-        logger.info("best proxy score = %.4f, saved to %s", best, save_to)
+        logger.info("best selection score = %.4f, saved to %s", best, save_to)
         run.close(best)
         return best
 
@@ -318,20 +330,22 @@ class JointTrainer:
         """The score before a single step — the bar a warm start must beat, tracked and checkpointed as window 0."""
         initial = self._evaluate(model, evaluator, pairs.val)
         logger.info(
-            "init proxy %.4f | node R %.3f ratio %+.2f | edge AUC %.4f",
+            "init proxy %.4f (sel %.4f) | node R %.3f ratio %+.2f | edge AUC %.4f",
             initial.score,
+            initial.selection_score,
             initial.node_recall,
             initial.node_ratio,
             initial.edge_auc,
         )
-        run.window(0, self._metrics(initial, initial.score))
+        run.window(0, self._metrics(initial, initial.selection_score))
         self._save_checkpoint(save_to, model)
-        return initial.score
+        return initial.selection_score
 
     def _metrics(self, result: _EvalResult, best: float) -> dict[str, float]:
-        """The eval half of one tracked row — the selected-on score, the best so far, and both halves' levers."""
+        """The eval half of one tracked row — the honest score, the selected-on one, the best so far, and the levers."""
         return {
             "proxy_score": result.score,
+            "selection_score": result.selection_score,
             "best_score": best,
             "node_recall": result.node_recall,
             "node_ratio": result.node_ratio,
@@ -452,7 +466,13 @@ class JointTrainer:
         """Both trained heads through the shipped tracker on the proxy, plus their edge ranking on the val pairs."""
         model.eval()
         result = evaluator.evaluate_joint(model)
-        return _EvalResult(result.score, result.node_recall, result.node_ratio, self._edge_auc(model, val_targets))
+        return _EvalResult(
+            result.score,
+            result.selection_score,
+            result.node_recall,
+            result.node_ratio,
+            self._edge_auc(model, val_targets),
+        )
 
     @torch.no_grad()
     def _edge_auc(self, model: JointModel, val_targets: list[PairTarget]) -> float:

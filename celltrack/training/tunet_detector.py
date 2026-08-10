@@ -169,8 +169,17 @@ class TUNetDetectorTrainer:
             best = restored
         else:
             initial = evaluator.evaluate(detector)
-            best = initial.score
-            logger.info("init proxy %.4f | node R %.3f ratio %+.2f", best, initial.node_recall, initial.node_ratio)
+            # Selection reads the CLAMPED score, never the faithful one: the competition's node-count factor
+            # pays a bonus for undershooting, so the faithful metric can rank a detector that found 30% fewer
+            # cells ABOVE an honest one — and this trainer optimises detection, where that bias bites hardest.
+            best = initial.selection_score
+            logger.info(
+                "init proxy %.4f (sel %.4f) | node R %.3f ratio %+.2f",
+                initial.score,
+                best,
+                initial.node_recall,
+                initial.node_ratio,
+            )
             run.window(done, self._metrics(initial, best))
             detector.save_checkpoint(save_to, self.config.recipe)
 
@@ -183,7 +192,7 @@ class TUNetDetectorTrainer:
             loss, rate = self._run_window(detector, optimization, targets, window, done)
             done += window
             result = evaluator.evaluate(detector)
-            score = result.score
+            score = result.selection_score
             improved = stop.update(score) if stop is not None else score >= best
             marker = ""
             if improved:
@@ -194,11 +203,12 @@ class TUNetDetectorTrainer:
             run.window(done, {**self._metrics(result, best), **window_metrics})
             eta_hours = (self.config.steps - done) / rate / _SECONDS_PER_HOUR if rate else 0.0
             logger.info(
-                "step %5d/%d | loss %.4f | proxy %.4f | best %.4f%s | node R %.3f ratio %+.2f | "
+                "step %5d/%d | loss %.4f | proxy %.4f (sel %.4f) | best %.4f%s | node R %.3f ratio %+.2f | "
                 "%.1f it/s (%.0f frames/s) | elapsed %.2fh ETA %.2fh",
                 done,
                 self.config.steps,
                 loss,
+                result.score,
                 score,
                 best,
                 marker,

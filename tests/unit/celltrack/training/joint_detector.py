@@ -267,6 +267,7 @@ def test_train_records_each_window(
     assert mlflow_backend.logged_params()["det_weight"] == 1.0
     assert {
         "proxy_score",
+        "selection_score",
         "best_score",
         "node_recall",
         "node_ratio",

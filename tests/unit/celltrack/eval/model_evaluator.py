@@ -83,6 +83,7 @@ def test_evaluate(video_store: Path, in_bounds_tracks: AnnotatedTracks):
 
     assert isinstance(result, EvalResult)
     assert isinstance(result.score, float)
+    assert result.selection_score <= result.score  # the clamp only ever removes the under-detection bonus
     assert math.isfinite(result.node_recall)
     assert math.isfinite(result.node_ratio)
 
@@ -99,5 +100,6 @@ def test_evaluate_joint(video_store: Path, in_bounds_tracks: AnnotatedTracks):
 
     assert isinstance(result, EvalResult)
     assert isinstance(result.score, float)
+    assert result.selection_score <= result.score
     assert math.isfinite(result.node_recall)
     assert math.isfinite(result.node_ratio)
