@@ -14,19 +14,18 @@ from __future__ import annotations
 
 import argparse
 import logging
-from collections.abc import Mapping
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import get_args, get_type_hints
 
 from pydantic import BaseModel
 
 from celltrack.eval.proxy import CV_MOVIES, TEST_MOVIES, TestMovieProxy
+from celltrack.eval.sweep_tracking import SweepTracking
 from celltrack.linkers.linkers import LinkerConfig
 from celltrack.tracker import CellTracker, TrackerConfig
 from core.metrics.score import SplitScore, VideoMetrics
 from core.paths import DataRoot
-from core.tracking import Tracker
 
 logger = logging.getLogger(__name__)
 
@@ -143,37 +142,6 @@ class TrackerProxyEval:
         return {prefix: SplitScore.of(metrics) for prefix, metrics in groups.items()}
 
 
-class _SweepTracking:
-    """One mlflow run per swept grid cell, so a sweep is comparable across CLI invocations, not just within one.
-
-    The whole RESOLVED `TrackerConfig` goes in as params (every knob, `--set` overrides folded in), which is
-    what makes "what did smooth_strength=0.3 score" answerable months later; the split score and, when asked,
-    each movie's raw Jaccard and node ratio go in as metrics. `CELLTRACK_NO_MLFLOW` makes all of it a no-op.
-    """
-
-    _EXPERIMENT = "celltrack-proxy"
-
-    def __init__(self, proxy: str) -> None:
-        self._proxy = proxy
-
-    def cell(self, config: TrackerConfig, score: float, breakdown: Mapping[str, VideoMetrics]) -> None:
-        """Record one grid cell: its config as params, its score (and any per-movie metrics) as metrics."""
-        name = f"{self._proxy}-thr{config.threshold:g}-dis{config.linker.disappearance_cost:g}"
-        handle = Tracker(self._EXPERIMENT, name, _SweepTracking._params(config), {"proxy": self._proxy}).start()
-        handle.metric("proxy_score", score)
-        for stem, metric in breakdown.items():
-            handle.metric(f"{stem}.raw_jaccard", metric.edges.jaccard())
-            handle.metric(f"{stem}.node_ratio", metric.total_node_ratio())
-        handle.end()
-
-    @staticmethod
-    def _params(config: TrackerConfig) -> dict[str, object]:
-        """The config as a nested plain dict — pydantic sub-configs dumped so the tracker can flatten them."""
-        return {
-            key: value.model_dump() if isinstance(value, BaseModel) else value for key, value in asdict(config).items()
-        }
-
-
 @dataclass(frozen=True)
 class _Args:
     """The parsed CLI options, so the sweep is one object handed to the evaluator."""
@@ -237,7 +205,7 @@ def main() -> None:
         )
     for prefix, split in evaluator.by_acquisition(breakdown).items():
         logger.info("  acquisition %-6s score=%.4f", prefix, split.score)
-    tracking = _SweepTracking(args.stems_label)
+    tracking = SweepTracking(args.stems_label)
     first_cell = (args.thresholds[0], args.disappearance_costs[0])  # the cell `breakdown` was measured at
     for (threshold, cost), score in evaluator.scores(root).items():
         logger.info("threshold=%-6.4f disappearance=%-6.2f proxy score=%.4f", threshold, cost, score)

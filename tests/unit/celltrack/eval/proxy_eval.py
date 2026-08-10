@@ -8,7 +8,8 @@ from pydantic import BaseModel
 
 from celltrack.eval import proxy_eval
 from celltrack.eval.proxy import CV_MOVIES
-from celltrack.eval.proxy_eval import TrackerProxyEval, _Args, _ConfigOverride, _SweepTracking
+from celltrack.eval.proxy_eval import TrackerProxyEval, _Args, _ConfigOverride
+from celltrack.eval.sweep_tracking import SweepTracking
 from celltrack.tracker import CellTracker, TrackerConfig
 from core.metrics.score import VideoMetrics
 from core.paths import DataRoot
@@ -146,7 +147,7 @@ def test_config_at():
 def test_cell(mlflow_backend: RecordingMlflow):
     """A swept cell becomes one run: the resolved config as params, the score and per-movie numbers as metrics."""
     config = TrackerProxyEval("cpu").config_at(0.97, 2.0)
-    _SweepTracking("test-4").cell(config, 0.81, cast(dict[str, VideoMetrics], {"44b6_x": _Metrics()}))
+    SweepTracking("test-4").cell(config, 0.81, cast(dict[str, VideoMetrics], {"44b6_x": _Metrics()}))
     params = mlflow_backend.logged_params()
     assert params["threshold"] == 0.97
     assert params["linker.disappearance_cost"] == 2.0  # the pydantic sub-config is dumped, then flattened
