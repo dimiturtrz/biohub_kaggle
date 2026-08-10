@@ -34,6 +34,7 @@ from celltrack.eval.bracket import ValidationFold
 from celltrack.linkers.linkers import LinkerConfig
 from celltrack.postproc.linefit_smoother import LinefitSmoother
 from celltrack.postproc.short_track_filter import ShortTrackFilter
+from celltrack.training.early_stop import EarlyStop
 from celltrack.training.tunet_dataset import Augmentation, FrameDataset, FrameTarget
 from core.data.split import AcquisitionFolds
 from core.data.tracks import AnnotatedTracks
@@ -79,6 +80,11 @@ class TUNetTrainConfig:
     # The in-loop eval is a checkpoint SELECTOR, not the final number — 4x flip-TTA buys a faithful score the
     # selector doesn't need, at 4x the eval cost. Off by default; the final full-frame calibration re-enables it.
     eval_tta: bool = False
+    # Stop after this many consecutive non-improving evals (the validation curve dips then recovers, so 8 clears
+    # the longest observed recovering dip). Save-best means stopping early never costs quality, only compute.
+    # <1 disables (runs the full `steps` budget).
+    patience: int = 8
+    es_min_delta: float = 0.0
     seed: int = 0
     augmentation: Augmentation = field(default_factory=Augmentation)
     cosine_lr: bool = False  # decay lr to zero over `steps` (cosine); off keeps the flat lr of the baseline
@@ -169,14 +175,18 @@ class TUNetDetectorTrainer:
             logger.info("init fold-0 subset score = %.4f", best)
             detector.save_checkpoint(save_to, self.config.recipe)
 
+        stop = EarlyStop(self.config.patience, self.config.es_min_delta) if self.config.patience >= 1 else None
+        if stop is not None:
+            stop.update(best)  # seed with the init score so a first worse window doesn't read as an improvement
         run_start = time.perf_counter()
         while done < self.config.steps:
             window = min(self.config.eval_every, self.config.steps - done)
             loss, rate = self._run_window(detector, optimization, targets, window, done)
             done += window
             score = self._score_fold(evaluator, detector, self.config.eval_threshold)
+            improved = stop.update(score) if stop is not None else score >= best
             marker = ""
-            if score >= best:
+            if improved:
                 best, marker = score, " *saved"
                 detector.save_checkpoint(save_to, self.config.recipe)
             self._save_resume(resume_path, detector, optimization, done, best)
@@ -195,6 +205,9 @@ class TUNetDetectorTrainer:
                 (time.perf_counter() - run_start) / _SECONDS_PER_HOUR,
                 eta_hours,
             )
+            if stop is not None and stop.should_stop:
+                logger.info("early stop: %d evals no gain (step %d, best %.4f)", self.config.patience, done, best)
+                break
 
         logger.info("best fold-0 subset score = %.4f, saved to %s", best, save_to)
         return best
@@ -345,6 +358,7 @@ def main() -> None:
     parser.add_argument("--eval-subset", type=int, default=2)
     parser.add_argument("--eval-threshold", type=float, default=0.5)
     parser.add_argument("--eval-tta", action="store_true", help="flip-TTA in the eval (4x cost; off=selector)")
+    parser.add_argument("--patience", type=int, default=8, help="stop after N non-improving evals (<1 disables)")
     parser.add_argument("--warm-start", action="store_true", help="initialise from the published pilkwang weights")
     parser.add_argument("--aug-brightness", type=float, default=0.0, help="multiplicative intensity jitter half-range")
     parser.add_argument("--aug-offset", type=float, default=0.0, help="additive intensity jitter half-range")
@@ -367,6 +381,7 @@ def main() -> None:
         eval_subset=args.eval_subset,
         eval_threshold=args.eval_threshold,
         eval_tta=args.eval_tta,
+        patience=args.patience,
         augmentation=Augmentation(
             brightness=args.aug_brightness,
             offset=args.aug_offset,
