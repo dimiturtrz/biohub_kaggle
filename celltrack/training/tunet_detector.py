@@ -358,8 +358,19 @@ def main() -> None:
     root = DataRoot.from_config(_CONFIG)
     dz, dy, dx = config.downsample
 
-    train_paths = AcquisitionFolds().split(root.videos("train"), 0).train
-    logger.info("enumerating GT frames over %d train videos...", len(train_paths))
+    proc = root.processed(_DATASET)
+    tracker_config = TrackerConfig(threshold=config.eval_threshold)
+    recipe = replace(config.recipe, tta=config.eval_tta)  # selector eval skips TTA by default (4x cheaper)
+    evaluator = ModelEvaluator.mount(root, (proc / _PACK_REL, proc / _PACK2_REL), recipe, config.device, tracker_config)
+
+    # The proxy's movies sit in the competition's train/ directory, so the fold's training split contains them;
+    # training on them is fine, selecting on them is not (see `TestMovieProxy.unscored`).
+    train_paths = evaluator.proxy.unscored(AcquisitionFolds().split(root.videos("train"), 0).train)
+    logger.info(
+        "enumerating GT frames over %d train videos (%d proxy movies held out of training)...",
+        len(train_paths),
+        len(evaluator.proxy.paths),
+    )
     targets: list[FrameTarget] = []
     for path in train_paths:
         quantiles = cast(ImageStatistics, zarr.open_group(path, mode="r").attrs["image_statistics"])["quantiles"]
@@ -370,10 +381,6 @@ def main() -> None:
             targets.append(FrameTarget(path, int(timepoint), q_low, q_high, frame_coords.astype(np.int64)))
     logger.info("%d annotated frames", len(targets))
 
-    proc = root.processed(_DATASET)
-    tracker_config = TrackerConfig(threshold=config.eval_threshold)
-    recipe = replace(config.recipe, tta=config.eval_tta)  # selector eval skips TTA by default (4x cheaper)
-    evaluator = ModelEvaluator.mount(root, (proc / _PACK_REL, proc / _PACK2_REL), recipe, config.device, tracker_config)
     logger.info("eval through the shipped tracker on the %d test movies", len(evaluator.proxy.paths))
 
     save_to = root.processed(_DATASET) / args.weights

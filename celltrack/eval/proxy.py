@@ -9,6 +9,7 @@ so an experiment is a thin driver that builds a pipeline and calls :meth:`TestMo
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -63,6 +64,19 @@ class TestMovieProxy:
         truths = tuple(AnnotatedTracks.from_geff(root.track_store(p)) for p in paths)
         spacing = CellVideo.from_ome_zarr(paths[0]).spacing
         return cls(paths=paths, truths=truths, spacing=spacing)
+
+    def unscored(self, videos: Sequence[Path]) -> list[Path]:
+        """`videos` minus the movies this proxy scores — the training set a checkpoint may be selected against.
+
+        The four test movies live in the competition's `train/` directory, so a fold's training split contains
+        them: training on them is legitimate, but *selecting* on them is not. A trainer that eval-selects
+        through this proxy cannot see itself overfitting the very movies it is judged by, and the hidden
+        leaderboard annotates those same movies far more densely than we do — so a checkpoint that memorises
+        our sparse labels can look better here and generalise worse there, the anti-transfer this campaign
+        keeps meeting. Dropping them costs four videos of ~158.
+        """
+        scored = {path.stem for path in self.paths}
+        return [video for video in videos if video.stem not in scored]
 
     def metrics(self, pipeline: LinkingPipeline) -> dict[str, VideoMetrics]:
         """Each movie's metrics, keyed by stem — the per-video breakdown a split score aggregates away.

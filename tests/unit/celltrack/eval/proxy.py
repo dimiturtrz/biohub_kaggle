@@ -150,3 +150,10 @@ def test_load_raises_if_a_movie_is_absent():
 
     with pytest.raises(KeyError):
         TestMovieProxy.load(cast(DataRoot, _Root()))
+
+
+def test_unscored(video_store: Path, in_bounds_tracks: AnnotatedTracks):
+    """The movies the proxy scores are held out of a training list; everything else passes through."""
+    proxy = TestMovieProxy(paths=(video_store,), truths=(in_bounds_tracks,), spacing=Spacing(z=1.0, y=1.0, x=1.0))
+    other = video_store.parent / "other.zarr"
+    assert proxy.unscored([video_store, other]) == [other]
