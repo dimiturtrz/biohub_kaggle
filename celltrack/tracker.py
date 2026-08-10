@@ -64,7 +64,12 @@ class LinkerStage:
 class TrackerConfig:
     """Every operating-point knob of the tracker recipe, so a sweep varies one object, not a call site."""
 
-    threshold: float = 0.99
+    # 0.97 is the MEASURED best, not a round number: the leaderboard ladder is 0.99 -> 0.887,
+    # 0.98 -> 0.891, 0.97 -> 0.892, a spread five times our noise floor. The default used to be 0.99,
+    # so every caller that omitted a config silently got the worst of the three — the shipped kernel only
+    # escaped it by hardcoding 0.97. Threshold is a RECALL lever the sparse proxy cannot see (it reads
+    # flat-to-inverted there), so this value comes from the leaderboard and must not be re-tuned on the proxy.
+    threshold: float = 0.97
     linker: LinkerConfig = field(default_factory=LinkerConfig)
     edge_blend: tuple[float, float] = (0.8, 0.2)
     # The seed-1 fraction of the detector's logit blend; None is the equal mean the frontier ships. The edge
