@@ -23,6 +23,9 @@ from typing import override
 from tqdm import tqdm
 
 _LOGGER_NAME = "celltrack"
+# `python -m pkg.module` runs that module AS `__main__`, so its getLogger(__name__) sits outside the
+# `celltrack` tree; configure it too or every entrypoint logs into the void.
+_ENTRYPOINT_NAME = "__main__"
 
 
 class Obs:
@@ -55,24 +58,33 @@ class Obs:
         `logging.basicConfig(force=True)`, wiping root handlers; keeping ours off the root makes them
         survive that. `celltrack.*` children propagate up to here.
 
+        They go on `__main__` too, which is not cosmetic: `python -m celltrack.training.joint_detector`
+        executes that module AS `__main__`, so its module-level `getLogger(__name__)` is named `__main__`
+        and is no child of `celltrack` — its lines would vanish while every imported module's kept printing.
+        A 3000-step run logged nothing but its tracker's chatter before this was fixed.
+
         `truncate=False` appends instead of starting the file empty — what a RESUMED run wants, so the
         record of the killed attempt survives beside its continuation.
         """
-        log = logging.getLogger(_LOGGER_NAME)
-        log.setLevel(level)
-        log.propagate = False
-        log.handlers.clear()
         fmt = logging.Formatter("%(asctime)s %(levelname)s %(name)s | %(message)s", "%H:%M:%S")
         stream = logging.StreamHandler(sys.stdout)
         stream.setFormatter(fmt)
-        log.addHandler(stream)
+        handlers: list[logging.Handler] = [stream]
         if logfile is not None:
             Path(logfile).parent.mkdir(parents=True, exist_ok=True)
             if truncate:
                 Path(logfile).write_text("", encoding="utf-8")
             file_handler = Obs._AppendHandler(logfile)
             file_handler.setFormatter(fmt)
-            log.addHandler(file_handler)
+            handlers.append(file_handler)
+        log = logging.getLogger(_LOGGER_NAME)
+        for name in (_LOGGER_NAME, _ENTRYPOINT_NAME):
+            configured = logging.getLogger(name)
+            configured.setLevel(level)
+            configured.propagate = False
+            configured.handlers.clear()
+            for handler in handlers:
+                configured.addHandler(handler)
         return log
 
     @staticmethod

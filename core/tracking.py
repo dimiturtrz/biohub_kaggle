@@ -13,6 +13,8 @@ tracking must never break a run.
 from __future__ import annotations
 
 import contextlib
+import importlib.util
+import logging
 import os
 import types
 from pathlib import Path
@@ -24,6 +26,9 @@ _MLRUNS = _ROOT / "mlruns"  # artifact store (default root)
 _DB_URI = f"sqlite:///{(_ROOT / 'mlflow.db').as_posix()}"  # metadata + registry (file store deprecated)
 _DISABLE_ENV = "CELLTRACK_NO_MLFLOW"
 _RUN_ID_FILE = ".mlflow_run_id"
+
+
+logger = logging.getLogger(__name__)
 
 
 class Tracker:
@@ -100,8 +105,13 @@ class Tracker:
         _MLRUNS.mkdir(exist_ok=True)
         backend.set_tracking_uri(_DB_URI)
         backend.set_experiment(self.experiment)
-        with contextlib.suppress(Exception):
-            backend.enable_system_metrics_logging()  # GPU/CPU/mem if psutil+pynvml present
+        if importlib.util.find_spec("psutil") is not None:
+            # GPU/CPU/mem, but ONLY when psutil is actually importable: enabling merely sets a global flag,
+            # and every later `start_run` then RAISES if the package is missing — which the caller's guard
+            # turns into a no-op handle, silently disabling all tracking. That inertness went unnoticed
+            # through a whole 3000-step run.
+            with contextlib.suppress(Exception):
+                backend.enable_system_metrics_logging()
 
     def _log_open(self, backend: types.ModuleType) -> None:
         if self.params:
@@ -119,8 +129,8 @@ class Tracker:
             backend.start_run(run_name=self.run_name)
             self._log_open(backend)
             return Tracker._Live(backend)
-        except Exception:  # noqa: BLE001 — tracking must never break a run
-            return Tracker._Noop()
+        except Exception as error:  # noqa: BLE001 — tracking must never break a run
+            return Tracker._disabled(error)
 
     def track_run(self, run_dir: str | Path | None = None) -> Tracker._Noop | Tracker._Live:
         """Resume the run tied to `run_dir` (via `<run_dir>/.mlflow_run_id`) if it exists, else start a
@@ -142,5 +152,17 @@ class Tracker:
                     id_file.parent.mkdir(parents=True, exist_ok=True)
                     id_file.write_text(active.info.run_id, encoding="utf-8")
             return Tracker._Live(backend)
-        except Exception:  # noqa: BLE001 — tracking must never break a run
-            return Tracker._Noop()
+        except Exception as error:  # noqa: BLE001 — tracking must never break a run
+            return Tracker._disabled(error)
+
+    @staticmethod
+    def _disabled(error: Exception) -> Tracker._Noop:
+        """A no-op handle, but SAID OUT LOUD — a tracker that never breaks a run must not silently vanish.
+
+        The guards here exist so tracking can never take a training run down with it. Left mute, they also
+        make a broken tracker indistinguishable from a working one: a missing `psutil` once turned every
+        `start_run` into a no-op and a 3000-step run recorded nothing, discovered only afterwards. One
+        warning costs nothing and makes that visible in seconds.
+        """
+        logger.warning("experiment tracking disabled — %s: %s", type(error).__name__, error)
+        return Tracker._Noop()
