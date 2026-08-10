@@ -44,6 +44,7 @@ from celltrack.detectors.pipeline import BlendDetectorScorer  # noqa: E402
 from celltrack.detectors.response_cache import EphemeralResponseStore  # noqa: E402
 from celltrack.tracker import CellTracker, TrackerConfig  # noqa: E402
 from celltrack.detectors.tunet import TemporalUNetDetector  # noqa: E402
+from celltrack.postproc.short_track_filter import ShortTrackRescueConfig  # noqa: E402
 
 # 0.97: stack the two independent recall levers the leaderboard rewards. Threshold is a recall lever the sparse
 # proxy cannot see — public 0.99/0.98/0.97 = 0.887/0.891/0.892, matching the disclosed clean-baseline ~0.96875;
@@ -54,22 +55,26 @@ _THRESHOLD = 0.97
 # movies (p99.9 = 9.78), so 10um admits every true successor; the proxy is flat 0.929-0.930 over gate 10-15
 # (bead i0a). bonus = 2·gate: a certain association must overpower up to two gate-widths where the nearest-
 # distance prior is anti-informative (the crowding-mislink); the proxy peaks broadly over 2-3·gate (bead 88x).
-# Single-variable LB probe on the confirmed-best base (thr0.97, bonus20, min6, smooth0.8 = LB 0.892): the one
-# changed knob is the linker admission GATE, 10 -> 14um. It admits division/fast-mover edges beyond the proxy
-# GT's 9.96um max displacement that the denser hidden set may annotate. Yusuke's LB-0.897 used a 14um edge
-# gate -> a real prior; the proxy is flat over 10-15 (no proxy GT edge exceeds 10) so only the LB can judge.
-# This is a LINKING-side change (distinct from the refuted recall-side tweaks). bonus HELD at 20 (= 2·10, the
-# swept peak) so the A/B isolates the gate alone; smooth_strength defaults to the LB-confirmed 0.8.
-_GATE_UM = 14.0
+# Gate at the derived physical value 10um (max annotated single-frame travel 9.96um, bead i0a) — the confirmed
+# best; the earlier gate14 LB probe tied at 0.892 (admission-widening is flat, transfer law), so it earns no
+# keep and we restore the derived value.
+_GATE_UM = 10.0
 _EDGE_BONUS = 20.0
 # Two edge-transformer seeds blended in logit space; 0.8·seed1 + 0.2·seed2 is the proxy peak (bead 88x).
 _EDGE_BLEND = (0.8, 0.2)
 _DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+# LB probe on the confirmed-best base (thr0.97, gate10, bonus20, smooth0.8 = LB 0.892): the frontier's short-track
+# CUT-AND-RESCUE (min_track_length 7 with a confidence carve-out — keep a short component whose mean edge prob
+# >= 0.90 and mean step <= 2.75um). min7 alone is LB-anti (drops true short tracks); the rescue recovers exactly
+# those. Proxy +0.0039 vs base BUT mixed: +0.0115 on uncrowded 6bba_05b6850b, -0.0037 on the dense movie — the
+# hidden set is denser, so the transfer prior is low-moderate; only the LB arbitrates. Frontier pairs these at
+# its 0.897-0.908 tier. A/B vs the gate10/min6 base (LB 0.892).
 _CONFIG = TrackerConfig(
     threshold=_THRESHOLD,
     edge_blend=_EDGE_BLEND,
     linker=LinkerConfig(name="assignment", gate_um=_GATE_UM, affinity_bonus=_EDGE_BONUS),
-    min_track_length=6,
+    min_track_length=7,
+    rescue=ShortTrackRescueConfig(),
 )
 
 
