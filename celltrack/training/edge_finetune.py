@@ -33,8 +33,8 @@ from celltrack.detectors.tunet import TemporalUNetDetector, _VideoSource
 from celltrack.edges.edge_scoring import EdgeTransformerScorer
 from celltrack.eval.dense_diagnosis import DenseDiagnosis, DenseFateDiagnosis, Fate, MislinkSignal
 from celltrack.eval.proxy import TestMovieProxy
+from celltrack.losses.softmax_focal_bce import SoftmaxFocalBCE
 from celltrack.tracker import CellTracker
-from celltrack.training.softmax_focal_bce import SoftmaxFocalBCE
 from core.data.tracks import TrackGraph
 from core.metrics.matching import UNMATCHED, DistanceMatcher
 from core.paths import DataRoot

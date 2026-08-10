@@ -7,7 +7,7 @@ import numpy as np
 import torch
 import zarr
 
-from celltrack.training.tunet_dataset import Augmentation, FrameDataset, FrameTarget
+from celltrack.data.tunet_dataset import Augmentation, FrameDataset, FrameTarget
 from core.data.video import ImageStatistics
 
 

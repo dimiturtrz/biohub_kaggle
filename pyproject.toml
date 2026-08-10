@@ -232,7 +232,7 @@ layers = [
     "tracker",
     "edges | linkers | postproc",
     "detectors",
-    "affinity",
+    "losses | data | affinity",
 ]
 # <<< LOCAL-SLOT: import-contracts
 

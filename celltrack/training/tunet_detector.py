@@ -28,14 +28,14 @@ from jaxtyping import Float, Int
 from torch import Tensor, nn
 from torch.nn.attention import SDPBackend, sdpa_kernel
 
+from celltrack.data.tunet_dataset import Augmentation, FrameDataset, FrameTarget
 from celltrack.detectors.tunet import DetectorRecipe, TemporalUNetDetector
 from celltrack.eval.bracket import ValidationFold
 from celltrack.linkers.linkers import LinkerConfig
+from celltrack.losses.balanced_bce import BalancedBCE
 from celltrack.postproc.linefit_smoother import LinefitSmoother
 from celltrack.postproc.short_track_filter import ShortTrackFilter
-from celltrack.training.balanced_bce import BalancedBCE
 from celltrack.training.early_stop import EarlyStop
-from celltrack.training.tunet_dataset import Augmentation, FrameDataset, FrameTarget
 from core.data.split import AcquisitionFolds
 from core.data.tracks import AnnotatedTracks
 from core.data.video import ImageStatistics

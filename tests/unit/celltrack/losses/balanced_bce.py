@@ -2,7 +2,7 @@
 
 import torch
 
-from celltrack.training.balanced_bce import BalancedBCE
+from celltrack.losses.balanced_bce import BalancedBCE
 
 
 def test_balanced_b_c_e_of():

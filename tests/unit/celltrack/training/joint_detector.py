@@ -12,7 +12,7 @@ import numpy as np
 import torch
 import zarr
 
-from celltrack.training.joint_dataset import PairTarget
+from celltrack.data.joint_dataset import PairTarget
 from celltrack.training.joint_detector import JointTrainConfig, JointTrainer
 from core.data.video import ImageStatistics
 

@@ -1,6 +1,6 @@
 import numpy as np
 
-from celltrack.training.targets import DetectionTarget
+from celltrack.data.targets import DetectionTarget
 from core.geometry import Spacing
 
 ISOTROPIC = Spacing(z=1.0, y=1.0, x=1.0)

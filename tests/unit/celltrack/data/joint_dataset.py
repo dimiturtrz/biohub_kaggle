@@ -7,7 +7,7 @@ import numpy as np
 import torch
 import zarr
 
-from celltrack.training.joint_dataset import PairDataset, PairTarget
+from celltrack.data.joint_dataset import PairDataset, PairTarget
 from core.data.tracks import TrackGraph
 from core.data.video import ImageStatistics
 

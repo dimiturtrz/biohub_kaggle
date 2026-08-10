@@ -2,7 +2,7 @@ from pathlib import Path
 
 import numpy as np
 
-from celltrack.training.crops import CropSampler
+from celltrack.data.crops import CropSampler
 from core.data.tracks import AnnotatedTracks
 from core.data.video import CellVideo
 from core.geometry import Spacing

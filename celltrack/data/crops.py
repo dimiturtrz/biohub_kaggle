@@ -18,7 +18,7 @@ from dataclasses import dataclass
 import numpy as np
 from jaxtyping import Bool, Float, Int
 
-from celltrack.training.targets import DetectionTarget
+from celltrack.data.targets import DetectionTarget
 from core.data.tracks import AnnotatedTracks
 from core.data.video import CellVideo
 from core.geometry import Spacing

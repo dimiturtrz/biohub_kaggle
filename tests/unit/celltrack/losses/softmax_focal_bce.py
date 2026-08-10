@@ -2,7 +2,7 @@
 
 import torch
 
-from celltrack.training.softmax_focal_bce import SoftmaxFocalBCE
+from celltrack.losses.softmax_focal_bce import SoftmaxFocalBCE
 
 
 def test_softmax_focal_b_c_e_of():
