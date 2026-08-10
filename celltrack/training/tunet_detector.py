@@ -23,7 +23,6 @@ from typing import cast
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 import zarr
 from jaxtyping import Float, Int
 from torch import Tensor, nn
@@ -34,6 +33,7 @@ from celltrack.eval.bracket import ValidationFold
 from celltrack.linkers.linkers import LinkerConfig
 from celltrack.postproc.linefit_smoother import LinefitSmoother
 from celltrack.postproc.short_track_filter import ShortTrackFilter
+from celltrack.training.balanced_bce import BalancedBCE
 from celltrack.training.early_stop import EarlyStop
 from celltrack.training.tunet_dataset import Augmentation, FrameDataset, FrameTarget
 from core.data.split import AcquisitionFolds
@@ -322,7 +322,7 @@ class TUNetDetectorTrainer:
         attention = sdpa_kernel(SDPBackend.MATH) if self.config.compile_backbone else contextlib.nullcontext()
         with attention, torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=self.config.device == "cuda"):
             logits = detector.forward_batch(frames, single_frame=self.config.single_frame)
-            loss = self._detection_loss(logits, centres, self.config.neg_weight)
+            loss = BalancedBCE.of(logits, centres, self.config.neg_weight)
         optimization.zero_grad()
         loss.backward()
         nn.utils.clip_grad_norm_(detector.parameters(), self.config.grad_clip)
@@ -344,29 +344,6 @@ class TUNetDetectorTrainer:
         estimated = sum(metric.estimated_nodes for metric in metrics)
         ratio = (predicted - estimated) / estimated if estimated > 0 else float("nan")
         return _EvalResult(SplitScore.of(metrics).score, NodeCounts.pooled(nodes).recall(), ratio)
-
-    @staticmethod
-    def _detection_loss(
-        logits: Float[Tensor, "b z y x"], centres: list[Int[Tensor, "n 3"]], neg_weight: float
-    ) -> Float[Tensor, ""]:
-        """Count-normalised BCE per frame, averaged over the batch — pilkwang's detector loss, batched.
-
-        Each frame weighs its own GT voxels 1/n_pos and its negatives neg_weight/n_neg, so a crowded and a
-        sparse frame contribute equally; the batch mean keeps the loss (and thus the learning rate) at the
-        same scale as the one-frame path.
-        """
-        target = torch.zeros_like(logits)
-        weight = torch.empty_like(logits)
-        bounds = torch.tensor(logits.shape[1:], device=logits.device)
-        for index, coords in enumerate(centres):
-            coords = coords.to(logits.device)
-            inside = (coords >= 0).all(dim=1) & (coords < bounds).all(dim=1)
-            kept = coords[inside]
-            target[index, kept[:, 0], kept[:, 1], kept[:, 2]] = 1.0
-            n_pos = target[index].sum().clamp(min=1)
-            n_neg = (target[index].numel() - n_pos).clamp(min=1)
-            weight[index] = torch.where(target[index] == 1.0, 1.0 / n_pos, neg_weight / n_neg)
-        return F.binary_cross_entropy_with_logits(logits, target, weight=weight, reduction="sum") / logits.shape[0]
 
 
 def main() -> None:

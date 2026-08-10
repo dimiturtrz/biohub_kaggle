@@ -114,13 +114,3 @@ def test_mine_hard_negatives_ignores_a_source_without_a_true_successor():
     targets = np.ones((3, 3), dtype=np.float32)
 
     assert GapSupervision._mine_hard_negatives(gt_matrix, positions, targets, keep=2).shape == (0, 2)
-
-
-def test_frontier_loss():
-    """The focal-BCE (softmax over sources) is far lower when the logits already place mass on the true parent."""
-    target = torch.tensor([[1.0, 0.0], [0.0, 0.0]])  # source 0 is the parent of target 0
-    right = EdgeHardNegativeFinetuner._frontier_loss(torch.tensor([[9.0, 0.0], [-9.0, 0.0]]), target)  # src0 wins col0
-    wrong = EdgeHardNegativeFinetuner._frontier_loss(torch.tensor([[-9.0, 0.0], [9.0, 0.0]]), target)  # other src wins
-
-    assert right < wrong
-    assert right < 0.1

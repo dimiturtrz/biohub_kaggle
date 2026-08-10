@@ -28,13 +28,13 @@ import numpy as np
 import torch
 from jaxtyping import Float, Int
 from scipy.spatial.distance import cdist
-from torch.nn import functional
 
 from celltrack.detectors.tunet import TemporalUNetDetector, _VideoSource
 from celltrack.edges.edge_scoring import EdgeTransformerScorer
 from celltrack.eval.dense_diagnosis import DenseDiagnosis, DenseFateDiagnosis, Fate, MislinkSignal
 from celltrack.eval.proxy import TestMovieProxy
 from celltrack.tracker import CellTracker
+from celltrack.training.softmax_focal_bce import SoftmaxFocalBCE
 from core.data.tracks import TrackGraph
 from core.metrics.matching import UNMATCHED, DistanceMatcher
 from core.paths import DataRoot
@@ -45,7 +45,6 @@ logger = logging.getLogger(__name__)
 # its mislink inversion is generalisation, not memorisation of the movie the finetune saw.
 _TRAIN_STEMS = ("6bba_05b6850b", "6bba_969618f6", "6bba_fc83837d")
 _EVAL_STEM = "6bba_05db0fb1"
-_FOCAL_POWER = 2.0
 
 
 @dataclass(frozen=True)
@@ -169,26 +168,13 @@ class EdgeHardNegativeFinetuner:
             source, gap.timepoint, gap.source_positions, gap.target_positions, self._config.device
         )
         target = torch.as_tensor(gap.gt_matrix, device=self._config.device)
-        loss = EdgeHardNegativeFinetuner._frontier_loss(logits, target)
+        loss = SoftmaxFocalBCE.of(logits, target)
         if len(gap.hard_negatives):
             probability = torch.softmax(logits, dim=0)
             rows = torch.as_tensor(gap.hard_negatives[:, 0], device=self._config.device)
             columns = torch.as_tensor(gap.hard_negatives[:, 1], device=self._config.device)
             loss = loss + self._config.hard_negative_weight * probability[rows, columns].mean()
         return loss
-
-    @staticmethod
-    def _frontier_loss(
-        logits: Float[torch.Tensor, "s t"], target: Float[torch.Tensor, "s t"]
-    ) -> Float[torch.Tensor, ""]:
-        """The reference focal-BCE over annotated rows and columns, softmax over sources (one parent per target)."""
-        active = (target.sum(dim=1) > 0).unsqueeze(1) | (target.sum(dim=0) > 0).unsqueeze(0)
-        if not active.any():
-            return logits.new_zeros(())
-        probability = torch.softmax(logits, dim=0)
-        bce = functional.binary_cross_entropy(probability, target, reduction="none")
-        p_t = probability * target + (1 - probability) * (1 - target)
-        return (((1 - p_t) ** _FOCAL_POWER) * bce)[active].mean()
 
     # CLI orchestration of the zni probe: mount the training proxy + tracker, mine gaps, report the read-out.
     @staticmethod
