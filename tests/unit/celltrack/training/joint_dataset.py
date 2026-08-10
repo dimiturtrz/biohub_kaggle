@@ -22,7 +22,7 @@ def _graph() -> TrackGraph:
 
 def test_enumerate():
     """One pair at t=0 with the two-source, two-target edge matrix marking only the annotated link 0->2."""
-    targets = PairTarget.enumerate(_graph(), Path("v.zarr"), q_low=0.0, q_high=1.0, downsample=(1, 1, 1))
+    targets = PairTarget.enumerate(_graph(), Path("v.zarr"), q_low=0.0, q_high=1.0)
     assert len(targets) == 1  # only t=0 has nodes at both t and t+1
     target = targets[0]
     assert target.timepoint == 0

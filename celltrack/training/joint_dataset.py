@@ -39,17 +39,16 @@ class PairTarget:
     edge_matrix: Float[np.ndarray, "s u"]  # 1 where an annotated link joins a source to a target
 
     @classmethod
-    def enumerate(
-        cls, graph: TrackGraph, zarr_path: Path, q_low: float, q_high: float, downsample: tuple[int, int, int]
-    ) -> list["PairTarget"]:
+    def enumerate(cls, graph: TrackGraph, zarr_path: Path, q_low: float, q_high: float) -> list["PairTarget"]:
         """Every consecutive-frame pair a video's GT graph supports, with centres and the edge matrix precomputed.
 
         Nodes are grouped by timepoint; a pair exists for each `t` that has annotated nodes at both `t` and
         `t + 1`. The edge matrix is read off the GT edges directly — no matching — so `[i, j] = 1` exactly when
-        the annotation links the `i`-th source node to the `j`-th target node.
+        the annotation links the `i`-th source node to the `j`-th target node. Centres are full-resolution voxels
+        (the model divides by the downsample, mirroring the inference scorer's `_gap_logits`).
         """
         timepoints = graph.timepoints()
-        positions = graph.positions() // np.array(downsample)
+        positions = graph.positions()
         edge_rows = graph.edge_rows()
         targets: list[PairTarget] = []
         for timepoint in np.unique(timepoints).tolist():

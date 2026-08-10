@@ -123,23 +123,27 @@ class EdgeTransformerScorer(nn.Module):
         spatial = torch.tensor(frame_t.shape, dtype=torch.float32, device=device)
         src_voxel = torch.as_tensor(src_positions, device=device)
         tgt_voxel = torch.as_tensor(tgt_positions, device=device)
-        feat_src = self._node_features(features[0], src_voxel / downsample, spatial, 0.0, device)
-        feat_tgt = self._node_features(features[1], tgt_voxel / downsample, spatial, 1.0, device)
+        feat_src = self.node_features(features[0], src_voxel / downsample, spatial, 0.0, device)
+        feat_tgt = self.node_features(features[1], tgt_voxel / downsample, spatial, 1.0, device)
         return self.transformer(feat_src, feat_tgt, src_voxel, tgt_voxel)  # (s, t)
 
-    def _node_features(
-        self,
+    @staticmethod
+    def node_features(
         feature_map: Float[Tensor, "c z y x"],
         grid_positions: Float[Tensor, "n 3"],
         spatial: Float[Tensor, "3"],
         time_fraction: float,
         device: str,
     ) -> Float[Tensor, "n d"]:
-        """A node's UNet feature vector at its voxel, concatenated with the window-relative position embed."""
+        """A node's UNet feature vector at its voxel, concatenated with the window-relative position embed.
+
+        Stateless (the whole node→transformer-input step), so the joint trainer builds the same inputs the
+        shipped scorer does — one definition, both callers.
+        """
         clamped = grid_positions.round().long().clamp(min=torch.zeros(3, dtype=torch.long, device=device))
         clamped = torch.minimum(clamped, (spatial - 1).long())
         indexed = feature_map[:, clamped[:, 0], clamped[:, 1], clamped[:, 2]].T  # (n, c)
-        position = self._position_embedding(grid_positions, spatial, time_fraction, device)
+        position = EdgeTransformerScorer._position_embedding(grid_positions, spatial, time_fraction, device)
         return torch.cat([indexed, position], dim=-1)
 
     @staticmethod

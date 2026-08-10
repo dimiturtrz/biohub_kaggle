@@ -13,7 +13,7 @@ import torch
 import zarr
 
 from celltrack.detectors.tunet import DetectorRecipe, TemporalUNetDetector
-from celltrack.edges.edge_scoring import EdgeTransformerScorer, PrecomputedEdgeAffinity
+from celltrack.edges.edge_scoring import _POS_EMBED_DIM, EdgeTransformerScorer, PrecomputedEdgeAffinity
 from core.data.tracks import TrackGraph
 
 _RECIPE = DetectorRecipe(downsample=(1, 1, 1), pool_kernel_um=1.0, tta=False)
@@ -41,6 +41,18 @@ def _detections() -> TrackGraph:
     """Two detections at t=0 and two at t=1 — a gap the scorer must return a (2, 2) matrix for."""
     coords = np.array([[0, 1, 4, 4], [0, 3, 4, 4], [1, 1, 4, 4], [1, 3, 4, 4]], dtype=np.int64)
     return TrackGraph(np.arange(4, dtype=np.int64), coords, np.empty((0, 2), dtype=np.int64))
+
+
+def test_node_features():
+    """A node's feature vector is its UNet channels at the voxel, concatenated with the position embedding."""
+    channels = 3
+    feature_map = torch.zeros(channels, 4, 4, 4)
+    feature_map[:, 1, 2, 2] = torch.tensor([5.0, 6.0, 7.0])
+    grid_positions = torch.tensor([[1.0, 2.0, 2.0]])
+    spatial = torch.tensor([4.0, 4.0, 4.0])
+    features = EdgeTransformerScorer.node_features(feature_map, grid_positions, spatial, 0.0, "cpu")
+    assert features.shape == (1, channels + 4 * _POS_EMBED_DIM)
+    assert torch.allclose(features[0, :channels], torch.tensor([5.0, 6.0, 7.0]))
 
 
 def test_probabilities():
