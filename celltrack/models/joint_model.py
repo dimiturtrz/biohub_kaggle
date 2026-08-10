@@ -10,14 +10,19 @@ in, divided by the downsample for the feature grid) so a jointly-trained model i
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import override
 
 import torch
 from jaxtyping import Float, Int
 from torch import Tensor, nn
 
-from celltrack.models.edge_transformer import EdgeTransformerScorer
+from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeTransformerScorer
 from celltrack.models.temporal_unet_detector import TemporalUNetDetector
+
+# The published head's shape, which a checkpoint's weights were trained in and must be rebuilt at.
+_HIDDEN_DIM, _N_HEADS, _N_BLOCKS = 128, 4, 4
+_POS_FEATURE_DIM = 4 * _POS_EMBED_DIM  # sinusoidal embed of (t, z, y, x)
 
 
 class JointModel(nn.Module):
@@ -30,6 +35,28 @@ class JointModel(nn.Module):
         self.detector = detector
         self.transformer = transformer
         self.downsample = downsample
+
+    @classmethod
+    def from_checkpoint(cls, path: Path, device: str = "cpu") -> "JointModel":
+        """Rebuild a trained joint model from the checkpoint the trainer writes — both heads and their shape.
+
+        A run's saved weights are only worth what can be read back: scoring a finished checkpoint (or
+        re-scoring one whose run reported nothing) needs the same two heads at the same sizes, which the
+        checkpoint carries alongside them.
+        """
+        state = torch.load(path, map_location=device, weights_only=False)
+        config = state["config"]
+        detector = TemporalUNetDetector(config["out_channels"], tuple(config["layers"]))
+        transformer = EdgeTransformerScorer._transformer_cls()(  # noqa: SLF001 — the pack's head class, mounted
+            feat_dim=config["out_channels"] + _POS_FEATURE_DIM,
+            hidden_dim=_HIDDEN_DIM,
+            n_heads=_N_HEADS,
+            n_blocks=_N_BLOCKS,
+        )
+        detector.load_state_dict(state["detector_state"])
+        transformer.load_state_dict(state["transformer_state"])
+        model = cls(detector, transformer, tuple(config["downsample"]))
+        return model.to(device).eval()
 
     @override
     def forward(

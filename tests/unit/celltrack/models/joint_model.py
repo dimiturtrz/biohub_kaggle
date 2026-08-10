@@ -5,6 +5,8 @@ in `conftest` stand in with the same shape contracts, so this exercises the join
 → two detect-head reads + node-feature indexing → transformer) without them.
 """
 
+from pathlib import Path
+
 import torch
 
 from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeTransformerScorer
@@ -29,3 +31,30 @@ def test_forward():
     detection_t, detection_t1, edge_logits = model.forward(frame_t, frame_t1, source_positions, target_positions)
     assert detection_t.shape == (4, 8, 8) and detection_t1.shape == (4, 8, 8)
     assert edge_logits.shape == (1, 2)
+
+
+def test_from_checkpoint(tmp_path: Path):
+    """A checkpoint written by the trainer rebuilds both heads at the shape its weights were trained in."""
+    out_channels = 2
+    detector = TemporalUNetDetector(out_channels, (2, 4))
+    transformer = EdgeTransformerScorer._transformer_cls()(
+        feat_dim=out_channels + 4 * _POS_EMBED_DIM, hidden_dim=128, n_heads=4, n_blocks=4
+    )
+    saved = JointModel(detector, transformer, downsample=(1, 4, 4))
+    path = tmp_path / "joint.pt"
+    torch.save(  # exactly the payload JointTrainer._save_checkpoint writes
+        {
+            "detector_state": saved.detector.state_dict(),
+            "transformer_state": saved.transformer.state_dict(),
+            "config": {"out_channels": out_channels, "layers": [2, 4], "downsample": [1, 4, 4]},
+        },
+        path,
+    )
+
+    loaded = JointModel.from_checkpoint(path)
+
+    assert loaded.downsample == (1, 4, 4)
+    for restored, original in zip(
+        loaded.detector.state_dict().values(), saved.detector.state_dict().values(), strict=True
+    ):
+        assert torch.equal(restored, original)
