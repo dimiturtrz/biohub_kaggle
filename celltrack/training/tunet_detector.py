@@ -40,6 +40,7 @@ from core.data.split import AcquisitionFolds
 from core.data.tracks import AnnotatedTracks
 from core.data.video import ImageStatistics
 from core.geometry import Spacing
+from core.metrics.detection import NodeCounts
 from core.metrics.matching import DistanceMatcher
 from core.metrics.score import SplitScore, VideoMetrics
 from core.paths import DataRoot
@@ -108,6 +109,20 @@ class _FoldEval:
 
 
 @dataclass(frozen=True)
+class _EvalResult:
+    """One eval's pooled numbers — the edge-Jaccard the run selects on, plus detection recall and the node-count ratio.
+
+    Node *recall* (over annotated cells) is the real detector lever; node precision against the sparse annotation
+    is ~meaningless (most true detections land on unannotated cells), so the over-detection signal is the
+    node-count ratio `(predicted - estimated) / estimated` instead — the same term the leaderboard penalises.
+    """
+
+    score: float
+    node_recall: float
+    node_ratio: float
+
+
+@dataclass(frozen=True)
 class _Optimization:
     """The optimiser and its optional learning-rate schedule, advanced together after each step."""
 
@@ -170,9 +185,12 @@ class TUNetDetectorTrainer:
 
         resume_path = save_to.with_suffix(".resume.pt")
         done, restored = self._restore(detector, optimization, resume_path, resume=resume)
-        best = restored if restored is not None else self._score_fold(evaluator, detector, self.config.eval_threshold)
-        if restored is None:
-            logger.info("init fold-0 subset score = %.4f", best)
+        if restored is not None:
+            best = restored
+        else:
+            initial = self._score_fold(evaluator, detector, self.config.eval_threshold)
+            best = initial.score
+            logger.info("init subset %.4f | node R %.3f ratio %+.2f", best, initial.node_recall, initial.node_ratio)
             detector.save_checkpoint(save_to, self.config.recipe)
 
         stop = EarlyStop(self.config.patience, self.config.es_min_delta) if self.config.patience >= 1 else None
@@ -183,7 +201,8 @@ class TUNetDetectorTrainer:
             window = min(self.config.eval_every, self.config.steps - done)
             loss, rate = self._run_window(detector, optimization, targets, window, done)
             done += window
-            score = self._score_fold(evaluator, detector, self.config.eval_threshold)
+            result = self._score_fold(evaluator, detector, self.config.eval_threshold)
+            score = result.score
             improved = stop.update(score) if stop is not None else score >= best
             marker = ""
             if improved:
@@ -192,14 +211,16 @@ class TUNetDetectorTrainer:
             self._save_resume(resume_path, detector, optimization, done, best)
             eta_hours = (self.config.steps - done) / rate / _SECONDS_PER_HOUR if rate else 0.0
             logger.info(
-                "step %5d/%d | loss %.4f | fold-0 subset %.4f | best %.4f%s | %.1f it/s (%.0f frames/s) | "
-                "elapsed %.2fh ETA %.2fh",
+                "step %5d/%d | loss %.4f | subset %.4f | best %.4f%s | node R %.3f ratio %+.2f | "
+                "%.1f it/s (%.0f frames/s) | elapsed %.2fh ETA %.2fh",
                 done,
                 self.config.steps,
                 loss,
                 score,
                 best,
                 marker,
+                result.node_recall,
+                result.node_ratio,
                 rate,
                 rate * self.config.batch_size,
                 (time.perf_counter() - run_start) / _SECONDS_PER_HOUR,
@@ -308,18 +329,21 @@ class TUNetDetectorTrainer:
         optimization.step()
         return float(loss.detach())
 
-    def _score_fold(self, evaluator: _FoldEval, detector: TemporalUNetDetector, threshold: float) -> float:
-        """The pooled fold-0 subset score — the same edge-Jaccard the leaderboard reports — at one threshold."""
-        buckets: dict[str, list[VideoMetrics]] = {}
+    def _score_fold(self, evaluator: _FoldEval, detector: TemporalUNetDetector, threshold: float) -> _EvalResult:
+        """The pooled eval — the edge-Jaccard the run selects on, plus node precision/recall to show how it improves."""
+        metrics: list[VideoMetrics] = []
+        nodes: list[NodeCounts] = []
         linker = evaluator.linker_config.build(evaluator.spacing)
         recipe = replace(self.config.recipe, tta=self.config.eval_tta)  # selector eval skips TTA (4x cheaper)
         for path, truth in evaluator.videos:
             detections = detector.detections(path, threshold, recipe, self.config.device)
             graph = evaluator.smooth.transform(evaluator.short.transform(linker.link(detections)))
-            buckets.setdefault(AcquisitionFolds.prefix_of(path), []).append(
-                VideoMetrics.of(graph, truth, evaluator.matcher)
-            )
-        return SplitScore.of([m for ms in buckets.values() for m in ms]).score
+            metrics.append(VideoMetrics.of(graph, truth, evaluator.matcher))
+            nodes.append(NodeCounts.of(evaluator.matcher.match(graph, truth.graph), len(truth.graph.node_ids)))
+        predicted = sum(metric.predicted_nodes for metric in metrics)
+        estimated = sum(metric.estimated_nodes for metric in metrics)
+        ratio = (predicted - estimated) / estimated if estimated > 0 else float("nan")
+        return _EvalResult(SplitScore.of(metrics).score, NodeCounts.pooled(nodes).recall(), ratio)
 
     @staticmethod
     def _detection_loss(
