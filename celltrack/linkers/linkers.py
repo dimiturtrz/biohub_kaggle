@@ -12,9 +12,10 @@ because it crosses a trust boundary — a `--set linker.name=` override or a loa
 an unknown name or a non-positive radius is rejected AT construction with a clear error, not deep inside `build`.
 """
 
+import logging
 from collections.abc import Callable
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from celltrack.affinity import EdgeAffinity
 from celltrack.linkers.assignment_linking import AssignmentLinker
@@ -24,6 +25,8 @@ from celltrack.linkers.ilp_linking import ILPLinker
 from celltrack.linkers.linking import Linker, NearestNeighbourLinker
 from celltrack.linkers.motion_linking import MotionHungarianLinker
 from core.geometry import Spacing
+
+logger = logging.getLogger(__name__)
 
 LINKER_NAMES = ("assignment", "nn", "motion", "ilp", "division", "flow")
 
@@ -53,6 +56,21 @@ class LinkerConfig(BaseModel):
         """The affinity bonus, self-balancing to 2·gate (the dimensional P-vs-distance coupling) when unset."""
         return self.affinity_bonus if self.affinity_bonus is not None else _BONUS_GATE_RATIO * self.gate_um
 
+    @model_validator(mode="after")
+    def _bonus_is_readable(self) -> "LinkerConfig":
+        """Refuse an affinity_bonus on a linker that cannot read an affinity — the knob could not move anything.
+
+        Pairing a bonus with `motion` or `ilp` is not a harmless default: it is an instruction the pipeline
+        would accept and silently drop, and a sweep over it would report a flat curve that means nothing.
+        """
+        if self.affinity_bonus is not None and self.name not in _AFFINITY_READERS:
+            message = (
+                f"linker {self.name!r} does not read an edge affinity, so affinity_bonus="
+                f"{self.affinity_bonus} cannot affect it; choose one of {sorted(_AFFINITY_READERS)} or drop the bonus"
+            )
+            raise ValueError(message)
+        return self
+
     @field_validator("name")
     @classmethod
     def _known_name(cls, name: str) -> str:
@@ -61,11 +79,22 @@ class LinkerConfig(BaseModel):
         return name
 
     def build(self, spacing: Spacing, affinity: EdgeAffinity | None = None) -> Linker:
-        """The concrete linker named by this config, wired with the gates it uses (and the affinity if it reads one)."""
+        """The concrete linker named by this config, wired with the gates it uses (and the affinity if it reads one).
+
+        Ignoring a mounted affinity is a legitimate choice (run `motion` and disregard the learned head), so it
+        warns rather than raises — but it warns, because the affinity was already COMPUTED to be discarded.
+        """
+        if affinity is not None and self.name not in _AFFINITY_READERS:
+            logger.warning("linker %r ignores the mounted edge affinity — it was computed and discarded", self.name)
         return _BUILDERS[self.name](self, spacing, affinity)
 
 
 _Builder = Callable[[LinkerConfig, Spacing, EdgeAffinity | None], Linker]
+
+# Which linkers actually READ a learned affinity. The rest take the argument and drop it, so a mounted
+# affinity paired with them is computed (~a third of inference) and thrown away, and an affinity_bonus set
+# on them is a knob that cannot move anything. Both were silent until this set made the coupling checkable.
+_AFFINITY_READERS = frozenset({"assignment", "flow"})
 
 _BUILDERS: dict[str, _Builder] = {
     "assignment": lambda config, spacing, affinity: AssignmentLinker(

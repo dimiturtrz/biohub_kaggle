@@ -68,3 +68,11 @@ def test_build_wires_ilp_and_division_gates():
     assert DivisionAwareLinker(spacing=SPACING, max_distance_um=10.0, division_distance_um=8.0) == LinkerConfig(
         name="division"
     ).build(SPACING)
+
+
+def test_bonus_is_readable():
+    """A bonus on a linker that cannot read an affinity is refused — the knob could not have moved anything."""
+    with pytest.raises(ValidationError, match="does not read an edge affinity"):
+        LinkerConfig(name="motion", affinity_bonus=20.0)
+
+    assert LinkerConfig(name="assignment", affinity_bonus=20.0).effective_bonus == 20.0  # readers still accept it
