@@ -11,6 +11,8 @@ and a knob sweep varies one `TrackerConfig`.
 
 from __future__ import annotations
 
+import logging
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
@@ -30,6 +32,8 @@ from celltrack.postproc.topology_repair import TopologyConfig
 from core.data.tracks import TrackGraph
 from core.data.video import CellVideo
 from core.geometry import Spacing
+
+logger = logging.getLogger(__name__)
 
 # The tracker's two published seeds cache their forward under these keys, so a sweep replays the read-out.
 _SEED1_CACHE = "pilkwang_seed1_logits"
@@ -125,14 +129,29 @@ class CellTracker:
         return CellTracker(detector=self.detector, edge_scorer=self.edge_scorer, device=self.device, config=config)
 
     def run(self, video_key: str, path: Path) -> TrackGraph:
-        """Detect, score edges, and fold the post-proc stages over one video into a linked track graph."""
+        """Detect, score edges, and fold the post-proc stages over one video into a linked track graph.
+
+        Each stage is timed at INFO so a slow submission is diagnosable per stage (detect / affinity / link+post)
+        rather than as one opaque wall-clock — the detection forward is the GPU cost, the stages are the CPU cost.
+        """
         seed1 = self.config.detector_blend
         blend = None if seed1 is None else (seed1, 1 - seed1)
+        detect_start = time.perf_counter()
         nodes = self.detector.nodes(video_key, path, self.config.threshold, blend)
+        affinity_start = time.perf_counter()
         affinity = self.edge_scorer.affinities(path, nodes, self.device)
+        stages_start = time.perf_counter()
         graph = nodes
         for stage in self._stages(self.spacing(path), affinity):
             graph = stage.transform(graph)
+        logger.info(
+            "%s: detect %.1fs | affinity %.1fs | link+post %.1fs (%d nodes)",
+            video_key,
+            affinity_start - detect_start,
+            stages_start - affinity_start,
+            time.perf_counter() - stages_start,
+            len(nodes.node_ids),
+        )
         return graph
 
     def _stages(self, spacing: Spacing, affinity: EdgeAffinity | None) -> tuple[GraphStage, ...]:
