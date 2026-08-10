@@ -5,6 +5,10 @@ additional annotations on these same movies (validated: proxy 0.888 -> public 0.
 pipeline on these movies' known annotations ranks configurations far better than an unrelated fold. This module
 owns the canonical movie identifiers (previously copy-pasted across a dozen eval scripts) and the score loop,
 so an experiment is a thin driver that builds a pipeline and calls :meth:`TestMovieProxy.score`.
+
+The identifiers here define the campaign's whole split: `VALIDATION_MOVIES` chooses checkpoints,
+`TEST_MOVIES` estimates the leaderboard, and `training_videos` is everything else — one home for the
+arithmetic, so no trainer re-derives which videos it is allowed to fit on.
 """
 
 from __future__ import annotations
@@ -34,6 +38,13 @@ CV_MOVIES: tuple[str, ...] = (
     "6bba_969618f6",
     "6bba_fc83837d",
 )
+# The four DENSELY annotated members of the CV set — the trainers' checkpoint-selection videos.
+# Selecting on the test four would make one set do double duty (choose the checkpoint, then read that same
+# number as the expected leaderboard) and would apply the selection pressure against OUR annotation of those
+# movies, which is sparse (52/51/861/1229 nodes) where the hidden eval annotates them densely — the documented
+# anti-transfer failure mode. These four carry the denser lineages, so selection pressure matches the labels
+# the leaderboard actually scores, and the test four stay untouched as an estimate.
+VALIDATION_MOVIES: tuple[str, ...] = tuple(stem for stem in CV_MOVIES if stem not in TEST_MOVIES)
 
 
 class LinkingPipeline(Protocol):
@@ -65,18 +76,18 @@ class TestMovieProxy:
         spacing = CellVideo.from_ome_zarr(paths[0]).spacing
         return cls(paths=paths, truths=truths, spacing=spacing)
 
-    def unscored(self, videos: Sequence[Path]) -> list[Path]:
-        """`videos` minus the movies this proxy scores — the training set a checkpoint may be selected against.
+    @staticmethod
+    def training_videos(videos: Sequence[Path], held_out: tuple[str, ...] = CV_MOVIES) -> list[Path]:
+        """`videos` minus every held-out movie — the one home for "drop what I am scored on" in the campaign.
 
-        The four test movies live in the competition's `train/` directory, so a fold's training split contains
-        them: training on them is legitimate, but *selecting* on them is not. A trainer that eval-selects
-        through this proxy cannot see itself overfitting the very movies it is judged by, and the hidden
-        leaderboard annotates those same movies far more densely than we do — so a checkpoint that memorises
-        our sparse labels can look better here and generalise worse there, the anti-transfer this campaign
-        keeps meeting. Dropping them costs four videos of ~158.
+        The scored movies live in the competition's `train/` directory, so a naive training set contains them:
+        training on them is legitimate, but *selecting* on them, or reading a score off a movie that was fitted
+        on, is not. Dropping all eight (four validation, four test) leaves ~191 of the 199 train videos, and
+        keeps both held-out numbers honest — the validation four choose the checkpoint, the test four estimate
+        the leaderboard.
         """
-        scored = {path.stem for path in self.paths}
-        return [video for video in videos if video.stem not in scored]
+        excluded = set(held_out)
+        return [video for video in videos if video.stem not in excluded]
 
     def metrics(self, pipeline: LinkingPipeline) -> dict[str, VideoMetrics]:
         """Each movie's metrics, keyed by stem — the per-video breakdown a split score aggregates away.

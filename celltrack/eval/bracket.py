@@ -10,6 +10,10 @@ One honesty note the metric forces: the ceiling links only the ~6 % of cells tha
 predicted-node count sits far below the estimated true count and the node-count adjustment hands it a
 large, unrepresentative bonus. The linking quality is therefore read off the unadjusted **edge Jaccard**.
 The floor detects to the estimated count, so there its adjusted score is meaningful and reported too.
+
+Both arms run over the four competition test movies — the same held-out set the trainers select on — so a
+bracket number sits on the same axis as every model score, instead of on a hashed fold that neither leaks
+honestly nor ranks the same way.
 """
 
 import argparse
@@ -19,10 +23,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from celltrack.detectors.detection import CELL_SCALE_UM, HIGH, LOW, BlobDetector
+from celltrack.eval.proxy import TestMovieProxy
 from celltrack.linkers.linking import Linker, NearestNeighbourLinker
 from celltrack.linkers.motion_linking import MotionHungarianLinker
 from celltrack.postproc.division_recovery import DivisionRecovery
-from core.data.split import AcquisitionFolds
 from core.data.tracks import AnnotatedTracks, TrackGraph
 from core.data.video import CellVideo
 from core.geometry import Spacing
@@ -32,14 +36,13 @@ from core.metrics.score import SplitScore, VideoMetrics
 from core.paths import DataRoot
 
 _CONFIG = Path(__file__).parents[1] / "paths.yaml"
-# Swept on validation fold 0: the edge Jaccard peaks near 15 um (0.998), above the 7 um matching cutoff
-# because a true successor may move further than the matcher tolerates, and below the point where a wrong
-# cell in a dense frame becomes the cheaper partner. See interpretations/tracking/2026-07-23_bracket.md.
+# Swept when the linker was first bracketed: the edge Jaccard peaks near 15 um (0.998), above the 7 um
+# matching cutoff because a true successor may move further than the matcher tolerates, and below the point
+# where a wrong cell in a dense frame becomes the cheaper partner. See interpretations/tracking/2026-07-23_bracket.md.
 _LINK_GATE_UM = 15.0
-_DEFAULT_FOLD = 0
 # The shipping kernel's motion gates, so a ceiling run measures the linker we actually submit.
 _TIGHT_GATE_UM, _LOOSE_GATE_UM = 6.0, 10.0
-# Post-link division gates. The parent gate is the frontier's 10.5 um, which a fold-0 sweep independently
+# Post-link division gates. The parent gate is the frontier's 10.5 um, which our own sweep independently
 # picks out as the optimum (0.4468 division Jaccard, falling to 0.2558 by 14 um as false forks cost the edge
 # term too). Their 8.0 um sister gate is far too tight for this data — 0.2593 — and the measured plateau
 # starts at 18 um, where the gate is close to inert anyway: two daughters each within 10.5 um of one mother
@@ -154,69 +157,31 @@ class Floor:
         return VideoMetrics.of(self.linker.link(detections), truth, self.matcher)
 
 
-@dataclass(frozen=True)
-class ValidationFold:
-    """The held-out videos of one fold, so a bracket run reads its data from a single place."""
-
-    spacing: Spacing
-    videos: tuple[Path, ...]
-    annotations: tuple[AnnotatedTracks, ...]
-
-    @classmethod
-    def load(cls, root: DataRoot, fold: int) -> "ValidationFold":
-        """Read the fold's held-out video paths and annotations, spacing from the first store."""
-        held_out = AcquisitionFolds().split(root.videos("train"), fold).validation
-        return cls(
-            spacing=CellVideo.from_ome_zarr(held_out[0]).spacing,
-            videos=held_out,
-            annotations=tuple(AnnotatedTracks.from_geff(root.track_store(video)) for video in held_out),
-        )
-
-    def stratified_subset(self, per_prefix: int) -> "ValidationFold":
-        """A subset with the first few videos of each acquisition kept — for the expensive floor run."""
-        keep = {video for group in AcquisitionFolds.by_prefix(self.videos).values() for video in group[:per_prefix]}
-        chosen = [index for index, video in enumerate(self.videos) if video in keep]
-        return ValidationFold(
-            spacing=self.spacing,
-            videos=tuple(self.videos[index] for index in chosen),
-            annotations=tuple(self.annotations[index] for index in chosen),
-        )
-
-    def images(self) -> list[tuple[CellVideo, AnnotatedTracks]]:
-        """Open each video's image alongside its annotation — what the floor needs."""
-        return [
-            (CellVideo.from_ome_zarr(video), truth) for video, truth in zip(self.videos, self.annotations, strict=True)
-        ]
-
-
 def main() -> None:
-    """Run a bracket arm on a validation fold and log what it reached."""
+    """Run a bracket arm on the four held-out test movies and log what it reached."""
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser(description="Bracket the competition score with simple baselines.")
     parser.add_argument("--arm", choices=("ceiling", "ceiling-motion", "ceiling-motiondiv", "floor"), default="ceiling")
-    parser.add_argument("--fold", type=int, default=_DEFAULT_FOLD)
     parser.add_argument("--gate-um", type=float, default=_LINK_GATE_UM)
     parser.add_argument("--scale-um", type=float, default=CELL_SCALE_UM)
-    parser.add_argument("--floor-per-prefix", type=int, default=3)
     parser.add_argument("--parent-gate-um", type=float, default=_PARENT_GATE_UM)
     parser.add_argument("--sister-gate-um", type=float, default=_SISTER_GATE_UM)
     parser.add_argument("--division-fraction", type=float, default=_MAX_DIVISION_FRACTION)
     arguments = parser.parse_args()
 
-    fold = ValidationFold.load(DataRoot.from_config(_CONFIG), arguments.fold)
-    logger.info("fold %d: %d validation videos", arguments.fold, len(fold.videos))
+    proxy = TestMovieProxy.load(DataRoot.from_config(_CONFIG))
+    logger.info("held out: %d test movies", len(proxy.paths))
 
     if arguments.arm == "floor":
-        sample = fold.stratified_subset(arguments.floor_per_prefix)
-        logger.info("floor sample: %d videos", len(sample.videos))
-        floor = Floor.with_scale_and_gate(fold.spacing, arguments.scale_um, arguments.gate_um)
-        logger.info("%s", floor.over(sample.images()).report())
+        images = [(CellVideo.from_ome_zarr(path), truth) for path, truth in zip(proxy.paths, proxy.truths, strict=True)]
+        floor = Floor.with_scale_and_gate(proxy.spacing, arguments.scale_um, arguments.gate_um)
+        logger.info("%s", floor.over(images).report())
     elif arguments.arm == "ceiling":
-        logger.info("%s", Ceiling.with_gate(fold.spacing, arguments.gate_um).over(fold.annotations).report())
+        logger.info("%s", Ceiling.with_gate(proxy.spacing, arguments.gate_um).over(proxy.truths).report())
     else:
         recovery = (
             DivisionRecovery(
-                spacing=fold.spacing,
+                spacing=proxy.spacing,
                 parent_gate_um=arguments.parent_gate_um,
                 sister_gate_um=arguments.sister_gate_um,
                 max_added_fraction=arguments.division_fraction,
@@ -224,7 +189,7 @@ def main() -> None:
             if arguments.arm == "ceiling-motiondiv"
             else None
         )
-        logger.info("%s", Ceiling.with_motion(fold.spacing, recovery).over(fold.annotations).report())
+        logger.info("%s", Ceiling.with_motion(proxy.spacing, recovery).over(proxy.truths).report())
 
 
 if __name__ == "__main__":

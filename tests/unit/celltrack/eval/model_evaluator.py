@@ -23,7 +23,6 @@ from celltrack.models.temporal_unet_detector import TemporalUNetDetector as _Net
 from celltrack.tracker import TrackerConfig
 from core.data.tracks import AnnotatedTracks, TrackGraph
 from core.geometry import Spacing
-from core.paths import DataRoot
 
 
 class _StubEdgeScorer:
@@ -50,9 +49,8 @@ def _evaluator(proxy: TestMovieProxy) -> ModelEvaluator:
 
 
 def test_mount(monkeypatch: pytest.MonkeyPatch):
-    """`mount` loads the proxy once and mounts the two-seed edge affinity at the config's blend, both shared."""
+    """`mount` keeps the caller's proxy and mounts the two-seed edge affinity at the config's blend, both shared."""
     captured: dict[str, object] = {}
-    monkeypatch.setattr(TestMovieProxy, "load", classmethod(lambda cls, root, stems: "proxy"))
 
     def _fake_from_packs(packs: tuple[Path, ...], weights: tuple[float, ...], device: str) -> str:
         captured["packs"], captured["weights"], captured["device"] = packs, weights, device
@@ -61,7 +59,7 @@ def test_mount(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(BlendedEdgeTransformerScorer, "from_packs", staticmethod(_fake_from_packs))
 
     evaluator = ModelEvaluator.mount(
-        cast(DataRoot, object()),
+        cast(TestMovieProxy, "proxy"),
         (Path("p1"), Path("p2")),
         DetectorRecipe(),
         "cpu",

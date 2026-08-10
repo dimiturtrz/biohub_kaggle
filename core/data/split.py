@@ -1,18 +1,15 @@
-"""Partitioning the training videos for local validation.
+"""Grouping the training videos by acquisition.
 
 The two filename prefixes are two acquisitions, and they are not interchangeable: `44b6` holds ~36.9k
-cells at 0.99 % annotated, `6bba` ~16.5k at 9.0 %. A partition that ignores them can hand one fold most
-of one acquisition and read the resulting score as generalisation.
+cells at 0.99 % annotated, `6bba` ~16.5k at 9.0 %. Any partition or per-group report that ignores them
+can hand one side most of one acquisition and read the resulting score as generalisation.
 
-It does *not* follow that the acquisitions should be held out from each other. The competition's own test
-split is two videos of each prefix, so acquisition identity is present on both sides there — training on
-one acquisition and validating on the other would measure a harder task than the leaderboard scores, and
-mis-estimate it. Validation therefore mirrors the test split: stratified by prefix, partitioned at video
-level, with the score reported per prefix as well as pooled, since a pooled number hides which
-acquisition a method actually helped.
-
-Membership comes from a stable hash of the video name rather than a shuffle, so a fold is reproducible
-from the filenames alone — no seed to carry, no id list to drift out of sync with the data.
+There are no k-folds here any more. The competition's four TEST movies live inside `train/`, so the
+honest held-out set is those movies scored through the shipped pipeline (`celltrack.eval.proxy`), not a
+hashed fold of the train directory — a fold-0 validation split both leaked (the published weights we
+warm-start from were fitted on ~93 % of it) and misranked (0.837 on the fold eval vs 0.893 through the
+real pipeline for the same weights). What survives is the acquisition vocabulary itself: which videos
+belong to which acquisition, and a stable, seed-free rank within one.
 """
 
 import hashlib
@@ -21,19 +18,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 _DIGEST_BYTES = 8
-_DEFAULT_FOLDS = 5
-
-
-@dataclass(frozen=True)
-class VideoSplit:
-    """One fold: the videos to fit on, and the held-out videos that are never fitted on."""
-
-    train: tuple[Path, ...]
-    validation: tuple[Path, ...]
-
-    def validation_by_prefix(self) -> dict[str, tuple[Path, ...]]:
-        """The held-out videos grouped by acquisition — a pooled score hides which acquisition improved."""
-        return AcquisitionFolds.by_prefix(self.validation)
 
 
 @dataclass(frozen=True)
@@ -49,10 +33,10 @@ class DatasetSplit:
 class StratifiedSplit:
     """Deterministic train/validation/test over videos, each acquisition partitioned the same way.
 
-    A held-out count per acquisition rather than a fold index: the smallest useful test set mirrors the
-    competition's own — a couple of videos of each acquisition, so the local number tracks the leaderboard —
-    and validation is smaller still, since per-epoch scoring must stay cheap. Membership is by the same stable
-    filename rank the folds use, so the split is reproducible from the filenames with no seed to carry.
+    A held-out count per acquisition: the smallest useful test set mirrors the competition's own — a couple
+    of videos of each acquisition — and validation is smaller still, since per-epoch scoring must stay cheap.
+    Membership is by stable filename rank, so the split is reproducible from the filenames with no seed to
+    carry. The trainers do not use this: they hold out the four proxy movies instead.
     """
 
     test_per_prefix: int = 2
@@ -64,8 +48,8 @@ class StratifiedSplit:
         validation: list[Path] = []
         test: list[Path] = []
         held = self.test_per_prefix + self.validation_per_prefix
-        for group in AcquisitionFolds.by_prefix(videos).values():
-            ordered = sorted(group, key=AcquisitionFolds.rank_of)
+        for group in Acquisitions.by_prefix(videos).values():
+            ordered = sorted(group, key=Acquisitions.rank_of)
             test.extend(ordered[: self.test_per_prefix])
             validation.extend(ordered[self.test_per_prefix : held])
             train.extend(ordered[held:])
@@ -73,35 +57,15 @@ class StratifiedSplit:
 
 
 @dataclass(frozen=True)
-class AcquisitionFolds:
-    """Deterministic k-fold over videos, stratified so each acquisition is spread evenly across folds."""
-
-    folds: int = _DEFAULT_FOLDS
-
-    def split(self, videos: Sequence[Path], index: int) -> VideoSplit:
-        """The train/validation partition for one fold, counting folds from zero."""
-        if not 0 <= index < self.folds:
-            raise ValueError(f"fold {index} is outside the {self.folds} folds available")
-        held_out = set(self._fold_members(videos, index))
-        return VideoSplit(
-            train=tuple(video for video in videos if video not in held_out),
-            validation=tuple(video for video in videos if video in held_out),
-        )
-
-    def _fold_members(self, videos: Sequence[Path], index: int) -> list[Path]:
-        """The videos of one fold — each acquisition dealt round-robin, so every fold holds both."""
-        members: list[Path] = []
-        for group in self.by_prefix(videos).values():
-            ordered = sorted(group, key=self.rank_of)
-            members.extend(ordered[index :: self.folds])
-        return members
+class Acquisitions:
+    """The acquisition a video belongs to, and a stable order within one — the vocabulary, not a partition."""
 
     @staticmethod
     def by_prefix(videos: Sequence[Path]) -> dict[str, tuple[Path, ...]]:
-        """Group videos by acquisition, so each one can be dealt across folds and scored on its own."""
+        """Group videos by acquisition, so each one can be reported and sampled on its own."""
         grouped: dict[str, list[Path]] = {}
         for video in videos:
-            grouped.setdefault(AcquisitionFolds.prefix_of(video), []).append(video)
+            grouped.setdefault(Acquisitions.prefix_of(video), []).append(video)
         return {prefix: tuple(members) for prefix, members in sorted(grouped.items())}
 
     @staticmethod
@@ -111,6 +75,6 @@ class AcquisitionFolds:
 
     @staticmethod
     def rank_of(video: Path) -> int:
-        """A stable position for a video, so folds are reproducible from the filenames alone."""
+        """A stable position for a video, so any ordering is reproducible from the filenames alone."""
         digest = hashlib.blake2b(video.stem.encode("utf-8"), digest_size=_DIGEST_BYTES).digest()
         return int.from_bytes(digest, "big")

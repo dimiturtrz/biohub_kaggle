@@ -1,4 +1,4 @@
-"""Train our own weights for the temporal-U-Net detector on our fold split.
+"""Train our own weights for the temporal-U-Net detector on every train video but the four held-out movies.
 
 Detector-only supervision: a frame's ground-truth cell centres are positive voxels, everything else a
 heavily down-weighted negative, and the network learns to fire a sharp local maximum at each centre. No
@@ -7,12 +7,17 @@ the linker that consumes it is ours. The input recipe is pilkwang's (x4 Y/X down
 quantile-norm), trained through the same fake-pair forward used at inference so train and test see the
 same distribution.
 
-Warm-starting from the published weights (``--warm-start``) continues their detector on our fold-train
+The split is three-way and lives in `celltrack.eval.proxy`: eight movies are held out of training, the
+densely-annotated VALIDATION four choose the checkpoint through the *shipped* CellTracker (`ModelEvaluator`),
+and the TEST four are never selected on, so they stay a clean leaderboard estimate (`proxy_eval`). Everything
+else in `train/` is trained on — a hashed fold split is neither needed nor honest here (the published weights
+we warm-start from were fitted on ~93 % of fold-0's validation, and that eval ranked the same weights 0.837
+against 0.893 through the real pipeline).
+
+Warm-starting from the published weights (``--warm-start``) continues their detector on our training
 videos; from scratch it is the honest own-trained baseline. Either way the best checkpoint by the
-LB-aligned proxy score is saved — the detector is selected through the *shipped* CellTracker on the four
-test movies (`ModelEvaluator`), not a divergent fold-0 motion-linker eval — so the run stops at its own peak
-rather than a fixed step count. The trainer takes prepared frames and an evaluator as inputs; ``main``
-mounts that proxy evaluator.
+LB-aligned proxy score is saved, so the run stops at its own peak rather than a fixed step count. The
+trainer takes prepared frames and an evaluator as inputs; ``main`` mounts that proxy evaluator.
 """
 
 import argparse
@@ -33,10 +38,10 @@ from torch.nn.attention import SDPBackend, sdpa_kernel
 from celltrack.data.tunet_dataset import Augmentation, FrameDataset, FrameTarget
 from celltrack.detectors.tunet import DetectorRecipe, TemporalUNetDetector
 from celltrack.eval.model_evaluator import ModelEvaluator
+from celltrack.eval.proxy import TEST_MOVIES, VALIDATION_MOVIES, TestMovieProxy
 from celltrack.losses.balanced_bce import BalancedBCE
 from celltrack.tracker import TrackerConfig
 from celltrack.training.early_stop import EarlyStop
-from core.data.split import AcquisitionFolds
 from core.data.tracks import AnnotatedTracks
 from core.data.video import ImageStatistics
 from core.paths import DataRoot
@@ -70,7 +75,7 @@ class TUNetTrainConfig:
     # deadlock on this Windows box on repeated spawn. `threads` parallel readers, `prefetch` frames in flight.
     threads: int = 12
     prefetch: int = 24
-    # Every fold-train frame is the same downsampled shape, so a step forwards `batch_size` frames in one pass
+    # Every training frame is the same downsampled shape, so a step forwards `batch_size` frames in one pass
     # (batch=1 starved the GPU). The loss averages over the batch, so the learning rate carries over unchanged.
     batch_size: int = 8
     grad_clip: float = 1.0
@@ -311,7 +316,7 @@ class TUNetDetectorTrainer:
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
-    parser = argparse.ArgumentParser(description="Train the temporal-U-Net detector on our fold split.")
+    parser = argparse.ArgumentParser(description="Train the temporal-U-Net detector on the non-held-out train videos.")
     parser.add_argument("--steps", type=int, default=1500)
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--neg-weight", type=float, default=1e-2)
@@ -361,16 +366,19 @@ def main() -> None:
     proc = root.processed(_DATASET)
     tracker_config = TrackerConfig(threshold=config.eval_threshold)
     recipe = replace(config.recipe, tta=config.eval_tta)  # selector eval skips TTA by default (4x cheaper)
-    evaluator = ModelEvaluator.mount(root, (proc / _PACK_REL, proc / _PACK2_REL), recipe, config.device, tracker_config)
-
-    # The proxy's movies sit in the competition's train/ directory, so the fold's training split contains them;
-    # training on them is fine, selecting on them is not (see `TestMovieProxy.unscored`).
-    train_paths = evaluator.proxy.unscored(AcquisitionFolds().split(root.videos("train"), 0).train)
-    logger.info(
-        "enumerating GT frames over %d train videos (%d proxy movies held out of training)...",
-        len(train_paths),
-        len(evaluator.proxy.paths),
+    validation = TestMovieProxy.load(root, VALIDATION_MOVIES)
+    evaluator = ModelEvaluator.mount(
+        validation, (proc / _PACK_REL, proc / _PACK2_REL), recipe, config.device, tracker_config
     )
+
+    train_paths = TestMovieProxy.training_videos(root.videos("train"))
+    logger.info(
+        "split: %d train / %d validation (selected on) / %d test (estimate only)",
+        len(train_paths),
+        len(VALIDATION_MOVIES),
+        len(TEST_MOVIES),
+    )
+    logger.info("enumerating GT frames over %d train videos...", len(train_paths))
     targets: list[FrameTarget] = []
     for path in train_paths:
         quantiles = cast(ImageStatistics, zarr.open_group(path, mode="r").attrs["image_statistics"])["quantiles"]
@@ -381,7 +389,7 @@ def main() -> None:
             targets.append(FrameTarget(path, int(timepoint), q_low, q_high, frame_coords.astype(np.int64)))
     logger.info("%d annotated frames", len(targets))
 
-    logger.info("eval through the shipped tracker on the %d test movies", len(evaluator.proxy.paths))
+    logger.info("selecting through the shipped tracker on the %d validation movies", len(evaluator.proxy.paths))
 
     save_to = root.processed(_DATASET) / args.weights
     TUNetDetectorTrainer(config).train(

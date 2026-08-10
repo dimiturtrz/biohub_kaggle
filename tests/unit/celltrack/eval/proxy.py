@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from celltrack.eval import proxy
-from celltrack.eval.proxy import TEST_MOVIES, TestMovieProxy
+from celltrack.eval.proxy import CV_MOVIES, TEST_MOVIES, VALIDATION_MOVIES, TestMovieProxy
 from core.data.tracks import AnnotatedTracks, TrackGraph
 from core.geometry import Spacing
 from core.paths import DataRoot
@@ -152,8 +152,19 @@ def test_load_raises_if_a_movie_is_absent():
         TestMovieProxy.load(cast(DataRoot, _Root()))
 
 
-def test_unscored(video_store: Path, in_bounds_tracks: AnnotatedTracks):
-    """The movies the proxy scores are held out of a training list; everything else passes through."""
-    proxy = TestMovieProxy(paths=(video_store,), truths=(in_bounds_tracks,), spacing=Spacing(z=1.0, y=1.0, x=1.0))
-    other = video_store.parent / "other.zarr"
-    assert proxy.unscored([video_store, other]) == [other]
+def test_validation_movies_are_the_cv_set_without_the_test_four():
+    """Selection runs on the denser-annotated four, so the test four are never both selected on and reported."""
+    assert set(VALIDATION_MOVIES) == set(CV_MOVIES) - set(TEST_MOVIES)
+    assert len(VALIDATION_MOVIES) == len(TEST_MOVIES)
+
+
+def test_training_videos():
+    """All eight held-out movies leave the training list; everything else passes through."""
+    videos = [Path(f"{stem}.zarr") for stem in CV_MOVIES] + [Path("44b6_other.zarr")]
+    assert TestMovieProxy.training_videos(videos) == [Path("44b6_other.zarr")]
+
+
+def test_training_videos_takes_the_held_out_stems_it_is_given():
+    """A caller can hold out a different set — the arithmetic still lives in one place."""
+    videos = [Path("a_1.zarr"), Path("a_2.zarr")]
+    assert TestMovieProxy.training_videos(videos, ("a_1",)) == [Path("a_2.zarr")]

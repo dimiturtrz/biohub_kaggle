@@ -2,7 +2,7 @@ from pathlib import Path
 
 import numpy as np
 
-from celltrack.eval.bracket import ArmResult, Ceiling, Floor, ValidationFold
+from celltrack.eval.bracket import ArmResult, Ceiling, Floor
 from celltrack.postproc.division_recovery import DivisionRecovery
 from core.data.tracks import AnnotatedTracks, TrackGraph
 from core.data.video import CellVideo
@@ -11,7 +11,6 @@ from core.metrics.divisions import DivisionCounts
 from core.metrics.edges import EdgeCounts
 from core.metrics.matching import DistanceMatcher
 from core.metrics.score import VideoMetrics
-from core.paths import DataRoot
 
 SPACING = Spacing(z=1.0, y=1.0, x=1.0)
 MATCHER = DistanceMatcher(spacing=SPACING)
@@ -102,26 +101,3 @@ def test_floor_over(video_store: Path):
     assert result.label == "floor"
     assert len(result.metrics) == 1
     assert result.metrics[0].estimated_nodes == truth.estimated_node_count
-
-
-def test_load(dataset_root: Path):
-    """The fold reads its held-out annotations and the voxel spacing off disk in one place."""
-    fold = ValidationFold.load(DataRoot(dataset_root), fold=0)
-    assert len(fold.annotations) == len(fold.videos) == 2
-    assert fold.spacing == Spacing(z=1.625, y=0.40625, x=0.40625)
-
-
-def test_stratified_subset(dataset_root: Path):
-    """A stratified subset keeps both acquisitions, capped at the requested count per prefix."""
-    fold = ValidationFold.load(DataRoot(dataset_root), fold=0)
-    subset = fold.stratified_subset(per_prefix=1)
-    prefixes = {video.stem.split("_")[0] for video in subset.videos}
-    assert prefixes == {"44b6", "6bba"}
-
-
-def test_images(dataset_root: Path):
-    """Each video's image is opened alongside its annotation for the floor."""
-    fold = ValidationFold.load(DataRoot(dataset_root), fold=0)
-    opened = fold.images()
-    assert len(opened) == 2
-    assert all(isinstance(cell, CellVideo) for cell, _ in opened)

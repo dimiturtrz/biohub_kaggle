@@ -49,24 +49,6 @@ def geff_store(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def dataset_root(tmp_path: Path) -> Path:
-    """A minimal data root: two videos of each acquisition in train (with GEFF) and one in test.
-
-    Two per acquisition, not one, so a fold split leaves a non-empty train partition on both sides.
-    """
-    competition = tmp_path / "raw" / "biohub_cell_tracking"
-    train, test = competition / "train", competition / "test"
-    train.mkdir(parents=True)
-    test.mkdir(parents=True)
-    for prefix in ("44b6", "6bba"):
-        for suffix in ("0000abcd", "1111beef"):
-            _write_video(train / f"{prefix}_{suffix}.zarr")
-            _write_geff(train / f"{prefix}_{suffix}.geff")
-        _write_video(test / f"{prefix}_0000ef01.zarr")
-    return tmp_path
-
-
-@pytest.fixture
 def in_bounds_tracks() -> AnnotatedTracks:
     """A GEFF-shaped annotation whose cells sit inside the tiny `video_store` volume (Z=2, Y=4, X=4)."""
     graph = TrackGraph(

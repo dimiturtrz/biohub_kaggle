@@ -2,7 +2,8 @@
 
 These assertions read the competition data, so they are skipped wherever it is absent (CI, a fresh
 clone). They exist because the numbers are load-bearing: the two acquisitions differ by an order of
-magnitude in annotation density, which is why validation is stratified by prefix rather than pooled.
+magnitude in annotation density, which is why every score is read per prefix as well as pooled, and why
+the held-out movies are drawn from both.
 """
 
 from pathlib import Path
@@ -11,8 +12,9 @@ import numpy as np
 import polars as pl
 import pytest
 
-from celltrack.eval.bracket import Ceiling, ValidationFold
-from core.data.split import AcquisitionFolds
+from celltrack.eval.bracket import Ceiling
+from celltrack.eval.proxy import TestMovieProxy
+from core.data.split import Acquisitions
 from core.data.submission import Submission
 from core.data.tracks import AnnotatedTracks, TrackGraph
 from core.paths import DataRoot
@@ -39,14 +41,14 @@ def data_root() -> DataRoot:
 def test_the_train_split_holds_both_acquisitions():
     videos = data_root().videos("train")
     assert len(videos) == TRAIN_VIDEOS
-    assert {prefix: len(group) for prefix, group in AcquisitionFolds.by_prefix(videos).items()} == PREFIX_COUNTS
+    assert {prefix: len(group) for prefix, group in Acquisitions.by_prefix(videos).items()} == PREFIX_COUNTS
 
 
 def test_the_test_split_holds_both_acquisitions():
     """Acquisition identity is present on both sides of the official split, so validation must be too."""
     videos = data_root().videos("test")
     assert len(videos) == TEST_VIDEOS
-    assert sorted(AcquisitionFolds.by_prefix(videos)) == sorted(PREFIX_COUNTS)
+    assert sorted(Acquisitions.by_prefix(videos)) == sorted(PREFIX_COUNTS)
 
 
 def test_the_annotation_totals_are_what_the_split_assumes():
@@ -57,8 +59,8 @@ def test_the_annotation_totals_are_what_the_split_assumes():
 
 def test_the_linking_ceiling_is_near_perfect():
     """Linking ground-truth nodes recovers almost every edge, so detection, not linking, is the budget."""
-    fold = ValidationFold.load(data_root(), fold=0)
-    ceiling = Ceiling.with_gate(fold.spacing, gate_um=15.0).over(fold.annotations)
+    proxy = TestMovieProxy.load(data_root())
+    ceiling = Ceiling.with_gate(proxy.spacing, gate_um=15.0).over(proxy.truths)
     assert ceiling.edge_jaccard() > CEILING_FLOOR
 
 

@@ -1,4 +1,4 @@
-"""Train the joint detector+edge model on our fold split — one backbone serving detection and association.
+"""Train the joint detector+edge model — one backbone serving detection and association.
 
 Detection-only training (`tunet_detector`) freezes association; the joint loop runs the temporal backbone
 once on the real consecutive pair `(t, t+1)` and reads all three heads off the shared features — the
@@ -9,9 +9,11 @@ different scales and a summed number hides which one is learning.
 
 The loop mirrors the detector trainer — eval-sized windows, EarlyStop + save-best + resume, the bf16 /
 channels_last / optional torch.compile speed setup — and selects on the same LB-aligned number: the
-`ModelEvaluator` score of BOTH trained heads through the shipped `CellTracker` on the four test movies. Held-out
-loss does not transfer, and it hides which half moved; the pipeline score is the metric the leaderboard reports,
-with the edge PRC-AUC over the held-out pairs logged beside it as the association half's own diagnostic.
+`ModelEvaluator` score of BOTH trained heads through the shipped `CellTracker` on the densely-annotated
+VALIDATION movies (`celltrack.eval.proxy`), with the TEST four held out of training and out of selection so
+they remain a clean leaderboard estimate. Held-out loss does not transfer, and it hides which half moved; the
+pipeline score is the metric the leaderboard reports, with the edge PRC-AUC over the same validation movies'
+pairs logged beside it as the association half's own diagnostic.
 Warm-starting (`--warm-start`) continues pilkwang's published detector+transformer; from scratch it is the honest
 own-trained baseline. Either way the best checkpoint by proxy score is saved.
 """
@@ -34,8 +36,8 @@ from torch.nn.attention import SDPBackend, sdpa_kernel
 
 from celltrack.data.joint_dataset import PairDataset, PairTarget
 from celltrack.detectors.tunet import DetectorRecipe
-from celltrack.eval.bracket import ValidationFold
 from celltrack.eval.model_evaluator import ModelEvaluator
+from celltrack.eval.proxy import TEST_MOVIES, VALIDATION_MOVIES, TestMovieProxy
 from celltrack.losses.balanced_bce import BalancedBCE
 from celltrack.losses.softmax_focal_bce import SoftmaxFocalBCE
 from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeTransformerScorer
@@ -44,7 +46,6 @@ from celltrack.models.temporal_unet_detector import TemporalUNetDetector
 from celltrack.tracker import TrackerConfig
 from celltrack.training.early_stop import EarlyStop
 from celltrack.training.tunet_detector import _Optimization
-from core.data.split import AcquisitionFolds
 from core.data.tracks import AnnotatedTracks
 from core.data.video import ImageStatistics
 from core.metrics.edge_auc import EdgeAUC
@@ -344,14 +345,14 @@ class JointTrainer:
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
-    parser = argparse.ArgumentParser(description="Train the joint detector+edge model on our fold split.")
+    parser = argparse.ArgumentParser(description="Train the joint detector+edge model on the non-held-out videos.")
     parser.add_argument("--steps", type=int, default=1500)
     parser.add_argument("--warm-start", action="store_true", help="initialise from the published pilkwang weights")
     parser.add_argument("--det-weight", type=float, default=1.0, help="weight on the detection term vs the edge term")
     parser.add_argument("--compile-backbone", action="store_true", help="torch.compile the U-Net (static shape)")
     parser.add_argument("--patience", type=int, default=5, help="stop after N non-improving evals (<1 disables)")
     parser.add_argument("--device", type=str, default="cuda")
-    parser.add_argument("--val-videos", type=int, default=2, help="held-out videos the edge AUC is measured over")
+    parser.add_argument("--val-videos", type=int, default=2, help="validation movies the edge AUC is measured over")
     parser.add_argument("--eval-threshold", type=float, default=0.5, help="detection threshold of the selector eval")
     parser.add_argument("--resume", action="store_true", help="continue from the .resume.pt snapshot")
     parser.add_argument("--weights", type=str, default="joint_tunet_ours.pt")
@@ -373,25 +374,34 @@ def main() -> None:
         q_low, q_high = float(quantiles["0.001"]), float(quantiles["0.999"])
         return PairTarget.enumerate(graph_source.graph, video, q_low, q_high)
 
-    train_paths = AcquisitionFolds().split(root.videos("train"), 0).train
+    proc = root.processed(_DATASET)
+    recipe = DetectorRecipe(downsample=config.downsample, tta=config.eval_tta)
+    tracker_config = TrackerConfig(threshold=config.eval_threshold)
+    validation = TestMovieProxy.load(root, VALIDATION_MOVIES)
+    evaluator = ModelEvaluator.mount(
+        validation, (proc / _PACK_REL, proc / _PACK2_REL), recipe, config.device, tracker_config
+    )
+
+    train_paths = TestMovieProxy.training_videos(root.videos("train"))
+    logger.info(
+        "split: %d train / %d validation (selected on) / %d test (estimate only)",
+        len(train_paths),
+        len(VALIDATION_MOVIES),
+        len(TEST_MOVIES),
+    )
     logger.info("enumerating GT pairs over %d train videos...", len(train_paths))
     train_targets: list[PairTarget] = []
     for path in train_paths:
         train_targets.extend(_enumerate(path, AnnotatedTracks.from_geff(root.track_store(path))))
     logger.info("%d train pairs", len(train_targets))
 
-    fold = ValidationFold.load(root, 0)
-    held = list(zip(fold.videos, fold.annotations, strict=True))[: args.val_videos]
+    # The edge AUC reads the SAME held-out movies the checkpoint is selected on — one validation set, and a
+    # pair-level forward per annotated frame, so `--val-videos` caps how many of them contribute.
+    held = list(zip(evaluator.proxy.paths, evaluator.proxy.truths, strict=True))[: args.val_videos]
     val_targets: list[PairTarget] = []
     for video, truth in held:
         val_targets.extend(_enumerate(video, truth))
-    logger.info("%d val pairs over %d held-out videos", len(val_targets), len(held))
-
-    proc = root.processed(_DATASET)
-    recipe = DetectorRecipe(downsample=config.downsample, tta=config.eval_tta)
-    tracker_config = TrackerConfig(threshold=config.eval_threshold)
-    evaluator = ModelEvaluator.mount(root, (proc / _PACK_REL, proc / _PACK2_REL), recipe, config.device, tracker_config)
-    logger.info("selecting on the shipped tracker over the %d test movies", len(evaluator.proxy.paths))
+    logger.info("%d val pairs over %d validation movies", len(val_targets), len(held))
 
     save_to = proc / args.weights
     JointTrainer(config).train(
