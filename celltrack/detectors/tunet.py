@@ -146,14 +146,19 @@ class TemporalUNetDetector(nn.Module):
         """Rebuild a detector we trained: our checkpoint carries both the weights and the recipe."""
         blob = torch.load(path, map_location=map_location, weights_only=True)
         detector = cls(int(blob["out_channels"]), tuple(blob["layers"]))
-        detector.load_state_dict(blob["state_dict"])
+        detector.load_state_dict(cls._uncompiled(blob["state_dict"]))
         return detector, DetectorRecipe.from_config(blob["recipe"])
+
+    @staticmethod
+    def _uncompiled(state: dict[str, Tensor]) -> dict[str, Tensor]:
+        """Strip the `_orig_mod.` prefix torch.compile inserts, so a compiled run's checkpoint loads plainly."""
+        return {key.replace("_orig_mod.", ""): value for key, value in state.items()}
 
     def save_checkpoint(self, path: Path, recipe: DetectorRecipe) -> None:
         """Persist the trained weights with the structure and recipe needed to reconstruct the detector."""
         torch.save(
             {
-                "state_dict": self.state_dict(),
+                "state_dict": self._uncompiled(self.state_dict()),
                 "out_channels": self.out_channels,
                 "layers": self.layers,
                 "recipe": recipe.as_config(),
