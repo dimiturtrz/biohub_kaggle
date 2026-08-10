@@ -94,6 +94,11 @@ class JointTrainConfig:
     patience: int = 5
     es_min_delta: float = 0.0
     seed: int = 0
+    # Decay the rate to zero over the run (cosine). Warm-starting a CONVERGED model is exactly the case a
+    # schedule is for: a flat rate keeps taking full-size steps away from an optimum the weights already
+    # sit in, while an annealed one explores early and settles. `_Optimization` already advances and
+    # persists a scheduler — the joint loop simply never built one.
+    cosine_lr: bool = False
     compile_backbone: bool = False  # torch.compile the U-Net (static shape); one-time warmup, then fused kernels
 
 
@@ -140,7 +145,8 @@ class JointTrainer:
             # Compile the backbone (static shape); the temporal-attention SDPA is forced to MATH at forward
             # time (see `_step`) — its efficient backward has a broken compiled meta-kernel.
             model.detector.unet = torch.compile(model.detector.unet, dynamic=False)  # type: ignore[bad-assignment]
-        optimization = _Optimization(torch.optim.AdamW(model.parameters(), lr=self.config.lr), None)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=self.config.lr)
+        optimization = _Optimization(optimizer, self._schedule(optimizer))
 
         run = TrainingRun.open(asdict(self.config), setup)
         resume_path = save_to.with_suffix(".resume.pt")
@@ -213,6 +219,12 @@ class JointTrainer:
             "node_ratio": result.node_ratio,
             "edge_auc": result.edge_auc,
         }
+
+    def _schedule(self, optimizer: torch.optim.Optimizer) -> torch.optim.lr_scheduler.LRScheduler | None:
+        """A cosine decay to zero over the whole run, or none for a flat rate."""
+        if not self.config.cosine_lr:
+            return None
+        return torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.config.steps)
 
     def _model(self, *, warm_start: bool) -> JointModel:
         """A joint model to train — warm-started from the published pack, or fresh at the configured size."""
@@ -362,6 +374,7 @@ def main() -> None:
     # which is what 3000 warm-start steps at 1e-4 did (never beat the init). Exposed so the rate is a
     # variable of the experiment rather than an inherited constant.
     parser.add_argument("--lr", type=float, default=1e-4, help="learning rate; lower it when warm-starting")
+    parser.add_argument("--cosine-lr", action="store_true", help="decay the rate to zero over the run")
     parser.add_argument("--compile-backbone", action="store_true", help="torch.compile the U-Net (static shape)")
     parser.add_argument("--patience", type=int, default=5, help="stop after N non-improving evals (<1 disables)")
     parser.add_argument("--device", type=str, default="cuda")
@@ -375,6 +388,7 @@ def main() -> None:
         steps=args.steps,
         det_weight=args.det_weight,
         lr=args.lr,
+        cosine_lr=args.cosine_lr,
         device=args.device,
         patience=args.patience,
         eval_threshold=args.eval_threshold,
