@@ -40,7 +40,6 @@ sys.path.insert(0, str(pack_source()))
 
 from celltrack.linkers.linkers import LinkerConfig  # noqa: E402
 from celltrack.multi_gpu_submission import MultiGpuSubmission  # noqa: E402
-from celltrack.postproc.short_track_filter import ShortTrackRescueConfig  # noqa: E402
 from celltrack.tracker import TrackerConfig  # noqa: E402
 
 # 0.97: stack the two independent recall levers the leaderboard rewards. Threshold is a recall lever the sparse
@@ -59,18 +58,17 @@ _GATE_UM = 10.0
 _EDGE_BONUS = 20.0
 # Two edge-transformer seeds blended in logit space; 0.8·seed1 + 0.2·seed2 is the proxy peak (bead 88x).
 _EDGE_BLEND = (0.8, 0.2)
-# LB probe on the confirmed-best base (thr0.97, gate10, bonus20, smooth0.8 = LB 0.892): the frontier's short-track
-# CUT-AND-RESCUE (min_track_length 7 with a confidence carve-out — keep a short component whose mean edge prob
-# >= 0.90 and mean step <= 2.75um). min7 alone is LB-anti (drops true short tracks); the rescue recovers exactly
-# those. Proxy +0.0039 vs base BUT mixed: +0.0115 on uncrowded 6bba_05b6850b, -0.0037 on the dense movie — the
-# hidden set is denser, so the transfer prior is low-moderate; only the LB arbitrates. Frontier pairs these at
-# its 0.897-0.908 tier. A/B vs the gate10/min6 base (LB 0.892).
+# The CONFIRMED-BEST recipe (thr0.97, gate10, bonus20, min6, smooth0.8 = LB 0.892), restored deliberately:
+# this run is an INFRASTRUCTURE control, not a score probe. It is the first submission carrying the fp16
+# autocast (proxy-verified score-identical, 0.9334 either way) and the multi-GPU dispatcher (exact by
+# construction — same code, same weights, one device per video). Holding the config at a known LB anchor is
+# what makes the run interpretable: 0.892 confirms both are score-neutral on the hidden set and the kernel log
+# gives the real T4 speedup, while any other number indicts the infrastructure rather than a tracking knob.
+# The min7+rescue probe is already in flight on its own submission and is not duplicated here.
 _CONFIG = TrackerConfig(
     threshold=_THRESHOLD,
     edge_blend=_EDGE_BLEND,
     linker=LinkerConfig(name="assignment", gate_um=_GATE_UM, affinity_bonus=_EDGE_BONUS),
-    min_track_length=7,
-    rescue=ShortTrackRescueConfig(),
 )
 _SUBMISSION = Path("/kaggle/working/submission.csv")
 
