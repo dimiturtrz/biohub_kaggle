@@ -42,25 +42,30 @@ from celltrack.linkers.linkers import LinkerConfig  # noqa: E402
 from celltrack.multi_gpu_submission import MultiGpuSubmission  # noqa: E402
 from celltrack.tracker import TrackerConfig  # noqa: E402
 
-# 0.96 EXTENDS the recall ladder past where we stopped probing. The measured LB curve is monotonic as the
-# threshold FALLS — 0.99 -> 0.887, 0.98 -> 0.891, 0.97 -> 0.892 — and we halted at 0.97 only because that is
-# where probing began, not because it turned over. The disclosed clean public baseline runs 0.96875, BELOW our
-# best, so the frontier is operating further down this same curve. Threshold is the one lever confirmed to
-# transfer here, and it is proxy-BLIND (the sparse proxy reads it flat-to-inverted, preferring 0.995 which the
-# LB refuted at 0.880), so a slot is the only instrument that can answer it. Serves bead 26l.
-_THRESHOLD = 0.96
-# The gate is the maximum single-frame cell travel: annotated-edge displacement maxes at 9.96um across the four
-# movies, so 10um admits every true successor; bonus = 2*gate is the crowding argument (bead 88x/i0a).
+# thr 0.97 is the measured LB best of the ladder probed so far (0.99/0.98/0.97 = 0.887/0.891/0.892).
+_THRESHOLD = 0.97
 _GATE_UM = 10.0
 _EDGE_BONUS = 20.0
-# Two edge-transformer seeds blended in logit space; 0.8*seed1 + 0.2*seed2 is the proxy peak (bead 88x).
 _EDGE_BLEND = (0.8, 0.2)
-# The CONFIRMED-BEST base otherwise (min6, no rescue, assignment linker, smooth0.8 = LB 0.892), so the
-# threshold is the only variable. min7+rescue has since scored 0.891, i.e. below this base — hence min6.
+# The flow solver's track-boundary charge. At 0 it provably reduces to the assignment linker edge-for-edge;
+# 3 is where it behaves globally and is its measured proxy peak.
+_BOUNDARY_COST = 3.0
+# CONSOLIDATES THE CONFIRMED WIN ONTO THE CONFIRMED BASE. v23 (global flow + bidirectional fusion) scored
+# LB 0.895 — our best — but it was anchored on the min7+rescue base, which separately measured 0.891, i.e.
+# 0.001 BELOW the min6 base. This is the same config with that handicap removed: min_track_length back to 6
+# and no rescue, so the only difference from v23 is the base it stands on.
+#
+# The fusion is kept because the LB, not the proxy, arbitrated it: alone under the per-frame assignment linker
+# it measured -0.0027, but a symmetric mutual-consistency affinity suits a GLOBAL solver that imposes
+# one-parent/one-child itself rather than through the probability's normalisation. Proxy showed the sign flip;
+# the leaderboard confirmed it at +0.004.
 _CONFIG = TrackerConfig(
     threshold=_THRESHOLD,
     edge_blend=_EDGE_BLEND,
-    linker=LinkerConfig(name="assignment", gate_um=_GATE_UM, affinity_bonus=_EDGE_BONUS),
+    linker=LinkerConfig(
+        name="flow", gate_um=_GATE_UM, affinity_bonus=_EDGE_BONUS, disappearance_cost=_BOUNDARY_COST
+    ),
+    bidirectional_edges=True,
 )
 _SUBMISSION = Path("/kaggle/working/submission.csv")
 
