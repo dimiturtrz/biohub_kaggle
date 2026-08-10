@@ -18,6 +18,15 @@ def test_params():
     assert "gate_um" in params["linker"]
 
 
-def test_cell(caplog):
-    """Recording a cell is inert under the opt-out and never raises — tracking must not break a sweep."""
+def test_cell(mlflow_backend):
+    """One grid cell lands as its resolved config in params and its score in metrics — that is the record.
+
+    A sweep whose cells are not recorded is a sweep that has to be re-run to be compared, which is the whole
+    reason this exists; asserting the call is inert would assert nothing.
+    """
     SweepTracking("test-proxy").cell(TrackerConfig(threshold=0.97), score=0.9334, breakdown={})
+
+    assert ("metric", "proxy_score", 0.9334, None) in mlflow_backend.calls
+    params = next(call[1] for call in mlflow_backend.calls if call[0] == "params")
+    assert params["threshold"] == 0.97  # the RESOLVED config, so a cell is comparable months later
+    assert params["linker.gate_um"] == 10.0  # nested sub-configs flattened to dotted keys, not dropped
