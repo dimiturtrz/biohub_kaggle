@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from celltrack.affinity import EdgeAffinity
 from celltrack.linkers.agreement_gating import AgreementGate
 from celltrack.linkers.assignment_linking import AssignmentLinker
+from celltrack.linkers.boundary_prior import BoundaryPrior
 from celltrack.linkers.division_linking import DivisionAwareLinker
 from celltrack.linkers.flow_linking import FlowLinker
 from celltrack.linkers.ilp_linking import ILPLinker
@@ -55,6 +56,12 @@ class LinkerConfig(BaseModel):
     # (`AgreementGate`, which documents what a principled value would be derived from); the cost keeps ranking
     # whatever survives by the sharp forward probability. Setting it makes `build` require a fused affinity.
     agreement_floor: float | None = Field(None, ge=0, le=1)
+    # OFF = the shipped flat track-boundary cost, charged identically everywhere. ON makes it position- and
+    # time-aware (`BoundaryPrior`): a track opening at a face of the imaged volume or in the first observed frame
+    # is free, one opening mid-volume mid-movie still pays. There is no strength knob — the discount is derived
+    # (see `_EXPLAINED_FACTOR`), so this is an on/off claim about the observation window, not a tuning surface.
+    # Setting it makes `build` require the video's volume shape.
+    boundary_prior: bool = False
 
     @property
     def effective_bonus(self) -> float:
@@ -80,6 +87,21 @@ class LinkerConfig(BaseModel):
                 raise ValueError(message)
         return self
 
+    @model_validator(mode="after")
+    def _boundary_prior_is_readable(self) -> "LinkerConfig":
+        """Refuse the boundary prior on a linker that charges no track boundary — same reason as the affinity knobs.
+
+        Only the flow linker prices appearance and disappearance, so only it has a price for the prior to modulate;
+        anywhere else the flag would be accepted, silently dropped, and sweep as a flat curve.
+        """
+        if self.boundary_prior and self.name not in _BOUNDARY_PRIOR_READERS:
+            message = (
+                f"linker {self.name!r} charges no track-boundary cost, so boundary_prior cannot affect it; "
+                f"choose one of {sorted(_BOUNDARY_PRIOR_READERS)} or drop the flag"
+            )
+            raise ValueError(message)
+        return self
+
     @field_validator("name")
     @classmethod
     def _known_name(cls, name: str) -> str:
@@ -88,18 +110,24 @@ class LinkerConfig(BaseModel):
         return name
 
     def build(
-        self, spacing: Spacing, affinity: EdgeAffinity | None = None, mutual: EdgeAffinity | None = None
+        self,
+        spacing: Spacing,
+        affinity: EdgeAffinity | None = None,
+        mutual: EdgeAffinity | None = None,
+        volume_shape: tuple[int, int, int] | None = None,
     ) -> Linker:
         """The concrete linker named by this config, wired with the gates it uses (and the affinity if it reads one).
 
         Ignoring a mounted affinity is a legitimate choice (run `motion` and disregard the learned head), so it
         warns rather than raises — but it warns, because the affinity was already COMPUTED to be discarded.
         `mutual` carries the bidirectionally fused probabilities the agreement floor reads; it is needed only
-        when a floor is set, and the cost never reads it.
+        when a floor is set, and the cost never reads it. `volume_shape` is the video's `(z, y, x)` timepoint
+        shape — the one fact about the imaging a detection graph does not carry — and only the boundary prior
+        reads it.
         """
         if affinity is not None and self.name not in _AFFINITY_READERS:
             logger.warning("linker %r ignores the mounted edge affinity — it was computed and discarded", self.name)
-        return _BUILDERS[self.name](self, spacing, affinity, self._gate(mutual))
+        return _BUILDERS[self.name](self, spacing, affinity, self._gate(mutual), self._boundary(volume_shape))
 
     def _gate(self, mutual: EdgeAffinity | None) -> AgreementGate | None:
         """The agreement gate this config asks for — `None` when no floor is set, an error when it cannot be met.
@@ -117,16 +145,37 @@ class LinkerConfig(BaseModel):
             raise ValueError(message)
         return AgreementGate(mutual=mutual, floor=self.agreement_floor)
 
+    def _boundary(self, volume_shape: tuple[int, int, int] | None) -> BoundaryPrior | None:
+        """The track-boundary prior this config asks for — `None` when off, an error when the shape is missing.
 
-_Builder = Callable[[LinkerConfig, Spacing, EdgeAffinity | None, AgreementGate | None], Linker]
+        The prior's whole content is where the imaged volume ENDS, so a caller that enables it without passing the
+        video's shape is refused rather than quietly served a flat cost: the alternative is a knob that reports a
+        flat sweep curve because it never actually ran.
+        """
+        if not self.boundary_prior:
+            return None
+        if volume_shape is None:
+            message = (
+                "boundary_prior needs the video's (z, y, x) volume shape to know where the imaged volume ends; "
+                "pass `volume_shape` (e.g. `CellVideo.volume_shape`), or drop the flag"
+            )
+            raise ValueError(message)
+        return BoundaryPrior(volume_shape=volume_shape)
+
+
+_Builder = Callable[[LinkerConfig, Spacing, EdgeAffinity | None, AgreementGate | None, BoundaryPrior | None], Linker]
 
 # Which linkers actually READ a learned affinity. The rest take the argument and drop it, so a mounted
 # affinity paired with them is computed (~a third of inference) and thrown away, and an affinity_bonus set
 # on them is a knob that cannot move anything. Both were silent until this set made the coupling checkable.
 _AFFINITY_READERS = frozenset({"assignment", "flow"})
 
+# Which linkers price a track boundary per node. Only the flow linker charges appearance and disappearance at all,
+# so it is the only one with a price the boundary prior can modulate.
+_BOUNDARY_PRIOR_READERS = frozenset({"flow"})
+
 _BUILDERS: dict[str, _Builder] = {
-    "assignment": lambda config, spacing, affinity, gate: AssignmentLinker(
+    "assignment": lambda config, spacing, affinity, gate, boundary: AssignmentLinker(
         spacing=spacing,
         max_distance_um=config.gate_um,
         affinity=affinity,
@@ -134,25 +183,26 @@ _BUILDERS: dict[str, _Builder] = {
         disappearance_cost=config.disappearance_cost,
         agreement=gate,
     ),
-    "nn": lambda config, spacing, affinity, gate: NearestNeighbourLinker(
+    "nn": lambda config, spacing, affinity, gate, boundary: NearestNeighbourLinker(
         spacing=spacing, max_distance_um=config.gate_um
     ),
-    "motion": lambda config, spacing, affinity, gate: MotionHungarianLinker(
+    "motion": lambda config, spacing, affinity, gate, boundary: MotionHungarianLinker(
         spacing=spacing, tight_gate_um=config.tight_um, loose_gate_um=config.gate_um
     ),
-    "ilp": lambda config, spacing, affinity, gate: ILPLinker(spacing=spacing, max_distance_um=config.gate_um),
-    "division": lambda config, spacing, affinity, gate: DivisionAwareLinker(
+    "ilp": lambda config, spacing, affinity, gate, boundary: ILPLinker(spacing=spacing, max_distance_um=config.gate_um),
+    "division": lambda config, spacing, affinity, gate, boundary: DivisionAwareLinker(
         spacing=spacing, max_distance_um=config.gate_um, division_distance_um=config.division_um
     ),
     # The global min-cost-flow linker reads the same gate, affinity and bonus as `assignment`; its extra lever is
     # the track-boundary cost, which it draws from `disappearance_cost` (the appearance+disappearance charged per
     # track). At `disappearance_cost = 0` it reduces to `assignment` — that is the A/B baseline for the sweep.
-    "flow": lambda config, spacing, affinity, gate: FlowLinker(
+    "flow": lambda config, spacing, affinity, gate, boundary: FlowLinker(
         spacing=spacing,
         max_distance_um=config.gate_um,
         affinity=affinity,
         affinity_bonus=config.effective_bonus,
         boundary_cost=config.disappearance_cost,
         agreement=gate,
+        boundary=boundary,
     ),
 }

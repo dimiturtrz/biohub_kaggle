@@ -2,6 +2,7 @@ import numpy as np
 
 from celltrack.linkers.agreement_gating import AgreementGate
 from celltrack.linkers.assignment_linking import AssignmentLinker
+from celltrack.linkers.boundary_prior import BoundaryPrior
 from celltrack.linkers.flow_linking import FlowLinker
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
@@ -95,3 +96,56 @@ def test_link_agreement_gate_off_is_byte_identical():
 
     assert default.agreement is None  # the shipped default is OFF
     assert default.link(detections).edges.tobytes() == explicit.link(detections).edges.tobytes()
+
+
+# An 81-voxel cube at 1 um: with a 10 um gate the boundary band is voxels 0..10 and 70..80, so the centre (40)
+# is deep interior. Anchors at t=0 and t=3 own the clip's ends, 38 um from the probe pair and thus out of gate.
+_CUBE = (81, 81, 81)
+_EDGE_SCENE = [[0, 40, 40, 78], [1, 40, 40, 2], [2, 40, 40, 2], [3, 40, 40, 78]]
+_INTERIOR_SCENE = [[0, 40, 40, 78], [1, 40, 40, 40], [2, 40, 40, 40], [3, 40, 40, 78]]
+# One in-gate transition per scene (rows 1->2), worth `0 - 20*0.2 = -4` against a boundary cost of 3 per arc.
+_PAIR_AFFINITY = _Affinity({1: np.array([[0.2]], dtype=np.float64)})
+
+
+def _priced(scene: list[list[int]], boundary: BoundaryPrior | None) -> list[tuple[int, int]]:
+    linker = FlowLinker(
+        ISOTROPIC,
+        max_distance_um=10.0,
+        affinity=_PAIR_AFFINITY,
+        affinity_bonus=20.0,
+        boundary_cost=3.0,
+        boundary=boundary,
+    )
+    return _sorted_edges(linker.link(_graph(scene)))
+
+
+def test_link_boundary_prior_admits_a_track_born_at_the_volume_edge():
+    """A mid-movie track the flat cost refuses is admitted when it starts against a face — same track, same cost.
+
+    The two scenes are identical but for WHERE the pair sits: 2 um from the x face, or 40 um deep. The link saves
+    4 and two flat boundaries cost 6, so the flat linker drops both. Under the prior the edge pair's appearance
+    and disappearance are explained by the field of view (a cell walked in through that face), so the link is all
+    that is left to pay and it is taken — while the interior pair, with no such excuse, still pays 6 and is
+    dropped. That geometric difference is exactly what a flat cost cannot express.
+    """
+    prior = BoundaryPrior(_CUBE)
+    assert _priced(_EDGE_SCENE, prior) == [(1, 2)]
+    assert _priced(_INTERIOR_SCENE, prior) == []
+    assert _priced(_EDGE_SCENE, None) == []  # flat: the edge track is refused with the interior one
+
+
+def test_link_boundary_prior_off_is_byte_identical():
+    """Unset, the prior is inert: the default linker's graph is byte-for-byte the explicit-None linker's.
+
+    Asserted on the scene where the prior CHANGES the answer, so a prior that leaked on by default would fail
+    here rather than pass as a coincidence.
+    """
+    detections = _graph(_EDGE_SCENE)
+    default = FlowLinker(ISOTROPIC, max_distance_um=10.0, affinity=_PAIR_AFFINITY, affinity_bonus=20.0)
+    explicit = FlowLinker(ISOTROPIC, max_distance_um=10.0, affinity=_PAIR_AFFINITY, affinity_bonus=20.0, boundary=None)
+
+    assert default.boundary is None  # the shipped default is OFF
+    linked, reference = default.link(detections), explicit.link(detections)
+    assert linked.edges.tobytes() == reference.edges.tobytes()
+    assert linked.node_ids.tobytes() == reference.node_ids.tobytes()
+    assert linked.coordinates.tobytes() == reference.coordinates.tobytes()

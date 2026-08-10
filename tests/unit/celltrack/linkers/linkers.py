@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from celltrack.affinity import EdgeAffinity
 from celltrack.linkers.agreement_gating import AgreementGate
 from celltrack.linkers.assignment_linking import AssignmentLinker
+from celltrack.linkers.boundary_prior import BoundaryPrior
 from celltrack.linkers.division_linking import DivisionAwareLinker
 from celltrack.linkers.ilp_linking import ILPLinker
 from celltrack.linkers.linkers import LINKER_NAMES, LinkerConfig
@@ -113,3 +114,28 @@ def test_build_leaves_the_gate_off_by_default():
     """No floor means no gate, even when a fused affinity is available — nothing is enabled implicitly."""
     built = LinkerConfig(name="flow").build(SPACING, cast(EdgeAffinity, object()), cast(EdgeAffinity, _Mutual()))
     assert built.agreement is None
+
+
+def test_boundary_prior_is_readable():
+    """The boundary prior on a linker that charges no track boundary is refused — it could not move anything."""
+    with pytest.raises(ValidationError, match="charges no track-boundary cost"):
+        LinkerConfig(name="assignment", boundary_prior=True)
+
+    assert LinkerConfig(name="flow", boundary_prior=True).boundary_prior  # the flow linker prices boundaries
+
+
+def test_build_wires_the_boundary_prior_with_the_volume_shape():
+    """Enabled, the prior reaches the flow linker carrying the video's imaged extent — the fact it cannot infer."""
+    built = LinkerConfig(name="flow", boundary_prior=True).build(SPACING, volume_shape=(20, 100, 100))
+    assert built.boundary == BoundaryPrior(volume_shape=(20, 100, 100))
+
+
+def test_build_without_the_volume_shape_refuses_the_prior():
+    """A prior the caller gave no volume to is an error, not a silently flat cost — as with the agreement floor."""
+    with pytest.raises(ValueError, match="needs the video's"):
+        LinkerConfig(name="flow", boundary_prior=True).build(SPACING)
+
+
+def test_build_leaves_the_boundary_prior_off_by_default():
+    """No flag means no prior, even when the volume shape is available — the shipped cost stays flat."""
+    assert LinkerConfig(name="flow").build(SPACING, volume_shape=(20, 100, 100)).boundary is None

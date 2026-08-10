@@ -28,6 +28,7 @@ from scipy.spatial.distance import cdist
 
 from celltrack.affinity import EdgeAffinity
 from celltrack.linkers.agreement_gating import AgreementGate
+from celltrack.linkers.boundary_prior import BoundaryPrior
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
 
@@ -47,6 +48,9 @@ class FlowLinker:
     Same per-edge cost and gate as `AssignmentLinker`; the difference is the `boundary_cost` charged for
     starting and ending a track, which couples the frame gaps so a globally cheaper set of longer trajectories
     can beat the per-frame-optimal one. `boundary_cost = 0` reproduces `AssignmentLinker` edge for edge.
+
+    That charge is flat by default — the same wherever and whenever a track ends. An optional `BoundaryPrior`
+    makes it position- and time-aware, discounting a boundary the observation window itself explains.
     """
 
     spacing: Spacing
@@ -57,6 +61,10 @@ class FlowLinker:
     # Off by default: the same mutual-agreement admission filter `AssignmentLinker` takes. A transition the gate
     # excludes is simply absent from the network, so the flow must route the track through an admitted edge.
     agreement: AgreementGate | None = None
+    # Off by default (`None` = one flat price everywhere, wherever and whenever a track ends). Set, it discounts
+    # the boundary arcs of detections whose appearance or disappearance the observation window already explains —
+    # see `BoundaryPrior`. It is purely a per-arc PRICE: the arcs, the gate and the transition costs are untouched.
+    boundary: BoundaryPrior | None = None
 
     def link(self, detections: TrackGraph) -> TrackGraph:
         """Select the min-cost set of 1-to-1 links over the whole video, coupled through the track-boundary cost."""
@@ -71,16 +79,34 @@ class FlowLinker:
         self, count: int, positions_um: Float[np.ndarray, "n 3"], timepoints: Int[np.ndarray, "n"]
     ) -> "nx.DiGraph[_Node]":
         """The flow network: a unit-capacity node per detection, boundary arcs to source/sink, gated transitions."""
-        boundary = round(_COST_SCALE * self.boundary_cost)
+        appearance, disappearance = self._boundary_costs(positions_um, timepoints)
         graph: nx.DiGraph[_Node] = nx.DiGraph()
         for row in range(count):
             graph.add_edge(("in", row), ("out", row), capacity=1, weight=0)  # 1-to-1: at most one link through a cell
-            graph.add_edge(_SOURCE, ("in", row), capacity=1, weight=boundary)  # appearance
-            graph.add_edge(("out", row), _SINK, capacity=1, weight=boundary)  # disappearance
+            graph.add_edge(_SOURCE, ("in", row), capacity=1, weight=appearance[row])  # appearance
+            graph.add_edge(("out", row), _SINK, capacity=1, weight=disappearance[row])  # disappearance
         for source_row, target_row, weight in self._transitions(positions_um, timepoints):
             graph.add_edge(("out", source_row), ("in", target_row), capacity=1, weight=weight)
         graph.add_edge(_SINK, _SOURCE, capacity=count, weight=0)  # return arc closes the circulation
         return graph
+
+    def _boundary_costs(
+        self, positions_um: Float[np.ndarray, "n 3"], timepoints: Int[np.ndarray, "n"]
+    ) -> tuple[list[int], list[int]]:
+        """The integer appearance and disappearance charge per detection — flat, or discounted by the prior.
+
+        Without a prior every detection pays the same `boundary_cost`, which is the shipped behaviour. With one,
+        the flat charge is scaled by that detection's factor; the prior's margin is this linker's own gate, so the
+        band of cheap births is exactly the region a cell could have entered from outside within one frame gap.
+        """
+        flat = round(_COST_SCALE * self.boundary_cost)
+        if self.boundary is None or len(timepoints) == 0:
+            return [flat] * len(timepoints), [flat] * len(timepoints)
+        factors = self.boundary.factors(self.spacing, self.max_distance_um, positions_um, timepoints)
+        return (
+            [round(flat * factor) for factor in factors.appearance.tolist()],
+            [round(flat * factor) for factor in factors.disappearance.tolist()],
+        )
 
     def _transitions(
         self, positions_um: Float[np.ndarray, "n 3"], timepoints: Int[np.ndarray, "n"]

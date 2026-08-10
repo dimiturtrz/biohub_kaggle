@@ -222,7 +222,8 @@ class CellTracker:
         mutual = self._mutual(path, nodes, affinity)
         stages_start = time.perf_counter()
         graph = nodes
-        for stage in self._stages(self.spacing(path), affinity, mutual):
+        video = CellVideo.from_ome_zarr(path)
+        for stage in self._stages(video.spacing, affinity, mutual, video.volume_shape):
             graph = stage.transform(graph)
         logger.info(
             "%s: detect %.1fs | affinity %.1fs | link+post %.1fs (%d nodes)",
@@ -248,16 +249,23 @@ class CellTracker:
         return self.edge_scorer.with_bidirectional(bidirectional=True).affinities(path, nodes, self.device)
 
     def _stages(
-        self, spacing: Spacing, affinity: EdgeAffinity | None, mutual: EdgeAffinity | None = None
+        self,
+        spacing: Spacing,
+        affinity: EdgeAffinity | None,
+        mutual: EdgeAffinity | None = None,
+        volume_shape: tuple[int, int, int] | None = None,
     ) -> tuple[GraphStage, ...]:
         """The ordered post-detection passes at this video's spacing — link, drop short tracks, bridge gaps, smooth.
 
         The short-track filter runs *before* the gap bridge: prune spurious fragments first, then reconnect the
         one-frame dropouts the pruning leaves in real tracks. Reversing them (bridge then prune) lets the bridge
         splice fragments that the filter would have removed, and scores lower.
+
+        `volume_shape` is the imaged `(z, y, x)` extent, which a detection graph does not carry: it is what lets a
+        linker tell a track leaving the field of view from one breaking mid-volume.
         """
         config = self.config
-        link = LinkerStage(config.linker.build(spacing, affinity, mutual))
+        link = LinkerStage(config.linker.build(spacing, affinity, mutual, volume_shape))
         # Division recovery reads the edge affinity, so it needs a learned head and runs before the short-track
         # filter (whose division-preserving carve-out can only protect a fork that already exists).
         divide = (

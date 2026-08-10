@@ -26,6 +26,7 @@ _CHAIN = TrackGraph(
 @dataclass
 class _Video:
     spacing: Spacing
+    volume_shape: tuple[int, int, int] = (4, 4, 4)
 
 
 class _StubDetector:
@@ -95,6 +96,17 @@ def test_run_with_topology_repair(monkeypatch: pytest.MonkeyPatch):
     tracker = _tracker(monkeypatch, TrackerConfig(min_track_length=1, smooth_strength=0.0, topology=TopologyConfig()))
     graph = tracker.run("m.zarr", Path("m.zarr"))
     assert graph.edges.tolist() == [[0, 1]]  # the single consecutive, single-parent edge survives the repair
+
+
+def test_run_hands_the_linker_the_volume_shape(monkeypatch: pytest.MonkeyPatch):
+    """The imaged extent reaches the linker: a boundary prior refuses to build without it, so this run would fail.
+
+    Where the volume ENDS is the one fact about the imaging a detection graph cannot carry, and the tracker is
+    the only place that has already opened the video.
+    """
+    linker = LinkerConfig(name="flow", boundary_prior=True)
+    tracker = _tracker(monkeypatch, TrackerConfig(min_track_length=1, smooth_strength=0.0, linker=linker))
+    assert tracker.run("m.zarr", Path("m.zarr")).node_ids.tolist() == [0, 1]  # built and ran; no shape = ValueError
 
 
 def test_with_config(monkeypatch: pytest.MonkeyPatch):
