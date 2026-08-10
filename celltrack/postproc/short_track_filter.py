@@ -124,6 +124,8 @@ class ShortTrackFilter:
     # Optional confidence carve-out: a short component the head scores highly and links tightly is kept rather
     # than dropped. None is the original blunt length rule (division carve-out only).
     rescue: ShortTrackRescue | None = None
+    # Keep a component that touches the first or last observed frame, however short it is — see `transform`.
+    keep_boundary: bool = False
 
     def transform(self, graph: TrackGraph) -> TrackGraph:
         """Return the graph with short, division-free, low-confidence lineage fragments removed."""
@@ -132,6 +134,8 @@ class ShortTrackFilter:
         sizes = np.bincount(labels, minlength=len(graph.node_ids))
         keep_label = sizes >= self.min_length
         keep_label[labels[adjacency.dividing_rows()]] = True
+        if self.keep_boundary:
+            keep_label[labels[self._boundary_rows(graph)]] = True
         if self.rescue is not None:
             keep_label |= self.rescue.protected(graph, labels, sizes, keep_label)
         keep_row = keep_label[labels]
@@ -143,3 +147,18 @@ class ShortTrackFilter:
             coordinates=graph.coordinates[keep_row],
             edges=graph.edges[edge_kept],
         )
+
+    @staticmethod
+    def _boundary_rows(graph: TrackGraph) -> Int[np.ndarray, "n"]:
+        """Nodes in the first or last observed frame — the components the clip, not the detector, cut short.
+
+        A component that appears AND vanishes inside the movie is the suspicious one: a real cell would have
+        to be born and die there. A component flush against the first or last frame is different in kind —
+        it extends beyond what was filmed, so its observed length is an artefact of the observation window,
+        and a cell entering at frame 96 of 100 cannot reach a length of six however real it is. Judging that
+        component by the same length rule discards true lineages the hidden annotation still scores.
+        """
+        timepoints = graph.timepoints()
+        if timepoints.size == 0:
+            return np.empty(0, dtype=np.int64)
+        return np.flatnonzero((timepoints == timepoints.min()) | (timepoints == timepoints.max()))

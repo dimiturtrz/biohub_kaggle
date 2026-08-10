@@ -81,3 +81,26 @@ def test_build():
     assert rescue.max_length == 4
     assert rescue.budget_cap == 7
     assert rescue.spacing is ISOTROPIC
+
+
+def test_transform_keeps_boundary_truncated_components():
+    """A short component flush against the last frame survives; an equally short one mid-clip does not.
+
+    The clip, not the detector, cut the first one short — it extends past what was filmed.
+    """
+    coordinates = np.array(
+        [
+            *[[0, 0, 0, 0], [1, 0, 0, 0], [2, 0, 0, 0], [3, 0, 0, 0], [4, 0, 0, 0], [5, 0, 0, 0]],  # long
+            *[[2, 0, 0, 50], [3, 0, 0, 50]],  # short, strictly inside the clip -> dropped
+            *[[4, 0, 0, 90], [5, 0, 0, 90]],  # short, touching the last frame -> kept
+        ],
+        dtype=np.int64,
+    )
+    edges = np.array([[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [6, 7], [8, 9]], dtype=np.int64)
+    graph = TrackGraph(np.arange(len(coordinates), dtype=np.int64), coordinates, edges)
+
+    kept = ShortTrackFilter(min_length=6, keep_boundary=True).transform(graph)
+
+    surviving = {tuple(row) for row in kept.coordinates.tolist()}
+    assert (5, 0, 0, 90) in surviving  # boundary-truncated component survives
+    assert (2, 0, 0, 50) not in surviving  # the mid-clip fragment is still dropped

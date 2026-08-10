@@ -79,6 +79,10 @@ class TrackerConfig:
     # min_track_length) to recover the true short tracks the blunt cut removes — a recall lever the sparse proxy
     # understates but the denser hidden annotation rewards. The frontier pairs min_track_length 7 with this.
     rescue: ShortTrackRescueConfig | None = None
+    # Off by default: exempt components touching the first or last frame from the length cut. Their
+    # brevity is the observation window's doing, not the detector's — a cell entering at frame 96 of 100
+    # cannot reach min_track_length however real it is, yet the hidden annotation still scores its edges.
+    keep_boundary_tracks: bool = False
     # The one-frame motion-synthetic gap bridge — always on (it helps, +0.0017 at its plateau cap).
     bridge: BridgeConfig = field(default_factory=BridgeConfig)
     # Off by default (present = on): reuse an existing isolated t+1 detection to bridge a one-frame gap (geometry
@@ -195,7 +199,9 @@ class CellTracker:
         # part of a bridged track rather than being pruned as length-1 fragments first.
         reuse = (config.reuse.build(spacing),) if config.reuse is not None else ()
         rescue = config.rescue.build(spacing, affinity) if config.rescue is not None and affinity else None
-        short = ShortTrackFilter(min_length=config.min_track_length, rescue=rescue)
+        short = ShortTrackFilter(
+            min_length=config.min_track_length, rescue=rescue, keep_boundary=config.keep_boundary_tracks
+        )
         bridge = config.bridge.build(spacing)
         smooth = LinefitSmoother(strength=config.smooth_strength)
         # Topology repair (enforce-next-frame, single-parent, prune-isolated) runs after the graph's edges are
