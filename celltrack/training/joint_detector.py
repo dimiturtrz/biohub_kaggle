@@ -407,6 +407,10 @@ class JointTrainer:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train the joint detector+edge model on the non-held-out videos.")
     parser.add_argument("--steps", type=int, default=1500)
+    # Eval cadence was a config field with NO flag, so every run silently used 500 — which also fixes what
+    # `--patience` means, since patience counts EVAL WINDOWS. At 18024 pairs (one per step) an epoch is
+    # ~18000 steps, so patience 5 at eval_every 500 is 14% of an epoch, and at 9000 it is five epochs.
+    parser.add_argument("--eval-every", type=int, default=500, help="steps per eval window")
     parser.add_argument("--warm-start", action="store_true", help="initialise from the published pilkwang weights")
     parser.add_argument("--det-weight", type=float, default=1.0, help="weight on the detection term vs the edge term")
     parser.add_argument(
@@ -432,6 +436,7 @@ def main() -> None:
 
     config = JointTrainConfig(
         steps=args.steps,
+        eval_every=args.eval_every,
         det_weight=args.det_weight,
         contrastive_weight=args.contrastive_weight,
         temperature=args.temperature,
