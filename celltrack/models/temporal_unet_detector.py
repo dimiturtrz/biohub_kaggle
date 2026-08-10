@@ -41,14 +41,22 @@ class DetectorRecipe:
     # Hard cap on detected centres per frame. A well-trained detector emits far fewer, but an undertrained one
     # can fire on noise everywhere; without a cap that flood explodes the linker's per-frame O(N^3) assignment.
     keep_per_frame: int = 2000
+    # Detect each frame inside a REAL consecutive pair instead of a duplicate of itself. The network is
+    # TRAINED on real pairs (the detect head is supervised on both frames of a (t, t+1) window), but the
+    # shipped read-out feeds it (t, t) — a degenerate window it never saw, whose temporal attention has
+    # nothing to attend to. Every frame is still covered: slide the pair and take the last frame from the
+    # trailing slot of the final window.
+    pair_context: bool = False
 
     def fingerprint(self) -> str:
         """A short cache key of the inputs that change the forward response — the downsample and the TTA.
 
         The read-out params (`pool_kernel_um`, `keep_per_frame`) shape peaks, not the cached logit volumes, so
         they are excluded: a threshold or NMS-radius change must replay the same cache, not re-forward.
+        `pair_context` IS included — it changes the window the network sees, so it changes the response, and
+        omitting it would let one arm of an A/B silently replay the other's cached volumes.
         """
-        return f"ds{'x'.join(map(str, self.downsample))}_tta{int(self.tta)}"
+        return f"ds{'x'.join(map(str, self.downsample))}_tta{int(self.tta)}_pc{int(self.pair_context)}"
 
     def as_config(self) -> dict[str, object]:
         """The recipe as a JSON-serialisable dict, saved beside the weights so inference is reproducible."""
@@ -57,6 +65,7 @@ class DetectorRecipe:
             "pool_kernel_um": self.pool_kernel_um,
             "tta": self.tta,
             "keep_per_frame": self.keep_per_frame,
+            "pair_context": self.pair_context,
         }
 
     @classmethod
@@ -112,6 +121,16 @@ class TemporalUNetDetector(nn.Module):
     def forward(self, frame: Float[Tensor, "z y x"]) -> Float[Tensor, "z y x"]:
         """Detection logits for one already-normalised, already-downsampled frame (the batch-of-one path)."""
         return self.forward_batch(frame.unsqueeze(0))[0]  # (Z, Y', X')
+
+    def forward_pair(self, frames: Float[Tensor, "two z y x"]) -> Float[Tensor, "two z y x"]:
+        """Detection logits for BOTH frames of a real consecutive window — the pair the model was trained on.
+
+        `forward_batch` duplicates a frame to satisfy the temporal window and then discards the second output.
+        Here the window is genuine, so the attention has a real neighbour to attend to, and both outputs are
+        kept: sliding the pair covers every frame, the last one from the trailing slot.
+        """
+        features = self.unet(frames.unsqueeze(0).unsqueeze(2))  # (1, 2, C, Z, Y', X')
+        return self.detect_head(features[0])[:, 0]  # (2, Z, Y', X')
 
     def forward_batch(
         self, frames: Float[Tensor, "b z y x"], *, single_frame: bool = False

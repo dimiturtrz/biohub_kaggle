@@ -24,7 +24,7 @@ from jaxtyping import Float, Int
 from torch import Tensor
 
 from celltrack.detectors.peaks import PeakExtractor
-from celltrack.models.temporal_unet_detector import DetectorRecipe
+from celltrack.models.temporal_unet_detector import DetectorRecipe, _VideoSource
 from celltrack.models.temporal_unet_detector import TemporalUNetDetector as _TemporalUNetNet
 from celltrack.precision import AutocastPolicy
 from core.data.tracks import TrackGraph
@@ -79,11 +79,53 @@ class TemporalUNetDetector(_TemporalUNetNet):
         """
         self.eval()
         source = self._open_source(path)
-        volumes: list[Float[np.ndarray, "z y x"]] = []
-        for timepoint in range(int(source.array.shape[0])):
-            logits = self._logits(self._read_frame(source, timepoint, recipe.downsample, device), recipe.tta)
-            volumes.append((torch.sigmoid(logits) if as_probability else logits).cpu().numpy())
-        return volumes
+        frames = int(source.array.shape[0])
+        read = (
+            self._paired_logits(source, frames, recipe, device)
+            if recipe.pair_context
+            else self._duplicated_logits(source, frames, recipe, device)
+        )
+        return [(torch.sigmoid(logits) if as_probability else logits).cpu().numpy() for logits in read]
+
+    def _duplicated_logits(
+        self, source: _VideoSource, frames: int, recipe: DetectorRecipe, device: str
+    ) -> list[Float[Tensor, "z y x"]]:
+        """Each frame detected alone, inside a duplicate of itself — the shipped path."""
+        return [
+            self._logits(self._read_frame(source, timepoint, recipe.downsample, device), recipe.tta)
+            for timepoint in range(frames)
+        ]
+
+    def _paired_logits(
+        self, source: _VideoSource, frames: int, recipe: DetectorRecipe, device: str
+    ) -> list[Float[Tensor, "z y x"]]:
+        """Each frame detected inside a REAL consecutive window, the way the head was supervised.
+
+        The pair slides, so a frame is read from the leading slot and the final frame from the trailing slot of
+        the last window. That is one forward FEWER than the duplicated path, not one more.
+        """
+        if frames < 2:  # noqa: PLR2004 — a single-frame video has no pair to form
+            return self._duplicated_logits(source, frames, recipe, device)
+        read: list[Float[Tensor, "z y x"]] = []
+        previous = self._read_frame(source, 0, recipe.downsample, device)
+        for timepoint in range(frames - 1):
+            current = self._read_frame(source, timepoint + 1, recipe.downsample, device)
+            pair = self._pair_logits(torch.stack([previous, current]), recipe.tta)
+            read.append(pair[0])
+            if timepoint == frames - 2:
+                read.append(pair[1])
+            previous = current
+        return read
+
+    def _pair_logits(self, frames: Float[Tensor, "two z y x"], tta: bool) -> Float[Tensor, "two z y x"]:  # noqa: FBT001
+        """Both frames' detection logits, flip-TTA averaged with the pair kept together under each flip."""
+        with AutocastPolicy.of(str(frames.device)):
+            logits = self.forward_pair(frames)
+            if tta:
+                for dims in [(-1,), (-2,), (-2, -1)]:
+                    logits = logits + self.forward_pair(frames.flip(dims)).flip(dims)
+                logits = logits / 4
+        return logits.float()
 
     @classmethod
     def graph_from_volumes(
