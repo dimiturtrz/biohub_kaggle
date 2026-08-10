@@ -98,3 +98,33 @@ pass is avoidable: the forward features could be reused with the fractions swapp
 
 The consumer-coupling result itself is unaffected — the sign flip between the per-frame and global linkers was
 measured, not inferred from this reasoning.
+
+## The leaderboard settled it: 0.895
+
+This document was written while the fusion looked refuted. It isn't — it was **mis-paired**, and the
+distinction is the whole point.
+
+Submitted as the coupled pairing (global flow linker at boundary cost 3, plus bidirectional harmonic fusion),
+it scored **0.895 public — our best, from a previous best of 0.892**, and **+0.004 over its own base** (that
+base, min7+rescue, separately measured 0.891). The prediction made here from mechanism alone — that a
+symmetric mutual-consistency affinity would stop hurting once its consumer imposed one-parent-one-child
+*structurally* rather than through the probability's normalisation — is now confirmed by the only instrument
+that arbitrates.
+
+Two things are worth extracting, because neither is about this component.
+
+**A component that "fails" may have been paired with the wrong consumer.** Bidirectional fusion measured
+−0.0027 pooled and −0.0010 on the very movie it targets. Under the campaign's usual rule that is a refutation,
+and reverting it would have been defensible. It was kept opt-in *because the mechanism was sound and the
+measurement contradicted it* — which is the only reason the win existed to be found. The lesson is not "keep
+everything"; it is that a negative result measures a *configuration*, not a technique.
+
+**The proxy could not see this, and that was predictable.** The fusion read +0.0019 on the four-movie proxy —
+under its own noise floor, unreportable as a win — and transferred as +0.004. That is the transfer law holding
+again: DECISION-RULE changes transfer even when the proxy cannot resolve them (the greedy → global linker was
++0.005 on the leaderboard), while every recall-side proxy gain this campaign has produced has died. When a
+change alters *how the linker decides*, a sub-floor proxy movement is still worth a slot.
+
+The open question this leaves is the useful one: the fusion and the global solver were adopted together, so
+their contributions are not separated. The follow-up (same configuration on the confirmed-best min6 base) is
+built; isolating flow-alone from fusion-alone is the experiment after that.
