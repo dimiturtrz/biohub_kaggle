@@ -38,6 +38,28 @@ no gain. Reverted.
 Both are the same lesson in different clothes: *the bottleneck was not where the optimisation instinct pointed*,
 and one measurement was cheaper than either build.
 
+## What it found instead: the forward was fp32
+
+The same audit turned up something nobody had proposed. Grepping the inference path for `autocast`, `half`, or
+`channels_last` returned **nothing** — every forward in the submission ran in full fp32. On the hardware the
+submission actually runs on that is the whole game: a T4 peaks near 8 TFLOPS in fp32 and ~65 in fp16, so the
+tensor cores sat idle through the entire 88 %. The isolated forward measured **1.98× faster** under autocast.
+
+The catch is that this one *can* change the answer, unlike video-level parallelism, so it had to be arbitrated
+by score rather than by stopwatch. The read-out is an equality comparison between a volume and its max-pool,
+and a threshold at 0.97 — both sensitive to small perturbations of the peak logits (a half-precision *cached*
+volume once cost 0.909 → 0.816 by tying a nucleus to the valley beside it). Computing reduced and casting the
+read-out back to fp32 sidesteps that, and the four-movie proxy confirms it: **0.9334 with autocast against
+0.9334 without, identical to four decimals.**
+
+**fp16, not bf16** — and that distinction was measured, not assumed. Choosing the dtype by hardware capability
+(bf16 where supported) scored **0.9309**, a real −0.0025. The reason is the mirror image of why training uses
+bf16: bf16 buys exponent range at the cost of three mantissa bits, and range is what keeps *gradients* off the
+underflow floor. A forward carries no gradients, so the range buys nothing here while the lost mantissa moves
+exactly the logits the read-out thresholds. Inference wants the mantissa; training wants the range. fp16 is
+also the only half a Turing T4 accelerates, so the two arguments agree on the same answer and the
+capability branch disappears.
+
 ## What it leaves
 
 Since ~88 % of the time is GPU work and **videos are independent**, the lever is parallelism over videos, not
