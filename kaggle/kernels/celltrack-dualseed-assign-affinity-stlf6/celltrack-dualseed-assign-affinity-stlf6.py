@@ -59,6 +59,9 @@ _GATE_UM = 10.0
 _EDGE_BONUS = 20.0
 # Two edge-transformer seeds blended in logit space; 0.8·seed1 + 0.2·seed2 is the proxy peak (bead 88x).
 _EDGE_BLEND = (0.8, 0.2)
+# The flow solver's track-boundary charge (appearance+disappearance per track). At 0 it provably reduces to
+# the assignment linker edge-for-edge; 3 is its measured proxy peak and where it behaves globally at all.
+_BOUNDARY_COST = 3.0
 # The frontier's short-track CUT-AND-RESCUE on the confirmed-best base (thr0.97, gate10, bonus20, smooth0.8 =
 # LB 0.892): min_track_length 7 with a confidence carve-out that keeps a short component whose mean edge
 # probability >= 0.90 and mean step <= 2.75um. min7 alone is LB-anti (it drops true short tracks); the rescue
@@ -69,16 +72,20 @@ _EDGE_BLEND = (0.8, 0.2)
 _CONFIG = TrackerConfig(
     threshold=_THRESHOLD,
     edge_blend=_EDGE_BLEND,
-    linker=LinkerConfig(name="assignment", gate_um=_GATE_UM, affinity_bonus=_EDGE_BONUS),
     min_track_length=7,
     rescue=ShortTrackRescueConfig(),
-    # THE single variable under test vs v21 (same base: thr0.97, gate10, bonus20, min7, rescue, smooth0.8).
-    # A component touching the first or last observed frame is one the CLIP truncated, not the detector:
-    # a cell entering at frame 96 of 100 cannot reach min_track_length however real it is, yet the hidden
-    # annotation still scores its edges. Proxy reads -0.0005 (a tie) because our sparse annotation cannot
-    # see those tracks at all - the same blind spot that made the confidence rescue proxy-neutral. Only
-    # the LB can arbitrate a recall lever here.
-    keep_boundary_tracks=True,
+    # THE change under test vs v21 (same base: thr0.97, gate10, bonus20, min7, rescue, smooth0.8).
+    # A GLOBAL linker plus the bidirectional harmonic fusion — one idea, not two knobs. The fusion alone
+    # measured -0.0027 under the per-frame assignment linker but +0.0004 under the global flow solver:
+    # softmax-over-sources already encodes 'one parent per target', which the assignment cost is built
+    # around, whereas a global solver imposes that constraint itself and wants a symmetric, mutually
+    # consistent affinity. Both gaps sit under the noise floor, so this is a decision-rule PROBE, not a
+    # proxy win — and decision-rule changes are the only class that has ever transferred here
+    # (greedy -> global was +0.005 on the LB while every recall-side proxy gain died).
+    linker=LinkerConfig(
+        name="flow", gate_um=_GATE_UM, affinity_bonus=_EDGE_BONUS, disappearance_cost=_BOUNDARY_COST
+    ),
+    bidirectional_edges=True,
 )
 _SUBMISSION = Path("/kaggle/working/submission.csv")
 
