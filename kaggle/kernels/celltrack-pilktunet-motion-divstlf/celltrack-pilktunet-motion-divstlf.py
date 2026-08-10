@@ -27,7 +27,14 @@ _MARKER = next(iter(glob.glob("/kaggle/input/**/celltrack/tracker.py", recursive
 _KIT_ROOT = os.path.dirname(os.path.dirname(_MARKER))
 sys.path.insert(0, _KIT_ROOT)
 
-from celltrack.kernel_runtime import install_wheels, pack_source, run_submission, test_videos  # noqa: E402
+from celltrack.kernel_runtime import KernelRuntime  # noqa: E402
+
+# kernel_runtime's steps are @staticmethods on KernelRuntime (the arch gate forbids top-level functions);
+# alias them to the free names the kernel body uses so the bootstrap stays a flat script.
+install_wheels = KernelRuntime.install_wheels
+pack_source = KernelRuntime.pack_source
+run_submission = KernelRuntime.run_submission
+test_videos = KernelRuntime.test_videos
 
 install_wheels(Path(_KIT_ROOT))
 sys.path.insert(0, str(pack_source()))
