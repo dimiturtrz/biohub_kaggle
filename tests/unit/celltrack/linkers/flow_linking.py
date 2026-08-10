@@ -1,5 +1,6 @@
 import numpy as np
 
+from celltrack.linkers.agreement_gating import AgreementGate
 from celltrack.linkers.assignment_linking import AssignmentLinker
 from celltrack.linkers.flow_linking import FlowLinker
 from core.data.tracks import TrackGraph
@@ -65,3 +66,32 @@ def test_link_boundary_cost_raises_the_bar():
 
     assert _sorted_edges(free.link(detections)) == [(0, 1)]
     assert _sorted_edges(priced.link(detections)) == []
+
+
+def test_link_agreement_gate_composes_with_the_flow():
+    """The mutual-agreement floor filters the flow's transitions too — an excluded pair is absent from the network.
+
+    Same inverted scene as the assignment linker's: the near candidate (row 1) wins on forward probability and
+    loses on the fused one, so gating reroutes the track through the true successor (row 2). The global
+    optimiser and the per-frame one therefore share one admission rule, not two.
+    """
+    detections = _graph([[0, 0, 0, 0], [1, 0, 1, 0], [1, 0, 5, 0]])
+    affinity = _Affinity({0: np.array([[0.686, 0.4]], dtype=np.float64)})
+    gate = AgreementGate(mutual=_Affinity({0: np.array([[0.1, 0.8]], dtype=np.float64)}), floor=0.5)
+
+    ungated = FlowLinker(ISOTROPIC, max_distance_um=10.0, affinity=affinity, affinity_bonus=20.0)
+    gated = FlowLinker(ISOTROPIC, max_distance_um=10.0, affinity=affinity, affinity_bonus=20.0, agreement=gate)
+
+    assert _sorted_edges(ungated.link(detections)) == [(0, 1)]
+    assert _sorted_edges(gated.link(detections)) == [(0, 2)]
+
+
+def test_link_agreement_gate_off_is_byte_identical():
+    """Unset, the gate is inert: the default flow linker's edges are byte-for-byte the explicit-None linker's."""
+    detections = _graph([[0, 0, 0, 0], [1, 0, 1, 0], [1, 0, 5, 0]])
+    affinity = _Affinity({0: np.array([[0.686, 0.4]], dtype=np.float64)})
+    default = FlowLinker(ISOTROPIC, max_distance_um=10.0, affinity=affinity, affinity_bonus=20.0)
+    explicit = FlowLinker(ISOTROPIC, max_distance_um=10.0, affinity=affinity, affinity_bonus=20.0, agreement=None)
+
+    assert default.agreement is None  # the shipped default is OFF
+    assert default.link(detections).edges.tobytes() == explicit.link(detections).edges.tobytes()

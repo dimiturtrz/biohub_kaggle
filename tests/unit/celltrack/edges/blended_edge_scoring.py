@@ -12,7 +12,8 @@ import torch
 import zarr
 
 from celltrack.edges.blended_edge_scoring import BlendedEdgeTransformerScorer
-from celltrack.models.edge_transformer import EdgeGap, EdgeTransformerScorer
+from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeGap, EdgeTransformerScorer, video_gaps
+from celltrack.models.prior_velocity import GapHistory, PriorVelocity
 from celltrack.models.temporal_unet_detector import DetectorRecipe, TemporalUNetDetector
 from core.data.tracks import TrackGraph
 
@@ -37,10 +38,10 @@ def _save_pack(scorer: EdgeTransformerScorer, directory: Path) -> Path:
     return directory
 
 
-def _video(tmp_path: Path) -> Path:
-    """A synthetic two-frame OME-zarr with unit voxel scale and the quantiles the reader expects."""
+def _video(tmp_path: Path, frames: int = 2) -> Path:
+    """A synthetic OME-zarr of `frames` frames with unit voxel scale and the quantiles the reader expects."""
     group = zarr.open_group(str(tmp_path / "v.zarr"), mode="w")
-    array = group.create_array("0", shape=(2, 4, 8, 8), dtype="float32")
+    array = group.create_array("0", shape=(frames, 4, 8, 8), dtype="float32")
     array[:] = 0.0
     array[:, 1:3, 4, 4] = 1.0
     group.attrs["image_statistics"] = {"quantiles": {"0.001": 0.0, "0.999": 1.0}}
@@ -119,6 +120,66 @@ def test_affinities_bidirectional(tmp_path: Path):
     assert fused.shape == plain.shape
     assert np.isfinite(fused).all()
     assert not np.allclose(fused, plain)
+
+
+def _widened_scorer(seed: int) -> EdgeTransformerScorer:
+    """A seed whose head was widened for the prior velocity — the state a `--prior-velocity` run saves."""
+    torch.manual_seed(seed)
+    scorer = EdgeTransformerScorer(TemporalUNetDetector(out_channels=2, layers=(2, 4)), _RECIPE)
+    scorer.transformer = EdgeTransformerScorer._transformer_cls()(
+        feat_dim=2 + 4 * _POS_EMBED_DIM + PriorVelocity.DIM, hidden_dim=8, n_heads=1, n_blocks=1
+    )
+    return scorer.eval()
+
+
+def _moving_detections() -> TrackGraph:
+    """Two cells over THREE frames, displaced each step — the second gap's sources have a real history."""
+    coords = np.array(
+        [[0, 1, 2, 2], [0, 3, 5, 5], [1, 1, 3, 3], [1, 3, 6, 6], [2, 1, 4, 4], [2, 3, 7, 7]], dtype=np.int64
+    )
+    return TrackGraph(np.arange(6, dtype=np.int64), coords, np.empty((0, 2), dtype=np.int64))
+
+
+def test_affinities_prior_velocity_is_per_seed(tmp_path: Path):
+    """A widened blend scores every gap, and a one-member blend still equals that seed scored on its own.
+
+    Each seed carries its OWN history — a velocity has to be the one that seed's weights produced — so the
+    single-seed case (what a joint run's selector eval mounts) must reduce exactly to the solo scorer.
+    """
+    a = _widened_scorer(0)
+    detections, video = _moving_detections(), _video(tmp_path, frames=3)
+
+    blended = BlendedEdgeTransformerScorer((a,), (1.0,)).affinities(video, detections, "cpu")
+    solo = a.affinities(video, detections, "cpu")
+
+    for timepoint in (0, 1):
+        matrix, expected = blended.probabilities(timepoint), solo.probabilities(timepoint)
+        assert matrix is not None
+        assert expected is not None
+        assert np.isfinite(matrix).all()
+        assert np.array_equal(matrix, expected)
+
+
+def test_bidirectional_reverse_carries_no_history(tmp_path: Path):
+    """The reverse half of a fused gap is the STATELESS pass: its sources' only prior gap is the one being scored.
+
+    So the second gap's fused matrix must reproduce from the history-carrying forward and a reverse computed
+    with no history at all — zeros for a widened head, never the forward direction's history, which belongs to
+    the other frame's nodes.
+    """
+    a = _widened_scorer(0)
+    scorer = BlendedEdgeTransformerScorer((a,), (1.0,), bidirectional=True)
+    detections, video = _moving_detections(), _video(tmp_path, frames=3)
+    first, second = video_gaps(video, detections, "cpu")
+
+    fused = scorer.affinities(video, detections, "cpu").probabilities(1)
+
+    with torch.no_grad():
+        _, history = a._seed_logits(first, GapHistory())
+        forward = torch.softmax(a._seed_logits(second, history)[0], dim=0)
+        reverse = torch.softmax(a._gap_logits(second, reverse=True), dim=0).T
+    assert fused is not None
+    assert np.array_equal(fused, BlendedEdgeTransformerScorer.fuse(forward, reverse).numpy())
 
 
 def test_with_bidirectional():

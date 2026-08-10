@@ -49,7 +49,8 @@ class _StubTransformer(nn.Module):
     real head — source features `(s, feat_dim)` and target features `(t, feat_dim)` (plus their voxel
     coordinates) map to a `(s, t)` logit matrix. A single learnable `proj` linear is enough: it carries a
     `proj.weight` so the pack loader's `transformer.*` state round-trips, and its logits soft-max to a valid
-    per-source probability column, which is all the mount's `_score_gap`/`affinities` read.
+    per-source probability column, which is all the mount's `affinities` path reads. Its `proj.in_features` is
+    also what `EdgeTransformerScorer.uses_prior_velocity` reads, so a widened stub behaves like a widened head.
     """
 
     def __init__(self, feat_dim: int, hidden_dim: int, n_heads: int, n_blocks: int) -> None:

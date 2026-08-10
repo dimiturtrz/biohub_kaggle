@@ -5,6 +5,7 @@ off (no tensor at all, not a zero one), a pair without a predecessor yields exac
 yields the model's own previous-gap displacement.
 """
 
+from contextlib import nullcontext
 from pathlib import Path
 from typing import cast
 
@@ -13,15 +14,18 @@ import torch
 import zarr
 
 from celltrack.data.joint_dataset import PairDataset, PairSample, PairTarget
-from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeTransformerScorer
+from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeTransformerScorer, video_gaps
 from celltrack.models.joint_model import JointModel
-from celltrack.models.prior_velocity import PriorVelocity
-from celltrack.models.temporal_unet_detector import TemporalUNetDetector
+from celltrack.models.prior_velocity import GapHistory, PriorVelocity
+from celltrack.models.temporal_unet_detector import DetectorRecipe, TemporalUNetDetector
 from celltrack.training.prior_velocity_source import PriorVelocitySource
+from core.data.tracks import TrackGraph
 from core.data.video import ImageStatistics
 
 _OUT_CHANNELS = 2
 _DOWNSAMPLE = (1, 1, 1)
+_RECIPE = DetectorRecipe(downsample=_DOWNSAMPLE, pool_kernel_um=1.0, tta=False)
+_WIDENED = _OUT_CHANNELS + 4 * _POS_EMBED_DIM + PriorVelocity.DIM
 
 
 def _model(feat_dim: int = _OUT_CHANNELS + 4 * _POS_EMBED_DIM) -> JointModel:
@@ -100,10 +104,42 @@ def test_of(video_store: Path):
     A single source at `t-1` makes `softmax(logits, dim=0)` all ones whatever the head says, so every source's
     expected incoming displacement is exactly `c_source - c_previous` — the value below, independent of weights.
     """
-    model = _model(feat_dim=_OUT_CHANNELS + 4 * _POS_EMBED_DIM + PriorVelocity.DIM)
+    model = _model(feat_dim=_WIDENED)
     source = PriorVelocitySource(enabled=True)
 
     velocity = source.of(model, _sample(video_store, previous=True), torch.autocast("cpu", enabled=False))
 
     assert velocity is not None
     assert velocity.tolist() == [[-1.0, -2.0, -2.0], [0.0, 1.0, 1.0]]
+
+
+def _same_nodes() -> TrackGraph:
+    """The `_sample` pair's nodes as a detection graph: `previous_centres` at t=0, `source_centres` at t=1.
+
+    Same coordinates, same row order, so the gap the scorer enumerates for `t=0 -> t=1` is exactly the gap the
+    trainer's `previous_frame`/`previous_centres` describe. The t=2 node only exists to give the sources' own
+    gap a successor to be scored against.
+    """
+    coords = np.array([[0, 1, 2, 2], [1, 0, 0, 0], [1, 1, 3, 3], [2, 1, 3, 3]], dtype=np.int64)
+    return TrackGraph(np.arange(4, dtype=np.int64), coords, np.empty((0, 2), dtype=np.int64))
+
+
+def test_training_and_inference_velocity_agree(video_store: Path):
+    """The SAME weights and the SAME previous gap give the trainer and the shipped scorer the same velocity.
+
+    This is the drift the whole feature turns on: a head trained on a history it is never scored with is a head
+    scored on an input distribution it never saw. Both regimes go through `GapHistory.velocity` — one softmax
+    over the sources of one zero-velocity forward — so the equality below is structural, not a coincidence of
+    these numbers, and a second definition of the step would break it.
+    """
+    model = _model(feat_dim=_WIDENED)
+    scorer = EdgeTransformerScorer.of(model.detector, model.transformer, _RECIPE).eval()
+    previous_gap, scored_gap = video_gaps(video_store, _same_nodes(), "cpu")
+
+    training = PriorVelocitySource(enabled=True).of(model, _sample(video_store, previous=True), nullcontext())
+    with torch.no_grad():
+        _, history = scorer._seed_logits(previous_gap, GapHistory())
+    inference = history.velocity(torch.as_tensor(scored_gap.src_positions))
+
+    assert training is not None
+    assert torch.equal(inference, training)

@@ -16,6 +16,8 @@ gap was ambiguous or when a node has no incoming mass at all.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import torch
 from jaxtyping import Float
 from torch import Tensor, nn
@@ -78,3 +80,31 @@ class PriorVelocity:
             if widened.bias is not None and layer.bias is not None:
                 widened.bias.copy_(layer.bias)
         return widened
+
+
+@dataclass(frozen=True)
+class GapHistory:
+    """One frame gap's source coordinates and the head's RAW logits over it — where the next gap's velocity comes from.
+
+    The velocity has to be produced identically while training and while scoring, or a trained head is read on
+    an input distribution it never saw. Both regimes hold exactly the same two things once a gap has been
+    forwarded — where its sources were, and what the head said about them — so the step from that pair to a
+    velocity lives here ONCE and both callers go through it: softmax over the SOURCES of each target (the
+    scorer's own normalisation, divisions allowed and merges not), then `PriorVelocity.expected_incoming`.
+
+    Logits rather than probabilities, so the normalisation itself cannot drift between the two callers.
+
+    An empty `GapHistory()` is the explicit "no previous gap" case — a video's first gap, or a training pair
+    whose predecessor frame carries no annotation — and yields the same exact zeros an unmatched node degrades
+    to, so "no history" and "no usable history" reach the head as one case rather than two.
+    """
+
+    coordinates: Float[Tensor, "p 3"] | None = None
+    logits: Float[Tensor, "p n"] | None = None
+
+    def velocity(self, coordinates: Float[Tensor, "n 3"]) -> Float[Tensor, "n 3"]:
+        """The expected incoming displacement of the nodes at `coordinates` — exact zeros without a previous gap."""
+        if self.coordinates is None or self.logits is None:
+            return PriorVelocity.expected_incoming(coordinates)
+        weights = torch.softmax(self.logits.float(), dim=0)
+        return PriorVelocity.expected_incoming(coordinates, self.coordinates, weights)

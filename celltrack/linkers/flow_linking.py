@@ -27,6 +27,7 @@ from jaxtyping import Float, Int
 from scipy.spatial.distance import cdist
 
 from celltrack.affinity import EdgeAffinity
+from celltrack.linkers.agreement_gating import AgreementGate
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
 
@@ -53,6 +54,9 @@ class FlowLinker:
     affinity: EdgeAffinity | None = None
     affinity_bonus: float = 0.0
     boundary_cost: float = 0.0
+    # Off by default: the same mutual-agreement admission filter `AssignmentLinker` takes. A transition the gate
+    # excludes is simply absent from the network, so the flow must route the track through an admitted edge.
+    agreement: AgreementGate | None = None
 
     def link(self, detections: TrackGraph) -> TrackGraph:
         """Select the min-cost set of 1-to-1 links over the whole video, coupled through the track-boundary cost."""
@@ -97,13 +101,20 @@ class FlowLinker:
         return transitions
 
     def _gated_cost(self, timepoint: int, distance: Float[np.ndarray, "s t"]) -> Float[np.ndarray, "s t"]:
-        """`distance - bonus*P` in-gate, infinite beyond it — the assignment linker's transition cost."""
+        """`distance - bonus*P` in-gate, infinite beyond it — the assignment linker's transition cost.
+
+        An infinite cost is how a pair is kept out of the network at all (`_transitions` keeps only the finite
+        ones), so the agreement gate excludes a candidate here by the same route the distance gate does.
+        """
+        within_gate = distance <= self.max_distance_um
+        if self.agreement is not None:
+            within_gate = self.agreement.narrow(timepoint, within_gate)
         cost = distance.astype(np.float64)
         if self.affinity is not None and self.affinity_bonus != 0.0:
             probability = self.affinity.probabilities(timepoint)
             if probability is not None:
                 cost = cost - self.affinity_bonus * probability
-        return np.where(distance <= self.max_distance_um, cost, np.inf)
+        return np.where(within_gate, cost, np.inf)
 
     @staticmethod
     def _selected_links(flow: dict[_Node, dict[_Node, int]], node_ids: Int[np.ndarray, "n"]) -> Int[np.ndarray, "e 2"]:

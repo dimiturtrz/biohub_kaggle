@@ -1,9 +1,11 @@
 from typing import cast
 
+import numpy as np
 import pytest
 from pydantic import ValidationError
 
 from celltrack.affinity import EdgeAffinity
+from celltrack.linkers.agreement_gating import AgreementGate
 from celltrack.linkers.assignment_linking import AssignmentLinker
 from celltrack.linkers.division_linking import DivisionAwareLinker
 from celltrack.linkers.ilp_linking import ILPLinker
@@ -76,3 +78,38 @@ def test_bonus_is_readable():
         LinkerConfig(name="motion", affinity_bonus=20.0)
 
     assert LinkerConfig(name="assignment", affinity_bonus=20.0).effective_bonus == 20.0  # readers still accept it
+
+
+class _Mutual:
+    """A stand-in for the bidirectionally fused affinity the agreement floor gates on."""
+
+    def probabilities(self, timepoint: int) -> np.ndarray | None:
+        return np.zeros((1, 1))
+
+
+def test_agreement_floor_is_readable():
+    """An agreement floor on a linker that cannot read an affinity is refused, exactly as a bonus is."""
+    with pytest.raises(ValidationError, match="does not read an edge affinity"):
+        LinkerConfig(name="motion", agreement_floor=0.5)
+
+    assert LinkerConfig(name="flow", agreement_floor=0.5).agreement_floor == 0.5  # readers still accept it
+
+
+def test_build_wires_the_agreement_gate_into_both_affinity_readers():
+    """A floor plus the fused affinity builds the same `AgreementGate` onto the assignment and flow linkers."""
+    mutual = cast(EdgeAffinity, _Mutual())
+    for name in ("assignment", "flow"):
+        built = LinkerConfig(name=name, agreement_floor=0.4).build(SPACING, cast(EdgeAffinity, object()), mutual)
+        assert built.agreement == AgreementGate(mutual=mutual, floor=0.4)
+
+
+def test_build_without_the_fused_affinity_refuses_a_floor():
+    """A floor the pipeline could not honour is an error, not a silently dropped instruction."""
+    with pytest.raises(ValueError, match="needs the bidirectionally fused affinity"):
+        LinkerConfig(name="assignment", agreement_floor=0.4).build(SPACING, cast(EdgeAffinity, object()))
+
+
+def test_build_leaves_the_gate_off_by_default():
+    """No floor means no gate, even when a fused affinity is available — nothing is enabled implicitly."""
+    built = LinkerConfig(name="flow").build(SPACING, cast(EdgeAffinity, object()), cast(EdgeAffinity, _Mutual()))
+    assert built.agreement is None

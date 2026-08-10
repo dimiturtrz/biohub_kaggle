@@ -16,15 +16,17 @@ the sources of each target (the training normalisation: divisions allowed, merge
 from __future__ import annotations
 
 import sys
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 import numpy as np
 import torch
 from jaxtyping import Float
 from torch import Tensor, nn
 
-from celltrack.models.prior_velocity import PriorVelocity
+from celltrack.models.prior_velocity import GapHistory, PriorVelocity
 from celltrack.models.temporal_unet_detector import _EXT_SRC, DetectorRecipe, TemporalUNetDetector, _VideoSource
 from celltrack.precision import AutocastPolicy
 from core.data.tracks import TrackGraph
@@ -61,6 +63,41 @@ class EdgeGap:
     src_positions: Float[np.ndarray, "s 3"]
     tgt_positions: Float[np.ndarray, "t 3"]
     device: str
+
+
+@dataclass(frozen=True)
+class _GapWindow:
+    """One gap's backbone output and node voxels — the expensive half of a scoring pass, reusable across velocities.
+
+    A gap is forwarded through the head twice whenever the prior-velocity feature is on (once with the carried
+    history, once with zeros to define the history the NEXT gap reads). The 3D backbone dominates that cost and
+    depends on neither velocity, so it runs once and both head passes read this.
+    """
+
+    features: Float[Tensor, "2 c z y x"]
+    early: Float[Tensor, "e 3"]
+    late: Float[Tensor, "l 3"]
+    spatial: Float[Tensor, "3"]
+    downsample: Float[Tensor, "3"]
+    device: str
+
+
+def video_gaps(path: Path, detections: TrackGraph, device: str) -> Iterator[EdgeGap]:
+    """Every scorable `t -> t+1` gap of a video, in ASCENDING time — one enumeration, every scorer.
+
+    Ascending order is load-bearing, not incidental: a gap's prior velocity is read from the gap before it, so
+    a scorer can only carry that state forward if it meets the gaps in time order. Rows follow the linker's own
+    `np.flatnonzero(timepoints == t)` order, so each matrix drops straight onto the assignment cost.
+    """
+    source = TemporalUNetDetector._open_source(path)  # noqa: SLF001
+    timepoints = detections.timepoints()
+    positions = detections.positions().astype(np.float32)
+    for timepoint in np.unique(timepoints)[:-1].tolist():
+        src_rows = np.flatnonzero(timepoints == timepoint)
+        tgt_rows = np.flatnonzero(timepoints == timepoint + 1)
+        if len(src_rows) == 0 or len(tgt_rows) == 0:
+            continue
+        yield EdgeGap(source, int(timepoint), positions[src_rows], positions[tgt_rows], device)
 
 
 class EdgeTransformerScorer(nn.Module):
@@ -111,23 +148,108 @@ class EdgeTransformerScorer(nn.Module):
 
     @torch.no_grad()
     def affinities(self, path: Path, detections: TrackGraph, device: str) -> PrecomputedEdgeAffinity:
-        """Score every candidate pair on every frame gap of a video, aligned to the linker's per-gap node order."""
-        source = TemporalUNetDetector._open_source(path)  # noqa: SLF001
-        timepoints = detections.timepoints()
-        positions = detections.positions().astype(np.float32)
+        """Score every candidate pair on every frame gap of a video, aligned to the linker's per-gap node order.
+
+        The gaps arrive in ascending time, so each one hands the next its `GapHistory` — the state the sources'
+        prior velocity is read from. A head widened for that feature is therefore scored with the history it was
+        trained on instead of crashing on a missing input; a head without the extra columns carries an empty
+        history, never runs the extra pass, and computes exactly the matrices it computed before this existed.
+        """
+        history = GapHistory()
         by_timepoint: dict[int, Float[np.ndarray, "s t"]] = {}
-        for timepoint in np.unique(timepoints)[:-1].tolist():
-            src_rows = np.flatnonzero(timepoints == timepoint)
-            tgt_rows = np.flatnonzero(timepoints == timepoint + 1)
-            if len(src_rows) == 0 or len(tgt_rows) == 0:
-                continue
-            gap = EdgeGap(source, int(timepoint), positions[src_rows], positions[tgt_rows], device)
-            by_timepoint[gap.timepoint] = self._score_gap(gap)
+        for gap in video_gaps(path, detections, device):
+            logits, history = self._seed_logits(gap, history)
+            by_timepoint[gap.timepoint] = torch.softmax(logits, dim=0).cpu().numpy()
         return PrecomputedEdgeAffinity(by_timepoint)
 
-    def _score_gap(self, gap: EdgeGap) -> Float[np.ndarray, "s t"]:
-        """The source→target probability matrix for one gap: transformer logits soft-maxed over the sources."""
-        return torch.softmax(self._gap_logits(gap), dim=0).cpu().numpy()
+    def _seed_logits(self, gap: EdgeGap, history: GapHistory) -> tuple[Float[Tensor, "s t"], GapHistory]:
+        """This gap's forward logits under the carried `history`, AND the history the NEXT gap reads.
+
+        Both come out of ONE backbone pass. Returning them together is what lets a blend of seeds carry a
+        SEPARATE history per seed without the caller knowing how a history is made: a velocity has to be the
+        one that seed's own weights produced, since that is what its trainer fed it.
+        """
+        window = self._gap_window(gap, reverse=False)
+        return self._head_logits(window, history), self._history_after(window)
+
+    def _history_after(self, window: _GapWindow) -> GapHistory:
+        """The history this gap hands the next one: its sources' voxels and its ZERO-velocity logits.
+
+        Zero-velocity, NOT the logits actually scored, because zero-velocity is what the trainer's history is:
+        a step optimises one gap, and the previous gap it reads the velocity off is forwarded with zeros for
+        its own sources (`PriorVelocitySource.of`), which stops the recursion one step back. Chaining the
+        scored logits instead would be free and would feed the head a history distribution it never saw —
+        drift dressed as an optimisation.
+
+        A head that was never widened reads no velocity, carries no history, and skips this second head pass.
+        """
+        if not self.uses_prior_velocity:
+            return GapHistory()
+        return GapHistory(window.early, self._head_logits(window, GapHistory()))
+
+    @property
+    def uses_prior_velocity(self) -> bool:
+        """Whether the MOUNTED head reads a prior velocity — answered by the weights, never by a caller's flag.
+
+        The feature is a property of the trained weights: `PriorVelocitySource.widen` appended three input
+        columns to the head's projection, and `JointModel.from_checkpoint` rebuilds the head at whatever width
+        was saved. Asking the projection how wide it is therefore cannot disagree with the checkpoint, while a
+        flag threaded down from a config can — and the disagreement's failure mode is the crash this replaces.
+        """
+        projection = cast(nn.Linear, self.transformer.proj)
+        return projection.in_features == self.detector.out_channels + 4 * _POS_EMBED_DIM + PriorVelocity.DIM
+
+    def _gap_window(self, gap: EdgeGap, *, reverse: bool) -> _GapWindow:
+        """Read the gap's two frames and run the backbone once — the half of a pass no velocity can change."""
+        device, recipe = gap.device, self.recipe
+        frame_t = TemporalUNetDetector._read_frame(gap.source, gap.timepoint, recipe.downsample, device)  # noqa: SLF001
+        frame_t1 = TemporalUNetDetector._read_frame(gap.source, gap.timepoint + 1, recipe.downsample, device)  # noqa: SLF001
+        frames = [frame_t1, frame_t] if reverse else [frame_t, frame_t1]
+        early, late = (gap.tgt_positions, gap.src_positions) if reverse else (gap.src_positions, gap.tgt_positions)
+        window = torch.stack(frames, dim=0).unsqueeze(0).unsqueeze(2)
+        with AutocastPolicy.of(device):
+            features = self.detector.unet(window)[0]  # (2, C, Z, Y, X)
+        return _GapWindow(
+            features=features,
+            early=torch.as_tensor(early, device=device),
+            late=torch.as_tensor(late, device=device),
+            spatial=torch.tensor(frame_t.shape, dtype=torch.float32, device=device),
+            downsample=torch.tensor(recipe.downsample, dtype=torch.float32, device=device),
+            device=device,
+        )
+
+    def _head_logits(self, window: _GapWindow, history: GapHistory) -> Float[Tensor, "early late"]:
+        """The transformer's logits over one window's nodes, the early slot carrying `history`'s velocity."""
+        early_step, late_step = self._velocity_columns(window, history)
+        with AutocastPolicy.of(window.device):
+            feat_early = self.node_features(
+                window.features[0],
+                window.early / window.downsample,
+                NodeWindowSlot(window.spatial, 0.0, window.device),
+                early_step,
+            )
+            feat_late = self.node_features(
+                window.features[1],
+                window.late / window.downsample,
+                NodeWindowSlot(window.spatial, 1.0, window.device),
+                late_step,
+            )
+            logits = self.transformer(feat_early, feat_late, window.early, window.late)  # (early, late)
+        return logits.float()
+
+    def _velocity_columns(
+        self, window: _GapWindow, history: GapHistory
+    ) -> tuple[Float[Tensor, "e 3"] | None, Float[Tensor, "l 3"] | None]:
+        """The two slots' prior-step inputs — `(None, None)` unless the mounted head was widened to read them.
+
+        Only the EARLY slot carries a history: the late nodes' previous gap IS the gap being scored, so their
+        history is unavailable without circularity and they take the zero vector, exactly as `JointModel.forward`
+        gives its targets. The velocity arrives in full-resolution voxels and is divided by the downsample into
+        the feature grid's space — the same two steps, in the same order, the trainer's forward takes.
+        """
+        if not self.uses_prior_velocity:
+            return None, None
+        return history.velocity(window.early) / window.downsample, torch.zeros_like(window.late)
 
     def _gap_logits(self, gap: EdgeGap, *, reverse: bool = False) -> Float[Tensor, "early late"]:
         """The pre-softmax association logits for one gap: UNet features + position embed → transformer.
@@ -149,23 +271,16 @@ class EdgeTransformerScorer(nn.Module):
         re-normalisation of the forward logits either, since the head's source/target roles genuinely swap.
         A consequence worth taking: the UNet recompute here is avoidable, because the forward pass's features
         could be reused with the fractions swapped.
+
+        NO PRIOR VELOCITY is carried through this entry point, in either direction. A reverse pass's sources are
+        the LATER frame's nodes, whose only previous gap is the gap under test — there is no history to read
+        that is not circular — so a widened head takes the zero vector here, the same value a first-gap or an
+        entering node takes. Feeding the forward direction's history instead would attach the earlier frame's
+        motion to a different frame's nodes, which is not a weaker signal but a wrong one. A FORWARD pass that
+        wants its history goes through `_seed_logits`, which is where the state is carried; this entry point
+        stays the stateless one, used for the reverse direction and by the edge finetuner.
         """
-        device, recipe = gap.device, self.recipe
-        downsample = torch.tensor(recipe.downsample, dtype=torch.float32, device=device)
-        frame_t = TemporalUNetDetector._read_frame(gap.source, gap.timepoint, recipe.downsample, device)  # noqa: SLF001
-        frame_t1 = TemporalUNetDetector._read_frame(gap.source, gap.timepoint + 1, recipe.downsample, device)  # noqa: SLF001
-        frames = [frame_t1, frame_t] if reverse else [frame_t, frame_t1]
-        early, late = (gap.tgt_positions, gap.src_positions) if reverse else (gap.src_positions, gap.tgt_positions)
-        window = torch.stack(frames, dim=0).unsqueeze(0).unsqueeze(2)
-        spatial = torch.tensor(frame_t.shape, dtype=torch.float32, device=device)
-        early_voxel = torch.as_tensor(early, device=device)
-        late_voxel = torch.as_tensor(late, device=device)
-        with AutocastPolicy.of(device):
-            features = self.detector.unet(window)[0]  # (2, C, Z, Y, X)
-            feat_early = self.node_features(features[0], early_voxel / downsample, NodeWindowSlot(spatial, 0.0, device))
-            feat_late = self.node_features(features[1], late_voxel / downsample, NodeWindowSlot(spatial, 1.0, device))
-            logits = self.transformer(feat_early, feat_late, early_voxel, late_voxel)  # (early, late)
-        return logits.float()
+        return self._head_logits(self._gap_window(gap, reverse=reverse), GapHistory())
 
     @staticmethod
     def node_features(

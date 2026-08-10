@@ -19,8 +19,8 @@ import torch
 from jaxtyping import Float
 from torch import Tensor
 
-from celltrack.models.edge_transformer import EdgeGap, EdgeTransformerScorer, PrecomputedEdgeAffinity
-from celltrack.models.temporal_unet_detector import TemporalUNetDetector
+from celltrack.models.edge_transformer import EdgeGap, EdgeTransformerScorer, PrecomputedEdgeAffinity, video_gaps
+from celltrack.models.prior_velocity import GapHistory
 from core.data.tracks import TrackGraph
 
 _DENOMINATOR_FLOOR = 1e-12
@@ -69,33 +69,52 @@ class BlendedEdgeTransformerScorer:
 
     @torch.no_grad()
     def affinities(self, path: Path, detections: TrackGraph, device: str) -> PrecomputedEdgeAffinity:
-        """The blended source→target probability matrices, one per scored frame gap of the video."""
-        source = TemporalUNetDetector._open_source(path)  # noqa: SLF001
-        timepoints = detections.timepoints()
-        positions = detections.positions().astype(np.float32)
+        """The blended source→target probability matrices, one per scored frame gap of the video.
+
+        Gaps arrive in ascending time so each seed can carry its own `GapHistory` forward — the prior-velocity
+        state a widened head reads. Per SEED, not per blend: the velocity a head consumes has to be the one its
+        own weights produced (that is what its trainer fed it), and two seeds need not even agree on whether
+        they were widened for the feature at all. A blend of unwidened seeds carries empty histories and is
+        byte-identical to what this computed before the feature existed.
+        """
+        histories = tuple(GapHistory() for _ in self.scorers)
         by_timepoint: dict[int, Float[np.ndarray, "s t"]] = {}
-        for timepoint in np.unique(timepoints)[:-1].tolist():
-            src_rows = np.flatnonzero(timepoints == timepoint)
-            tgt_rows = np.flatnonzero(timepoints == timepoint + 1)
-            if len(src_rows) == 0 or len(tgt_rows) == 0:
-                continue
-            gap = EdgeGap(source, int(timepoint), positions[src_rows], positions[tgt_rows], device)
-            by_timepoint[gap.timepoint] = self._gap_probabilities(gap).cpu().numpy()
+        for gap in video_gaps(path, detections, device):
+            probabilities, histories = self._gap_probabilities(gap, histories)
+            by_timepoint[gap.timepoint] = probabilities.cpu().numpy()
         return PrecomputedEdgeAffinity(by_timepoint)
 
-    def _gap_probabilities(self, gap: EdgeGap) -> Float[Tensor, "s t"]:
-        """One gap's source→target probabilities — the forward normalisation, optionally fused with the reverse."""
-        forward = torch.softmax(self._blended_logits(gap, reverse=False), dim=0)
+    def _gap_probabilities(
+        self, gap: EdgeGap, histories: tuple[GapHistory, ...]
+    ) -> tuple[Float[Tensor, "s t"], tuple[GapHistory, ...]]:
+        """One gap's probabilities and each seed's carried history — forward, optionally fused with the reverse."""
+        blended, carried = self._forward_logits(gap, histories)
+        forward = torch.softmax(blended, dim=0)
         if not self.bidirectional:
-            return forward
-        reverse = torch.softmax(self._blended_logits(gap, reverse=True), dim=0).T
-        return self.fuse(forward, reverse)
+            return forward, carried
+        reverse = torch.softmax(self._reverse_logits(gap), dim=0).T
+        return self.fuse(forward, reverse), carried
 
-    def _blended_logits(self, gap: EdgeGap, *, reverse: bool) -> Float[Tensor, "early late"]:
-        """The seeds' logits for one gap direction, convex-combined before any normalisation."""
+    def _forward_logits(
+        self, gap: EdgeGap, histories: tuple[GapHistory, ...]
+    ) -> tuple[Float[Tensor, "s t"], tuple[GapHistory, ...]]:
+        """The seeds' forward logits convex-combined, plus the history each seed hands the next gap."""
+        scored = [
+            scorer._seed_logits(gap, history)  # noqa: SLF001
+            for scorer, history in zip(self.scorers, histories, strict=True)
+        ]
+        weighted = torch.stack([weight * logits for weight, (logits, _) in zip(self.weights, scored, strict=True)])
+        return weighted.sum(dim=0), tuple(history for _, history in scored)
+
+    def _reverse_logits(self, gap: EdgeGap) -> Float[Tensor, "t s"]:
+        """The seeds' logits for the gap scored with the temporal pair SWAPPED, combined before normalisation.
+
+        The reverse direction carries no prior velocity — see `EdgeTransformerScorer._gap_logits` for why its
+        sources have no non-circular history — so a widened head reads zeros here and no state crosses gaps.
+        """
         weighted = torch.stack(
             [
-                weight * scorer._gap_logits(gap, reverse=reverse)  # noqa: SLF001
+                weight * scorer._gap_logits(gap, reverse=True)  # noqa: SLF001
                 for scorer, weight in zip(self.scorers, self.weights, strict=True)
             ]
         )

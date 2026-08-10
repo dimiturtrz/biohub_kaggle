@@ -22,6 +22,7 @@ from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
 
 from celltrack.affinity import EdgeAffinity
+from celltrack.linkers.agreement_gating import AgreementGate
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
 
@@ -54,6 +55,9 @@ class AssignmentLinker:
     # continue a track — it takes an edge whose cost is up to `disappearance_cost`, recovering a true successor
     # the pure-negative rule drops as a track break. The frontier prices this (appearance stays free).
     disappearance_cost: float = 0.0
+    # Off by default: admit a candidate edge only where the forward and reverse normalisations agree
+    # (`AgreementGate`). The cost still ranks what survives by the sharp forward probability.
+    agreement: AgreementGate | None = None
 
     def link(self, detections: TrackGraph) -> TrackGraph:
         """Assign each cell to at most one successor, frame pair by frame pair, minimising total edge cost."""
@@ -90,8 +94,11 @@ class AssignmentLinker:
 
         Without an affinity the link reward makes every in-gate edge beat a skip (distance-only linking); with
         one the reward is zero so only a negative `distance - bonus*P` links — matching `ILPLinker` in both.
+        An agreement gate narrows WHICH pairs compete; it never touches the cost they compete on.
         """
         within_gate = distance <= self.max_distance_um
+        if self.agreement is not None:
+            within_gate = self.agreement.narrow(timepoint, within_gate)
         link_reward = _LINK_REWARD if self.affinity is None else 0.0
         cost = distance - link_reward
         if self.affinity is not None and self.affinity_bonus != 0.0:

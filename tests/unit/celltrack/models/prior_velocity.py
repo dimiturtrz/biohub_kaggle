@@ -8,7 +8,31 @@ checked the only way that matters — the widened layer reproducing the original
 import torch
 from torch import nn
 
-from celltrack.models.prior_velocity import PriorVelocity
+from celltrack.models.prior_velocity import GapHistory, PriorVelocity
+
+
+def test_velocity():
+    """A carried gap normalises its RAW logits over the SOURCES, then takes the expected incoming displacement.
+
+    The softmax lives inside the history, not at its two call sites, so the trainer and the shipped scorer
+    cannot normalise a gap differently: this is the one definition both go through.
+    """
+    previous = torch.tensor([[0.0, 0.0, 0.0], [0.0, 0.0, 2.0]])
+    coordinates = torch.tensor([[0.0, 0.0, 10.0]])
+    logits = torch.tensor([[1.5], [1.5]])  # equal logits == an ambiguous gap, softmax to 0.5 each
+
+    velocity = GapHistory(previous, logits).velocity(coordinates)
+
+    expected = PriorVelocity.expected_incoming(coordinates, previous, torch.softmax(logits, dim=0))
+    assert torch.equal(velocity, expected)
+    assert torch.equal(velocity, torch.tensor([[0.0, 0.0, 9.0]]))  # 10 - (0.5*0 + 0.5*2)
+
+
+def test_velocity_without_a_previous_gap():
+    """An empty history — a video's FIRST gap, or a training pair with no predecessor — yields exact zeros."""
+    coordinates = torch.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+    assert torch.equal(GapHistory().velocity(coordinates), torch.zeros(2, 3))
+    assert torch.equal(GapHistory(coordinates).velocity(coordinates), torch.zeros(2, 3))  # coords without logits
 
 
 def test_expected_incoming():

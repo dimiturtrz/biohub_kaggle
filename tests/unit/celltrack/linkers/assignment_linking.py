@@ -3,6 +3,7 @@ from dataclasses import dataclass
 import numpy as np
 from jaxtyping import Float
 
+from celltrack.linkers.agreement_gating import AgreementGate
 from celltrack.linkers.assignment_linking import AssignmentLinker
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
@@ -80,3 +81,50 @@ def test_disappearance_cost_recovers_a_track_break():
         spacing=Spacing(z=1.0, y=1.0, x=1.0), max_distance_um=10.0, affinity=affinity, disappearance_cost=6.0
     )
     assert continues.link(coordinates).edges.tolist() == [[0, 10]]
+
+
+def _inverted_scene() -> tuple[TrackGraph, _StubAffinity]:
+    """The measured dense failure: a wrong NEAR neighbour outscoring the true, farther successor.
+
+    Source at y=0; the near candidate (row 1, y=1) takes the inverted forward probability 0.686, the true
+    successor (row 2, y=5) only 0.4. At a bonus of 20 the near pair costs 1 - 13.72 = -12.72 against the true
+    pair's 5 - 8 = -3, so the cost alone links the wrong one.
+    """
+    return detections([[0, 0, 0, 0], [1, 0, 1, 0], [1, 0, 5, 0]]), _StubAffinity(
+        np.array([[0.686, 0.4]], dtype=np.float64)
+    )
+
+
+def test_link_agreement_gate_excludes_the_inverted_near_neighbour():
+    """A high-forward / low-mutual candidate is refused admission, and the true high-mutual successor is linked.
+
+    The gate reads the fused probabilities, where the near neighbour collapses (0.1 — it has its own better
+    parent backwards) and the true successor holds (0.8). The cost is untouched: it still ranks by the sharp
+    forward probability, but now over the admitted candidates only.
+    """
+    graph, affinity = _inverted_scene()
+    ungated = AssignmentLinker(
+        spacing=Spacing(z=1.0, y=1.0, x=1.0), max_distance_um=10.0, affinity=affinity, affinity_bonus=20.0
+    )
+    gated = AssignmentLinker(
+        spacing=Spacing(z=1.0, y=1.0, x=1.0),
+        max_distance_um=10.0,
+        affinity=affinity,
+        affinity_bonus=20.0,
+        agreement=AgreementGate(mutual=_StubAffinity(np.array([[0.1, 0.8]], dtype=np.float64)), floor=0.5),
+    )
+
+    assert ungated.link(graph).edges.tolist() == [[0, 10]]  # the near mislink the cost cannot resist
+    assert gated.link(graph).edges.tolist() == [[0, 20]]  # the true successor, admitted where the near one is not
+
+
+def test_link_agreement_gate_off_is_byte_identical():
+    """Unset, the gate changes nothing: the default linker's edges are byte-for-byte the explicit-None linker's."""
+    graph, affinity = _inverted_scene()
+    gates = (
+        AssignmentLinker(spacing=Spacing(z=1.0, y=1.0, x=1.0), max_distance_um=10.0, affinity=affinity),
+        AssignmentLinker(spacing=Spacing(z=1.0, y=1.0, x=1.0), max_distance_um=10.0, affinity=affinity, agreement=None),
+    )
+
+    assert gates[0].agreement is None  # the shipped default is OFF
+    assert gates[0].link(graph).edges.tobytes() == gates[1].link(graph).edges.tobytes()

@@ -200,9 +200,10 @@ class CellTracker:
         nodes = self.detector.nodes(video_key, path, self.config.threshold, blend)
         affinity_start = time.perf_counter()
         affinity = self.edge_scorer.affinities(path, nodes, self.device)
+        mutual = self._mutual(path, nodes, affinity)
         stages_start = time.perf_counter()
         graph = nodes
-        for stage in self._stages(self.spacing(path), affinity):
+        for stage in self._stages(self.spacing(path), affinity, mutual):
             graph = stage.transform(graph)
         logger.info(
             "%s: detect %.1fs | affinity %.1fs | link+post %.1fs (%d nodes)",
@@ -214,7 +215,22 @@ class CellTracker:
         )
         return graph
 
-    def _stages(self, spacing: Spacing, affinity: EdgeAffinity | None) -> tuple[GraphStage, ...]:
+    def _mutual(self, path: Path, nodes: TrackGraph, affinity: EdgeAffinity | None) -> EdgeAffinity | None:
+        """The bidirectionally fused probabilities the linker's agreement floor gates on — `None` when unused.
+
+        Scored only when a floor is set, because it costs a second reversed pass over every gap. When the
+        tracker already runs `bidirectional_edges` the mounted affinity IS the fused one, so the gate reads it
+        directly and the extra pass is skipped — that pairing gates and scores on the same quantity.
+        """
+        if self.config.linker.agreement_floor is None:
+            return None
+        if self.config.bidirectional_edges:
+            return affinity
+        return self.edge_scorer.with_bidirectional(bidirectional=True).affinities(path, nodes, self.device)
+
+    def _stages(
+        self, spacing: Spacing, affinity: EdgeAffinity | None, mutual: EdgeAffinity | None = None
+    ) -> tuple[GraphStage, ...]:
         """The ordered post-detection passes at this video's spacing — link, drop short tracks, bridge gaps, smooth.
 
         The short-track filter runs *before* the gap bridge: prune spurious fragments first, then reconnect the
@@ -222,7 +238,7 @@ class CellTracker:
         splice fragments that the filter would have removed, and scores lower.
         """
         config = self.config
-        link = LinkerStage(config.linker.build(spacing, affinity))
+        link = LinkerStage(config.linker.build(spacing, affinity, mutual))
         # Division recovery reads the edge affinity, so it needs a learned head and runs before the short-track
         # filter (whose division-preserving carve-out can only protect a fork that already exists).
         divide = (

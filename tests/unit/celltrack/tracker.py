@@ -157,3 +157,73 @@ def test_post_init():
         TrackerConfig(min_track_length=0)
 
     assert TrackerConfig().threshold == 0.97  # the LB-measured best, not the round number
+
+
+class _FusedAffinity:
+    """A gap scored high in both directions — what the agreement floor admits."""
+
+    def probabilities(self, timepoint: int) -> np.ndarray | None:
+        return np.ones((1, 1)) if timepoint == 0 else None
+
+
+class _RecordingEdgeScorer:
+    """An edge scorer that records the direction setting of every scoring pass it is asked for."""
+
+    def __init__(self, scored: list[bool], *, bidirectional: bool) -> None:
+        self.scored = scored
+        self.bidirectional = bidirectional
+
+    def affinities(self, path: Path, nodes: TrackGraph, device: str) -> _FusedAffinity:
+        self.scored.append(self.bidirectional)
+        return _FusedAffinity()
+
+    def with_bidirectional(self, *, bidirectional: bool) -> "_RecordingEdgeScorer":
+        return _RecordingEdgeScorer(self.scored, bidirectional=bidirectional)
+
+
+def _recording_tracker(monkeypatch: pytest.MonkeyPatch, config: TrackerConfig) -> tuple[CellTracker, list[bool]]:
+    monkeypatch.setattr(
+        tracker_module.CellVideo, "from_ome_zarr", staticmethod(lambda path: _Video(Spacing(1.0, 1.0, 1.0)))
+    )
+    scored: list[bool] = []
+    scorer = _RecordingEdgeScorer(scored, bidirectional=config.bidirectional_edges)
+    tracker = CellTracker(
+        detector=cast(BlendDetectorScorer, _StubBlend()),
+        edge_scorer=cast(tracker_module.BlendedEdgeTransformerScorer, scorer),
+        device="cpu",
+        config=config,
+    )
+    return tracker, scored
+
+
+def test_run_scores_the_fused_affinity_for_an_agreement_floor(monkeypatch: pytest.MonkeyPatch):
+    """A linker agreement floor makes the tracker score the gaps a second time, backwards — the gate's input.
+
+    The cost still reads the directional pass; the reversed pass exists only to be gated on, which is why it is
+    scored only when a floor is set.
+    """
+    config = TrackerConfig(min_track_length=1, smooth_strength=0.0, linker=LinkerConfig(agreement_floor=0.5))
+    tracker, scored = _recording_tracker(monkeypatch, config)
+
+    graph = tracker.run("m.zarr", Path("m.zarr"))
+    assert scored == [False, True]  # the directional pass for the cost, then the fused one for the gate
+    assert graph.edges.tolist() == [[0, 1]]  # a pair both directions agree on stays admissible
+
+
+def test_run_reuses_the_bidirectional_affinity_for_the_gate(monkeypatch: pytest.MonkeyPatch):
+    """Under `bidirectional_edges` the mounted affinity IS the fused one, so the gate reads it — no second pass."""
+    config = TrackerConfig(
+        min_track_length=1, smooth_strength=0.0, bidirectional_edges=True, linker=LinkerConfig(agreement_floor=0.5)
+    )
+    tracker, scored = _recording_tracker(monkeypatch, config)
+
+    tracker.run("m.zarr", Path("m.zarr"))
+    assert scored == [True]
+
+
+def test_run_without_a_floor_scores_once(monkeypatch: pytest.MonkeyPatch):
+    """No floor, no fused pass: the default tracker pays for exactly the one scoring pass it always did."""
+    tracker, scored = _recording_tracker(monkeypatch, TrackerConfig(min_track_length=1, smooth_strength=0.0))
+
+    tracker.run("m.zarr", Path("m.zarr"))
+    assert scored == [False]

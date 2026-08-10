@@ -22,7 +22,7 @@ from torch import Tensor, nn
 
 from celltrack.data.joint_dataset import PairSample
 from celltrack.models.joint_model import JointModel
-from celltrack.models.prior_velocity import PriorVelocity
+from celltrack.models.prior_velocity import GapHistory, PriorVelocity
 
 
 @dataclass(frozen=True)
@@ -52,21 +52,23 @@ class PriorVelocitySource:
     ) -> Float[Tensor, "s 3"] | None:
         """Each source's expected incoming displacement over the `t-1 -> t` gap; `None` while the feature is off.
 
-        The previous gap is scored by the model itself and soft-maxed over its sources — the scorer's own
-        normalisation — so the history moves as the head trains and matches what inference could compute.
+        The previous gap is scored by the model itself, and the raw logits go into a `GapHistory` — the ONE
+        definition of how a scored gap becomes a velocity, shared with the inference scorer, so a trained head
+        is read the way it was trained rather than through a second copy of the same three lines that can drift.
         It runs under `torch.no_grad`: a step optimises the pair being scored, never a two-gap chain. That
         forward passes ZERO velocity for its own sources, which both stops the recursion one step back and
-        keeps the head's input width the one the widened projection expects.
+        keeps the head's input width the one the widened projection expects — and it is what
+        `EdgeTransformerScorer._history_after` reproduces at inference.
 
-        A pair with no predecessor — a video's first annotated frame — takes the exact zeros
-        `expected_incoming` returns for an absent history, the same value an unmatched node degrades to, so
-        "no history" and "no usable history" reach the head as one case rather than two.
+        A pair with no predecessor — a video's first annotated frame — takes the exact zeros an empty
+        `GapHistory` yields, the same value an unmatched node degrades to, so "no history" and "no usable
+        history" reach the head as one case rather than two.
         """
         if not self.enabled:
             return None
         sources = sample.source_centres.to(torch.float32)
         if sample.previous_frame is None or sample.previous_centres is None:
-            return PriorVelocity.expected_incoming(sources)
+            return GapHistory().velocity(sources)
         previous = sample.previous_centres.to(torch.float32)
         with torch.no_grad(), precision:
             logits = model.forward(
@@ -76,4 +78,4 @@ class PriorVelocitySource:
                 sample.source_centres,
                 torch.zeros_like(previous),
             ).edge_logits
-        return PriorVelocity.expected_incoming(sources, previous, torch.softmax(logits.float(), dim=0))
+        return GapHistory(previous, logits).velocity(sources)
