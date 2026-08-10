@@ -25,6 +25,7 @@ from jaxtyping import Float
 from torch import Tensor, nn
 
 from celltrack.models.temporal_unet_detector import _EXT_SRC, DetectorRecipe, TemporalUNetDetector, _VideoSource
+from celltrack.precision import AutocastPolicy
 from core.data.tracks import TrackGraph
 
 _POS_EMBED_DIM = 8
@@ -114,18 +115,22 @@ class EdgeTransformerScorer(nn.Module):
 
         Kept separate from the softmax so several seeds' logits can be blended *before* normalisation — the
         detector-blend lesson, that probabilities saturate and logits don't (see `BlendedEdgeTransformerScorer`).
+        The backbone and transformer run at the device's accelerated precision; the logits return fp32, the
+        space the seed blend and the softmax over sources are taken in.
         """
         downsample = torch.tensor(self.recipe.downsample, dtype=torch.float32, device=device)
         frame_t = TemporalUNetDetector._read_frame(source, timepoint, self.recipe.downsample, device)  # noqa: SLF001
         frame_t1 = TemporalUNetDetector._read_frame(source, timepoint + 1, self.recipe.downsample, device)  # noqa: SLF001
         window = torch.stack([frame_t, frame_t1], dim=0).unsqueeze(0).unsqueeze(2)
-        features = self.detector.unet(window)[0]  # (2, C, Z, Y, X)
         spatial = torch.tensor(frame_t.shape, dtype=torch.float32, device=device)
         src_voxel = torch.as_tensor(src_positions, device=device)
         tgt_voxel = torch.as_tensor(tgt_positions, device=device)
-        feat_src = self.node_features(features[0], src_voxel / downsample, spatial, 0.0, device)
-        feat_tgt = self.node_features(features[1], tgt_voxel / downsample, spatial, 1.0, device)
-        return self.transformer(feat_src, feat_tgt, src_voxel, tgt_voxel)  # (s, t)
+        with AutocastPolicy.of(device):
+            features = self.detector.unet(window)[0]  # (2, C, Z, Y, X)
+            feat_src = self.node_features(features[0], src_voxel / downsample, spatial, 0.0, device)
+            feat_tgt = self.node_features(features[1], tgt_voxel / downsample, spatial, 1.0, device)
+            logits = self.transformer(feat_src, feat_tgt, src_voxel, tgt_voxel)  # (s, t)
+        return logits.float()
 
     @staticmethod
     def node_features(

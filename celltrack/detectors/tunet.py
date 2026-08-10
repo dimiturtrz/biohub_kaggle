@@ -25,6 +25,7 @@ from torch import Tensor
 from celltrack.detectors.peaks import PeakExtractor
 from celltrack.models.temporal_unet_detector import DetectorRecipe
 from celltrack.models.temporal_unet_detector import TemporalUNetDetector as _TemporalUNetNet
+from celltrack.precision import AutocastPolicy
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
 
@@ -104,13 +105,18 @@ class TemporalUNetDetector(_TemporalUNetNet):
         return self._open_source(path).scale
 
     def _logits(self, frame: Float[Tensor, "z y x"], tta: bool) -> Float[Tensor, "z y x"]:  # noqa: FBT001
-        """Detection logits for a frame, averaged over the flip-TTA ensemble when enabled."""
-        logits = self(frame)
-        if tta:
-            for dims in [(-1,), (-2,), (-2, -1)]:
-                logits = logits + self(frame.flip(dims)).flip(dims)
-            logits = logits / 4
-        return logits
+        """Detection logits for a frame, averaged over the flip-TTA ensemble when enabled.
+
+        The forward runs at the device's accelerated precision and comes back fp32: the peak read-out compares
+        a volume against its max-pool for equality, and half precision ties a nucleus to the valley beside it.
+        """
+        with AutocastPolicy.of(str(frame.device)):
+            logits = self(frame)
+            if tta:
+                for dims in [(-1,), (-2,), (-2, -1)]:
+                    logits = logits + self(frame.flip(dims)).flip(dims)
+                logits = logits / 4
+        return logits.float()
 
     @staticmethod
     def _extractor(scale: tuple[float, float, float], recipe: DetectorRecipe, device: str) -> PeakExtractor:
