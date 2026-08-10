@@ -14,6 +14,7 @@ prepared frames and an evaluator as inputs; ``main`` does the fold loading.
 """
 
 import argparse
+import contextlib
 import logging
 import time
 from dataclasses import dataclass, field, replace
@@ -26,6 +27,7 @@ import torch.nn.functional as F
 import zarr
 from jaxtyping import Float, Int
 from torch import Tensor, nn
+from torch.nn.attention import SDPBackend, sdpa_kernel
 
 from celltrack.detectors.tunet import DetectorRecipe, TemporalUNetDetector
 from celltrack.eval.bracket import ValidationFold
@@ -150,8 +152,10 @@ class TUNetDetectorTrainer:
             detector = detector.to(memory_format=torch.channels_last_3d)  # type: ignore[no-matching-overload]
         if self.config.compile_backbone:
             # torch.compile returns an OptimizedModule (a Module) the stubs type as Any; compile the backbone
-            # here because it is called via forward_batch, not the wrapped forward.
-            detector.unet = torch.compile(detector.unet)  # type: ignore[bad-assignment]
+            # here because it is called via forward_batch, not the wrapped forward. The temporal-attention SDPA
+            # is forced to the MATH backend at forward time (see `_step`) — its efficient/flash backward has a
+            # broken compiled meta-kernel, while math's backward is primitives inductor traces cleanly.
+            detector.unet = torch.compile(detector.unet, dynamic=False)  # type: ignore[bad-assignment]
         optimizer = torch.optim.AdamW(detector.parameters(), lr=self.config.lr)
         optimization = _Optimization(optimizer, self._scheduler(optimizer))
 
@@ -276,7 +280,10 @@ class TUNetDetectorTrainer:
     ) -> float:
         """One optimisation step over a batch of frames and their GT voxel centres; returns the scalar loss."""
         frames = frames.to(self.config.device, non_blocking=True)
-        with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=self.config.device == "cuda"):
+        # Under compile, pin SDPA to the math backend so inductor traces its (clean) composite backward, not the
+        # efficient kernel whose compiled backward asserts on the temporal-attention strides. No-op when eager.
+        attention = sdpa_kernel(SDPBackend.MATH) if self.config.compile_backbone else contextlib.nullcontext()
+        with attention, torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=self.config.device == "cuda"):
             logits = detector.forward_batch(frames)
             loss = self._detection_loss(logits, centres, self.config.neg_weight)
         optimization.zero_grad()
