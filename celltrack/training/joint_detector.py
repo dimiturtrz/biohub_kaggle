@@ -2,10 +2,12 @@
 
 Detection-only training (`tunet_detector`) freezes association; the joint loop runs the temporal backbone
 once on the real consecutive pair `(t, t+1)` and reads all three heads off the shared features — the
-detection head on each frame and the edge transformer on the node features (see `joint_model`). The three
-losses are kept SEPARATE (a detection BalancedBCE per frame, a SoftmaxFocalBCE over the links) so a window
-logs each term on its own: that decoupling is the whole point, since the edge and detection curves move on
-different scales and a summed number hides which one is learning.
+detection head on each frame and the edge transformer on the node features (see `joint_model`). The losses are
+kept SEPARATE (a detection BalancedBCE per frame, a SoftmaxFocalBCE over the links, and an optional InfoNCE
+over the node features themselves) so a window logs each term on its own: that decoupling is the whole point,
+since the curves move on different scales and a summed number hides which one is learning. The contrastive
+term is the only one that asks the BACKBONE for discrimination — the edge loss only asks the head to rank
+pairs given whatever features it is handed — and it is off (weight 0) unless a run asks for it.
 
 The loop mirrors the detector trainer — eval-sized windows, EarlyStop + save-best + resume, the bf16 /
 channels_last / optional torch.compile speed setup — and selects on the same LB-aligned number: the
@@ -39,6 +41,7 @@ from celltrack.detectors.tunet import DetectorRecipe
 from celltrack.eval.model_evaluator import ModelEvaluator
 from celltrack.eval.proxy import TEST_MOVIES, VALIDATION_MOVIES, TestMovieProxy
 from celltrack.losses.balanced_bce import BalancedBCE
+from celltrack.losses.info_nce import InfoNCE
 from celltrack.losses.softmax_focal_bce import SoftmaxFocalBCE
 from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeTransformerScorer
 from celltrack.models.joint_model import JointModel
@@ -79,6 +82,11 @@ class JointTrainConfig:
     lr: float = 1e-4
     neg_weight: float = 1e-2
     det_weight: float = 1.0  # weight on the (two-frame) detection term relative to the edge term
+    # Weight on the InfoNCE term over the NODE FEATURES — the only part of the objective that asks the
+    # backbone for discrimination rather than invariance. 0.0 by default: the term is still computed and
+    # logged as a diagnostic, but contributes exactly nothing, so an unasked run is the run of yesterday.
+    contrastive_weight: float = 0.0
+    temperature: float = 0.07  # the InfoNCE softmax temperature over candidate targets
     downsample: tuple[int, int, int] = (1, 4, 4)
     out_channels: int = 32
     layers: tuple[int, ...] = (32, 64, 128)
@@ -113,6 +121,25 @@ class PairSplit:
 
     train: list[PairTarget]
     val: list[PairTarget]
+
+
+@dataclass(frozen=True)
+class _LossTerms:
+    """One pair's loss tensors — the total that is stepped, plus each term on its own scale for the log."""
+
+    total: Tensor
+    edge: Tensor
+    detection: Tensor
+    contrastive: Tensor
+
+    def logged(self) -> dict[str, float]:
+        """The detached per-term floats under the names the run tracks — a summed number hides which half moved."""
+        return {
+            "train_loss": float(self.total.detach()),
+            "edge_loss": float(self.edge.detach()),
+            "det_loss": float(self.detection.detach()),
+            "contrastive_loss": float(self.contrastive.detach()),
+        }
 
 
 @dataclass(frozen=True)
@@ -177,7 +204,7 @@ class JointTrainer:
         run_start = time.perf_counter()
         while done < self.config.steps:
             window = min(self.config.eval_every, self.config.steps - done)
-            loss, edge, det, rate = self._run_window(model, optimization, pairs.train, window, done)
+            losses = self._run_window(model, optimization, pairs.train, window, done)
             done += window
             result = self._evaluate(model, evaluator, pairs.val)
             improved = stop.update(result.score) if stop is not None else result.score >= best
@@ -186,17 +213,18 @@ class JointTrainer:
                 best, marker = result.score, " *saved"
                 self._save_checkpoint(save_to, model)
             self._save_resume(resume_path, model, optimization, done, best)
-            losses = {"train_loss": loss, "edge_loss": edge, "det_loss": det, "it_per_s": rate}
             run.window(done, {**self._metrics(result, best), **losses})
+            rate = losses["it_per_s"]
             eta_hours = (self.config.steps - done) / rate / _SECONDS_PER_HOUR if rate else 0.0
             logger.info(
-                "step %5d/%d | train loss %.4f (edge %.4f det %.4f) | proxy %.4f | best %.4f%s | "
+                "step %5d/%d | train loss %.4f (edge %.4f det %.4f nce %.4f) | proxy %.4f | best %.4f%s | "
                 "node R %.3f ratio %+.2f | edge AUC %.4f | %.1f it/s | elapsed %.2fh ETA %.2fh",
                 done,
                 self.config.steps,
-                loss,
-                edge,
-                det,
+                losses["train_loss"],
+                losses["edge_loss"],
+                losses["det_loss"],
+                losses["contrastive_loss"],
                 result.score,
                 best,
                 marker,
@@ -254,31 +282,34 @@ class JointTrainer:
         targets: list[PairTarget],
         steps: int,
         seed_offset: int,
-    ) -> tuple[float, float, float, float]:
-        """Train `steps` optimiser steps of one GT pair each; returns the mean (loss, edge, det, steps/s)."""
+    ) -> dict[str, float]:
+        """Train `steps` optimiser steps of one GT pair each; returns each term's window mean plus `it_per_s`."""
         model.train()
         dataset = PairDataset(targets, steps, self.config.downsample, self.config.seed + seed_offset)
-        loss_sum, edge_sum, det_sum, done, t0 = 0.0, 0.0, 0.0, 0, time.perf_counter()
+        sums: dict[str, float] = {}
+        done, t0 = 0, time.perf_counter()
         for pair in dataset.stream():
-            loss, edge, det = self._step(model, optimization, pair)
-            loss_sum, edge_sum, det_sum, done = loss_sum + loss, edge_sum + edge, det_sum + det, done + 1
+            for name, value in self._step(model, optimization, pair).items():
+                sums[name] = sums.get(name, 0.0) + value
+            done += 1
             if done % _HEARTBEAT_UPDATES == 0:
                 rate = done / (time.perf_counter() - t0)
-                logger.info("  ..%d/%d in window | loss %.4f | %.1f it/s", done, steps, loss_sum / done, rate)
+                logger.info("  ..%d/%d in window | loss %.4f | %.1f it/s", done, steps, sums["train_loss"] / done, rate)
         divisor = max(done, 1)
-        return loss_sum / divisor, edge_sum / divisor, det_sum / divisor, done / (time.perf_counter() - t0)
+        means = {name: total / divisor for name, total in sums.items()}
+        return {**means, "it_per_s": done / (time.perf_counter() - t0)}
 
-    def _step(self, model: JointModel, optimization: _Optimization, pair: Pair) -> tuple[float, float, float]:
-        """One optimisation step over a single GT pair; returns (total, edge, detection) as separate floats."""
-        loss, edge, det = self._losses(model, pair)
+    def _step(self, model: JointModel, optimization: _Optimization, pair: Pair) -> dict[str, float]:
+        """One optimisation step over a single GT pair; returns every loss term as its own float."""
+        terms = self._losses(model, pair)
         optimization.zero_grad()
-        loss.backward()
+        terms.total.backward()
         nn.utils.clip_grad_norm_(model.parameters(), self.config.grad_clip)
         optimization.step()
-        return float(loss.detach()), float(edge.detach()), float(det.detach())
+        return terms.logged()
 
-    def _losses(self, model: JointModel, pair: Pair) -> tuple[Tensor, Tensor, Tensor]:
-        """The three loss tensors for one pair — shared by the training step and the no-grad eval.
+    def _losses(self, model: JointModel, pair: Pair) -> _LossTerms:
+        """The loss tensors for one pair — shared by the training step and the no-grad eval.
 
         Positions reach the model at FULL resolution (it divides by the downsample for the feature grid,
         mirroring the inference scorer); the detection heads emit on the downsampled grid, so their GT
@@ -292,13 +323,16 @@ class JointTrainer:
         # Under compile, pin SDPA to the math backend so inductor traces its clean composite backward; no-op eager.
         attention = sdpa_kernel(SDPBackend.MATH) if self.config.compile_backbone else contextlib.nullcontext()
         with attention, torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=device == "cuda"):
-            detection_t, detection_t1, edge_logits = model.forward(frame_t, frame_t1, source_centres, target_centres)
-            edge = SoftmaxFocalBCE.of(edge_logits, edge_matrix)
-            det = BalancedBCE.of(detection_t.unsqueeze(0), [centres_t_grid], self.config.neg_weight) + BalancedBCE.of(
-                detection_t1.unsqueeze(0), [centres_t1_grid], self.config.neg_weight
+            out = model.forward(frame_t, frame_t1, source_centres, target_centres)
+            edge = SoftmaxFocalBCE.of(out.edge_logits, edge_matrix)
+            det = BalancedBCE.of(
+                out.detection_t.unsqueeze(0), [centres_t_grid], self.config.neg_weight
+            ) + BalancedBCE.of(out.detection_t1.unsqueeze(0), [centres_t1_grid], self.config.neg_weight)
+            contrastive = InfoNCE.of(
+                out.source_features, out.target_features, edge_matrix, self.config.temperature, _POS_FEATURE_DIM
             )
-            loss = edge + self.config.det_weight * det
-        return loss, edge, det
+            loss = edge + self.config.det_weight * det + self.config.contrastive_weight * contrastive
+        return _LossTerms(loss, edge, det, contrastive)
 
     def _evaluate(self, model: JointModel, evaluator: ModelEvaluator, val_targets: list[PairTarget]) -> _EvalResult:
         """Both trained heads through the shipped tracker on the proxy, plus their edge ranking on the val pairs."""
@@ -320,7 +354,7 @@ class JointTrainer:
             pair = PairDataset([target], 1, self.config.downsample, self.config.seed)[0]
             frame_t, frame_t1, sources, sinks, _ = (item.to(device) for item in pair)
             with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=device == "cuda"):
-                _, _, logits = model.forward(frame_t, frame_t1, sources, sinks)
+                logits = model.forward(frame_t, frame_t1, sources, sinks).edge_logits
             auc = EdgeAUC.of(torch.softmax(logits.float(), dim=0).cpu().numpy(), target.edge_matrix)
             if not math.isnan(auc):
                 scored.append(auc)
@@ -375,6 +409,10 @@ def main() -> None:
     parser.add_argument("--steps", type=int, default=1500)
     parser.add_argument("--warm-start", action="store_true", help="initialise from the published pilkwang weights")
     parser.add_argument("--det-weight", type=float, default=1.0, help="weight on the detection term vs the edge term")
+    parser.add_argument(
+        "--contrastive-weight", type=float, default=0.0, help="weight on the InfoNCE term over the node features"
+    )
+    parser.add_argument("--temperature", type=float, default=0.07, help="InfoNCE softmax temperature over targets")
     # Fine-tuning a CONVERGED model at its original training rate is the classic way to walk off its optimum,
     # which is what 3000 warm-start steps at 1e-4 did (never beat the init). Exposed so the rate is a
     # variable of the experiment rather than an inherited constant.
@@ -395,6 +433,8 @@ def main() -> None:
     config = JointTrainConfig(
         steps=args.steps,
         det_weight=args.det_weight,
+        contrastive_weight=args.contrastive_weight,
+        temperature=args.temperature,
         lr=args.lr,
         cosine_lr=args.cosine_lr,
         warm_pack=_PACK_REL if args.warm_pack == "seed1" else _PACK2_REL,

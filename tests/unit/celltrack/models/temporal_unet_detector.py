@@ -101,3 +101,15 @@ def test_from_pack(tmp_path: Path):
     loaded, recipe = TemporalUNetDetector.from_pack(tmp_path)
     assert recipe.downsample == (1, 4, 4)
     assert torch.equal(detector.detect_head.weight, loaded.detect_head.weight)
+
+
+def test_forward_pair():
+    """Both frames of a real window get their own detection map — the second is not a discarded duplicate."""
+    torch.manual_seed(0)
+    detector = TemporalUNetDetector(out_channels=2, layers=(2, 4))
+    frames = torch.stack([torch.randn(4, 8, 8), torch.randn(4, 8, 8)])
+
+    logits = detector.forward_pair(frames)
+
+    assert logits.shape == (2, 4, 8, 8)  # one map per frame of the pair
+    assert not torch.allclose(logits[0], logits[1])  # genuinely different frames -> different responses

@@ -18,7 +18,7 @@ from celltrack.edges.blended_edge_scoring import BlendedEdgeTransformerScorer
 from celltrack.eval.model_evaluator import ModelEvaluator
 from celltrack.eval.proxy import TestMovieProxy
 from celltrack.tracker import TrackerConfig
-from celltrack.training.joint_detector import JointTrainConfig, JointTrainer, PairSplit
+from celltrack.training.joint_detector import JointTrainConfig, JointTrainer, PairSplit, _LossTerms
 from celltrack.training.run_tracking import RunSetup, TrainingSplit
 from core.data.tracks import AnnotatedTracks
 from core.data.video import ImageStatistics
@@ -32,6 +32,18 @@ def test_config_defaults_to_pilkwangs_recipe():
     assert config.downsample == (1, 4, 4)
     assert config.lr == 1e-4
     assert config.det_weight == 1.0
+    assert config.contrastive_weight == 0.0  # the contrastive term is opt-in: an unasked run is unchanged
+
+
+def test_logged():
+    """Every term reaches the run's metric table under its own name, detached from the graph."""
+    terms = _LossTerms(
+        total=torch.tensor(3.0, requires_grad=True),
+        edge=torch.tensor(1.0),
+        detection=torch.tensor(2.0),
+        contrastive=torch.tensor(0.5),
+    )
+    assert terms.logged() == {"train_loss": 3.0, "edge_loss": 1.0, "det_loss": 2.0, "contrastive_loss": 0.5}
 
 
 def _cpu_config() -> JointTrainConfig:
@@ -102,7 +114,7 @@ def test_train(video_store: Path, in_bounds_tracks: AnnotatedTracks, tmp_path: P
 def test_train_records_each_window(
     video_store: Path, in_bounds_tracks: AnnotatedTracks, tmp_path: Path, mlflow_backend: RecordingMlflow
 ):
-    """The joint loop is wired to the tracker, and keeps the two loss terms and the edge AUC as their own series."""
+    """The joint loop is wired to the tracker, and keeps each loss term and the edge AUC as their own series."""
     torch.manual_seed(0)
     targets = _pairs(video_store)
     JointTrainer(_cpu_config()).train(
@@ -120,6 +132,7 @@ def test_train_records_each_window(
         "train_loss",
         "edge_loss",
         "det_loss",
+        "contrastive_loss",
         "it_per_s",
     } <= mlflow_backend.metric_keys()
     steps = {call[3] for call in mlflow_backend.calls if call[0] == "metric"}

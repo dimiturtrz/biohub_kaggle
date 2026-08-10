@@ -23,14 +23,16 @@ def _joint_model() -> JointModel:
 
 
 def test_forward():
-    """One pair → detection maps for both frames (frame shape) and an s×u edge-logit matrix."""
+    """One pair → both detection maps (frame shape), the s×u edge logits, and the node features behind them."""
     model = _joint_model().eval()
     frame_t, frame_t1 = torch.zeros(4, 8, 8), torch.zeros(4, 8, 8)
     source_positions = torch.tensor([[2, 4, 4]])  # 1 source
     target_positions = torch.tensor([[2, 4, 4], [1, 2, 2]])  # 2 targets
-    detection_t, detection_t1, edge_logits = model.forward(frame_t, frame_t1, source_positions, target_positions)
-    assert detection_t.shape == (4, 8, 8) and detection_t1.shape == (4, 8, 8)
-    assert edge_logits.shape == (1, 2)
+    out = model.forward(frame_t, frame_t1, source_positions, target_positions)
+    assert out.detection_t.shape == (4, 8, 8) and out.detection_t1.shape == (4, 8, 8)
+    assert out.edge_logits.shape == (1, 2)
+    feature_dim = 2 + 4 * _POS_EMBED_DIM  # the appearance channels, then the sinusoidal (t, z, y, x) embed
+    assert out.source_features.shape == (1, feature_dim) and out.target_features.shape == (2, feature_dim)
 
 
 def test_from_checkpoint(tmp_path: Path):

@@ -10,6 +10,7 @@ in, divided by the downsample for the feature grid) so a jointly-trained model i
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import override
 
@@ -23,6 +24,22 @@ from celltrack.models.temporal_unet_detector import TemporalUNetDetector
 # The published head's shape, which a checkpoint's weights were trained in and must be rebuilt at.
 _HIDDEN_DIM, _N_HEADS, _N_BLOCKS = 128, 4, 4
 _POS_FEATURE_DIM = 4 * _POS_EMBED_DIM  # sinusoidal embed of (t, z, y, x)
+
+
+@dataclass(frozen=True)
+class JointForward:
+    """Everything one joint pass produces — both detection maps, the edge logits, and the node features behind them.
+
+    The features are what the edge transformer was handed, exposed so a loss can act on the REPRESENTATION and
+    not only on the head's ranking of it (see `celltrack.losses.info_nce`). Five outputs is past a readable
+    tuple, so the pass names them.
+    """
+
+    detection_t: Float[Tensor, "z y x"]
+    detection_t1: Float[Tensor, "z y x"]
+    edge_logits: Float[Tensor, "s u"]
+    source_features: Float[Tensor, "s d"]
+    target_features: Float[Tensor, "u d"]
 
 
 class JointModel(nn.Module):
@@ -65,8 +82,8 @@ class JointModel(nn.Module):
         frame_t1: Float[Tensor, "z y x"],
         source_positions: Int[Tensor, "s 3"],
         target_positions: Int[Tensor, "u 3"],
-    ) -> tuple[Float[Tensor, "z y x"], Float[Tensor, "z y x"], Float[Tensor, "s u"]]:
-        """One backbone pass on the pair → (detection logits t, detection logits t+1, source→target edge logits).
+    ) -> JointForward:
+        """One backbone pass on the pair → both detection maps, the source→target edge logits, and the features.
 
         Positions are full-resolution voxels; the feature grid divides them by the downsample, exactly as the
         inference scorer does, so the edge logits match what the shipped pipeline would compute for this model.
@@ -83,4 +100,4 @@ class JointModel(nn.Module):
         feat_source = EdgeTransformerScorer.node_features(features[0], source_voxel / downsample, spatial, 0.0, device)
         feat_target = EdgeTransformerScorer.node_features(features[1], target_voxel / downsample, spatial, 1.0, device)
         edge_logits = self.transformer(feat_source, feat_target, source_voxel, target_voxel)  # (s, u)
-        return detection_t, detection_t1, edge_logits
+        return JointForward(detection_t, detection_t1, edge_logits, feat_source, feat_target)
