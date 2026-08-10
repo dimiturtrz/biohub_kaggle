@@ -12,6 +12,7 @@ and a knob sweep varies one `TrackerConfig`.
 from __future__ import annotations
 
 import logging
+import math
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -108,6 +109,25 @@ class TrackerConfig:
     # forward and no retraining; it targets the affinity-inverted dense mislink, where a wrong near neighbour
     # wins forwards but loses backwards.
     bidirectional_edges: bool = False
+
+    def __post_init__(self) -> None:
+        """Reject an operating point that cannot mean what it says — the one config level that had no checks.
+
+        Every nested config here is a validated pydantic model; this dataclass was the exception, so a typo at
+        the top of the hierarchy constructed fine and misbehaved quietly. The blend is the sharp case: the
+        seeds' LOGITS are combined as a raw weighted sum before the softmax, so weights that do not sum to one
+        rescale the logits and shift the softmax TEMPERATURE — a different pipeline, not a different mix.
+        """
+        if not 0.0 <= self.threshold <= 1.0:
+            raise ValueError(f"threshold must be a probability in [0, 1], got {self.threshold}")
+        if self.min_track_length < 1:
+            raise ValueError(f"min_track_length must keep at least one node, got {self.min_track_length}")
+        if not math.isclose(sum(self.edge_blend), 1.0, abs_tol=1e-6):
+            raise ValueError(f"edge_blend must sum to 1 (it scales logits before the softmax), got {self.edge_blend}")
+        if self.detector_blend is not None and not 0.0 <= self.detector_blend <= 1.0:
+            raise ValueError(f"detector_blend is seed1's share in [0, 1], got {self.detector_blend}")
+        if not 0.0 <= self.smooth_strength <= 1.0:
+            raise ValueError(f"smooth_strength must be in [0, 1], got {self.smooth_strength}")
 
 
 @dataclass(frozen=True)
