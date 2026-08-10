@@ -358,6 +358,10 @@ def main() -> None:
     parser.add_argument("--steps", type=int, default=1500)
     parser.add_argument("--warm-start", action="store_true", help="initialise from the published pilkwang weights")
     parser.add_argument("--det-weight", type=float, default=1.0, help="weight on the detection term vs the edge term")
+    # Fine-tuning a CONVERGED model at its original training rate is the classic way to walk off its optimum,
+    # which is what 3000 warm-start steps at 1e-4 did (never beat the init). Exposed so the rate is a
+    # variable of the experiment rather than an inherited constant.
+    parser.add_argument("--lr", type=float, default=1e-4, help="learning rate; lower it when warm-starting")
     parser.add_argument("--compile-backbone", action="store_true", help="torch.compile the U-Net (static shape)")
     parser.add_argument("--patience", type=int, default=5, help="stop after N non-improving evals (<1 disables)")
     parser.add_argument("--device", type=str, default="cuda")
@@ -370,6 +374,7 @@ def main() -> None:
     config = JointTrainConfig(
         steps=args.steps,
         det_weight=args.det_weight,
+        lr=args.lr,
         device=args.device,
         patience=args.patience,
         eval_threshold=args.eval_threshold,
