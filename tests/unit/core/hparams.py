@@ -33,7 +33,7 @@ def test_to_json(tmp_path: Path):
 
 
 def test_from_json(tmp_path: Path):
-    original = RunConfig(name="probe").apply_overrides(["data.subset=4"])
+    original = RunConfig(name="probe").apply_overrides(["data.window_size=3"])
     path = tmp_path / "config.json"
     original.to_json(path)
     assert RunConfig.from_json(path) == original

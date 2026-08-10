@@ -19,9 +19,11 @@ from celltrack.eval.model_evaluator import ModelEvaluator
 from celltrack.eval.proxy import TestMovieProxy
 from celltrack.tracker import TrackerConfig
 from celltrack.training.joint_detector import JointTrainConfig, JointTrainer, PairSplit
+from celltrack.training.run_tracking import RunSetup, TrainingSplit
 from core.data.tracks import AnnotatedTracks
 from core.data.video import ImageStatistics
 from core.geometry import Spacing
+from tests.unit.celltrack.conftest import RecordingMlflow
 
 
 def test_config_defaults_to_pilkwangs_recipe():
@@ -90,11 +92,36 @@ def test_train(video_store: Path, in_bounds_tracks: AnnotatedTracks, tmp_path: P
     save_to = tmp_path / "joint.pt"
 
     best = JointTrainer(_cpu_config()).train(
-        PairSplit(targets, targets),
-        _evaluator(video_store, in_bounds_tracks),
-        warm_start=False,
-        save_to=save_to,
+        PairSplit(targets, targets), _evaluator(video_store, in_bounds_tracks), RunSetup(save_to)
     )
 
     assert isinstance(best, float)
     assert save_to.exists()
+
+
+def test_train_records_each_window(
+    video_store: Path, in_bounds_tracks: AnnotatedTracks, tmp_path: Path, mlflow_backend: RecordingMlflow
+):
+    """The joint loop is wired to the tracker, and keeps the two loss terms and the edge AUC as their own series."""
+    torch.manual_seed(0)
+    targets = _pairs(video_store)
+    JointTrainer(_cpu_config()).train(
+        PairSplit(targets, targets),
+        _evaluator(video_store, in_bounds_tracks),
+        RunSetup(tmp_path / "joint.pt", split=TrainingSplit(191, 4, 4)),
+    )
+    assert mlflow_backend.logged_params()["det_weight"] == 1.0
+    assert {
+        "proxy_score",
+        "best_score",
+        "node_recall",
+        "node_ratio",
+        "edge_auc",
+        "train_loss",
+        "edge_loss",
+        "det_loss",
+        "it_per_s",
+    } <= mlflow_backend.metric_keys()
+    steps = {call[3] for call in mlflow_backend.calls if call[0] == "metric"}
+    assert steps == {0, 2}  # the init eval at step 0, then the single two-step window
+    assert ("end",) in mlflow_backend.calls

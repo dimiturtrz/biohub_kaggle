@@ -36,6 +36,17 @@ def _write_geff(store: Path) -> Path:
     return store
 
 
+@pytest.fixture(autouse=True)
+def _no_mlflow(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The suite never writes to the real tracking store: every `Tracker` handle is the opt-out no-op.
+
+    This is also the standing proof that `CELLTRACK_NO_MLFLOW` keeps the wired-up code paths working — the
+    trainers and the proxy sweep run end to end under it. A test that wants to SEE what is logged patches
+    `Tracker._backend` instead (see `tests/unit/celltrack/conftest.py`), which bypasses this env var.
+    """
+    monkeypatch.setenv("CELLTRACK_NO_MLFLOW", "1")
+
+
 @pytest.fixture
 def video_store(tmp_path: Path) -> Path:
     """A tiny `(T, Z, Y, X)` OME-Zarr with the same metadata layout the competition ships."""

@@ -8,10 +8,27 @@ from pydantic import BaseModel
 
 from celltrack.eval import proxy_eval
 from celltrack.eval.proxy import CV_MOVIES
-from celltrack.eval.proxy_eval import TrackerProxyEval, _Args, _ConfigOverride
+from celltrack.eval.proxy_eval import TrackerProxyEval, _Args, _ConfigOverride, _SweepTracking
 from celltrack.tracker import CellTracker, TrackerConfig
 from core.metrics.score import VideoMetrics
 from core.paths import DataRoot
+from tests.unit.celltrack.conftest import RecordingMlflow
+
+
+class _Edges:
+    """The edge counts of one movie, exposing only the Jaccard the sweep records."""
+
+    def jaccard(self) -> float:
+        return 0.5
+
+
+class _Metrics:
+    """One movie's metrics, exposing only what a tracked sweep cell reads off them."""
+
+    edges = _Edges()
+
+    def total_node_ratio(self) -> float:
+        return 0.25
 
 
 def test_apply():
@@ -116,6 +133,26 @@ def test_by_acquisition(monkeypatch: pytest.MonkeyPatch):
     breakdown = {"44b6_a": "m1", "44b6_b": "m2", "6bba_c": "m3"}
     result = TrackerProxyEval.by_acquisition(cast(dict[str, VideoMetrics], breakdown))
     assert result == {"44b6": ["m1", "m2"], "6bba": ["m3"]}
+
+
+def test_config_at():
+    """`config_at` resolves one grid cell — the swept point with every `--set` override folded on top."""
+    config = TrackerConfig()
+    resolved = TrackerProxyEval("cpu", overrides=("smooth_strength=0.3",)).config_at(0.97, 2.0)
+    assert (resolved.threshold, resolved.linker.disappearance_cost) == (0.97, 2.0)
+    assert resolved.smooth_strength == 0.3 != config.smooth_strength
+
+
+def test_cell(mlflow_backend: RecordingMlflow):
+    """A swept cell becomes one run: the resolved config as params, the score and per-movie numbers as metrics."""
+    config = TrackerProxyEval("cpu").config_at(0.97, 2.0)
+    _SweepTracking("test-4").cell(config, 0.81, cast(dict[str, VideoMetrics], {"44b6_x": _Metrics()}))
+    params = mlflow_backend.logged_params()
+    assert params["threshold"] == 0.97
+    assert params["linker.disappearance_cost"] == 2.0  # the pydantic sub-config is dumped, then flattened
+    assert ("metric", "proxy_score", 0.81, None) in mlflow_backend.calls
+    assert ("metric", "44b6_x.raw_jaccard", 0.5, None) in mlflow_backend.calls
+    assert ("metric", "44b6_x.node_ratio", 0.25, None) in mlflow_backend.calls
 
 
 def test_from_argv(monkeypatch: pytest.MonkeyPatch):

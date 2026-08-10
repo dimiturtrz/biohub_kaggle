@@ -46,3 +46,14 @@ def test_timed(tmp_path: Path):
     contents = logfile.read_text(encoding="utf-8")
     assert "START load" in contents
     assert "DONE  load" in contents
+
+
+def test_setup_can_append_for_a_resumed_run(tmp_path: Path):
+    """`truncate=False` keeps what a killed run wrote, so a resumed run's log continues rather than replaces."""
+    logfile = tmp_path / "train.log"
+    logfile.write_text("first attempt\n", encoding="utf-8")
+    log = Obs.setup(logfile, truncate=False)
+    log.warning("second attempt")
+    contents = logfile.read_text(encoding="utf-8")
+    assert "first attempt" in contents
+    assert "second attempt" in contents

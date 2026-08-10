@@ -27,12 +27,10 @@ FieldValue = bool | int | float | tuple[object, ...] | list[object] | str | None
 
 
 class DataCfg(BaseModel):
-    """The input engine: which fold, how much of it, and the spatial/temporal window read per sample."""
+    """The input engine: the spatial/temporal window read per sample and how it is down-sampled."""
 
     model_config = _VALIDATE
 
-    fold: int = Field(0, ge=0)
-    subset: int = Field(0, ge=0)  # videos/prefix for the in-loop test split; 0 = full fold
     window_size: int = Field(2, ge=1)  # frames per temporal sample (t, t+1) for edge supervision
     downsample: tuple[int, int, int] = (1, 4, 4)  # (z, y, x) strided read — the pilkwang x4 in-plane
     pool_kernel_um: float = Field(5.0, gt=0)  # local-max peak-readout kernel (their model_config default)
@@ -73,7 +71,6 @@ class EvalCfg(BaseModel):
     model_config = _VALIDATE
 
     every: int = Field(1, ge=1)  # score every N epochs
-    subset: int = Field(8, ge=0)  # videos/prefix scored in-loop; 0 = full fold
     threshold: float = Field(0.99, gt=0, lt=1)  # peak-readout probability operating point
 
 

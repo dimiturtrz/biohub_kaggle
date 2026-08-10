@@ -19,6 +19,7 @@ from celltrack.eval.model_evaluator import ModelEvaluator
 from celltrack.eval.proxy import TestMovieProxy
 from celltrack.models.edge_transformer import PrecomputedEdgeAffinity
 from celltrack.tracker import TrackerConfig
+from celltrack.training.run_tracking import RunSetup, TrainingSplit
 from celltrack.training.tunet_detector import (
     TUNetDetectorTrainer,
     TUNetTrainConfig,
@@ -27,6 +28,7 @@ from celltrack.training.tunet_detector import (
 from core.data.tracks import AnnotatedTracks, TrackGraph
 from core.data.video import ImageStatistics
 from core.geometry import Spacing
+from tests.unit.celltrack.conftest import RecordingMlflow
 
 
 class _StubEdgeScorer:
@@ -109,13 +111,12 @@ def _cpu_config() -> TUNetTrainConfig:
     )
 
 
-def test_train(video_store: Path, in_bounds_tracks: AnnotatedTracks, tmp_path: Path):
-    """The loop runs end to end — sample, forward, loss, step, eval, save — and returns a best score, saved."""
-    torch.manual_seed(0)
+def _targets(video_store: Path, in_bounds_tracks: AnnotatedTracks) -> list[FrameTarget]:
+    """One annotated frame of the tiny fixture video, at its own intensity quantiles."""
     statistics = cast(ImageStatistics, zarr.open_group(video_store, mode="r").attrs["image_statistics"])
     quantiles = statistics["quantiles"]
     frame_coords = in_bounds_tracks.graph.coordinates
-    targets = [
+    return [
         FrameTarget(
             zarr_path=video_store,
             timepoint=0,
@@ -124,15 +125,50 @@ def test_train(video_store: Path, in_bounds_tracks: AnnotatedTracks, tmp_path: P
             coords=frame_coords[frame_coords[:, 0] == 0][:, 1:].astype(np.int64),
         )
     ]
-    proxy = TestMovieProxy(paths=(video_store,), truths=(in_bounds_tracks,), spacing=Spacing(z=1.0, y=1.0, x=1.0))
-    evaluator = ModelEvaluator(
-        proxy=proxy,
+
+
+def _evaluator(video_store: Path, in_bounds_tracks: AnnotatedTracks) -> ModelEvaluator:
+    """The real pipeline selector over a one-movie proxy — CPU, permissive threshold, geometry-only edges."""
+    return ModelEvaluator(
+        proxy=TestMovieProxy(paths=(video_store,), truths=(in_bounds_tracks,), spacing=Spacing(z=1.0, y=1.0, x=1.0)),
         edge_scorer=cast(BlendedEdgeTransformerScorer, _StubEdgeScorer()),  # geometry-only; real head needs packs
         recipe=DetectorRecipe(downsample=(1, 1, 1), pool_kernel_um=1.0, tta=False),
         device="cpu",
         config=TrackerConfig(threshold=0.0, min_track_length=1),
     )
+
+
+def test_train(video_store: Path, in_bounds_tracks: AnnotatedTracks, tmp_path: Path):
+    """The loop runs end to end — sample, forward, loss, step, eval, save — and returns a best score, saved."""
+    torch.manual_seed(0)
     save_to = tmp_path / "detector.pt"
-    best = TUNetDetectorTrainer(_cpu_config()).train(targets, evaluator, warm_start=False, save_to=save_to)
+    best = TUNetDetectorTrainer(_cpu_config()).train(
+        _targets(video_store, in_bounds_tracks), _evaluator(video_store, in_bounds_tracks), RunSetup(save_to)
+    )
     assert isinstance(best, float)
     assert save_to.exists()
+
+
+def test_train_records_each_window(
+    video_store: Path, in_bounds_tracks: AnnotatedTracks, tmp_path: Path, mlflow_backend: RecordingMlflow
+):
+    """The loop is actually wired to the tracker: the config lands as params, each window as metrics at its step."""
+    torch.manual_seed(0)
+    TUNetDetectorTrainer(_cpu_config()).train(
+        _targets(video_store, in_bounds_tracks),
+        _evaluator(video_store, in_bounds_tracks),
+        RunSetup(tmp_path / "detector.pt", split=TrainingSplit(191, 4, 4)),
+    )
+    assert mlflow_backend.logged_params()["steps"] == 2
+    assert {
+        "proxy_score",
+        "best_score",
+        "node_recall",
+        "node_ratio",
+        "train_loss",
+        "it_per_s",
+        "frames_per_s",
+    } <= mlflow_backend.metric_keys()
+    steps = {call[3] for call in mlflow_backend.calls if call[0] == "metric"}
+    assert steps == {0, 2}  # the init eval at step 0, then the single two-step window
+    assert ("end",) in mlflow_backend.calls

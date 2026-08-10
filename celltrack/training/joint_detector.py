@@ -25,7 +25,7 @@ import contextlib
 import logging
 import math
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import cast
 
@@ -45,10 +45,12 @@ from celltrack.models.joint_model import JointModel
 from celltrack.models.temporal_unet_detector import TemporalUNetDetector
 from celltrack.tracker import TrackerConfig
 from celltrack.training.early_stop import EarlyStop
+from celltrack.training.run_tracking import RunSetup, TrainingRun, TrainingSplit
 from celltrack.training.tunet_detector import _Optimization
 from core.data.tracks import AnnotatedTracks
 from core.data.video import ImageStatistics
 from core.metrics.edge_auc import EdgeAUC
+from core.obs import Obs
 from core.paths import DataRoot
 
 logger = logging.getLogger(__name__)
@@ -119,24 +121,17 @@ class JointTrainer:
     def __init__(self, config: JointTrainConfig) -> None:
         self.config = config
 
-    def train(
-        self,
-        pairs: PairSplit,
-        evaluator: ModelEvaluator,
-        *,
-        warm_start: bool,
-        save_to: Path,
-        resume: bool = False,
-    ) -> float:
+    def train(self, pairs: PairSplit, evaluator: ModelEvaluator, setup: RunSetup) -> float:
         """Train (or fine-tune) on the GT pairs, saving the best proxy-pipeline score. Returns that best score.
 
         The loop runs in eval-sized windows; each window streams `eval_every` GT pairs (one at a time — node
         counts are ragged, so there is no batching across pairs). A full resume snapshot (both heads, the
-        optimiser, step, best) is written beside the checkpoint every window; ``resume=True`` continues it.
+        optimiser, step, best) is written beside the checkpoint every window; ``setup.resume`` continues it.
         """
+        save_to = setup.save_to
         torch.set_float32_matmul_precision("high")  # TF32 on the fp32 matmuls the bf16 autocast leaves alone
         torch.backends.cudnn.benchmark = True  # one static frame shape — cudnn picks the fastest algo once
-        model = self._model(warm_start=warm_start).to(self.config.device)
+        model = self._model(warm_start=setup.warm_start).to(self.config.device)
         if self.config.device == "cuda":
             # channels_last_3d is a lossless layout that measured faster on the feature convs. torch stubs
             # omit the memory_format overload of Module.to; the call is runtime-valid.
@@ -147,8 +142,9 @@ class JointTrainer:
             model.detector.unet = torch.compile(model.detector.unet, dynamic=False)  # type: ignore[bad-assignment]
         optimization = _Optimization(torch.optim.AdamW(model.parameters(), lr=self.config.lr), None)
 
+        run = TrainingRun.open(asdict(self.config), setup)
         resume_path = save_to.with_suffix(".resume.pt")
-        done, restored = self._restore(model, optimization, resume_path, resume=resume)
+        done, restored = self._restore(model, optimization, resume_path, resume=setup.resume)
         if restored is not None:
             best = restored
         else:
@@ -161,6 +157,7 @@ class JointTrainer:
                 initial.node_ratio,
                 initial.edge_auc,
             )
+            run.window(done, self._metrics(initial, best))
             self._save_checkpoint(save_to, model)
 
         stop = EarlyStop(self.config.patience, self.config.es_min_delta) if self.config.patience >= 1 else None
@@ -178,6 +175,8 @@ class JointTrainer:
                 best, marker = result.score, " *saved"
                 self._save_checkpoint(save_to, model)
             self._save_resume(resume_path, model, optimization, done, best)
+            losses = {"train_loss": loss, "edge_loss": edge, "det_loss": det, "it_per_s": rate}
+            run.window(done, {**self._metrics(result, best), **losses})
             eta_hours = (self.config.steps - done) / rate / _SECONDS_PER_HOUR if rate else 0.0
             logger.info(
                 "step %5d/%d | train loss %.4f (edge %.4f det %.4f) | proxy %.4f | best %.4f%s | "
@@ -202,7 +201,18 @@ class JointTrainer:
                 break
 
         logger.info("best proxy score = %.4f, saved to %s", best, save_to)
+        run.close(best)
         return best
+
+    def _metrics(self, result: _EvalResult, best: float) -> dict[str, float]:
+        """The eval half of one tracked row — the selected-on score, the best so far, and both halves' levers."""
+        return {
+            "proxy_score": result.score,
+            "best_score": best,
+            "node_recall": result.node_recall,
+            "node_ratio": result.node_ratio,
+            "edge_auc": result.edge_auc,
+        }
 
     def _model(self, *, warm_start: bool) -> JointModel:
         """A joint model to train — warm-started from the published pack, or fresh at the configured size."""
@@ -344,7 +354,6 @@ class JointTrainer:
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
     parser = argparse.ArgumentParser(description="Train the joint detector+edge model on the non-held-out videos.")
     parser.add_argument("--steps", type=int, default=1500)
     parser.add_argument("--warm-start", action="store_true", help="initialise from the published pilkwang weights")
@@ -375,24 +384,28 @@ def main() -> None:
         return PairTarget.enumerate(graph_source.graph, video, q_low, q_high)
 
     proc = root.processed(_DATASET)
+    save_to = proc / args.weights
+    log = Obs.setup(save_to.with_suffix(".log"), truncate=not args.resume)  # tail-able while the run goes
     recipe = DetectorRecipe(downsample=config.downsample, tta=config.eval_tta)
     tracker_config = TrackerConfig(threshold=config.eval_threshold)
-    validation = TestMovieProxy.load(root, VALIDATION_MOVIES)
-    evaluator = ModelEvaluator.mount(
-        validation, (proc / _PACK_REL, proc / _PACK2_REL), recipe, config.device, tracker_config
-    )
+    with Obs.timed(log, "mounting the proxy evaluator"):
+        validation = TestMovieProxy.load(root, VALIDATION_MOVIES)
+        evaluator = ModelEvaluator.mount(
+            validation, (proc / _PACK_REL, proc / _PACK2_REL), recipe, config.device, tracker_config
+        )
 
     train_paths = TestMovieProxy.training_videos(root.videos("train"))
+    split = TrainingSplit(len(train_paths), len(VALIDATION_MOVIES), len(TEST_MOVIES))
     logger.info(
         "split: %d train / %d validation (selected on) / %d test (estimate only)",
-        len(train_paths),
-        len(VALIDATION_MOVIES),
-        len(TEST_MOVIES),
+        split.train,
+        split.validation,
+        split.test,
     )
-    logger.info("enumerating GT pairs over %d train videos...", len(train_paths))
     train_targets: list[PairTarget] = []
-    for path in train_paths:
-        train_targets.extend(_enumerate(path, AnnotatedTracks.from_geff(root.track_store(path))))
+    with Obs.timed(log, f"enumerating GT pairs over {len(train_paths)} train videos"):
+        for path in Obs.progress(train_paths, "videos", len(train_paths)):
+            train_targets.extend(_enumerate(path, AnnotatedTracks.from_geff(root.track_store(path))))
     logger.info("%d train pairs", len(train_targets))
 
     # The edge AUC reads the SAME held-out movies the checkpoint is selected on — one validation set, and a
@@ -403,14 +416,8 @@ def main() -> None:
         val_targets.extend(_enumerate(video, truth))
     logger.info("%d val pairs over %d validation movies", len(val_targets), len(held))
 
-    save_to = proc / args.weights
-    JointTrainer(config).train(
-        PairSplit(train_targets, val_targets),
-        evaluator,
-        warm_start=args.warm_start,
-        save_to=save_to,
-        resume=args.resume,
-    )
+    setup = RunSetup(save_to, warm_start=args.warm_start, resume=args.resume, split=split)
+    JointTrainer(config).train(PairSplit(train_targets, val_targets), evaluator, setup)
 
 
 if __name__ == "__main__":

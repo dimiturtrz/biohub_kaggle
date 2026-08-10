@@ -944,6 +944,12 @@
     },
     {
       "kind": "import",
+      "source": "celltrack.training.run_tracking",
+      "target": "core.tracking",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "celltrack.training.tracked_run",
       "target": "celltrack.training.early_stop",
       "weight": 1
@@ -2552,24 +2558,6 @@
     },
     {
       "kind": "calls",
-      "source": "celltrack.eval.proxy_eval.TrackerProxyEval._config",
-      "target": "celltrack.eval.proxy_eval._ConfigOverride.apply",
-      "weight": 1
-    },
-    {
-      "kind": "construct",
-      "source": "celltrack.eval.proxy_eval.TrackerProxyEval._config",
-      "target": "celltrack.linkers.linkers.LinkerConfig",
-      "weight": 1
-    },
-    {
-      "kind": "construct",
-      "source": "celltrack.eval.proxy_eval.TrackerProxyEval._config",
-      "target": "celltrack.tracker.TrackerConfig",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
       "source": "celltrack.eval.proxy_eval.TrackerProxyEval._mount",
       "target": "celltrack.eval.proxy.TestMovieProxy.load",
       "weight": 1
@@ -2589,13 +2577,13 @@
     {
       "kind": "calls",
       "source": "celltrack.eval.proxy_eval.TrackerProxyEval.breakdown",
-      "target": "celltrack.eval.proxy_eval.TrackerProxyEval._config",
+      "target": "celltrack.eval.proxy_eval.TrackerProxyEval._mount",
       "weight": 1
     },
     {
       "kind": "calls",
       "source": "celltrack.eval.proxy_eval.TrackerProxyEval.breakdown",
-      "target": "celltrack.eval.proxy_eval.TrackerProxyEval._mount",
+      "target": "celltrack.eval.proxy_eval.TrackerProxyEval.config_at",
       "weight": 1
     },
     {
@@ -2606,14 +2594,32 @@
     },
     {
       "kind": "calls",
-      "source": "celltrack.eval.proxy_eval.TrackerProxyEval.scores",
-      "target": "celltrack.eval.proxy_eval.TrackerProxyEval._config",
+      "source": "celltrack.eval.proxy_eval.TrackerProxyEval.config_at",
+      "target": "celltrack.eval.proxy_eval._ConfigOverride.apply",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.eval.proxy_eval.TrackerProxyEval.config_at",
+      "target": "celltrack.linkers.linkers.LinkerConfig",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.eval.proxy_eval.TrackerProxyEval.config_at",
+      "target": "celltrack.tracker.TrackerConfig",
       "weight": 1
     },
     {
       "kind": "calls",
       "source": "celltrack.eval.proxy_eval.TrackerProxyEval.scores",
       "target": "celltrack.eval.proxy_eval.TrackerProxyEval._mount",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.proxy_eval.TrackerProxyEval.scores",
+      "target": "celltrack.eval.proxy_eval.TrackerProxyEval.config_at",
       "weight": 1
     },
     {
@@ -2650,6 +2656,36 @@
       "kind": "calls",
       "source": "celltrack.eval.proxy_eval._ConfigOverride.nested",
       "target": "celltrack.eval.proxy_eval._ConfigOverride.concrete_type",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.proxy_eval._SweepTracking",
+      "target": "celltrack.tracker.TrackerConfig",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.proxy_eval._SweepTracking",
+      "target": "core.metrics.score.VideoMetrics",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.proxy_eval._SweepTracking.cell",
+      "target": "celltrack.eval.proxy_eval._SweepTracking._params",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.eval.proxy_eval._SweepTracking.cell",
+      "target": "core.tracking.Tracker",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.proxy_eval._SweepTracking.cell",
+      "target": "core.tracking.Tracker.start",
       "weight": 1
     },
     {
@@ -4581,6 +4617,12 @@
     {
       "kind": "references",
       "source": "celltrack.training.joint_detector.JointTrainer",
+      "target": "celltrack.training.run_tracking.RunSetup",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.joint_detector.JointTrainer",
       "target": "celltrack.training.tunet_detector._Optimization",
       "weight": 1
     },
@@ -4731,6 +4773,12 @@
     {
       "kind": "calls",
       "source": "celltrack.training.joint_detector.JointTrainer.train",
+      "target": "celltrack.training.joint_detector.JointTrainer._metrics",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer.train",
       "target": "celltrack.training.joint_detector.JointTrainer._model",
       "weight": 1
     },
@@ -4759,6 +4807,12 @@
       "weight": 1
     },
     {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer.train",
+      "target": "celltrack.training.run_tracking.TrainingRun.open",
+      "weight": 1
+    },
+    {
       "kind": "construct",
       "source": "celltrack.training.joint_detector.JointTrainer.train",
       "target": "celltrack.training.tunet_detector._Optimization",
@@ -4768,6 +4822,42 @@
       "kind": "holds",
       "source": "celltrack.training.joint_detector.PairSplit",
       "target": "celltrack.data.joint_dataset.PairTarget",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.training.run_tracking.RunSetup",
+      "target": "celltrack.training.run_tracking.TrainingSplit",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.run_tracking.TrainingRun",
+      "target": "celltrack.training.run_tracking.RunSetup",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.run_tracking.TrainingRun",
+      "target": "celltrack.training.run_tracking.TrainingRun",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.training.run_tracking.TrainingRun",
+      "target": "core.tracking.Tracker",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.run_tracking.TrainingRun.open",
+      "target": "core.tracking.Tracker",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.run_tracking.TrainingRun.open",
+      "target": "core.tracking.Tracker.track_run",
       "weight": 1
     },
     {
@@ -4821,7 +4911,19 @@
     {
       "kind": "references",
       "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer",
+      "target": "celltrack.eval.model_evaluator.EvalResult",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer",
       "target": "celltrack.eval.model_evaluator.ModelEvaluator",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer",
+      "target": "celltrack.training.run_tracking.RunSetup",
       "weight": 1
     },
     {
@@ -4911,7 +5013,19 @@
     {
       "kind": "calls",
       "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer.train",
+      "target": "celltrack.training.run_tracking.TrainingRun.open",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer.train",
       "target": "celltrack.training.tunet_detector.TUNetDetectorTrainer._detector",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer.train",
+      "target": "celltrack.training.tunet_detector.TUNetDetectorTrainer._metrics",
       "weight": 1
     },
     {
@@ -5661,7 +5775,7 @@
   ],
   "nodes": [
     {
-      "descendants": 73,
+      "descendants": 74,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -6189,7 +6303,7 @@
       "role": null
     },
     {
-      "descendants": 6,
+      "descendants": 7,
       "id": "celltrack.training",
       "label": "training",
       "level": "module",
@@ -6216,6 +6330,14 @@
       "descendants": 0,
       "id": "celltrack.training.joint_detector",
       "label": "joint_detector",
+      "level": "module",
+      "parent": "celltrack.training",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.run_tracking",
+      "label": "run_tracking",
       "level": "module",
       "parent": "celltrack.training",
       "role": null
@@ -6718,6 +6840,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.eval.proxy_eval._SweepTracking",
+      "label": "_SweepTracking",
+      "level": "class",
+      "parent": "celltrack.eval.proxy_eval",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.kernel_runtime.KernelRuntime",
       "label": "KernelRuntime",
       "level": "class",
@@ -7130,6 +7260,30 @@
       "label": "_EvalResult",
       "level": "class",
       "parent": "celltrack.training.joint_detector",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.run_tracking.RunSetup",
+      "label": "RunSetup",
+      "level": "class",
+      "parent": "celltrack.training.run_tracking",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.run_tracking.TrainingRun",
+      "label": "TrainingRun",
+      "level": "class",
+      "parent": "celltrack.training.run_tracking",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.run_tracking.TrainingSplit",
+      "label": "TrainingSplit",
+      "level": "class",
+      "parent": "celltrack.training.run_tracking",
       "role": "satellite"
     },
     {
@@ -8326,14 +8480,6 @@
     },
     {
       "descendants": 0,
-      "id": "celltrack.eval.proxy_eval.TrackerProxyEval._config",
-      "label": "_config",
-      "level": "method",
-      "parent": "celltrack.eval.proxy_eval.TrackerProxyEval",
-      "role": null
-    },
-    {
-      "descendants": 0,
       "id": "celltrack.eval.proxy_eval.TrackerProxyEval._mount",
       "label": "_mount",
       "level": "method",
@@ -8352,6 +8498,14 @@
       "descendants": 0,
       "id": "celltrack.eval.proxy_eval.TrackerProxyEval.by_acquisition",
       "label": "by_acquisition",
+      "level": "method",
+      "parent": "celltrack.eval.proxy_eval.TrackerProxyEval",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.proxy_eval.TrackerProxyEval.config_at",
+      "label": "config_at",
       "level": "method",
       "parent": "celltrack.eval.proxy_eval.TrackerProxyEval",
       "role": null
@@ -8402,6 +8556,30 @@
       "label": "nested",
       "level": "method",
       "parent": "celltrack.eval.proxy_eval._ConfigOverride",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.proxy_eval._SweepTracking.__init__",
+      "label": "__init__",
+      "level": "method",
+      "parent": "celltrack.eval.proxy_eval._SweepTracking",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.proxy_eval._SweepTracking._params",
+      "label": "_params",
+      "level": "method",
+      "parent": "celltrack.eval.proxy_eval._SweepTracking",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.proxy_eval._SweepTracking.cell",
+      "label": "cell",
+      "level": "method",
+      "parent": "celltrack.eval.proxy_eval._SweepTracking",
       "role": null
     },
     {
@@ -9582,6 +9760,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.training.joint_detector.JointTrainer._metrics",
+      "label": "_metrics",
+      "level": "method",
+      "parent": "celltrack.training.joint_detector.JointTrainer",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.training.joint_detector.JointTrainer._model",
       "label": "_model",
       "level": "method",
@@ -9638,6 +9824,38 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.training.run_tracking.TrainingRun.__init__",
+      "label": "__init__",
+      "level": "method",
+      "parent": "celltrack.training.run_tracking.TrainingRun",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.run_tracking.TrainingRun.close",
+      "label": "close",
+      "level": "method",
+      "parent": "celltrack.training.run_tracking.TrainingRun",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.run_tracking.TrainingRun.open",
+      "label": "open",
+      "level": "method",
+      "parent": "celltrack.training.run_tracking.TrainingRun",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.run_tracking.TrainingRun.window",
+      "label": "window",
+      "level": "method",
+      "parent": "celltrack.training.run_tracking.TrainingRun",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.training.tracked_run.TrackedRun.__init__",
       "label": "__init__",
       "level": "method",
@@ -9680,6 +9898,14 @@
       "descendants": 0,
       "id": "celltrack.training.tunet_detector.TUNetDetectorTrainer._detector",
       "label": "_detector",
+      "level": "method",
+      "parent": "celltrack.training.tunet_detector.TUNetDetectorTrainer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.tunet_detector.TUNetDetectorTrainer._metrics",
+      "label": "_metrics",
       "level": "method",
       "parent": "celltrack.training.tunet_detector.TUNetDetectorTrainer",
       "role": null

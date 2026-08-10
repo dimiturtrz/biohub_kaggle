@@ -48,12 +48,15 @@ class Obs:
                 self.handleError(record)
 
     @staticmethod
-    def setup(logfile: str | Path | None = None, level: int = logging.INFO) -> logging.Logger:
+    def setup(logfile: str | Path | None = None, level: int = logging.INFO, *, truncate: bool = True) -> logging.Logger:
         """Configure the `celltrack` logger -> console (stdout) + optional file. Returns it.
 
         Handlers go on the NAMED logger with propagate=False (not the root) — third-party libs call
         `logging.basicConfig(force=True)`, wiping root handlers; keeping ours off the root makes them
         survive that. `celltrack.*` children propagate up to here.
+
+        `truncate=False` appends instead of starting the file empty — what a RESUMED run wants, so the
+        record of the killed attempt survives beside its continuation.
         """
         log = logging.getLogger(_LOGGER_NAME)
         log.setLevel(level)
@@ -65,16 +68,17 @@ class Obs:
         log.addHandler(stream)
         if logfile is not None:
             Path(logfile).parent.mkdir(parents=True, exist_ok=True)
-            Path(logfile).write_text("", encoding="utf-8")  # truncate at start
+            if truncate:
+                Path(logfile).write_text("", encoding="utf-8")
             file_handler = Obs._AppendHandler(logfile)
             file_handler.setFormatter(fmt)
             log.addHandler(file_handler)
         return log
 
     @staticmethod
-    def progress(iterable: Iterable[object], desc: str, total: int | None = None, every: float = 5.0):
+    def progress[T](iterable: Iterable[T], desc: str, total: int | None = None, every: float = 5.0) -> Iterable[T]:
         """tqdm progress bar (degrades gracefully in non-tty). `every` = min seconds between bar
-        refreshes so file logs stay readable."""
+        refreshes so file logs stay readable. Generic, so a wrapped loop keeps its element type."""
         return tqdm(iterable, desc=desc, total=total, mininterval=every, dynamic_ncols=True)
 
     @staticmethod

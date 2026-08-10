@@ -14,7 +14,8 @@ from __future__ import annotations
 
 import argparse
 import logging
-from dataclasses import dataclass, field, replace
+from collections.abc import Mapping
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import get_args, get_type_hints
 
@@ -25,6 +26,7 @@ from celltrack.linkers.linkers import LinkerConfig
 from celltrack.tracker import CellTracker, TrackerConfig
 from core.metrics.score import SplitScore, VideoMetrics
 from core.paths import DataRoot
+from core.tracking import Tracker
 
 logger = logging.getLogger(__name__)
 
@@ -110,12 +112,12 @@ class TrackerProxyEval:
         results: dict[tuple[float, float], float] = {}
         for threshold in self.thresholds:
             for cost in self.disappearance_costs:
-                config = self._config(threshold, cost)
+                config = self.config_at(threshold, cost)
                 results[(threshold, cost)] = proxy.score(pipeline.with_config(config)).score
         return results
 
-    def _config(self, threshold: float, cost: float) -> TrackerConfig:
-        """The base config for one grid cell, with every `--set` override folded on top."""
+    def config_at(self, threshold: float, cost: float) -> TrackerConfig:
+        """The resolved config of one grid cell — the swept point with every `--set` override folded on top."""
         config = TrackerConfig(threshold=threshold, linker=LinkerConfig(disappearance_cost=cost))
         for assignment in self.overrides:
             config = _ConfigOverride.apply(config, assignment)
@@ -124,7 +126,7 @@ class TrackerProxyEval:
     def breakdown(self, root: DataRoot) -> dict[str, VideoMetrics]:
         """Per-movie metrics of the tracker at its first swept threshold — separates recall from bonus-farming."""
         proxy, pipeline = self._mount(root)
-        config = self._config(self.thresholds[0], self.disappearance_costs[0])
+        config = self.config_at(self.thresholds[0], self.disappearance_costs[0])
         return proxy.metrics(pipeline.with_config(config))
 
     @staticmethod
@@ -139,6 +141,37 @@ class TrackerProxyEval:
         for stem, metric in breakdown.items():
             groups.setdefault(stem[:_ACQUISITION_PREFIX], []).append(metric)
         return {prefix: SplitScore.of(metrics) for prefix, metrics in groups.items()}
+
+
+class _SweepTracking:
+    """One mlflow run per swept grid cell, so a sweep is comparable across CLI invocations, not just within one.
+
+    The whole RESOLVED `TrackerConfig` goes in as params (every knob, `--set` overrides folded in), which is
+    what makes "what did smooth_strength=0.3 score" answerable months later; the split score and, when asked,
+    each movie's raw Jaccard and node ratio go in as metrics. `CELLTRACK_NO_MLFLOW` makes all of it a no-op.
+    """
+
+    _EXPERIMENT = "celltrack-proxy"
+
+    def __init__(self, proxy: str) -> None:
+        self._proxy = proxy
+
+    def cell(self, config: TrackerConfig, score: float, breakdown: Mapping[str, VideoMetrics]) -> None:
+        """Record one grid cell: its config as params, its score (and any per-movie metrics) as metrics."""
+        name = f"{self._proxy}-thr{config.threshold:g}-dis{config.linker.disappearance_cost:g}"
+        handle = Tracker(self._EXPERIMENT, name, _SweepTracking._params(config), {"proxy": self._proxy}).start()
+        handle.metric("proxy_score", score)
+        for stem, metric in breakdown.items():
+            handle.metric(f"{stem}.raw_jaccard", metric.edges.jaccard())
+            handle.metric(f"{stem}.node_ratio", metric.total_node_ratio())
+        handle.end()
+
+    @staticmethod
+    def _params(config: TrackerConfig) -> dict[str, object]:
+        """The config as a nested plain dict — pydantic sub-configs dumped so the tracker can flatten them."""
+        return {
+            key: value.model_dump() if isinstance(value, BaseModel) else value for key, value in asdict(config).items()
+        }
 
 
 @dataclass(frozen=True)
@@ -192,21 +225,24 @@ def main() -> None:
     root = DataRoot.from_config(args.config)
     evaluator = TrackerProxyEval(args.device, args.thresholds, args.disappearance_costs, args.stems, args.overrides)
     logger.info("proxy=%s set=%s", args.stems_label, list(args.overrides))
-    if args.per_movie:
-        breakdown = evaluator.breakdown(root)
-        for stem, metric in breakdown.items():
-            logger.info(
-                "  %-16s raw_jac=%.4f adj_jac=%.4f nodes=%-6d ratio=%+.3f",
-                stem,
-                metric.edges.jaccard(),
-                metric.adjusted_edge_jaccard(),
-                metric.predicted_nodes,
-                metric.total_node_ratio(),
-            )
-        for prefix, split in evaluator.by_acquisition(breakdown).items():
-            logger.info("  acquisition %-6s score=%.4f", prefix, split.score)
+    breakdown: dict[str, VideoMetrics] = evaluator.breakdown(root) if args.per_movie else {}
+    for stem, metric in breakdown.items():
+        logger.info(
+            "  %-16s raw_jac=%.4f adj_jac=%.4f nodes=%-6d ratio=%+.3f",
+            stem,
+            metric.edges.jaccard(),
+            metric.adjusted_edge_jaccard(),
+            metric.predicted_nodes,
+            metric.total_node_ratio(),
+        )
+    for prefix, split in evaluator.by_acquisition(breakdown).items():
+        logger.info("  acquisition %-6s score=%.4f", prefix, split.score)
+    tracking = _SweepTracking(args.stems_label)
+    first_cell = (args.thresholds[0], args.disappearance_costs[0])  # the cell `breakdown` was measured at
     for (threshold, cost), score in evaluator.scores(root).items():
         logger.info("threshold=%-6.4f disappearance=%-6.2f proxy score=%.4f", threshold, cost, score)
+        per_movie = breakdown if (threshold, cost) == first_cell else {}
+        tracking.cell(evaluator.config_at(threshold, cost), score, per_movie)
 
 
 if __name__ == "__main__":

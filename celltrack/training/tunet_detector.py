@@ -24,7 +24,7 @@ import argparse
 import contextlib
 import logging
 import time
-from dataclasses import dataclass, field, replace
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import cast
 
@@ -37,13 +37,15 @@ from torch.nn.attention import SDPBackend, sdpa_kernel
 
 from celltrack.data.tunet_dataset import Augmentation, FrameDataset, FrameTarget
 from celltrack.detectors.tunet import DetectorRecipe, TemporalUNetDetector
-from celltrack.eval.model_evaluator import ModelEvaluator
+from celltrack.eval.model_evaluator import EvalResult, ModelEvaluator
 from celltrack.eval.proxy import TEST_MOVIES, VALIDATION_MOVIES, TestMovieProxy
 from celltrack.losses.balanced_bce import BalancedBCE
 from celltrack.tracker import TrackerConfig
 from celltrack.training.early_stop import EarlyStop
+from celltrack.training.run_tracking import RunSetup, TrainingRun, TrainingSplit
 from core.data.tracks import AnnotatedTracks
 from core.data.video import ImageStatistics
+from core.obs import Obs
 from core.paths import DataRoot
 
 logger = logging.getLogger(__name__)
@@ -135,25 +137,18 @@ class TUNetDetectorTrainer:
     def __init__(self, config: TUNetTrainConfig) -> None:
         self.config = config
 
-    def train(
-        self,
-        targets: list[FrameTarget],
-        evaluator: ModelEvaluator,
-        *,
-        warm_start: bool,
-        save_to: Path,
-        resume: bool = False,
-    ) -> float:
+    def train(self, targets: list[FrameTarget], evaluator: ModelEvaluator, setup: RunSetup) -> float:
         """Train (or fine-tune) on the prepared frames, saving the best proxy-pipeline score. Returns that best score.
 
         The loop runs in eval-sized windows; each window's frames are decompressed by a thread pool (see
         `FrameDataset.stream`) so the GPU stays fed without DataLoader worker processes, which deadlock on
         repeated spawn on this box. A full resume snapshot (weights, optimiser, schedule, step, best) is written
-        beside the checkpoint every window; ``resume=True`` picks the latest up where a killed run left off.
+        beside the checkpoint every window; ``setup.resume`` picks the latest up where a killed run left off.
         """
+        save_to = setup.save_to
         torch.set_float32_matmul_precision("high")  # TF32 on the fp32 matmuls the bf16 autocast leaves alone
         torch.backends.cudnn.benchmark = True  # one static frame shape (64^3) — cudnn picks the fastest algo once
-        detector = self._detector(warm_start=warm_start).to(self.config.device)
+        detector = self._detector(warm_start=setup.warm_start).to(self.config.device)
         if self.config.device == "cuda":
             # channels_last_3d is a lossless layout that measured ~1.2x on the feature convs — always on for CUDA,
             # not a knob. torch stubs omit the memory_format overload of Module.to; the call is runtime-valid.
@@ -167,14 +162,16 @@ class TUNetDetectorTrainer:
         optimizer = torch.optim.AdamW(detector.parameters(), lr=self.config.lr)
         optimization = _Optimization(optimizer, self._scheduler(optimizer))
 
+        run = TrainingRun.open(asdict(self.config), setup)
         resume_path = save_to.with_suffix(".resume.pt")
-        done, restored = self._restore(detector, optimization, resume_path, resume=resume)
+        done, restored = self._restore(detector, optimization, resume_path, resume=setup.resume)
         if restored is not None:
             best = restored
         else:
             initial = evaluator.evaluate(detector)
             best = initial.score
             logger.info("init proxy %.4f | node R %.3f ratio %+.2f", best, initial.node_recall, initial.node_ratio)
+            run.window(done, self._metrics(initial, best))
             detector.save_checkpoint(save_to, self.config.recipe)
 
         stop = EarlyStop(self.config.patience, self.config.es_min_delta) if self.config.patience >= 1 else None
@@ -193,6 +190,8 @@ class TUNetDetectorTrainer:
                 best, marker = score, " *saved"
                 detector.save_checkpoint(save_to, self.config.recipe)
             self._save_resume(resume_path, detector, optimization, done, best)
+            window_metrics = {"train_loss": loss, "it_per_s": rate, "frames_per_s": rate * self.config.batch_size}
+            run.window(done, {**self._metrics(result, best), **window_metrics})
             eta_hours = (self.config.steps - done) / rate / _SECONDS_PER_HOUR if rate else 0.0
             logger.info(
                 "step %5d/%d | loss %.4f | proxy %.4f | best %.4f%s | node R %.3f ratio %+.2f | "
@@ -215,7 +214,17 @@ class TUNetDetectorTrainer:
                 break
 
         logger.info("best proxy-pipeline score = %.4f, saved to %s", best, save_to)
+        run.close(best)
         return best
+
+    def _metrics(self, result: EvalResult, best: float) -> dict[str, float]:
+        """The eval half of one tracked row — the selected-on score, the best so far, and the node levers."""
+        return {
+            "proxy_score": result.score,
+            "best_score": best,
+            "node_recall": result.node_recall,
+            "node_ratio": result.node_ratio,
+        }
 
     def _scheduler(self, optimizer: torch.optim.Optimizer) -> torch.optim.lr_scheduler.LRScheduler | None:
         """A cosine decay to zero over the whole run, or none for the baseline's flat learning rate."""
@@ -315,7 +324,6 @@ class TUNetDetectorTrainer:
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
     parser = argparse.ArgumentParser(description="Train the temporal-U-Net detector on the non-held-out train videos.")
     parser.add_argument("--steps", type=int, default=1500)
     parser.add_argument("--lr", type=float, default=1e-4)
@@ -364,37 +372,39 @@ def main() -> None:
     dz, dy, dx = config.downsample
 
     proc = root.processed(_DATASET)
+    save_to = proc / args.weights
+    log = Obs.setup(save_to.with_suffix(".log"), truncate=not args.resume)  # tail-able while the run goes
     tracker_config = TrackerConfig(threshold=config.eval_threshold)
     recipe = replace(config.recipe, tta=config.eval_tta)  # selector eval skips TTA by default (4x cheaper)
-    validation = TestMovieProxy.load(root, VALIDATION_MOVIES)
-    evaluator = ModelEvaluator.mount(
-        validation, (proc / _PACK_REL, proc / _PACK2_REL), recipe, config.device, tracker_config
-    )
+    with Obs.timed(log, "mounting the proxy evaluator"):
+        validation = TestMovieProxy.load(root, VALIDATION_MOVIES)
+        evaluator = ModelEvaluator.mount(
+            validation, (proc / _PACK_REL, proc / _PACK2_REL), recipe, config.device, tracker_config
+        )
 
     train_paths = TestMovieProxy.training_videos(root.videos("train"))
+    split = TrainingSplit(len(train_paths), len(VALIDATION_MOVIES), len(TEST_MOVIES))
     logger.info(
         "split: %d train / %d validation (selected on) / %d test (estimate only)",
-        len(train_paths),
-        len(VALIDATION_MOVIES),
-        len(TEST_MOVIES),
+        split.train,
+        split.validation,
+        split.test,
     )
-    logger.info("enumerating GT frames over %d train videos...", len(train_paths))
     targets: list[FrameTarget] = []
-    for path in train_paths:
-        quantiles = cast(ImageStatistics, zarr.open_group(path, mode="r").attrs["image_statistics"])["quantiles"]
-        q_low, q_high = float(quantiles["0.001"]), float(quantiles["0.999"])
-        coordinates = AnnotatedTracks.from_geff(root.track_store(path)).graph.coordinates
-        for timepoint in np.unique(coordinates[:, 0]):
-            frame_coords = coordinates[coordinates[:, 0] == timepoint][:, 1:] // np.array([dz, dy, dx])
-            targets.append(FrameTarget(path, int(timepoint), q_low, q_high, frame_coords.astype(np.int64)))
+    with Obs.timed(log, f"enumerating GT frames over {len(train_paths)} train videos"):
+        for path in Obs.progress(train_paths, "videos", len(train_paths)):
+            quantiles = cast(ImageStatistics, zarr.open_group(path, mode="r").attrs["image_statistics"])["quantiles"]
+            q_low, q_high = float(quantiles["0.001"]), float(quantiles["0.999"])
+            coordinates = AnnotatedTracks.from_geff(root.track_store(path)).graph.coordinates
+            for timepoint in np.unique(coordinates[:, 0]):
+                frame_coords = coordinates[coordinates[:, 0] == timepoint][:, 1:] // np.array([dz, dy, dx])
+                targets.append(FrameTarget(path, int(timepoint), q_low, q_high, frame_coords.astype(np.int64)))
     logger.info("%d annotated frames", len(targets))
 
     logger.info("selecting through the shipped tracker on the %d validation movies", len(evaluator.proxy.paths))
 
-    save_to = root.processed(_DATASET) / args.weights
-    TUNetDetectorTrainer(config).train(
-        targets, evaluator, warm_start=args.warm_start, save_to=save_to, resume=args.resume
-    )
+    setup = RunSetup(save_to, warm_start=args.warm_start, resume=args.resume, split=split)
+    TUNetDetectorTrainer(config).train(targets, evaluator, setup)
 
 
 if __name__ == "__main__":

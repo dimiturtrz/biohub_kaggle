@@ -9,6 +9,8 @@ classes for tiny torch modules honouring that contract, so construction and forw
 
 from __future__ import annotations
 
+import types
+from pathlib import Path
 from typing import override
 
 import pytest
@@ -16,6 +18,8 @@ from torch import Tensor, nn
 
 from celltrack.models.edge_transformer import EdgeTransformerScorer
 from celltrack.models.temporal_unet_detector import TemporalUNetDetector
+from core import tracking
+from core.tracking import Tracker
 
 
 class _StubBackbone(nn.Module):
@@ -62,3 +66,65 @@ def _stub_external_models(monkeypatch: pytest.MonkeyPatch) -> None:
     """Swap both third-party model classes for local stubs so no test reaches the absent `external/` dep."""
     monkeypatch.setattr(TemporalUNetDetector, "_backbone_cls", staticmethod(lambda: _StubBackbone))
     monkeypatch.setattr(EdgeTransformerScorer, "_transformer_cls", staticmethod(lambda: _StubTransformer))
+
+
+class RecordingMlflow:
+    """A duck-typed mlflow module recording every call `Tracker` forwards, so what a run LOGS is assertable.
+
+    `Tracker._Live` types its sink as the mlflow module (that is what it gets in production) and suppresses
+    every call's exceptions, so a missing method would silently pass — this honours the whole surface the
+    tracker uses instead.
+    """
+
+    RUN_ID = "recorded-run"
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[object, ...]] = []
+
+    def set_tracking_uri(self, uri: str) -> None:
+        self.calls.append(("uri", uri))
+
+    def set_experiment(self, name: str) -> None:
+        self.calls.append(("experiment", name))
+
+    def enable_system_metrics_logging(self) -> None:
+        self.calls.append(("system_metrics",))
+
+    def start_run(self, run_name: str | None = None, run_id: str | None = None) -> None:
+        self.calls.append(("start", run_name, run_id))
+
+    def active_run(self) -> types.SimpleNamespace:
+        return types.SimpleNamespace(info=types.SimpleNamespace(run_id=RecordingMlflow.RUN_ID))
+
+    def log_params(self, params: dict[str, object]) -> None:
+        self.calls.append(("params", params))
+
+    def set_tag(self, key: str, value: str) -> None:
+        self.calls.append(("tag", key, value))
+
+    def log_metric(self, key: str, value: float, step: int | None = None) -> None:
+        self.calls.append(("metric", key, value, step))
+
+    def end_run(self) -> None:
+        self.calls.append(("end",))
+
+    def metric_keys(self) -> set[str]:
+        """Every metric key recorded — what a caller usually asserts over."""
+        return {str(call[1]) for call in self.calls if call[0] == "metric"}
+
+    def logged_params(self) -> dict[str, object]:
+        """The flattened params of the run's single open, merged (a resumed run re-logs nothing)."""
+        merged: dict[str, object] = {}
+        for call in self.calls:
+            if call[0] == "params":
+                merged.update(dict(call[1]))  # pyrefly: ignore[bad-argument-type]
+        return merged
+
+
+@pytest.fixture
+def mlflow_backend(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> RecordingMlflow:
+    """Replace the tracker's backend with a recorder (bypassing the suite-wide `CELLTRACK_NO_MLFLOW`)."""
+    backend = RecordingMlflow()
+    monkeypatch.setattr(tracking, "_MLRUNS", tmp_path / "mlruns")  # never touch the repo's real store
+    monkeypatch.setattr(Tracker, "_backend", staticmethod(lambda: backend))
+    return backend
