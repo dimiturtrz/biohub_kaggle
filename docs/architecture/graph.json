@@ -2,6 +2,42 @@
   "edges": [
     {
       "kind": "import",
+      "source": "celltrack.data.crops",
+      "target": "celltrack.data.targets",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.data.crops",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.data.crops",
+      "target": "core.data.video",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.data.crops",
+      "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.data.joint_dataset",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.data.targets",
+      "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "celltrack.detectors.center_prior",
       "target": "celltrack.detectors.response_cache",
       "weight": 1
@@ -98,24 +134,6 @@
     },
     {
       "kind": "import",
-      "source": "celltrack.edges.affinity_division",
-      "target": "celltrack.affinity",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.edges.affinity_division",
-      "target": "core.data.tracks",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.edges.affinity_division",
-      "target": "core.geometry",
-      "weight": 1
-    },
-    {
-      "kind": "import",
       "source": "celltrack.edges.blended_edge_scoring",
       "target": "celltrack.detectors.tunet",
       "weight": 1
@@ -129,18 +147,6 @@
     {
       "kind": "import",
       "source": "celltrack.edges.blended_edge_scoring",
-      "target": "core.data.tracks",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.edges.edge_scoring",
-      "target": "celltrack.detectors.tunet",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.edges.edge_scoring",
       "target": "core.data.tracks",
       "weight": 1
     },
@@ -530,6 +536,54 @@
     },
     {
       "kind": "import",
+      "source": "celltrack.models.edge_transformer",
+      "target": "celltrack.models.temporal_unet_detector",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.models.edge_transformer",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.models.joint_model",
+      "target": "celltrack.models.edge_transformer",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.models.joint_model",
+      "target": "celltrack.models.temporal_unet_detector",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.models.temporal_unet_detector",
+      "target": "core.data.video",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.postproc.affinity_division_recovery",
+      "target": "celltrack.affinity",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.postproc.affinity_division_recovery",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.postproc.affinity_division_recovery",
+      "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "celltrack.postproc.division_recovery",
       "target": "celltrack.detectors.center_prior",
       "weight": 1
@@ -686,30 +740,6 @@
     },
     {
       "kind": "import",
-      "source": "celltrack.training.crops",
-      "target": "celltrack.training.targets",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.training.crops",
-      "target": "core.data.tracks",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.training.crops",
-      "target": "core.data.video",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.training.crops",
-      "target": "core.geometry",
-      "weight": 1
-    },
-    {
-      "kind": "import",
       "source": "celltrack.training.edge_finetune",
       "target": "celltrack.dense_diagnosis",
       "weight": 1
@@ -758,8 +788,80 @@
     },
     {
       "kind": "import",
-      "source": "celltrack.training.targets",
-      "target": "core.geometry",
+      "source": "celltrack.training.joint_detector",
+      "target": "celltrack.data.joint_dataset",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.joint_detector",
+      "target": "celltrack.eval.bracket",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.joint_detector",
+      "target": "celltrack.losses.balanced_bce",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.joint_detector",
+      "target": "celltrack.losses.softmax_focal_bce",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.joint_detector",
+      "target": "celltrack.models.edge_transformer",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.joint_detector",
+      "target": "celltrack.models.joint_model",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.joint_detector",
+      "target": "celltrack.models.temporal_unet_detector",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.joint_detector",
+      "target": "celltrack.training.early_stop",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.joint_detector",
+      "target": "celltrack.training.tunet_detector",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.joint_detector",
+      "target": "core.data.split",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.joint_detector",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.joint_detector",
+      "target": "core.data.video",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.joint_detector",
+      "target": "core.paths",
       "weight": 1
     },
     {
@@ -878,6 +980,12 @@
     },
     {
       "kind": "import",
+      "source": "core.metrics.detection",
+      "target": "core.metrics.matching",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "core.metrics.divisions",
       "target": "core.data.tracks",
       "weight": 1
@@ -946,6 +1054,168 @@
       "kind": "import",
       "source": "core.metrics.score",
       "target": "core.metrics.matching",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.data.crops.CropSampler",
+      "target": "celltrack.data.crops.TrainingCrop",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.data.crops.CropSampler",
+      "target": "core.data.tracks.AnnotatedTracks",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.data.crops.CropSampler",
+      "target": "core.data.video.CellVideo",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.data.crops.CropSampler",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.crops.CropSampler._crop_origin",
+      "target": "celltrack.data.crops.CropSampler._jitter",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.crops.CropSampler.sample",
+      "target": "celltrack.data.crops.CropSampler._anchor",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.crops.CropSampler.sample",
+      "target": "celltrack.data.crops.CropSampler._centres_in_crop",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.crops.CropSampler.sample",
+      "target": "celltrack.data.crops.CropSampler._crop_origin",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.crops.CropSampler.sample",
+      "target": "celltrack.data.crops.CropSampler._flip",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.crops.CropSampler.sample",
+      "target": "celltrack.data.crops.CropSampler._intensity",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.crops.CropSampler.sample",
+      "target": "celltrack.data.crops.CropSampler._window_timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.data.crops.CropSampler.sample",
+      "target": "celltrack.data.crops.TrainingCrop",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.crops.CropSampler.sample",
+      "target": "celltrack.data.targets.DetectionTarget.build",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.crops.CropSampler.sample",
+      "target": "core.data.video.CellVideo.window",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.data.joint_dataset.PairDataset",
+      "target": "celltrack.data.joint_dataset.PairTarget",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.joint_dataset.PairDataset.__getitem__",
+      "target": "celltrack.data.joint_dataset.PairDataset._frame",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.data.joint_dataset.PairTarget",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.joint_dataset.PairTarget.enumerate",
+      "target": "core.data.tracks.TrackGraph.edge_rows",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.joint_dataset.PairTarget.enumerate",
+      "target": "core.data.tracks.TrackGraph.positions",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.joint_dataset.PairTarget.enumerate",
+      "target": "core.data.tracks.TrackGraph.timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.data.targets.DetectionTarget",
+      "target": "celltrack.data.targets.DetectionTarget",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.data.targets.DetectionTarget",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.targets.DetectionTarget.build",
+      "target": "core.geometry.Spacing.anisotropic_radius",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.data.tunet_dataset.FrameDataset",
+      "target": "celltrack.data.tunet_dataset.Augmentation",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.data.tunet_dataset.FrameDataset",
+      "target": "celltrack.data.tunet_dataset.FrameTarget",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.tunet_dataset.FrameDataset.__getitem__",
+      "target": "celltrack.data.tunet_dataset.Augmentation.apply",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.tunet_dataset.FrameDataset.batches",
+      "target": "celltrack.data.tunet_dataset.FrameDataset.stream",
       "weight": 1
     },
     {
@@ -1263,12 +1533,6 @@
     {
       "kind": "holds",
       "source": "celltrack.detectors.pipeline.BlendDetectorScorer",
-      "target": "celltrack.detectors.tunet.DetectorRecipe",
-      "weight": 1
-    },
-    {
-      "kind": "holds",
-      "source": "celltrack.detectors.pipeline.BlendDetectorScorer",
       "target": "celltrack.detectors.tunet.TemporalUNetDetector",
       "weight": 1
     },
@@ -1282,12 +1546,6 @@
       "kind": "calls",
       "source": "celltrack.detectors.pipeline.BlendDetectorScorer._cached_logits",
       "target": "celltrack.detectors.response_cache.ResponseStore.responses",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.detectors.pipeline.BlendDetectorScorer._cached_logits",
-      "target": "celltrack.detectors.tunet.DetectorRecipe.fingerprint",
       "weight": 1
     },
     {
@@ -1316,12 +1574,6 @@
     },
     {
       "kind": "references",
-      "source": "celltrack.detectors.tunet.DetectorRecipe",
-      "target": "celltrack.detectors.tunet.DetectorRecipe",
-      "weight": 1
-    },
-    {
-      "kind": "references",
       "source": "celltrack.detectors.tunet.TemporalUNetDetector",
       "target": "celltrack.detectors.peaks.PeakExtractor",
       "weight": 1
@@ -1329,25 +1581,13 @@
     {
       "kind": "references",
       "source": "celltrack.detectors.tunet.TemporalUNetDetector",
-      "target": "celltrack.detectors.tunet.DetectorRecipe",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.detectors.tunet.TemporalUNetDetector",
-      "target": "celltrack.detectors.tunet._VideoSource",
+      "target": "celltrack.models.temporal_unet_detector.DetectorRecipe",
       "weight": 1
     },
     {
       "kind": "references",
       "source": "celltrack.detectors.tunet.TemporalUNetDetector",
       "target": "core.data.tracks.TrackGraph",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.detectors.tunet.TemporalUNetDetector.__init__",
-      "target": "celltrack.detectors.tunet.TemporalUNetDetector._backbone_cls",
       "weight": 1
     },
     {
@@ -1369,27 +1609,9 @@
       "weight": 1
     },
     {
-      "kind": "construct",
-      "source": "celltrack.detectors.tunet.TemporalUNetDetector._open_source",
-      "target": "celltrack.detectors.tunet._VideoSource",
-      "weight": 1
-    },
-    {
       "kind": "calls",
       "source": "celltrack.detectors.tunet.TemporalUNetDetector._response",
       "target": "celltrack.detectors.tunet.TemporalUNetDetector._logits",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.detectors.tunet.TemporalUNetDetector._response",
-      "target": "celltrack.detectors.tunet.TemporalUNetDetector._open_source",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.detectors.tunet.TemporalUNetDetector._response",
-      "target": "celltrack.detectors.tunet.TemporalUNetDetector._read_frame",
       "weight": 1
     },
     {
@@ -1411,24 +1633,6 @@
       "weight": 1
     },
     {
-      "kind": "calls",
-      "source": "celltrack.detectors.tunet.TemporalUNetDetector.forward",
-      "target": "celltrack.detectors.tunet.TemporalUNetDetector.forward_batch",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.detectors.tunet.TemporalUNetDetector.from_checkpoint",
-      "target": "celltrack.detectors.tunet.DetectorRecipe.from_config",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.detectors.tunet.TemporalUNetDetector.from_pack",
-      "target": "celltrack.detectors.tunet.DetectorRecipe.from_config",
-      "weight": 1
-    },
-    {
       "kind": "construct",
       "source": "celltrack.detectors.tunet.TemporalUNetDetector.graph_from_volumes",
       "target": "core.data.tracks.TrackGraph",
@@ -1447,138 +1651,6 @@
       "weight": 1
     },
     {
-      "kind": "calls",
-      "source": "celltrack.detectors.tunet.TemporalUNetDetector.save_checkpoint",
-      "target": "celltrack.detectors.tunet.DetectorRecipe.as_config",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.detectors.tunet.TemporalUNetDetector.voxel_scale",
-      "target": "celltrack.detectors.tunet.TemporalUNetDetector._open_source",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.edges.affinity_division.AffinityDivisionConfig",
-      "target": "celltrack.affinity.EdgeAffinity",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.edges.affinity_division.AffinityDivisionConfig",
-      "target": "celltrack.edges.affinity_division.AffinityDivisionRecovery",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.edges.affinity_division.AffinityDivisionConfig",
-      "target": "core.geometry.Spacing",
-      "weight": 1
-    },
-    {
-      "kind": "construct",
-      "source": "celltrack.edges.affinity_division.AffinityDivisionConfig.build",
-      "target": "celltrack.edges.affinity_division.AffinityDivisionRecovery",
-      "weight": 1
-    },
-    {
-      "kind": "holds",
-      "source": "celltrack.edges.affinity_division.AffinityDivisionRecovery",
-      "target": "celltrack.affinity.EdgeAffinity",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.edges.affinity_division.AffinityDivisionRecovery",
-      "target": "celltrack.edges.affinity_division._Gap",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.edges.affinity_division.AffinityDivisionRecovery",
-      "target": "core.data.tracks.Adjacency",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.edges.affinity_division.AffinityDivisionRecovery",
-      "target": "core.data.tracks.TrackGraph",
-      "weight": 1
-    },
-    {
-      "kind": "holds",
-      "source": "celltrack.edges.affinity_division.AffinityDivisionRecovery",
-      "target": "core.geometry.Spacing",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.edges.affinity_division.AffinityDivisionRecovery._division_edges",
-      "target": "celltrack.affinity.EdgeAffinity.probabilities",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.edges.affinity_division.AffinityDivisionRecovery._division_edges",
-      "target": "celltrack.edges.affinity_division.AffinityDivisionRecovery._gap_proposals",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.edges.affinity_division.AffinityDivisionRecovery._division_edges",
-      "target": "core.data.tracks.Adjacency.of",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.edges.affinity_division.AffinityDivisionRecovery._division_edges",
-      "target": "core.data.tracks.TrackGraph.positions",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.edges.affinity_division.AffinityDivisionRecovery._division_edges",
-      "target": "core.data.tracks.TrackGraph.timepoints",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.edges.affinity_division.AffinityDivisionRecovery._division_edges",
-      "target": "core.geometry.Spacing.to_micrometres",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.edges.affinity_division.AffinityDivisionRecovery._gap_proposals",
-      "target": "celltrack.edges.affinity_division.AffinityDivisionRecovery._runner_up",
-      "weight": 1
-    },
-    {
-      "kind": "construct",
-      "source": "celltrack.edges.affinity_division.AffinityDivisionRecovery._gap_proposals",
-      "target": "celltrack.edges.affinity_division._Gap",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.edges.affinity_division.AffinityDivisionRecovery._runner_up",
-      "target": "celltrack.edges.affinity_division.AffinityDivisionRecovery._distance",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.edges.affinity_division.AffinityDivisionRecovery.transform",
-      "target": "celltrack.edges.affinity_division.AffinityDivisionRecovery._division_edges",
-      "weight": 1
-    },
-    {
-      "kind": "construct",
-      "source": "celltrack.edges.affinity_division.AffinityDivisionRecovery.transform",
-      "target": "core.data.tracks.TrackGraph",
-      "weight": 1
-    },
-    {
       "kind": "references",
       "source": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer",
       "target": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer",
@@ -1587,13 +1659,13 @@
     {
       "kind": "holds",
       "source": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer",
-      "target": "celltrack.edges.edge_scoring.EdgeTransformerScorer",
+      "target": "celltrack.models.edge_transformer.EdgeTransformerScorer",
       "weight": 1
     },
     {
       "kind": "references",
       "source": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer",
-      "target": "celltrack.edges.edge_scoring.PrecomputedEdgeAffinity",
+      "target": "celltrack.models.edge_transformer.PrecomputedEdgeAffinity",
       "weight": 1
     },
     {
@@ -1603,15 +1675,15 @@
       "weight": 1
     },
     {
-      "kind": "calls",
+      "kind": "construct",
       "source": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer.affinities",
-      "target": "celltrack.detectors.tunet.TemporalUNetDetector._open_source",
+      "target": "celltrack.models.edge_transformer.PrecomputedEdgeAffinity",
       "weight": 1
     },
     {
-      "kind": "construct",
+      "kind": "calls",
       "source": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer.affinities",
-      "target": "celltrack.edges.edge_scoring.PrecomputedEdgeAffinity",
+      "target": "celltrack.models.temporal_unet_detector.TemporalUNetDetector._open_source",
       "weight": 1
     },
     {
@@ -1629,109 +1701,7 @@
     {
       "kind": "calls",
       "source": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer.from_packs",
-      "target": "celltrack.edges.edge_scoring.EdgeTransformerScorer.from_pack",
-      "weight": 1
-    },
-    {
-      "kind": "holds",
-      "source": "celltrack.edges.edge_scoring.EdgeTransformerScorer",
-      "target": "celltrack.detectors.tunet.DetectorRecipe",
-      "weight": 1
-    },
-    {
-      "kind": "holds",
-      "source": "celltrack.edges.edge_scoring.EdgeTransformerScorer",
-      "target": "celltrack.detectors.tunet.TemporalUNetDetector",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.edges.edge_scoring.EdgeTransformerScorer",
-      "target": "celltrack.detectors.tunet._VideoSource",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.edges.edge_scoring.EdgeTransformerScorer",
-      "target": "celltrack.edges.edge_scoring.EdgeTransformerScorer",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.edges.edge_scoring.EdgeTransformerScorer",
-      "target": "celltrack.edges.edge_scoring.PrecomputedEdgeAffinity",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.edges.edge_scoring.EdgeTransformerScorer",
-      "target": "core.data.tracks.TrackGraph",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.edges.edge_scoring.EdgeTransformerScorer.__init__",
-      "target": "celltrack.edges.edge_scoring.EdgeTransformerScorer._transformer_cls",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.edges.edge_scoring.EdgeTransformerScorer._gap_logits",
-      "target": "celltrack.detectors.tunet.TemporalUNetDetector._read_frame",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.edges.edge_scoring.EdgeTransformerScorer._gap_logits",
-      "target": "celltrack.edges.edge_scoring.EdgeTransformerScorer._node_features",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.edges.edge_scoring.EdgeTransformerScorer._node_features",
-      "target": "celltrack.edges.edge_scoring.EdgeTransformerScorer._position_embedding",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.edges.edge_scoring.EdgeTransformerScorer._score_gap",
-      "target": "celltrack.edges.edge_scoring.EdgeTransformerScorer._gap_logits",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.edges.edge_scoring.EdgeTransformerScorer.affinities",
-      "target": "celltrack.detectors.tunet.TemporalUNetDetector._open_source",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.edges.edge_scoring.EdgeTransformerScorer.affinities",
-      "target": "celltrack.edges.edge_scoring.EdgeTransformerScorer._score_gap",
-      "weight": 1
-    },
-    {
-      "kind": "construct",
-      "source": "celltrack.edges.edge_scoring.EdgeTransformerScorer.affinities",
-      "target": "celltrack.edges.edge_scoring.PrecomputedEdgeAffinity",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.edges.edge_scoring.EdgeTransformerScorer.affinities",
-      "target": "core.data.tracks.TrackGraph.positions",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.edges.edge_scoring.EdgeTransformerScorer.affinities",
-      "target": "core.data.tracks.TrackGraph.timepoints",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.edges.edge_scoring.EdgeTransformerScorer.from_pack",
-      "target": "celltrack.detectors.tunet.TemporalUNetDetector.from_pack",
+      "target": "celltrack.models.edge_transformer.EdgeTransformerScorer.from_pack",
       "weight": 1
     },
     {
@@ -2935,6 +2905,300 @@
       "weight": 1
     },
     {
+      "kind": "references",
+      "source": "celltrack.models.edge_transformer.EdgeTransformerScorer",
+      "target": "celltrack.models.edge_transformer.EdgeTransformerScorer",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.models.edge_transformer.EdgeTransformerScorer",
+      "target": "celltrack.models.edge_transformer.PrecomputedEdgeAffinity",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.models.edge_transformer.EdgeTransformerScorer",
+      "target": "celltrack.models.temporal_unet_detector.DetectorRecipe",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.models.edge_transformer.EdgeTransformerScorer",
+      "target": "celltrack.models.temporal_unet_detector.TemporalUNetDetector",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.models.edge_transformer.EdgeTransformerScorer",
+      "target": "celltrack.models.temporal_unet_detector._VideoSource",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.models.edge_transformer.EdgeTransformerScorer",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.models.edge_transformer.EdgeTransformerScorer.__init__",
+      "target": "celltrack.models.edge_transformer.EdgeTransformerScorer._transformer_cls",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.models.edge_transformer.EdgeTransformerScorer._gap_logits",
+      "target": "celltrack.models.edge_transformer.EdgeTransformerScorer.node_features",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.models.edge_transformer.EdgeTransformerScorer._gap_logits",
+      "target": "celltrack.models.temporal_unet_detector.TemporalUNetDetector._read_frame",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.models.edge_transformer.EdgeTransformerScorer._score_gap",
+      "target": "celltrack.models.edge_transformer.EdgeTransformerScorer._gap_logits",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.models.edge_transformer.EdgeTransformerScorer.affinities",
+      "target": "celltrack.models.edge_transformer.EdgeTransformerScorer._score_gap",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.models.edge_transformer.EdgeTransformerScorer.affinities",
+      "target": "celltrack.models.edge_transformer.PrecomputedEdgeAffinity",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.models.edge_transformer.EdgeTransformerScorer.affinities",
+      "target": "celltrack.models.temporal_unet_detector.TemporalUNetDetector._open_source",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.models.edge_transformer.EdgeTransformerScorer.affinities",
+      "target": "core.data.tracks.TrackGraph.positions",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.models.edge_transformer.EdgeTransformerScorer.affinities",
+      "target": "core.data.tracks.TrackGraph.timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.models.edge_transformer.EdgeTransformerScorer.from_pack",
+      "target": "celltrack.models.temporal_unet_detector.TemporalUNetDetector.from_pack",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.models.edge_transformer.EdgeTransformerScorer.node_features",
+      "target": "celltrack.models.edge_transformer.EdgeTransformerScorer._position_embedding",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.models.joint_model.JointModel",
+      "target": "celltrack.models.temporal_unet_detector.TemporalUNetDetector",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.models.joint_model.JointModel.forward",
+      "target": "celltrack.models.edge_transformer.EdgeTransformerScorer.node_features",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.models.temporal_unet_detector.DetectorRecipe",
+      "target": "celltrack.models.temporal_unet_detector.DetectorRecipe",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.models.temporal_unet_detector.TemporalUNetDetector",
+      "target": "celltrack.models.temporal_unet_detector.DetectorRecipe",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.models.temporal_unet_detector.TemporalUNetDetector",
+      "target": "celltrack.models.temporal_unet_detector._VideoSource",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.models.temporal_unet_detector.TemporalUNetDetector.__init__",
+      "target": "celltrack.models.temporal_unet_detector.TemporalUNetDetector._backbone_cls",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.models.temporal_unet_detector.TemporalUNetDetector._open_source",
+      "target": "celltrack.models.temporal_unet_detector._VideoSource",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.models.temporal_unet_detector.TemporalUNetDetector.forward",
+      "target": "celltrack.models.temporal_unet_detector.TemporalUNetDetector.forward_batch",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.models.temporal_unet_detector.TemporalUNetDetector.from_checkpoint",
+      "target": "celltrack.models.temporal_unet_detector.DetectorRecipe.from_config",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.models.temporal_unet_detector.TemporalUNetDetector.from_pack",
+      "target": "celltrack.models.temporal_unet_detector.DetectorRecipe.from_config",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.models.temporal_unet_detector.TemporalUNetDetector.save_checkpoint",
+      "target": "celltrack.models.temporal_unet_detector.DetectorRecipe.as_config",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.models.temporal_unet_detector.TemporalUNetDetector.save_checkpoint",
+      "target": "celltrack.models.temporal_unet_detector.TemporalUNetDetector._uncompiled",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig",
+      "target": "celltrack.affinity.EdgeAffinity",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig",
+      "target": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig.build",
+      "target": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery",
+      "target": "celltrack.affinity.EdgeAffinity",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery",
+      "target": "celltrack.postproc.affinity_division_recovery._Gap",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery",
+      "target": "core.data.tracks.Adjacency",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._division_edges",
+      "target": "celltrack.affinity.EdgeAffinity.probabilities",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._division_edges",
+      "target": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._gap_proposals",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._division_edges",
+      "target": "core.data.tracks.Adjacency.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._division_edges",
+      "target": "core.data.tracks.TrackGraph.positions",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._division_edges",
+      "target": "core.data.tracks.TrackGraph.timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._division_edges",
+      "target": "core.geometry.Spacing.to_micrometres",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._gap_proposals",
+      "target": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._runner_up",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._gap_proposals",
+      "target": "celltrack.postproc.affinity_division_recovery._Gap",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._runner_up",
+      "target": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._distance",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery.transform",
+      "target": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._division_edges",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery.transform",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
       "kind": "holds",
       "source": "celltrack.postproc.division_recovery.DivisionRecovery",
       "target": "celltrack.detectors.center_prior.CenterConfirmer",
@@ -3705,12 +3969,6 @@
     {
       "kind": "calls",
       "source": "celltrack.tracker.CellTracker.from_packs",
-      "target": "celltrack.detectors.tunet.TemporalUNetDetector.from_pack",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.tracker.CellTracker.from_packs",
       "target": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer.from_packs",
       "weight": 1
     },
@@ -3777,13 +4035,13 @@
     {
       "kind": "holds",
       "source": "celltrack.tracker.TrackerConfig",
-      "target": "celltrack.edges.affinity_division.AffinityDivisionConfig",
+      "target": "celltrack.linkers.linkers.LinkerConfig",
       "weight": 1
     },
     {
       "kind": "holds",
       "source": "celltrack.tracker.TrackerConfig",
-      "target": "celltrack.linkers.linkers.LinkerConfig",
+      "target": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig",
       "weight": 1
     },
     {
@@ -3812,102 +4070,6 @@
     },
     {
       "kind": "references",
-      "source": "celltrack.training.crops.CropSampler",
-      "target": "celltrack.training.crops.TrainingCrop",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.training.crops.CropSampler",
-      "target": "core.data.tracks.AnnotatedTracks",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.training.crops.CropSampler",
-      "target": "core.data.video.CellVideo",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.training.crops.CropSampler",
-      "target": "core.geometry.Spacing",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.crops.CropSampler._crop_origin",
-      "target": "celltrack.training.crops.CropSampler._jitter",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.crops.CropSampler.sample",
-      "target": "celltrack.training.crops.CropSampler._anchor",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.crops.CropSampler.sample",
-      "target": "celltrack.training.crops.CropSampler._centres_in_crop",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.crops.CropSampler.sample",
-      "target": "celltrack.training.crops.CropSampler._crop_origin",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.crops.CropSampler.sample",
-      "target": "celltrack.training.crops.CropSampler._flip",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.crops.CropSampler.sample",
-      "target": "celltrack.training.crops.CropSampler._intensity",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.crops.CropSampler.sample",
-      "target": "celltrack.training.crops.CropSampler._window_timepoints",
-      "weight": 1
-    },
-    {
-      "kind": "construct",
-      "source": "celltrack.training.crops.CropSampler.sample",
-      "target": "celltrack.training.crops.TrainingCrop",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.crops.CropSampler.sample",
-      "target": "celltrack.training.targets.DetectionTarget.build",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.crops.CropSampler.sample",
-      "target": "core.data.video.CellVideo.window",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner",
-      "target": "celltrack.detectors.tunet._VideoSource",
-      "weight": 1
-    },
-    {
-      "kind": "holds",
-      "source": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner",
-      "target": "celltrack.edges.edge_scoring.EdgeTransformerScorer",
-      "weight": 1
-    },
-    {
-      "kind": "references",
       "source": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner",
       "target": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis",
       "weight": 1
@@ -3922,6 +4084,18 @@
       "kind": "references",
       "source": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner",
       "target": "celltrack.eval.proxy.TestMovieProxy",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner",
+      "target": "celltrack.models.edge_transformer.EdgeTransformerScorer",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner",
+      "target": "celltrack.models.temporal_unet_detector._VideoSource",
       "weight": 1
     },
     {
@@ -3951,13 +4125,13 @@
     {
       "kind": "calls",
       "source": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner._loss",
-      "target": "celltrack.edges.edge_scoring.EdgeTransformerScorer._gap_logits",
+      "target": "celltrack.losses.softmax_focal_bce.SoftmaxFocalBCE.of",
       "weight": 1
     },
     {
       "kind": "calls",
       "source": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner._loss",
-      "target": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner._frontier_loss",
+      "target": "celltrack.models.edge_transformer.EdgeTransformerScorer._gap_logits",
       "weight": 1
     },
     {
@@ -4011,7 +4185,7 @@
     {
       "kind": "calls",
       "source": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner.finetune",
-      "target": "celltrack.detectors.tunet.TemporalUNetDetector._open_source",
+      "target": "celltrack.models.temporal_unet_detector.TemporalUNetDetector._open_source",
       "weight": 1
     },
     {
@@ -4082,20 +4256,194 @@
     },
     {
       "kind": "references",
-      "source": "celltrack.training.targets.DetectionTarget",
-      "target": "celltrack.training.targets.DetectionTarget",
+      "source": "celltrack.training.joint_detector.JointTrainer",
+      "target": "celltrack.data.joint_dataset.PairTarget",
       "weight": 1
     },
     {
       "kind": "references",
-      "source": "celltrack.training.targets.DetectionTarget",
-      "target": "core.geometry.Spacing",
+      "source": "celltrack.training.joint_detector.JointTrainer",
+      "target": "celltrack.models.joint_model.JointModel",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.training.joint_detector.JointTrainer",
+      "target": "celltrack.training.joint_detector.JointTrainConfig",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.joint_detector.JointTrainer",
+      "target": "celltrack.training.joint_detector._EvalResult",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.joint_detector.JointTrainer",
+      "target": "celltrack.training.tunet_detector._Optimization",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.joint_detector.JointTrainer._evaluate",
+      "target": "celltrack.data.joint_dataset.PairDataset",
       "weight": 1
     },
     {
       "kind": "calls",
-      "source": "celltrack.training.targets.DetectionTarget.build",
-      "target": "core.geometry.Spacing.anisotropic_radius",
+      "source": "celltrack.training.joint_detector.JointTrainer._evaluate",
+      "target": "celltrack.training.joint_detector.JointTrainer._losses",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.joint_detector.JointTrainer._evaluate",
+      "target": "celltrack.training.joint_detector._EvalResult",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer._losses",
+      "target": "celltrack.losses.balanced_bce.BalancedBCE.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer._losses",
+      "target": "celltrack.losses.softmax_focal_bce.SoftmaxFocalBCE.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer._losses",
+      "target": "celltrack.models.joint_model.JointModel.forward",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer._model",
+      "target": "celltrack.models.edge_transformer.EdgeTransformerScorer._transformer_cls",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer._model",
+      "target": "celltrack.models.edge_transformer.EdgeTransformerScorer.from_pack",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.joint_detector.JointTrainer._model",
+      "target": "celltrack.models.joint_model.JointModel",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.joint_detector.JointTrainer._model",
+      "target": "celltrack.models.temporal_unet_detector.TemporalUNetDetector",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer._model",
+      "target": "core.paths.DataRoot.from_config",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer._restore",
+      "target": "celltrack.training.tunet_detector._Optimization.load_state_dict",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.joint_detector.JointTrainer._run_window",
+      "target": "celltrack.data.joint_dataset.PairDataset",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer._run_window",
+      "target": "celltrack.data.joint_dataset.PairDataset.stream",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer._run_window",
+      "target": "celltrack.training.joint_detector.JointTrainer._step",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer._save_resume",
+      "target": "celltrack.training.tunet_detector._Optimization.state_dict",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer._step",
+      "target": "celltrack.training.joint_detector.JointTrainer._losses",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer._step",
+      "target": "celltrack.training.tunet_detector._Optimization.step",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer._step",
+      "target": "celltrack.training.tunet_detector._Optimization.zero_grad",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.joint_detector.JointTrainer.train",
+      "target": "celltrack.training.early_stop.EarlyStop",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer.train",
+      "target": "celltrack.training.joint_detector.JointTrainer._evaluate",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer.train",
+      "target": "celltrack.training.joint_detector.JointTrainer._model",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer.train",
+      "target": "celltrack.training.joint_detector.JointTrainer._restore",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer.train",
+      "target": "celltrack.training.joint_detector.JointTrainer._run_window",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer.train",
+      "target": "celltrack.training.joint_detector.JointTrainer._save_checkpoint",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer.train",
+      "target": "celltrack.training.joint_detector.JointTrainer._save_resume",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.joint_detector.JointTrainer.train",
+      "target": "celltrack.training.tunet_detector._Optimization",
       "weight": 1
     },
     {
@@ -4135,27 +4483,9 @@
       "weight": 1
     },
     {
-      "kind": "holds",
-      "source": "celltrack.training.tunet_dataset.FrameDataset",
-      "target": "celltrack.training.tunet_dataset.Augmentation",
-      "weight": 1
-    },
-    {
-      "kind": "holds",
-      "source": "celltrack.training.tunet_dataset.FrameDataset",
-      "target": "celltrack.training.tunet_dataset.FrameTarget",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.tunet_dataset.FrameDataset.__getitem__",
-      "target": "celltrack.training.tunet_dataset.Augmentation.apply",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.tunet_dataset.FrameDataset.batches",
-      "target": "celltrack.training.tunet_dataset.FrameDataset.stream",
+      "kind": "references",
+      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer",
+      "target": "celltrack.data.tunet_dataset.FrameTarget",
       "weight": 1
     },
     {
@@ -4165,15 +4495,15 @@
       "weight": 1
     },
     {
-      "kind": "references",
-      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer",
-      "target": "celltrack.training.tunet_dataset.FrameTarget",
-      "weight": 1
-    },
-    {
       "kind": "holds",
       "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer",
       "target": "celltrack.training.tunet_detector.TUNetTrainConfig",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer",
+      "target": "celltrack.training.tunet_detector._EvalResult",
       "weight": 1
     },
     {
@@ -4197,12 +4527,6 @@
     {
       "kind": "calls",
       "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._detector",
-      "target": "celltrack.detectors.tunet.TemporalUNetDetector.from_pack",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._detector",
       "target": "core.paths.DataRoot.from_config",
       "weight": 1
     },
@@ -4215,13 +4539,13 @@
     {
       "kind": "construct",
       "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._run_window",
-      "target": "celltrack.training.tunet_dataset.FrameDataset",
+      "target": "celltrack.data.tunet_dataset.FrameDataset",
       "weight": 1
     },
     {
       "kind": "calls",
       "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._run_window",
-      "target": "celltrack.training.tunet_dataset.FrameDataset.batches",
+      "target": "celltrack.data.tunet_dataset.FrameDataset.batches",
       "weight": 1
     },
     {
@@ -4243,9 +4567,21 @@
       "weight": 1
     },
     {
+      "kind": "construct",
+      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._score_fold",
+      "target": "celltrack.training.tunet_detector._EvalResult",
+      "weight": 1
+    },
+    {
       "kind": "calls",
       "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._score_fold",
-      "target": "core.data.split.AcquisitionFolds.prefix_of",
+      "target": "core.metrics.detection.NodeCounts.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._score_fold",
+      "target": "core.metrics.detection.NodeCounts.pooled",
       "weight": 1
     },
     {
@@ -4263,13 +4599,7 @@
     {
       "kind": "calls",
       "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._step",
-      "target": "celltrack.detectors.tunet.TemporalUNetDetector.forward_batch",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._step",
-      "target": "celltrack.training.tunet_detector.TUNetDetectorTrainer._detection_loss",
+      "target": "celltrack.losses.balanced_bce.BalancedBCE.of",
       "weight": 1
     },
     {
@@ -4282,6 +4612,12 @@
       "kind": "calls",
       "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._step",
       "target": "celltrack.training.tunet_detector._Optimization.zero_grad",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer.train",
+      "target": "celltrack.training.early_stop.EarlyStop",
       "weight": 1
     },
     {
@@ -4329,13 +4665,7 @@
     {
       "kind": "holds",
       "source": "celltrack.training.tunet_detector.TUNetTrainConfig",
-      "target": "celltrack.detectors.tunet.DetectorRecipe",
-      "weight": 1
-    },
-    {
-      "kind": "holds",
-      "source": "celltrack.training.tunet_detector.TUNetTrainConfig",
-      "target": "celltrack.training.tunet_dataset.Augmentation",
+      "target": "celltrack.data.tunet_dataset.Augmentation",
       "weight": 1
     },
     {
@@ -4648,6 +4978,36 @@
       "kind": "calls",
       "source": "core.hparams.RunConfig.apply_overrides",
       "target": "core.hparams.RunConfig._coerce",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "core.metrics.detection.NodeCounts",
+      "target": "core.metrics.detection.NodeCounts",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "core.metrics.detection.NodeCounts",
+      "target": "core.metrics.matching.NodeMatching",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.detection.NodeCounts.f1",
+      "target": "core.metrics.detection.NodeCounts.precision",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.detection.NodeCounts.f1",
+      "target": "core.metrics.detection.NodeCounts.recall",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.detection.NodeCounts.of",
+      "target": "core.metrics.matching.NodeMatching.is_matched",
       "weight": 1
     },
     {
@@ -5079,7 +5439,7 @@
   ],
   "nodes": [
     {
-      "descendants": 59,
+      "descendants": 70,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -5116,6 +5476,46 @@
       "label": "bracket",
       "level": "module",
       "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 4,
+      "id": "celltrack.data",
+      "label": "data",
+      "level": "module",
+      "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.crops",
+      "label": "crops",
+      "level": "module",
+      "parent": "celltrack.data",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.joint_dataset",
+      "label": "joint_dataset",
+      "level": "module",
+      "parent": "celltrack.data",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.targets",
+      "label": "targets",
+      "level": "module",
+      "parent": "celltrack.data",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.tunet_dataset",
+      "label": "tunet_dataset",
+      "level": "module",
+      "parent": "celltrack.data",
       "role": null
     },
     {
@@ -5207,19 +5607,11 @@
       "role": null
     },
     {
-      "descendants": 3,
+      "descendants": 2,
       "id": "celltrack.edges",
       "label": "edges",
       "level": "module",
       "parent": "celltrack",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.edges.affinity_division",
-      "label": "affinity_division",
-      "level": "module",
-      "parent": "celltrack.edges",
       "role": null
     },
     {
@@ -5383,6 +5775,62 @@
       "role": null
     },
     {
+      "descendants": 2,
+      "id": "celltrack.losses",
+      "label": "losses",
+      "level": "module",
+      "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.losses.balanced_bce",
+      "label": "balanced_bce",
+      "level": "module",
+      "parent": "celltrack.losses",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.losses.softmax_focal_bce",
+      "label": "softmax_focal_bce",
+      "level": "module",
+      "parent": "celltrack.losses",
+      "role": null
+    },
+    {
+      "descendants": 3,
+      "id": "celltrack.models",
+      "label": "models",
+      "level": "module",
+      "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.edge_transformer",
+      "label": "edge_transformer",
+      "level": "module",
+      "parent": "celltrack.models",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.joint_model",
+      "label": "joint_model",
+      "level": "module",
+      "parent": "celltrack.models",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.temporal_unet_detector",
+      "label": "temporal_unet_detector",
+      "level": "module",
+      "parent": "celltrack.models",
+      "role": null
+    },
+    {
       "descendants": 0,
       "id": "celltrack.motion_linking",
       "label": "motion_linking",
@@ -5399,11 +5847,19 @@
       "role": null
     },
     {
-      "descendants": 5,
+      "descendants": 6,
       "id": "celltrack.postproc",
       "label": "postproc",
       "level": "module",
       "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.affinity_division_recovery",
+      "label": "affinity_division_recovery",
+      "level": "module",
+      "parent": "celltrack.postproc",
       "role": null
     },
     {
@@ -5487,19 +5943,11 @@
       "role": null
     },
     {
-      "descendants": 7,
+      "descendants": 6,
       "id": "celltrack.training",
       "label": "training",
       "level": "module",
       "parent": "celltrack",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.crops",
-      "label": "crops",
-      "level": "module",
-      "parent": "celltrack.training",
       "role": null
     },
     {
@@ -5520,8 +5968,8 @@
     },
     {
       "descendants": 0,
-      "id": "celltrack.training.targets",
-      "label": "targets",
+      "id": "celltrack.training.joint_detector",
+      "label": "joint_detector",
       "level": "module",
       "parent": "celltrack.training",
       "role": null
@@ -5559,7 +6007,7 @@
       "role": null
     },
     {
-      "descendants": 16,
+      "descendants": 17,
       "id": "core",
       "label": "core",
       "level": "module",
@@ -5623,11 +6071,19 @@
       "role": null
     },
     {
-      "descendants": 5,
+      "descendants": 6,
       "id": "core.metrics",
       "label": "metrics",
       "level": "module",
       "parent": "core",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.detection",
+      "label": "detection",
+      "level": "module",
+      "parent": "core.metrics",
       "role": null
     },
     {
@@ -5701,6 +6157,70 @@
       "level": "class",
       "parent": "celltrack.affinity",
       "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.crops.CropSampler",
+      "label": "CropSampler",
+      "level": "class",
+      "parent": "celltrack.data.crops",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.crops.TrainingCrop",
+      "label": "TrainingCrop",
+      "level": "class",
+      "parent": "celltrack.data.crops",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.joint_dataset.PairDataset",
+      "label": "PairDataset",
+      "level": "class",
+      "parent": "celltrack.data.joint_dataset",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.joint_dataset.PairTarget",
+      "label": "PairTarget",
+      "level": "class",
+      "parent": "celltrack.data.joint_dataset",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.targets.DetectionTarget",
+      "label": "DetectionTarget",
+      "level": "class",
+      "parent": "celltrack.data.targets",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.tunet_dataset.Augmentation",
+      "label": "Augmentation",
+      "level": "class",
+      "parent": "celltrack.data.tunet_dataset",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.tunet_dataset.FrameDataset",
+      "label": "FrameDataset",
+      "level": "class",
+      "parent": "celltrack.data.tunet_dataset",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.tunet_dataset.FrameTarget",
+      "label": "FrameTarget",
+      "level": "class",
+      "parent": "celltrack.data.tunet_dataset",
+      "role": "satellite"
     },
     {
       "descendants": 0,
@@ -5816,14 +6336,6 @@
     },
     {
       "descendants": 0,
-      "id": "celltrack.detectors.tunet.DetectorRecipe",
-      "label": "DetectorRecipe",
-      "level": "class",
-      "parent": "celltrack.detectors.tunet",
-      "role": "satellite"
-    },
-    {
-      "descendants": 0,
       "id": "celltrack.detectors.tunet.TemporalUNetDetector",
       "label": "TemporalUNetDetector",
       "level": "class",
@@ -5832,59 +6344,11 @@
     },
     {
       "descendants": 0,
-      "id": "celltrack.detectors.tunet._VideoSource",
-      "label": "_VideoSource",
-      "level": "class",
-      "parent": "celltrack.detectors.tunet",
-      "role": "satellite"
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.edges.affinity_division.AffinityDivisionConfig",
-      "label": "AffinityDivisionConfig",
-      "level": "class",
-      "parent": "celltrack.edges.affinity_division",
-      "role": "satellite"
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.edges.affinity_division.AffinityDivisionRecovery",
-      "label": "AffinityDivisionRecovery",
-      "level": "class",
-      "parent": "celltrack.edges.affinity_division",
-      "role": "satellite"
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.edges.affinity_division._Gap",
-      "label": "_Gap",
-      "level": "class",
-      "parent": "celltrack.edges.affinity_division",
-      "role": "satellite"
-    },
-    {
-      "descendants": 0,
       "id": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer",
       "label": "BlendedEdgeTransformerScorer",
       "level": "class",
       "parent": "celltrack.edges.blended_edge_scoring",
       "role": "primary"
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.edges.edge_scoring.EdgeTransformerScorer",
-      "label": "EdgeTransformerScorer",
-      "level": "class",
-      "parent": "celltrack.edges.edge_scoring",
-      "role": "primary"
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.edges.edge_scoring.PrecomputedEdgeAffinity",
-      "label": "PrecomputedEdgeAffinity",
-      "level": "class",
-      "parent": "celltrack.edges.edge_scoring",
-      "role": "satellite"
     },
     {
       "descendants": 0,
@@ -6064,6 +6528,94 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.losses.balanced_bce.BalancedBCE",
+      "label": "BalancedBCE",
+      "level": "class",
+      "parent": "celltrack.losses.balanced_bce",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.losses.softmax_focal_bce.SoftmaxFocalBCE",
+      "label": "SoftmaxFocalBCE",
+      "level": "class",
+      "parent": "celltrack.losses.softmax_focal_bce",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.edge_transformer.EdgeTransformerScorer",
+      "label": "EdgeTransformerScorer",
+      "level": "class",
+      "parent": "celltrack.models.edge_transformer",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.edge_transformer.PrecomputedEdgeAffinity",
+      "label": "PrecomputedEdgeAffinity",
+      "level": "class",
+      "parent": "celltrack.models.edge_transformer",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.joint_model.JointModel",
+      "label": "JointModel",
+      "level": "class",
+      "parent": "celltrack.models.joint_model",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.temporal_unet_detector.DetectorRecipe",
+      "label": "DetectorRecipe",
+      "level": "class",
+      "parent": "celltrack.models.temporal_unet_detector",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.temporal_unet_detector.TemporalUNetDetector",
+      "label": "TemporalUNetDetector",
+      "level": "class",
+      "parent": "celltrack.models.temporal_unet_detector",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.temporal_unet_detector._VideoSource",
+      "label": "_VideoSource",
+      "level": "class",
+      "parent": "celltrack.models.temporal_unet_detector",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig",
+      "label": "AffinityDivisionConfig",
+      "level": "class",
+      "parent": "celltrack.postproc.affinity_division_recovery",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery",
+      "label": "AffinityDivisionRecovery",
+      "level": "class",
+      "parent": "celltrack.postproc.affinity_division_recovery",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.affinity_division_recovery._Gap",
+      "label": "_Gap",
+      "level": "class",
+      "parent": "celltrack.postproc.affinity_division_recovery",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.postproc.division_recovery.DivisionRecovery",
       "label": "DivisionRecovery",
       "level": "class",
@@ -6232,22 +6784,6 @@
     },
     {
       "descendants": 0,
-      "id": "celltrack.training.crops.CropSampler",
-      "label": "CropSampler",
-      "level": "class",
-      "parent": "celltrack.training.crops",
-      "role": "satellite"
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.crops.TrainingCrop",
-      "label": "TrainingCrop",
-      "level": "class",
-      "parent": "celltrack.training.crops",
-      "role": "satellite"
-    },
-    {
-      "descendants": 0,
       "id": "celltrack.training.early_stop.EarlyStop",
       "label": "EarlyStop",
       "level": "class",
@@ -6280,10 +6816,26 @@
     },
     {
       "descendants": 0,
-      "id": "celltrack.training.targets.DetectionTarget",
-      "label": "DetectionTarget",
+      "id": "celltrack.training.joint_detector.JointTrainConfig",
+      "label": "JointTrainConfig",
       "level": "class",
-      "parent": "celltrack.training.targets",
+      "parent": "celltrack.training.joint_detector",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.joint_detector.JointTrainer",
+      "label": "JointTrainer",
+      "level": "class",
+      "parent": "celltrack.training.joint_detector",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.joint_detector._EvalResult",
+      "label": "_EvalResult",
+      "level": "class",
+      "parent": "celltrack.training.joint_detector",
       "role": "satellite"
     },
     {
@@ -6293,30 +6845,6 @@
       "level": "class",
       "parent": "celltrack.training.tracked_run",
       "role": "primary"
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.tunet_dataset.Augmentation",
-      "label": "Augmentation",
-      "level": "class",
-      "parent": "celltrack.training.tunet_dataset",
-      "role": "satellite"
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.tunet_dataset.FrameDataset",
-      "label": "FrameDataset",
-      "level": "class",
-      "parent": "celltrack.training.tunet_dataset",
-      "role": "primary"
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.tunet_dataset.FrameTarget",
-      "label": "FrameTarget",
-      "level": "class",
-      "parent": "celltrack.training.tunet_dataset",
-      "role": "satellite"
     },
     {
       "descendants": 0,
@@ -6330,6 +6858,14 @@
       "descendants": 0,
       "id": "celltrack.training.tunet_detector.TUNetTrainConfig",
       "label": "TUNetTrainConfig",
+      "level": "class",
+      "parent": "celltrack.training.tunet_detector",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.tunet_detector._EvalResult",
+      "label": "_EvalResult",
       "level": "class",
       "parent": "celltrack.training.tunet_detector",
       "role": "satellite"
@@ -6520,6 +7056,14 @@
     },
     {
       "descendants": 0,
+      "id": "core.metrics.detection.NodeCounts",
+      "label": "NodeCounts",
+      "level": "class",
+      "parent": "core.metrics.detection",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
       "id": "core.metrics.divisions.DivisionCounts",
       "label": "DivisionCounts",
       "level": "class",
@@ -6612,6 +7156,198 @@
       "label": "probabilities",
       "level": "method",
       "parent": "celltrack.affinity.EdgeAffinity",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.crops.CropSampler._anchor",
+      "label": "_anchor",
+      "level": "method",
+      "parent": "celltrack.data.crops.CropSampler",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.crops.CropSampler._centres_in_crop",
+      "label": "_centres_in_crop",
+      "level": "method",
+      "parent": "celltrack.data.crops.CropSampler",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.crops.CropSampler._crop_origin",
+      "label": "_crop_origin",
+      "level": "method",
+      "parent": "celltrack.data.crops.CropSampler",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.crops.CropSampler._flip",
+      "label": "_flip",
+      "level": "method",
+      "parent": "celltrack.data.crops.CropSampler",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.crops.CropSampler._intensity",
+      "label": "_intensity",
+      "level": "method",
+      "parent": "celltrack.data.crops.CropSampler",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.crops.CropSampler._jitter",
+      "label": "_jitter",
+      "level": "method",
+      "parent": "celltrack.data.crops.CropSampler",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.crops.CropSampler._window_timepoints",
+      "label": "_window_timepoints",
+      "level": "method",
+      "parent": "celltrack.data.crops.CropSampler",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.crops.CropSampler.sample",
+      "label": "sample",
+      "level": "method",
+      "parent": "celltrack.data.crops.CropSampler",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.joint_dataset.PairDataset.__getitem__",
+      "label": "__getitem__",
+      "level": "method",
+      "parent": "celltrack.data.joint_dataset.PairDataset",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.joint_dataset.PairDataset.__init__",
+      "label": "__init__",
+      "level": "method",
+      "parent": "celltrack.data.joint_dataset.PairDataset",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.joint_dataset.PairDataset.__len__",
+      "label": "__len__",
+      "level": "method",
+      "parent": "celltrack.data.joint_dataset.PairDataset",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.joint_dataset.PairDataset._frame",
+      "label": "_frame",
+      "level": "method",
+      "parent": "celltrack.data.joint_dataset.PairDataset",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.joint_dataset.PairDataset.stream",
+      "label": "stream",
+      "level": "method",
+      "parent": "celltrack.data.joint_dataset.PairDataset",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.joint_dataset.PairTarget._edge_matrix",
+      "label": "_edge_matrix",
+      "level": "method",
+      "parent": "celltrack.data.joint_dataset.PairTarget",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.joint_dataset.PairTarget.enumerate",
+      "label": "enumerate",
+      "level": "method",
+      "parent": "celltrack.data.joint_dataset.PairTarget",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.targets.DetectionTarget._gaussian_peaks",
+      "label": "_gaussian_peaks",
+      "level": "method",
+      "parent": "celltrack.data.targets.DetectionTarget",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.targets.DetectionTarget.build",
+      "label": "build",
+      "level": "method",
+      "parent": "celltrack.data.targets.DetectionTarget",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.targets.DetectionTarget.supervised_fraction",
+      "label": "supervised_fraction",
+      "level": "method",
+      "parent": "celltrack.data.targets.DetectionTarget",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.tunet_dataset.Augmentation.apply",
+      "label": "apply",
+      "level": "method",
+      "parent": "celltrack.data.tunet_dataset.Augmentation",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.tunet_dataset.FrameDataset.__getitem__",
+      "label": "__getitem__",
+      "level": "method",
+      "parent": "celltrack.data.tunet_dataset.FrameDataset",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.tunet_dataset.FrameDataset.__init__",
+      "label": "__init__",
+      "level": "method",
+      "parent": "celltrack.data.tunet_dataset.FrameDataset",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.tunet_dataset.FrameDataset.__len__",
+      "label": "__len__",
+      "level": "method",
+      "parent": "celltrack.data.tunet_dataset.FrameDataset",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.tunet_dataset.FrameDataset.batches",
+      "label": "batches",
+      "level": "method",
+      "parent": "celltrack.data.tunet_dataset.FrameDataset",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.tunet_dataset.FrameDataset.stream",
+      "label": "stream",
+      "level": "method",
+      "parent": "celltrack.data.tunet_dataset.FrameDataset",
       "role": null
     },
     {
@@ -6936,46 +7672,6 @@
     },
     {
       "descendants": 0,
-      "id": "celltrack.detectors.tunet.DetectorRecipe.as_config",
-      "label": "as_config",
-      "level": "method",
-      "parent": "celltrack.detectors.tunet.DetectorRecipe",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.detectors.tunet.DetectorRecipe.fingerprint",
-      "label": "fingerprint",
-      "level": "method",
-      "parent": "celltrack.detectors.tunet.DetectorRecipe",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.detectors.tunet.DetectorRecipe.from_config",
-      "label": "from_config",
-      "level": "method",
-      "parent": "celltrack.detectors.tunet.DetectorRecipe",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.detectors.tunet.TemporalUNetDetector.__init__",
-      "label": "__init__",
-      "level": "method",
-      "parent": "celltrack.detectors.tunet.TemporalUNetDetector",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.detectors.tunet.TemporalUNetDetector._backbone_cls",
-      "label": "_backbone_cls",
-      "level": "method",
-      "parent": "celltrack.detectors.tunet.TemporalUNetDetector",
-      "role": null
-    },
-    {
-      "descendants": 0,
       "id": "celltrack.detectors.tunet.TemporalUNetDetector._capped_peaks",
       "label": "_capped_peaks",
       "level": "method",
@@ -7008,22 +7704,6 @@
     },
     {
       "descendants": 0,
-      "id": "celltrack.detectors.tunet.TemporalUNetDetector._open_source",
-      "label": "_open_source",
-      "level": "method",
-      "parent": "celltrack.detectors.tunet.TemporalUNetDetector",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.detectors.tunet.TemporalUNetDetector._read_frame",
-      "label": "_read_frame",
-      "level": "method",
-      "parent": "celltrack.detectors.tunet.TemporalUNetDetector",
-      "role": null
-    },
-    {
-      "descendants": 0,
       "id": "celltrack.detectors.tunet.TemporalUNetDetector._response",
       "label": "_response",
       "level": "method",
@@ -7034,38 +7714,6 @@
       "descendants": 0,
       "id": "celltrack.detectors.tunet.TemporalUNetDetector.detections",
       "label": "detections",
-      "level": "method",
-      "parent": "celltrack.detectors.tunet.TemporalUNetDetector",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.detectors.tunet.TemporalUNetDetector.forward",
-      "label": "forward",
-      "level": "method",
-      "parent": "celltrack.detectors.tunet.TemporalUNetDetector",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.detectors.tunet.TemporalUNetDetector.forward_batch",
-      "label": "forward_batch",
-      "level": "method",
-      "parent": "celltrack.detectors.tunet.TemporalUNetDetector",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.detectors.tunet.TemporalUNetDetector.from_checkpoint",
-      "label": "from_checkpoint",
-      "level": "method",
-      "parent": "celltrack.detectors.tunet.TemporalUNetDetector",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.detectors.tunet.TemporalUNetDetector.from_pack",
-      "label": "from_pack",
       "level": "method",
       "parent": "celltrack.detectors.tunet.TemporalUNetDetector",
       "role": null
@@ -7096,66 +7744,10 @@
     },
     {
       "descendants": 0,
-      "id": "celltrack.detectors.tunet.TemporalUNetDetector.save_checkpoint",
-      "label": "save_checkpoint",
-      "level": "method",
-      "parent": "celltrack.detectors.tunet.TemporalUNetDetector",
-      "role": null
-    },
-    {
-      "descendants": 0,
       "id": "celltrack.detectors.tunet.TemporalUNetDetector.voxel_scale",
       "label": "voxel_scale",
       "level": "method",
       "parent": "celltrack.detectors.tunet.TemporalUNetDetector",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.edges.affinity_division.AffinityDivisionConfig.build",
-      "label": "build",
-      "level": "method",
-      "parent": "celltrack.edges.affinity_division.AffinityDivisionConfig",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.edges.affinity_division.AffinityDivisionRecovery._distance",
-      "label": "_distance",
-      "level": "method",
-      "parent": "celltrack.edges.affinity_division.AffinityDivisionRecovery",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.edges.affinity_division.AffinityDivisionRecovery._division_edges",
-      "label": "_division_edges",
-      "level": "method",
-      "parent": "celltrack.edges.affinity_division.AffinityDivisionRecovery",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.edges.affinity_division.AffinityDivisionRecovery._gap_proposals",
-      "label": "_gap_proposals",
-      "level": "method",
-      "parent": "celltrack.edges.affinity_division.AffinityDivisionRecovery",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.edges.affinity_division.AffinityDivisionRecovery._runner_up",
-      "label": "_runner_up",
-      "level": "method",
-      "parent": "celltrack.edges.affinity_division.AffinityDivisionRecovery",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.edges.affinity_division.AffinityDivisionRecovery.transform",
-      "label": "transform",
-      "level": "method",
-      "parent": "celltrack.edges.affinity_division.AffinityDivisionRecovery",
       "role": null
     },
     {
@@ -7180,78 +7772,6 @@
       "label": "from_packs",
       "level": "method",
       "parent": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.edges.edge_scoring.EdgeTransformerScorer.__init__",
-      "label": "__init__",
-      "level": "method",
-      "parent": "celltrack.edges.edge_scoring.EdgeTransformerScorer",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.edges.edge_scoring.EdgeTransformerScorer._gap_logits",
-      "label": "_gap_logits",
-      "level": "method",
-      "parent": "celltrack.edges.edge_scoring.EdgeTransformerScorer",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.edges.edge_scoring.EdgeTransformerScorer._node_features",
-      "label": "_node_features",
-      "level": "method",
-      "parent": "celltrack.edges.edge_scoring.EdgeTransformerScorer",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.edges.edge_scoring.EdgeTransformerScorer._position_embedding",
-      "label": "_position_embedding",
-      "level": "method",
-      "parent": "celltrack.edges.edge_scoring.EdgeTransformerScorer",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.edges.edge_scoring.EdgeTransformerScorer._score_gap",
-      "label": "_score_gap",
-      "level": "method",
-      "parent": "celltrack.edges.edge_scoring.EdgeTransformerScorer",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.edges.edge_scoring.EdgeTransformerScorer._transformer_cls",
-      "label": "_transformer_cls",
-      "level": "method",
-      "parent": "celltrack.edges.edge_scoring.EdgeTransformerScorer",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.edges.edge_scoring.EdgeTransformerScorer.affinities",
-      "label": "affinities",
-      "level": "method",
-      "parent": "celltrack.edges.edge_scoring.EdgeTransformerScorer",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.edges.edge_scoring.EdgeTransformerScorer.from_pack",
-      "label": "from_pack",
-      "level": "method",
-      "parent": "celltrack.edges.edge_scoring.EdgeTransformerScorer",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.edges.edge_scoring.PrecomputedEdgeAffinity.probabilities",
-      "label": "probabilities",
-      "level": "method",
-      "parent": "celltrack.edges.edge_scoring.PrecomputedEdgeAffinity",
       "role": null
     },
     {
@@ -7832,6 +8352,262 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.losses.balanced_bce.BalancedBCE.of",
+      "label": "of",
+      "level": "method",
+      "parent": "celltrack.losses.balanced_bce.BalancedBCE",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.losses.softmax_focal_bce.SoftmaxFocalBCE.of",
+      "label": "of",
+      "level": "method",
+      "parent": "celltrack.losses.softmax_focal_bce.SoftmaxFocalBCE",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.edge_transformer.EdgeTransformerScorer.__init__",
+      "label": "__init__",
+      "level": "method",
+      "parent": "celltrack.models.edge_transformer.EdgeTransformerScorer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.edge_transformer.EdgeTransformerScorer._gap_logits",
+      "label": "_gap_logits",
+      "level": "method",
+      "parent": "celltrack.models.edge_transformer.EdgeTransformerScorer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.edge_transformer.EdgeTransformerScorer._position_embedding",
+      "label": "_position_embedding",
+      "level": "method",
+      "parent": "celltrack.models.edge_transformer.EdgeTransformerScorer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.edge_transformer.EdgeTransformerScorer._score_gap",
+      "label": "_score_gap",
+      "level": "method",
+      "parent": "celltrack.models.edge_transformer.EdgeTransformerScorer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.edge_transformer.EdgeTransformerScorer._transformer_cls",
+      "label": "_transformer_cls",
+      "level": "method",
+      "parent": "celltrack.models.edge_transformer.EdgeTransformerScorer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.edge_transformer.EdgeTransformerScorer.affinities",
+      "label": "affinities",
+      "level": "method",
+      "parent": "celltrack.models.edge_transformer.EdgeTransformerScorer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.edge_transformer.EdgeTransformerScorer.from_pack",
+      "label": "from_pack",
+      "level": "method",
+      "parent": "celltrack.models.edge_transformer.EdgeTransformerScorer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.edge_transformer.EdgeTransformerScorer.node_features",
+      "label": "node_features",
+      "level": "method",
+      "parent": "celltrack.models.edge_transformer.EdgeTransformerScorer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.edge_transformer.PrecomputedEdgeAffinity.probabilities",
+      "label": "probabilities",
+      "level": "method",
+      "parent": "celltrack.models.edge_transformer.PrecomputedEdgeAffinity",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.joint_model.JointModel.__init__",
+      "label": "__init__",
+      "level": "method",
+      "parent": "celltrack.models.joint_model.JointModel",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.joint_model.JointModel.forward",
+      "label": "forward",
+      "level": "method",
+      "parent": "celltrack.models.joint_model.JointModel",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.temporal_unet_detector.DetectorRecipe.as_config",
+      "label": "as_config",
+      "level": "method",
+      "parent": "celltrack.models.temporal_unet_detector.DetectorRecipe",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.temporal_unet_detector.DetectorRecipe.fingerprint",
+      "label": "fingerprint",
+      "level": "method",
+      "parent": "celltrack.models.temporal_unet_detector.DetectorRecipe",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.temporal_unet_detector.DetectorRecipe.from_config",
+      "label": "from_config",
+      "level": "method",
+      "parent": "celltrack.models.temporal_unet_detector.DetectorRecipe",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.temporal_unet_detector.TemporalUNetDetector.__init__",
+      "label": "__init__",
+      "level": "method",
+      "parent": "celltrack.models.temporal_unet_detector.TemporalUNetDetector",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.temporal_unet_detector.TemporalUNetDetector._backbone_cls",
+      "label": "_backbone_cls",
+      "level": "method",
+      "parent": "celltrack.models.temporal_unet_detector.TemporalUNetDetector",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.temporal_unet_detector.TemporalUNetDetector._open_source",
+      "label": "_open_source",
+      "level": "method",
+      "parent": "celltrack.models.temporal_unet_detector.TemporalUNetDetector",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.temporal_unet_detector.TemporalUNetDetector._read_frame",
+      "label": "_read_frame",
+      "level": "method",
+      "parent": "celltrack.models.temporal_unet_detector.TemporalUNetDetector",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.temporal_unet_detector.TemporalUNetDetector._uncompiled",
+      "label": "_uncompiled",
+      "level": "method",
+      "parent": "celltrack.models.temporal_unet_detector.TemporalUNetDetector",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.temporal_unet_detector.TemporalUNetDetector.forward",
+      "label": "forward",
+      "level": "method",
+      "parent": "celltrack.models.temporal_unet_detector.TemporalUNetDetector",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.temporal_unet_detector.TemporalUNetDetector.forward_batch",
+      "label": "forward_batch",
+      "level": "method",
+      "parent": "celltrack.models.temporal_unet_detector.TemporalUNetDetector",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.temporal_unet_detector.TemporalUNetDetector.from_checkpoint",
+      "label": "from_checkpoint",
+      "level": "method",
+      "parent": "celltrack.models.temporal_unet_detector.TemporalUNetDetector",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.temporal_unet_detector.TemporalUNetDetector.from_pack",
+      "label": "from_pack",
+      "level": "method",
+      "parent": "celltrack.models.temporal_unet_detector.TemporalUNetDetector",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.temporal_unet_detector.TemporalUNetDetector.save_checkpoint",
+      "label": "save_checkpoint",
+      "level": "method",
+      "parent": "celltrack.models.temporal_unet_detector.TemporalUNetDetector",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig.build",
+      "label": "build",
+      "level": "method",
+      "parent": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._distance",
+      "label": "_distance",
+      "level": "method",
+      "parent": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._division_edges",
+      "label": "_division_edges",
+      "level": "method",
+      "parent": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._gap_proposals",
+      "label": "_gap_proposals",
+      "level": "method",
+      "parent": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._runner_up",
+      "label": "_runner_up",
+      "level": "method",
+      "parent": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery.transform",
+      "label": "transform",
+      "level": "method",
+      "parent": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.postproc.division_recovery.DivisionRecovery._confirmed_rows",
       "label": "_confirmed_rows",
       "level": "method",
@@ -8232,70 +9008,6 @@
     },
     {
       "descendants": 0,
-      "id": "celltrack.training.crops.CropSampler._anchor",
-      "label": "_anchor",
-      "level": "method",
-      "parent": "celltrack.training.crops.CropSampler",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.crops.CropSampler._centres_in_crop",
-      "label": "_centres_in_crop",
-      "level": "method",
-      "parent": "celltrack.training.crops.CropSampler",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.crops.CropSampler._crop_origin",
-      "label": "_crop_origin",
-      "level": "method",
-      "parent": "celltrack.training.crops.CropSampler",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.crops.CropSampler._flip",
-      "label": "_flip",
-      "level": "method",
-      "parent": "celltrack.training.crops.CropSampler",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.crops.CropSampler._intensity",
-      "label": "_intensity",
-      "level": "method",
-      "parent": "celltrack.training.crops.CropSampler",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.crops.CropSampler._jitter",
-      "label": "_jitter",
-      "level": "method",
-      "parent": "celltrack.training.crops.CropSampler",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.crops.CropSampler._window_timepoints",
-      "label": "_window_timepoints",
-      "level": "method",
-      "parent": "celltrack.training.crops.CropSampler",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.crops.CropSampler.sample",
-      "label": "sample",
-      "level": "method",
-      "parent": "celltrack.training.crops.CropSampler",
-      "role": null
-    },
-    {
-      "descendants": 0,
       "id": "celltrack.training.early_stop.EarlyStop.__init__",
       "label": "__init__",
       "level": "method",
@@ -8322,14 +9034,6 @@
       "descendants": 0,
       "id": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner.__init__",
       "label": "__init__",
-      "level": "method",
-      "parent": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner._frontier_loss",
-      "label": "_frontier_loss",
       "level": "method",
       "parent": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner",
       "role": null
@@ -8408,26 +9112,82 @@
     },
     {
       "descendants": 0,
-      "id": "celltrack.training.targets.DetectionTarget._gaussian_peaks",
-      "label": "_gaussian_peaks",
+      "id": "celltrack.training.joint_detector.JointTrainer.__init__",
+      "label": "__init__",
       "level": "method",
-      "parent": "celltrack.training.targets.DetectionTarget",
+      "parent": "celltrack.training.joint_detector.JointTrainer",
       "role": null
     },
     {
       "descendants": 0,
-      "id": "celltrack.training.targets.DetectionTarget.build",
-      "label": "build",
+      "id": "celltrack.training.joint_detector.JointTrainer._evaluate",
+      "label": "_evaluate",
       "level": "method",
-      "parent": "celltrack.training.targets.DetectionTarget",
+      "parent": "celltrack.training.joint_detector.JointTrainer",
       "role": null
     },
     {
       "descendants": 0,
-      "id": "celltrack.training.targets.DetectionTarget.supervised_fraction",
-      "label": "supervised_fraction",
+      "id": "celltrack.training.joint_detector.JointTrainer._losses",
+      "label": "_losses",
       "level": "method",
-      "parent": "celltrack.training.targets.DetectionTarget",
+      "parent": "celltrack.training.joint_detector.JointTrainer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.joint_detector.JointTrainer._model",
+      "label": "_model",
+      "level": "method",
+      "parent": "celltrack.training.joint_detector.JointTrainer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.joint_detector.JointTrainer._restore",
+      "label": "_restore",
+      "level": "method",
+      "parent": "celltrack.training.joint_detector.JointTrainer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.joint_detector.JointTrainer._run_window",
+      "label": "_run_window",
+      "level": "method",
+      "parent": "celltrack.training.joint_detector.JointTrainer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.joint_detector.JointTrainer._save_checkpoint",
+      "label": "_save_checkpoint",
+      "level": "method",
+      "parent": "celltrack.training.joint_detector.JointTrainer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.joint_detector.JointTrainer._save_resume",
+      "label": "_save_resume",
+      "level": "method",
+      "parent": "celltrack.training.joint_detector.JointTrainer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.joint_detector.JointTrainer._step",
+      "label": "_step",
+      "level": "method",
+      "parent": "celltrack.training.joint_detector.JointTrainer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.joint_detector.JointTrainer.train",
+      "label": "train",
+      "level": "method",
+      "parent": "celltrack.training.joint_detector.JointTrainer",
       "role": null
     },
     {
@@ -8464,64 +9224,8 @@
     },
     {
       "descendants": 0,
-      "id": "celltrack.training.tunet_dataset.Augmentation.apply",
-      "label": "apply",
-      "level": "method",
-      "parent": "celltrack.training.tunet_dataset.Augmentation",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.tunet_dataset.FrameDataset.__getitem__",
-      "label": "__getitem__",
-      "level": "method",
-      "parent": "celltrack.training.tunet_dataset.FrameDataset",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.tunet_dataset.FrameDataset.__init__",
-      "label": "__init__",
-      "level": "method",
-      "parent": "celltrack.training.tunet_dataset.FrameDataset",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.tunet_dataset.FrameDataset.__len__",
-      "label": "__len__",
-      "level": "method",
-      "parent": "celltrack.training.tunet_dataset.FrameDataset",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.tunet_dataset.FrameDataset.batches",
-      "label": "batches",
-      "level": "method",
-      "parent": "celltrack.training.tunet_dataset.FrameDataset",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.tunet_dataset.FrameDataset.stream",
-      "label": "stream",
-      "level": "method",
-      "parent": "celltrack.training.tunet_dataset.FrameDataset",
-      "role": null
-    },
-    {
-      "descendants": 0,
       "id": "celltrack.training.tunet_detector.TUNetDetectorTrainer.__init__",
       "label": "__init__",
-      "level": "method",
-      "parent": "celltrack.training.tunet_detector.TUNetDetectorTrainer",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.tunet_detector.TUNetDetectorTrainer._detection_loss",
-      "label": "_detection_loss",
       "level": "method",
       "parent": "celltrack.training.tunet_detector.TUNetDetectorTrainer",
       "role": null
@@ -8956,6 +9660,46 @@
       "label": "to_json",
       "level": "method",
       "parent": "core.hparams.RunConfig",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.detection.NodeCounts.f1",
+      "label": "f1",
+      "level": "method",
+      "parent": "core.metrics.detection.NodeCounts",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.detection.NodeCounts.of",
+      "label": "of",
+      "level": "method",
+      "parent": "core.metrics.detection.NodeCounts",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.detection.NodeCounts.pooled",
+      "label": "pooled",
+      "level": "method",
+      "parent": "core.metrics.detection.NodeCounts",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.detection.NodeCounts.precision",
+      "label": "precision",
+      "level": "method",
+      "parent": "core.metrics.detection.NodeCounts",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.detection.NodeCounts.recall",
+      "label": "recall",
+      "level": "method",
+      "parent": "core.metrics.detection.NodeCounts",
       "role": null
     },
     {
