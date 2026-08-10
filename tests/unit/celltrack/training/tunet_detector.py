@@ -14,19 +14,30 @@ import zarr
 
 from celltrack.data.tunet_dataset import FrameTarget
 from celltrack.detectors.tunet import DetectorRecipe
-from celltrack.linkers.linkers import LinkerConfig
-from celltrack.postproc.linefit_smoother import LinefitSmoother
-from celltrack.postproc.short_track_filter import ShortTrackFilter
+from celltrack.edges.blended_edge_scoring import BlendedEdgeTransformerScorer
+from celltrack.eval.model_evaluator import ModelEvaluator
+from celltrack.eval.proxy import TestMovieProxy
+from celltrack.models.edge_transformer import PrecomputedEdgeAffinity
+from celltrack.tracker import TrackerConfig
 from celltrack.training.tunet_detector import (
     TUNetDetectorTrainer,
     TUNetTrainConfig,
-    _FoldEval,
     _Optimization,
 )
-from core.data.tracks import AnnotatedTracks
+from core.data.tracks import AnnotatedTracks, TrackGraph
 from core.data.video import ImageStatistics
 from core.geometry import Spacing
-from core.metrics.matching import DistanceMatcher
+
+
+class _StubEdgeScorer:
+    """A geometry-only stand-in for the pilkwang edge head — every gap unscored, so the linker uses pure geometry.
+
+    Mounting the real `BlendedEdgeTransformerScorer` needs the two pilkwang packs (absent in CI); the linker
+    treats an unscored gap (`probabilities -> None`) as distance-only, which is all this end-to-end loop test needs.
+    """
+
+    def affinities(self, path: Path, detections: TrackGraph, device: str) -> PrecomputedEdgeAffinity:
+        return PrecomputedEdgeAffinity({})
 
 
 def test_config_defaults_to_pilkwangs_recipe():
@@ -113,14 +124,13 @@ def test_train(video_store: Path, in_bounds_tracks: AnnotatedTracks, tmp_path: P
             coords=frame_coords[frame_coords[:, 0] == 0][:, 1:].astype(np.int64),
         )
     ]
-    spacing = Spacing(z=1.0, y=1.0, x=1.0)
-    evaluator = _FoldEval(
-        videos=[(video_store, in_bounds_tracks)],
-        spacing=spacing,
-        matcher=DistanceMatcher(spacing=spacing),
-        short=ShortTrackFilter(min_length=1),
-        smooth=LinefitSmoother(strength=0.8),
-        linker_config=LinkerConfig(name="motion"),
+    proxy = TestMovieProxy(paths=(video_store,), truths=(in_bounds_tracks,), spacing=Spacing(z=1.0, y=1.0, x=1.0))
+    evaluator = ModelEvaluator(
+        proxy=proxy,
+        edge_scorer=cast(BlendedEdgeTransformerScorer, _StubEdgeScorer()),  # geometry-only; real head needs packs
+        recipe=DetectorRecipe(downsample=(1, 1, 1), pool_kernel_um=1.0, tta=False),
+        device="cpu",
+        config=TrackerConfig(threshold=0.0, min_track_length=1),
     )
     save_to = tmp_path / "detector.pt"
     best = TUNetDetectorTrainer(_cpu_config()).train(targets, evaluator, warm_start=False, save_to=save_to)

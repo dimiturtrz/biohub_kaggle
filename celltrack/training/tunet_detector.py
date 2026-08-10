@@ -8,9 +8,11 @@ quantile-norm), trained through the same fake-pair forward used at inference so 
 same distribution.
 
 Warm-starting from the published weights (``--warm-start``) continues their detector on our fold-train
-videos; from scratch it is the honest own-trained baseline. Either way the best checkpoint by fold-0
-subset score is saved, so the run stops at its own peak rather than a fixed step count. The trainer takes
-prepared frames and an evaluator as inputs; ``main`` does the fold loading.
+videos; from scratch it is the honest own-trained baseline. Either way the best checkpoint by the
+LB-aligned proxy score is saved — the detector is selected through the *shipped* CellTracker on the four
+test movies (`ModelEvaluator`), not a divergent fold-0 motion-linker eval — so the run stops at its own peak
+rather than a fixed step count. The trainer takes prepared frames and an evaluator as inputs; ``main``
+mounts that proxy evaluator.
 """
 
 import argparse
@@ -30,19 +32,13 @@ from torch.nn.attention import SDPBackend, sdpa_kernel
 
 from celltrack.data.tunet_dataset import Augmentation, FrameDataset, FrameTarget
 from celltrack.detectors.tunet import DetectorRecipe, TemporalUNetDetector
-from celltrack.eval.bracket import ValidationFold
-from celltrack.linkers.linkers import LinkerConfig
+from celltrack.eval.model_evaluator import ModelEvaluator
 from celltrack.losses.balanced_bce import BalancedBCE
-from celltrack.postproc.linefit_smoother import LinefitSmoother
-from celltrack.postproc.short_track_filter import ShortTrackFilter
+from celltrack.tracker import TrackerConfig
 from celltrack.training.early_stop import EarlyStop
 from core.data.split import AcquisitionFolds
 from core.data.tracks import AnnotatedTracks
 from core.data.video import ImageStatistics
-from core.geometry import Spacing
-from core.metrics.detection import NodeCounts
-from core.metrics.matching import DistanceMatcher
-from core.metrics.score import SplitScore, VideoMetrics
 from core.paths import DataRoot
 
 logger = logging.getLogger(__name__)
@@ -52,6 +48,9 @@ _DATASET = "biohub_cell_tracking"
 # The published pilkwang detector, kept under the (gitignored) data root's reference area — not vendored,
 # not a machine-specific absolute path. Fetch: copy weights/unet_transformer/split_0 from the support pack.
 _PACK_REL = Path("reference") / "pilkwang" / "split_0"
+# The second pilkwang seed's edge head — the tracker blends both seeds' affinities (0.8/0.2). Independent of the
+# detector under test, so the eval mounts it once; the trained weights supply only the detection nodes.
+_PACK2_REL = Path("reference") / "pilkwang" / "seed2" / "weights" / "unet_transformer" / "split_0"
 _HEARTBEAT_UPDATES = 100  # log within-window progress this often, so a long window isn't silent
 _SECONDS_PER_HOUR = 3600.0
 
@@ -97,32 +96,6 @@ class TUNetTrainConfig:
 
 
 @dataclass(frozen=True)
-class _FoldEval:
-    """The fold-0 subset scorer's fixed context — videos, matcher, and the post-proc chain, built once."""
-
-    videos: list[tuple[Path, AnnotatedTracks]]
-    spacing: Spacing
-    matcher: DistanceMatcher
-    short: ShortTrackFilter
-    smooth: LinefitSmoother
-    linker_config: LinkerConfig
-
-
-@dataclass(frozen=True)
-class _EvalResult:
-    """One eval's pooled numbers — the edge-Jaccard the run selects on, plus detection recall and the node-count ratio.
-
-    Node *recall* (over annotated cells) is the real detector lever; node precision against the sparse annotation
-    is ~meaningless (most true detections land on unannotated cells), so the over-detection signal is the
-    node-count ratio `(predicted - estimated) / estimated` instead — the same term the leaderboard penalises.
-    """
-
-    score: float
-    node_recall: float
-    node_ratio: float
-
-
-@dataclass(frozen=True)
 class _Optimization:
     """The optimiser and its optional learning-rate schedule, advanced together after each step."""
 
@@ -152,15 +125,21 @@ class _Optimization:
 
 
 class TUNetDetectorTrainer:
-    """Runs the detector-only training loop under one configuration, checkpointing the best fold-0 score."""
+    """Runs the detector-only training loop under one configuration, checkpointing the best proxy-pipeline score."""
 
     def __init__(self, config: TUNetTrainConfig) -> None:
         self.config = config
 
     def train(
-        self, targets: list[FrameTarget], evaluator: _FoldEval, *, warm_start: bool, save_to: Path, resume: bool = False
+        self,
+        targets: list[FrameTarget],
+        evaluator: ModelEvaluator,
+        *,
+        warm_start: bool,
+        save_to: Path,
+        resume: bool = False,
     ) -> float:
-        """Train (or fine-tune) on the prepared frames, saving the best fold-0 score. Returns that best score.
+        """Train (or fine-tune) on the prepared frames, saving the best proxy-pipeline score. Returns that best score.
 
         The loop runs in eval-sized windows; each window's frames are decompressed by a thread pool (see
         `FrameDataset.stream`) so the GPU stays fed without DataLoader worker processes, which deadlock on
@@ -188,9 +167,9 @@ class TUNetDetectorTrainer:
         if restored is not None:
             best = restored
         else:
-            initial = self._score_fold(evaluator, detector, self.config.eval_threshold)
+            initial = evaluator.evaluate(detector)
             best = initial.score
-            logger.info("init subset %.4f | node R %.3f ratio %+.2f", best, initial.node_recall, initial.node_ratio)
+            logger.info("init proxy %.4f | node R %.3f ratio %+.2f", best, initial.node_recall, initial.node_ratio)
             detector.save_checkpoint(save_to, self.config.recipe)
 
         stop = EarlyStop(self.config.patience, self.config.es_min_delta) if self.config.patience >= 1 else None
@@ -201,7 +180,7 @@ class TUNetDetectorTrainer:
             window = min(self.config.eval_every, self.config.steps - done)
             loss, rate = self._run_window(detector, optimization, targets, window, done)
             done += window
-            result = self._score_fold(evaluator, detector, self.config.eval_threshold)
+            result = evaluator.evaluate(detector)
             score = result.score
             improved = stop.update(score) if stop is not None else score >= best
             marker = ""
@@ -211,7 +190,7 @@ class TUNetDetectorTrainer:
             self._save_resume(resume_path, detector, optimization, done, best)
             eta_hours = (self.config.steps - done) / rate / _SECONDS_PER_HOUR if rate else 0.0
             logger.info(
-                "step %5d/%d | loss %.4f | subset %.4f | best %.4f%s | node R %.3f ratio %+.2f | "
+                "step %5d/%d | loss %.4f | proxy %.4f | best %.4f%s | node R %.3f ratio %+.2f | "
                 "%.1f it/s (%.0f frames/s) | elapsed %.2fh ETA %.2fh",
                 done,
                 self.config.steps,
@@ -230,7 +209,7 @@ class TUNetDetectorTrainer:
                 logger.info("early stop: %d evals no gain (step %d, best %.4f)", self.config.patience, done, best)
                 break
 
-        logger.info("best fold-0 subset score = %.4f, saved to %s", best, save_to)
+        logger.info("best proxy-pipeline score = %.4f, saved to %s", best, save_to)
         return best
 
     def _scheduler(self, optimizer: torch.optim.Optimizer) -> torch.optim.lr_scheduler.LRScheduler | None:
@@ -329,22 +308,6 @@ class TUNetDetectorTrainer:
         optimization.step()
         return float(loss.detach())
 
-    def _score_fold(self, evaluator: _FoldEval, detector: TemporalUNetDetector, threshold: float) -> _EvalResult:
-        """The pooled eval — the edge-Jaccard the run selects on, plus node precision/recall to show how it improves."""
-        metrics: list[VideoMetrics] = []
-        nodes: list[NodeCounts] = []
-        linker = evaluator.linker_config.build(evaluator.spacing)
-        recipe = replace(self.config.recipe, tta=self.config.eval_tta)  # selector eval skips TTA (4x cheaper)
-        for path, truth in evaluator.videos:
-            detections = detector.detections(path, threshold, recipe, self.config.device)
-            graph = evaluator.smooth.transform(evaluator.short.transform(linker.link(detections)))
-            metrics.append(VideoMetrics.of(graph, truth, evaluator.matcher))
-            nodes.append(NodeCounts.of(evaluator.matcher.match(graph, truth.graph), len(truth.graph.node_ids)))
-        predicted = sum(metric.predicted_nodes for metric in metrics)
-        estimated = sum(metric.estimated_nodes for metric in metrics)
-        ratio = (predicted - estimated) / estimated if estimated > 0 else float("nan")
-        return _EvalResult(SplitScore.of(metrics).score, NodeCounts.pooled(nodes).recall(), ratio)
-
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
@@ -407,17 +370,11 @@ def main() -> None:
             targets.append(FrameTarget(path, int(timepoint), q_low, q_high, frame_coords.astype(np.int64)))
     logger.info("%d annotated frames", len(targets))
 
-    fold = ValidationFold.load(root, 0)
-    fold = fold.stratified_subset(config.eval_subset) if config.eval_subset else fold
-    evaluator = _FoldEval(
-        videos=[(path, truth) for path, (_video, truth) in zip(fold.videos, fold.images(), strict=True)],
-        spacing=fold.spacing,
-        matcher=DistanceMatcher(spacing=fold.spacing),
-        short=ShortTrackFilter(min_length=3),
-        smooth=LinefitSmoother(strength=0.8),
-        linker_config=LinkerConfig(name="motion"),
-    )
-    logger.info("eval on %d fold-0 subset videos", len(evaluator.videos))
+    proc = root.processed(_DATASET)
+    tracker_config = TrackerConfig(threshold=config.eval_threshold)
+    recipe = replace(config.recipe, tta=config.eval_tta)  # selector eval skips TTA by default (4x cheaper)
+    evaluator = ModelEvaluator.mount(root, (proc / _PACK_REL, proc / _PACK2_REL), recipe, config.device, tracker_config)
+    logger.info("eval through the shipped tracker on the %d test movies", len(evaluator.proxy.paths))
 
     save_to = root.processed(_DATASET) / args.weights
     TUNetDetectorTrainer(config).train(

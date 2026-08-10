@@ -1,0 +1,81 @@
+"""Unit tests for the shipped-pipeline model evaluator — the LB-aligned checkpoint selector the trainer uses.
+
+`mount` is checked against stubbed proxy/edge-scorer loaders (the real ones need the pilkwang packs, absent in
+CI). `evaluate` is run end to end on the tiny video fixture with a minimal detector and a geometry-only edge
+scorer, so a real `CellTracker` pass over one movie is exercised without the GPU, the full model, or the packs —
+asserting it returns a float score and finite node metrics in the `EvalResult` the trainer logs and selects on.
+"""
+
+import math
+from pathlib import Path
+from typing import cast
+
+import pytest
+import torch
+
+from celltrack.detectors.tunet import DetectorRecipe, TemporalUNetDetector
+from celltrack.edges.blended_edge_scoring import BlendedEdgeTransformerScorer
+from celltrack.eval.model_evaluator import EvalResult, ModelEvaluator
+from celltrack.eval.proxy import TestMovieProxy
+from celltrack.models.edge_transformer import PrecomputedEdgeAffinity
+from celltrack.tracker import TrackerConfig
+from core.data.tracks import AnnotatedTracks, TrackGraph
+from core.geometry import Spacing
+from core.paths import DataRoot
+
+
+class _StubEdgeScorer:
+    """A geometry-only stand-in for the pilkwang edge head — every gap unscored, so the linker uses pure geometry."""
+
+    def affinities(self, path: Path, detections: TrackGraph, device: str) -> PrecomputedEdgeAffinity:
+        return PrecomputedEdgeAffinity({})
+
+
+def _evaluator(proxy: TestMovieProxy) -> ModelEvaluator:
+    """A CPU evaluator over one movie: a geometry-only edge scorer, a permissive threshold, no length pruning."""
+    return ModelEvaluator(
+        proxy=proxy,
+        edge_scorer=cast(BlendedEdgeTransformerScorer, _StubEdgeScorer()),
+        recipe=DetectorRecipe(downsample=(1, 1, 1), pool_kernel_um=1.0, tta=False),
+        device="cpu",
+        config=TrackerConfig(threshold=0.0, min_track_length=1),
+    )
+
+
+def test_mount(monkeypatch: pytest.MonkeyPatch):
+    """`mount` loads the proxy once and mounts the two-seed edge affinity at the config's blend, both shared."""
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(TestMovieProxy, "load", classmethod(lambda cls, root, stems: "proxy"))
+
+    def _fake_from_packs(packs: tuple[Path, ...], weights: tuple[float, ...], device: str) -> str:
+        captured["packs"], captured["weights"], captured["device"] = packs, weights, device
+        return "edge"
+
+    monkeypatch.setattr(BlendedEdgeTransformerScorer, "from_packs", staticmethod(_fake_from_packs))
+
+    evaluator = ModelEvaluator.mount(
+        cast(DataRoot, object()),
+        (Path("p1"), Path("p2")),
+        DetectorRecipe(),
+        "cpu",
+        TrackerConfig(edge_blend=(0.8, 0.2)),
+    )
+
+    assert evaluator.proxy == "proxy"
+    assert evaluator.edge_scorer == "edge"
+    assert captured["packs"] == (Path("p1"), Path("p2"))
+    assert captured["weights"] == (0.8, 0.2)
+
+
+def test_evaluate(video_store: Path, in_bounds_tracks: AnnotatedTracks):
+    """`evaluate` runs a real tracker over the movie and returns a float score with finite node metrics."""
+    torch.manual_seed(0)
+    proxy = TestMovieProxy(paths=(video_store,), truths=(in_bounds_tracks,), spacing=Spacing(z=1.0, y=1.0, x=1.0))
+    detector = TemporalUNetDetector(out_channels=2, layers=(2, 4))
+
+    result = _evaluator(proxy).evaluate(detector)
+
+    assert isinstance(result, EvalResult)
+    assert isinstance(result.score, float)
+    assert math.isfinite(result.node_recall)
+    assert math.isfinite(result.node_ratio)
