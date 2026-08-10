@@ -21,7 +21,7 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 # Bootstrap (must run before celltrack's dependencies are installed): find the mounted kit by a known module,
 # put it on the path, then hand off to celltrack.kernel_runtime for the rest.
-_MARKER = next(iter(glob.glob("/kaggle/input/**/celltrack/motion_linking.py", recursive=True)))
+_MARKER = next(iter(glob.glob("/kaggle/input/**/celltrack/tracker.py", recursive=True)))
 _KIT_ROOT = os.path.dirname(os.path.dirname(_MARKER))
 sys.path.insert(0, _KIT_ROOT)
 

@@ -30,7 +30,7 @@ from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-_MARKER = next(iter(glob.glob("/kaggle/input/**/celltrack/motion_linking.py", recursive=True)))
+_MARKER = next(iter(glob.glob("/kaggle/input/**/celltrack/tracker.py", recursive=True)))
 _KIT_ROOT = os.path.dirname(os.path.dirname(_MARKER))
 sys.path.insert(0, _KIT_ROOT)
 
