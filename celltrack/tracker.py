@@ -19,10 +19,10 @@ from celltrack.affinity import EdgeAffinity
 from celltrack.detectors.pipeline import BlendDetectorScorer
 from celltrack.detectors.response_cache import ResponseCache
 from celltrack.detectors.tunet import TemporalUNetDetector
-from celltrack.edges.affinity_division import AffinityDivisionConfig
 from celltrack.edges.blended_edge_scoring import BlendedEdgeTransformerScorer
 from celltrack.linkers.linkers import LinkerConfig
 from celltrack.linkers.linking import Linker
+from celltrack.postproc.affinity_division_recovery import AffinityDivisionConfig
 from celltrack.postproc.gap_closer import BridgeConfig, ReuseConfig
 from celltrack.postproc.linefit_smoother import LinefitSmoother
 from celltrack.postproc.short_track_filter import ShortTrackFilter, ShortTrackRescueConfig

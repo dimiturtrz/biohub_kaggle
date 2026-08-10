@@ -4,7 +4,7 @@ import numpy as np
 from jaxtyping import Float
 
 from celltrack.affinity import EdgeAffinity
-from celltrack.edges.affinity_division import AffinityDivisionConfig, AffinityDivisionRecovery
+from celltrack.postproc.affinity_division_recovery import AffinityDivisionConfig, AffinityDivisionRecovery
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
 
