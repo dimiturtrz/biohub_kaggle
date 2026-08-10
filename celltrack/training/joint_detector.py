@@ -8,10 +8,12 @@ logs each term on its own: that decoupling is the whole point, since the edge an
 different scales and a summed number hides which one is learning.
 
 The loop mirrors the detector trainer — eval-sized windows, EarlyStop + save-best + resume, the bf16 /
-channels_last / optional torch.compile speed setup — but the eval is the mean validation loss (lower is
-better, fed negated into the max-based EarlyStop) rather than a fold score, because the joint objective is
-the thing being tracked. Warm-starting (`--warm-start`) continues pilkwang's published detector+transformer;
-from scratch it is the honest own-trained baseline. Either way the best checkpoint by held-out loss is saved.
+channels_last / optional torch.compile speed setup — and selects on the same LB-aligned number: the
+`ModelEvaluator` score of BOTH trained heads through the shipped `CellTracker` on the four test movies. Held-out
+loss does not transfer, and it hides which half moved; the pipeline score is the metric the leaderboard reports,
+with the edge PRC-AUC over the held-out pairs logged beside it as the association half's own diagnostic.
+Warm-starting (`--warm-start`) continues pilkwang's published detector+transformer; from scratch it is the honest
+own-trained baseline. Either way the best checkpoint by proxy score is saved.
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import logging
+import math
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -30,17 +33,21 @@ from torch import Tensor, nn
 from torch.nn.attention import SDPBackend, sdpa_kernel
 
 from celltrack.data.joint_dataset import PairDataset, PairTarget
+from celltrack.detectors.tunet import DetectorRecipe
 from celltrack.eval.bracket import ValidationFold
+from celltrack.eval.model_evaluator import ModelEvaluator
 from celltrack.losses.balanced_bce import BalancedBCE
 from celltrack.losses.softmax_focal_bce import SoftmaxFocalBCE
 from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeTransformerScorer
 from celltrack.models.joint_model import JointModel
 from celltrack.models.temporal_unet_detector import TemporalUNetDetector
+from celltrack.tracker import TrackerConfig
 from celltrack.training.early_stop import EarlyStop
 from celltrack.training.tunet_detector import _Optimization
 from core.data.split import AcquisitionFolds
 from core.data.tracks import AnnotatedTracks
 from core.data.video import ImageStatistics
+from core.metrics.edge_auc import EdgeAUC
 from core.paths import DataRoot
 
 logger = logging.getLogger(__name__)
@@ -49,6 +56,9 @@ _CONFIG = Path(__file__).parents[2] / "paths.yaml"
 _DATASET = "biohub_cell_tracking"
 # The published pilkwang pack, under the (gitignored) data root's reference area — warm-start source.
 _PACK_REL = Path("reference") / "pilkwang" / "split_0"
+# The second pilkwang seed — the proxy eval's tracker is the shipped one, whose recipe blends two seeds' packs.
+# Only the PROXY needs them: a joint run's own heads supply both the nodes and the affinity being selected on.
+_PACK2_REL = Path("reference") / "pilkwang" / "seed2" / "weights" / "unet_transformer" / "split_0"
 _HEARTBEAT_UPDATES = 100  # log within-window progress this often, so a long window isn't silent
 _SECONDS_PER_HOUR = 3600.0
 # The fresh transformer's shape, matching the pilkwang head the warm-start path loads.
@@ -71,7 +81,11 @@ class JointTrainConfig:
     layers: tuple[int, ...] = (32, 64, 128)
     device: str = "cuda"
     grad_clip: float = 1.0
-    eval_every: int = 500  # the validation pass is serial with training — keep the window coarse
+    # The eval is a full `CellTracker` pass over the four proxy movies, serial with training — keep it coarse.
+    eval_every: int = 500
+    eval_threshold: float = 0.5  # the detection threshold the selector's tracker runs at
+    # The selector eval skips flip-TTA: it buys a faithful score the checkpoint choice doesn't need, at 4x cost.
+    eval_tta: bool = False
     # Stop after this many consecutive non-improving evals; save-best means stopping early never costs
     # quality, only compute. <1 disables (runs the full `steps` budget).
     patience: int = 5
@@ -81,30 +95,39 @@ class JointTrainConfig:
 
 
 @dataclass(frozen=True)
-class _EvalResult:
-    """One validation pass's mean losses — the total the run selects on, plus its edge and detection terms."""
+class PairSplit:
+    """The two pair sets a joint run reads — what it optimises on, and what its edge AUC is measured over."""
 
-    loss: float
-    edge: float
-    det: float
+    train: list[PairTarget]
+    val: list[PairTarget]
+
+
+@dataclass(frozen=True)
+class _EvalResult:
+    """One eval window's numbers — the LB-aligned proxy score selected on, its node levers, and the edge AUC."""
+
+    score: float
+    node_recall: float
+    node_ratio: float
+    edge_auc: float
 
 
 class JointTrainer:
-    """Runs the joint detector+edge training loop under one configuration, checkpointing the best val loss."""
+    """Runs the joint detector+edge training loop under one configuration, checkpointing the best proxy score."""
 
     def __init__(self, config: JointTrainConfig) -> None:
         self.config = config
 
     def train(
         self,
-        train_targets: list[PairTarget],
-        val_targets: list[PairTarget],
+        pairs: PairSplit,
+        evaluator: ModelEvaluator,
         *,
         warm_start: bool,
         save_to: Path,
         resume: bool = False,
     ) -> float:
-        """Train (or fine-tune) on the GT pairs, saving the best held-out loss. Returns that best (lowest) loss.
+        """Train (or fine-tune) on the GT pairs, saving the best proxy-pipeline score. Returns that best score.
 
         The loop runs in eval-sized windows; each window streams `eval_every` GT pairs (one at a time — node
         counts are ragged, so there is no batching across pairs). A full resume snapshot (both heads, the
@@ -128,38 +151,47 @@ class JointTrainer:
         if restored is not None:
             best = restored
         else:
-            initial = self._evaluate(model, val_targets)
-            best = initial.loss
-            logger.info("init val loss %.4f | edge %.4f det %.4f", best, initial.edge, initial.det)
+            initial = self._evaluate(model, evaluator, pairs.val)
+            best = initial.score
+            logger.info(
+                "init proxy %.4f | node R %.3f ratio %+.2f | edge AUC %.4f",
+                best,
+                initial.node_recall,
+                initial.node_ratio,
+                initial.edge_auc,
+            )
             self._save_checkpoint(save_to, model)
 
         stop = EarlyStop(self.config.patience, self.config.es_min_delta) if self.config.patience >= 1 else None
         if stop is not None:
-            stop.update(-best)  # seed with the init loss (negated — EarlyStop is max-based, lower loss is better)
+            stop.update(best)  # seed with the init score so a first worse window doesn't read as an improvement
         run_start = time.perf_counter()
         while done < self.config.steps:
             window = min(self.config.eval_every, self.config.steps - done)
-            loss, edge, det, rate = self._run_window(model, optimization, train_targets, window, done)
+            loss, edge, det, rate = self._run_window(model, optimization, pairs.train, window, done)
             done += window
-            result = self._evaluate(model, val_targets)
-            improved = stop.update(-result.loss) if stop is not None else result.loss <= best
+            result = self._evaluate(model, evaluator, pairs.val)
+            improved = stop.update(result.score) if stop is not None else result.score >= best
             marker = ""
             if improved:
-                best, marker = result.loss, " *saved"
+                best, marker = result.score, " *saved"
                 self._save_checkpoint(save_to, model)
             self._save_resume(resume_path, model, optimization, done, best)
             eta_hours = (self.config.steps - done) / rate / _SECONDS_PER_HOUR if rate else 0.0
             logger.info(
-                "step %5d/%d | train loss %.4f (edge %.4f det %.4f) | val %.4f | best %.4f%s | "
-                "%.1f it/s | elapsed %.2fh ETA %.2fh",
+                "step %5d/%d | train loss %.4f (edge %.4f det %.4f) | proxy %.4f | best %.4f%s | "
+                "node R %.3f ratio %+.2f | edge AUC %.4f | %.1f it/s | elapsed %.2fh ETA %.2fh",
                 done,
                 self.config.steps,
                 loss,
                 edge,
                 det,
-                result.loss,
+                result.score,
                 best,
                 marker,
+                result.node_recall,
+                result.node_ratio,
+                result.edge_auc,
                 rate,
                 (time.perf_counter() - run_start) / _SECONDS_PER_HOUR,
                 eta_hours,
@@ -168,7 +200,7 @@ class JointTrainer:
                 logger.info("early stop: %d evals no gain (step %d, best %.4f)", self.config.patience, done, best)
                 break
 
-        logger.info("best fold-0 val loss = %.4f, saved to %s", best, save_to)
+        logger.info("best proxy score = %.4f, saved to %s", best, save_to)
         return best
 
     def _model(self, *, warm_start: bool) -> JointModel:
@@ -240,17 +272,31 @@ class JointTrainer:
             loss = edge + self.config.det_weight * det
         return loss, edge, det
 
-    @torch.no_grad()
-    def _evaluate(self, model: JointModel, val_targets: list[PairTarget]) -> _EvalResult:
-        """Mean total loss over the held-out pairs (each read once), with its edge and detection terms."""
+    def _evaluate(self, model: JointModel, evaluator: ModelEvaluator, val_targets: list[PairTarget]) -> _EvalResult:
+        """Both trained heads through the shipped tracker on the proxy, plus their edge ranking on the val pairs."""
         model.eval()
-        loss_sum, edge_sum, det_sum = 0.0, 0.0, 0.0
+        result = evaluator.evaluate_joint(model)
+        return _EvalResult(result.score, result.node_recall, result.node_ratio, self._edge_auc(model, val_targets))
+
+    @torch.no_grad()
+    def _edge_auc(self, model: JointModel, val_targets: list[PairTarget]) -> float:
+        """Mean edge PRC-AUC over the held-out pairs — the association half's ranking quality, one number.
+
+        Scores are the pipeline's own: the logits soft-maxed over the sources of each target. Pairs whose
+        annotation carries no link leave the average precision undefined and are skipped, not counted as zero.
+        """
+        model.eval()
+        device = self.config.device
+        scored: list[float] = []
         for target in val_targets:
             pair = PairDataset([target], 1, self.config.downsample, self.config.seed)[0]
-            loss, edge, det = self._losses(model, pair)
-            loss_sum, edge_sum, det_sum = loss_sum + float(loss), edge_sum + float(edge), det_sum + float(det)
-        divisor = max(len(val_targets), 1)
-        return _EvalResult(loss_sum / divisor, edge_sum / divisor, det_sum / divisor)
+            frame_t, frame_t1, sources, sinks, _ = (item.to(device) for item in pair)
+            with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=device == "cuda"):
+                _, _, logits = model.forward(frame_t, frame_t1, sources, sinks)
+            auc = EdgeAUC.of(torch.softmax(logits.float(), dim=0).cpu().numpy(), target.edge_matrix)
+            if not math.isnan(auc):
+                scored.append(auc)
+        return sum(scored) / len(scored) if scored else float("nan")
 
     def _restore(
         self, model: JointModel, optimization: _Optimization, resume_path: Path, *, resume: bool
@@ -305,7 +351,8 @@ def main() -> None:
     parser.add_argument("--compile-backbone", action="store_true", help="torch.compile the U-Net (static shape)")
     parser.add_argument("--patience", type=int, default=5, help="stop after N non-improving evals (<1 disables)")
     parser.add_argument("--device", type=str, default="cuda")
-    parser.add_argument("--val-videos", type=int, default=2, help="held-out validation videos to score the loss on")
+    parser.add_argument("--val-videos", type=int, default=2, help="held-out videos the edge AUC is measured over")
+    parser.add_argument("--eval-threshold", type=float, default=0.5, help="detection threshold of the selector eval")
     parser.add_argument("--resume", action="store_true", help="continue from the .resume.pt snapshot")
     parser.add_argument("--weights", type=str, default="joint_tunet_ours.pt")
     args = parser.parse_args()
@@ -315,6 +362,7 @@ def main() -> None:
         det_weight=args.det_weight,
         device=args.device,
         patience=args.patience,
+        eval_threshold=args.eval_threshold,
         compile_backbone=args.compile_backbone,
     )
     root = DataRoot.from_config(_CONFIG)
@@ -339,9 +387,19 @@ def main() -> None:
         val_targets.extend(_enumerate(video, truth))
     logger.info("%d val pairs over %d held-out videos", len(val_targets), len(held))
 
-    save_to = root.processed(_DATASET) / args.weights
+    proc = root.processed(_DATASET)
+    recipe = DetectorRecipe(downsample=config.downsample, tta=config.eval_tta)
+    tracker_config = TrackerConfig(threshold=config.eval_threshold)
+    evaluator = ModelEvaluator.mount(root, (proc / _PACK_REL, proc / _PACK2_REL), recipe, config.device, tracker_config)
+    logger.info("selecting on the shipped tracker over the %d test movies", len(evaluator.proxy.paths))
+
+    save_to = proc / args.weights
     JointTrainer(config).train(
-        train_targets, val_targets, warm_start=args.warm_start, save_to=save_to, resume=args.resume
+        PairSplit(train_targets, val_targets),
+        evaluator,
+        warm_start=args.warm_start,
+        save_to=save_to,
+        resume=args.resume,
     )
 
 

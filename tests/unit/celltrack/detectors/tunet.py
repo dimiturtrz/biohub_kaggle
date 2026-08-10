@@ -13,6 +13,7 @@ import torch
 import zarr
 
 from celltrack.detectors.tunet import DetectorRecipe, TemporalUNetDetector
+from celltrack.models.temporal_unet_detector import TemporalUNetDetector as _NetOnly
 
 
 def _tiny_detector() -> TemporalUNetDetector:
@@ -30,6 +31,17 @@ def _video(tmp_path: Path, scale: list[float]) -> Path:
     group.attrs["image_statistics"] = {"quantiles": {"0.001": 0.0, "0.999": 1.0}}
     group.attrs["multiscales"] = [{"datasets": [{"coordinateTransformations": [{"scale": scale}]}]}]
     return tmp_path / "v.zarr"
+
+
+def test_of():
+    """Mounting an in-memory net for read-out SHARES its heads, so later training moves the mounted detector."""
+    net = _NetOnly(out_channels=2, layers=(2, 4))
+    detector = TemporalUNetDetector.of(net)
+    assert detector.unet is net.unet
+    assert detector.detect_head is net.detect_head
+    with torch.no_grad():
+        net.detect_head.bias.fill_(3.0)
+    assert float(detector.detect_head.bias.detach()[0]) == 3.0
 
 
 def test_detections(tmp_path: Path):

@@ -13,8 +13,15 @@ import torch
 import zarr
 
 from celltrack.data.joint_dataset import PairTarget
-from celltrack.training.joint_detector import JointTrainConfig, JointTrainer
+from celltrack.detectors.tunet import DetectorRecipe
+from celltrack.edges.blended_edge_scoring import BlendedEdgeTransformerScorer
+from celltrack.eval.model_evaluator import ModelEvaluator
+from celltrack.eval.proxy import TestMovieProxy
+from celltrack.tracker import TrackerConfig
+from celltrack.training.joint_detector import JointTrainConfig, JointTrainer, PairSplit
+from core.data.tracks import AnnotatedTracks
 from core.data.video import ImageStatistics
+from core.geometry import Spacing
 
 
 def test_config_defaults_to_pilkwangs_recipe():
@@ -65,11 +72,29 @@ def _pairs(video_store: Path) -> list[PairTarget]:
     ]
 
 
-def test_train(video_store: Path, tmp_path: Path):
-    """The loop runs end to end — sample, forward, three-part loss, step, eval, save — and returns a best loss."""
+def _evaluator(video_store: Path, in_bounds_tracks: AnnotatedTracks) -> ModelEvaluator:
+    """The real pipeline selector over a one-movie proxy — CPU, permissive threshold, no length pruning."""
+    return ModelEvaluator(
+        proxy=TestMovieProxy(paths=(video_store,), truths=(in_bounds_tracks,), spacing=Spacing(z=1.0, y=1.0, x=1.0)),
+        edge_scorer=cast(BlendedEdgeTransformerScorer, None),  # unused: a joint eval mounts the model's own head
+        recipe=DetectorRecipe(downsample=(1, 1, 1), pool_kernel_um=1.0, tta=False),
+        device="cpu",
+        config=TrackerConfig(threshold=0.0, min_track_length=1),
+    )
+
+
+def test_train(video_store: Path, in_bounds_tracks: AnnotatedTracks, tmp_path: Path):
+    """The loop runs end to end — sample, step, pipeline eval, edge AUC, save — and returns the best proxy score."""
     torch.manual_seed(0)
     targets = _pairs(video_store)
     save_to = tmp_path / "joint.pt"
-    best = JointTrainer(_cpu_config()).train(targets, targets, warm_start=False, save_to=save_to)
+
+    best = JointTrainer(_cpu_config()).train(
+        PairSplit(targets, targets),
+        _evaluator(video_store, in_bounds_tracks),
+        warm_start=False,
+        save_to=save_to,
+    )
+
     assert isinstance(best, float)
     assert save_to.exists()

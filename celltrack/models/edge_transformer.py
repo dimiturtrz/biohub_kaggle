@@ -66,6 +66,19 @@ class EdgeTransformerScorer(nn.Module):
         return SimpleNodeTransformer
 
     @classmethod
+    def of(
+        cls, detector: TemporalUNetDetector, transformer: nn.Module, recipe: DetectorRecipe
+    ) -> "EdgeTransformerScorer":
+        """Mount already-trained in-memory heads as a scorer — a jointly-trained pair, no pack on disk.
+
+        `from_pack` reads pilkwang's published weights; this takes the modules a joint run is optimising right
+        now, sharing them, so an eval scores the LIVE association head through the same `_gap_logits` path.
+        """
+        scorer = cls(detector, recipe)
+        scorer.transformer = transformer
+        return scorer
+
+    @classmethod
     def from_pack(cls, pack: Path, device: str = "cpu") -> "EdgeTransformerScorer":
         """Load the whole pilkwang head — `unet.*` + `detect_head.*` into the detector, `transformer.*` here."""
         detector, recipe = TemporalUNetDetector.from_pack(pack, map_location=device)

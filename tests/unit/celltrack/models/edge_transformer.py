@@ -63,6 +63,19 @@ def test_probabilities():
     assert affinity.probabilities(7) is None
 
 
+def test_of():
+    """Mounting in-memory heads keeps both objects — the given transformer, not the freshly built one."""
+    torch.manual_seed(0)
+    detector = TemporalUNetDetector(out_channels=2, layers=(2, 4))
+    transformer = EdgeTransformerScorer._transformer_cls()(
+        feat_dim=2 + 4 * _POS_EMBED_DIM, hidden_dim=8, n_heads=1, n_blocks=1
+    )
+    scorer = EdgeTransformerScorer.of(detector, transformer, _RECIPE)
+    assert scorer.detector is detector
+    assert scorer.transformer is transformer
+    assert scorer.recipe is _RECIPE
+
+
 def test_from_pack(tmp_path: Path):
     """The whole-pack loader takes `unet.*`/`detect_head.*` into the detector and `transformer.*` into the head."""
     scorer = _tiny_scorer()

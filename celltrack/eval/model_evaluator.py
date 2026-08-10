@@ -9,6 +9,10 @@ so it is mounted once and reused across every eval; only the detector changes, w
 `BlendDetectorScorer` over an `EphemeralResponseStore` (the trainer's weights move every window — there is no
 forward to cache). The score is the same `SplitScore` the proxy and the leaderboard report; node recall and the
 node-count ratio ride alongside, the detector-side levers that show *how* the number moved.
+
+A JOINT run trains both heads, so a pilkwang affinity would hide half of what it learned: `evaluate_joint`
+mounts the model's OWN transformer (as a one-member logit blend) behind its own detector instead. Both paths
+share the tracker assembly — only the edge affinity differs.
 """
 
 from __future__ import annotations
@@ -21,6 +25,8 @@ from celltrack.detectors.response_cache import EphemeralResponseStore
 from celltrack.detectors.tunet import DetectorRecipe, TemporalUNetDetector
 from celltrack.edges.blended_edge_scoring import BlendedEdgeTransformerScorer
 from celltrack.eval.proxy import TEST_MOVIES, TestMovieProxy
+from celltrack.models.edge_transformer import EdgeTransformerScorer
+from celltrack.models.joint_model import JointModel
 from celltrack.tracker import CellTracker, TrackerConfig
 from core.metrics.detection import NodeCounts
 from core.metrics.matching import DistanceMatcher
@@ -80,7 +86,23 @@ class ModelEvaluator:
         split score is the leaderboard's own metric; node recall and the node-count ratio come from the same
         per-movie run, so one tracker pass yields all three numbers the trainer logs and selects on.
         """
-        tracker = self._tracker(detector)
+        return self._score(detector, self.edge_scorer)
+
+    def evaluate_joint(self, model: JointModel) -> EvalResult:
+        """Score a jointly-trained pair of heads — the trained detector AND its trained association head.
+
+        `evaluate` mounts pilkwang's edge affinity, which makes the association half of a joint run invisible to
+        the selector. Here both halves come from the model: the detector gets the peak read-out re-bound onto its
+        live weights, and the transformer is mounted as a one-member logit blend (the type the tracker consumes),
+        so the number the run selects on is the whole trained pipeline through the shipped tracker.
+        """
+        detector = TemporalUNetDetector.of(model.detector)
+        scorer = EdgeTransformerScorer.of(detector, model.transformer, self.recipe)
+        return self._score(detector, BlendedEdgeTransformerScorer((scorer,), (1.0,)))
+
+    def _score(self, detector: TemporalUNetDetector, edge_scorer: BlendedEdgeTransformerScorer) -> EvalResult:
+        """One tracker pass per proxy movie, pooled into the split score and the detector's node levers."""
+        tracker = self._tracker(detector, edge_scorer)
         matcher = DistanceMatcher(spacing=self.proxy.spacing)
         metrics: list[VideoMetrics] = []
         nodes: list[NodeCounts] = []
@@ -93,9 +115,9 @@ class ModelEvaluator:
         ratio = (predicted - estimated) / estimated if estimated > 0 else float("nan")
         return EvalResult(SplitScore.of(metrics).score, NodeCounts.pooled(nodes).recall(), ratio)
 
-    def _tracker(self, detector: TemporalUNetDetector) -> CellTracker:
-        """Mount the trained detector into the shipped tracker behind the pre-mounted pilkwang edge affinity."""
+    def _tracker(self, detector: TemporalUNetDetector, edge_scorer: BlendedEdgeTransformerScorer) -> CellTracker:
+        """Mount the trained detector into the shipped tracker behind the given edge affinity — one assembly."""
         scorer = BlendDetectorScorer(
             detectors=((detector, EphemeralResponseStore()),), recipe=self.recipe, device=self.device
         )
-        return CellTracker(detector=scorer, edge_scorer=self.edge_scorer, device=self.device, config=self.config)
+        return CellTracker(detector=scorer, edge_scorer=edge_scorer, device=self.device, config=self.config)

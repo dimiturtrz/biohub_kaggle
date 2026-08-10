@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
+from typing import Self
 
 import numpy as np
 import torch
@@ -32,6 +33,17 @@ from core.geometry import Spacing
 
 class TemporalUNetDetector(_TemporalUNetNet):
     """The pure net plus the peak read-out — forward a video to cellness logits, then read centres out."""
+
+    @classmethod
+    def of(cls, net: _TemporalUNetNet) -> Self:
+        """Give an in-memory net the peak read-out, sharing its two heads — no weight copy, no pack on disk.
+
+        The joint trainer holds the bare net (`celltrack.models`); scoring it through the shipped tracker needs
+        this read-out, on the LIVE weights, so the backbone and detection head are re-bound rather than reloaded.
+        """
+        detector = cls(net.out_channels, tuple(net.layers))
+        detector.unet, detector.detect_head = net.unet, net.detect_head
+        return detector
 
     def detections(self, path: Path, threshold: float, recipe: DetectorRecipe, device: str) -> TrackGraph:
         """Detect cell centres in every frame of a video, returned as an edge-free `TrackGraph`.
