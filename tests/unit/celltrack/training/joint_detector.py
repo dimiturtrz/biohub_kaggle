@@ -37,6 +37,68 @@ def test_config_defaults_to_pilkwangs_recipe():
     assert config.contrastive_weight == 0.0  # the contrastive term is opt-in: an unasked run is unchanged
 
 
+_CORPUS = 18024  # the real GT-pair count: one pair per step, so this is one epoch
+
+
+def test_resolved():
+    """No epoch field set means today's run: the step-scale numbers a caller passed reach the loop unchanged."""
+    config = JointTrainConfig(steps=3000, eval_every=500, patience=5)
+    assert config.resolved(_CORPUS) == config
+
+
+def test_resolved_turns_epochs_into_steps():
+    """`epochs` is passes over the corpus, so the budget is that many times the derived steps-per-epoch."""
+    assert JointTrainConfig(epochs=1.5).resolved(_CORPUS).steps == 27036
+
+
+def test_resolved_turns_evals_per_epoch_into_a_window_length():
+    """Four evals per epoch is a window of a quarter of the corpus, whatever the split's size happens to be."""
+    assert JointTrainConfig(evals_per_epoch=4).resolved(_CORPUS).eval_every == 4506
+
+
+def test_resolved_turns_patience_epochs_into_windows():
+    """Patience counts EVAL WINDOWS, so an epoch of patience is however many windows that epoch holds."""
+    resolved = JointTrainConfig(patience_epochs=2.0, evals_per_epoch=3).resolved(_CORPUS)
+    assert resolved.patience == 6
+
+    from_raw_windows = JointTrainConfig(patience_epochs=1.0, eval_every=9012).resolved(_CORPUS)
+    assert from_raw_windows.patience == 2  # no evals_per_epoch: the window count follows the raw eval_every
+
+
+def test_resolved_epoch_fields_win_over_their_raw_twins():
+    """Both forms given is not an error and neither is dropped in silence — the epoch form wins, and it is logged."""
+    config = JointTrainConfig(
+        steps=3000, eval_every=500, patience=5, epochs=2.0, evals_per_epoch=2, patience_epochs=3.0
+    )
+
+    resolved = config.resolved(_CORPUS)
+
+    assert (resolved.steps, resolved.eval_every, resolved.patience) == (36048, 9012, 6)
+    assert config._overrides() == [
+        "epochs=2.0 overrides steps=3000",
+        "evals_per_epoch=2 overrides eval_every=500",
+        "patience_epochs=3.0 overrides patience=5",
+    ]
+
+
+def test_resolved_keeps_a_window_when_the_corpus_is_smaller_than_the_eval_count():
+    """A corpus of three pairs asked for ten evals would floor to a zero-step window; it floors to one instead."""
+    resolved = JointTrainConfig(evals_per_epoch=10, patience_epochs=0.01).resolved(3)
+    assert resolved.eval_every == 1
+    assert resolved.patience == 1
+
+
+def test_schedule_spans_the_resolved_step_count():
+    """The cosine horizon is built from the RESOLVED budget — resolving epochs late must not leave it stale."""
+    config = JointTrainConfig(steps=10, epochs=2.0, cosine_lr=True).resolved(_CORPUS)
+    optimizer = torch.optim.AdamW([torch.zeros(1, requires_grad=True)], lr=1e-4)
+
+    schedule = JointTrainer(config)._schedule(optimizer)
+
+    assert schedule is not None
+    assert schedule.T_max == 36048  # type: ignore[missing-attribute]
+
+
 def _outcome(edge_logits: torch.Tensor, edge_matrix: torch.Tensor) -> _PairOutcome:
     """A pair outcome whose loss terms are placeholders — these tests are about the edge tensors beside them."""
     return _PairOutcome(
@@ -219,6 +281,22 @@ def test_train_records_each_window(
     assert steps == {0, 2}  # the init eval at step 0, then the single two-step window
     assert ("end",) in mlflow_backend.calls
     assert {"coverage", "sampling_entropy"} & mlflow_backend.metric_keys() == set()  # off: no sampler row
+
+
+def test_train_runs_the_epoch_schedule(
+    video_store: Path, in_bounds_tracks: AnnotatedTracks, tmp_path: Path, mlflow_backend: RecordingMlflow
+):
+    """Asked for two epochs over a two-pair corpus, the loop runs four steps in one-pair windows."""
+    torch.manual_seed(0)
+    targets = _pairs(video_store)
+    config = replace(_cpu_config(), steps=2, eval_every=2, patience=0, epochs=2.0, evals_per_epoch=2)
+
+    JointTrainer(config).train(
+        PairSplit(targets, targets), _evaluator(video_store, in_bounds_tracks), RunSetup(tmp_path / "joint.pt")
+    )
+
+    steps = {call[3] for call in mlflow_backend.calls if call[0] == "metric"}
+    assert steps == {0, 1, 2, 3, 4}
 
 
 def _trained_bytes(config: JointTrainConfig, video_store: Path, tracks: AnnotatedTracks, run_dir: Path) -> bytes:

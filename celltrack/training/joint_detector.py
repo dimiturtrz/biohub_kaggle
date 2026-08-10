@@ -28,7 +28,7 @@ import logging
 import math
 import time
 from collections.abc import Iterator
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import cast
 
@@ -72,6 +72,8 @@ _SECONDS_PER_HOUR = 3600.0
 # The fresh transformer's shape, matching the pilkwang head the warm-start path loads.
 _HIDDEN_DIM, _N_HEADS, _N_BLOCKS = 128, 4, 4
 _POS_FEATURE_DIM = 4 * _POS_EMBED_DIM  # sinusoidal embed of (t, z, y, x)
+# Each epoch-scale field and the step-scale field it replaces when set, so an override is logged, never silent.
+_EPOCH_OVERRIDES = (("epochs", "steps"), ("evals_per_epoch", "eval_every"), ("patience_epochs", "patience"))
 
 Pair = tuple[Tensor, Tensor, Tensor, Tensor, Tensor]
 
@@ -118,6 +120,50 @@ class JointTrainConfig:
     # Draw each step's pair in proportion to its measured top-1 defect instead of uniformly with replacement
     # (see `DifficultySampler`). Off by default: with it off the loop is the uniform stream of yesterday.
     difficulty_sampling: bool = False
+    # The epoch scale. The loop consumes ONE GT pair per step, so a pass over the corpus is `len(train_targets)`
+    # steps — DERIVED from the split, never configured, since a hand-set value rots the moment the split moves.
+    # Unset (None) leaves the step-scale fields above exactly as given; set, each one wins over its raw twin.
+    epochs: float | None = None
+    evals_per_epoch: int | None = None
+    patience_epochs: float | None = None
+
+    def resolved(self, steps_per_epoch: int) -> JointTrainConfig:
+        """The same run expressed in steps — the schedule the loop, the scheduler and early-stop all read."""
+        eval_every = self._eval_every(steps_per_epoch)
+        windows_per_epoch = self.evals_per_epoch if self.evals_per_epoch is not None else steps_per_epoch / eval_every
+        steps = self.steps if self.epochs is None else round(self.epochs * steps_per_epoch)
+        patience = self.patience
+        if self.patience_epochs is not None:
+            patience = max(1, round(self.patience_epochs * windows_per_epoch))
+        self._log_schedule(steps_per_epoch, steps, eval_every, patience)
+        return replace(self, steps=steps, eval_every=eval_every, patience=patience)
+
+    def _eval_every(self, steps_per_epoch: int) -> int:
+        """Window length in steps; a corpus smaller than the requested evals still yields a one-step window."""
+        if self.evals_per_epoch is None:
+            return self.eval_every
+        return max(1, steps_per_epoch // self.evals_per_epoch)
+
+    def _overrides(self) -> list[str]:
+        """Which raw step-scale values the epoch form replaced — reported so neither form is dropped in silence."""
+        return [
+            f"{epoch}={getattr(self, epoch)} overrides {raw}={getattr(self, raw)}"
+            for epoch, raw in _EPOCH_OVERRIDES
+            if getattr(self, epoch) is not None
+        ]
+
+    def _log_schedule(self, steps_per_epoch: int, steps: int, eval_every: int, patience: int) -> None:
+        """One startup line carrying every derived value, so a run's schedule is self-documenting."""
+        overrides = self._overrides()
+        logger.info(
+            "schedule: %d steps/epoch | %d steps (%.2f epochs) | eval every %d steps | patience %d windows%s",
+            steps_per_epoch,
+            steps,
+            steps / steps_per_epoch,
+            eval_every,
+            patience,
+            " | " + "; ".join(overrides) if overrides else "",
+        )
 
 
 @dataclass(frozen=True)
@@ -189,7 +235,12 @@ class JointTrainer:
         The loop runs in eval-sized windows; each window streams `eval_every` GT pairs (one at a time — node
         counts are ragged, so there is no batching across pairs). A full resume snapshot (both heads, the
         optimiser, step, best) is written beside the checkpoint every window; ``setup.resume`` continues it.
+
+        One pair per step makes the corpus itself the epoch, so the schedule is resolved here — the first
+        moment the pair count is known — and every later reader (the scheduler's horizon included) sees steps.
         """
+        steps_per_epoch = max(1, len(pairs.train))
+        self.config = self.config.resolved(steps_per_epoch)
         save_to = setup.save_to
         torch.set_float32_matmul_precision("high")  # TF32 on the fp32 matmuls the bf16 autocast leaves alone
         torch.backends.cudnn.benchmark = True  # one static frame shape — cudnn picks the fastest algo once
@@ -208,20 +259,7 @@ class JointTrainer:
         run = TrainingRun.open(asdict(self.config), setup)
         resume_path = save_to.with_suffix(".resume.pt")
         done, restored = self._restore(model, optimization, resume_path, resume=setup.resume)
-        if restored is not None:
-            best = restored
-        else:
-            initial = self._evaluate(model, evaluator, pairs.val)
-            best = initial.score
-            logger.info(
-                "init proxy %.4f | node R %.3f ratio %+.2f | edge AUC %.4f",
-                best,
-                initial.node_recall,
-                initial.node_ratio,
-                initial.edge_auc,
-            )
-            run.window(done, self._metrics(initial, best))
-            self._save_checkpoint(save_to, model)
+        best = restored if restored is not None else self._initial_best(model, evaluator, pairs, run, save_to)
 
         stop = EarlyStop(self.config.patience, self.config.es_min_delta) if self.config.patience >= 1 else None
         if stop is not None:
@@ -244,8 +282,10 @@ class JointTrainer:
             rate = losses["it_per_s"]
             eta_hours = (self.config.steps - done) / rate / _SECONDS_PER_HOUR if rate else 0.0
             logger.info(
-                "step %5d/%d | train loss %.4f (edge %.4f det %.4f nce %.4f) | proxy %.4f | best %.4f%s | "
-                "node R %.3f ratio %+.2f | edge AUC %.4f | %.1f it/s | elapsed %.2fh ETA %.2fh",
+                "epoch %g/%g | step %5d/%d | train loss %.4f (edge %.4f det %.4f nce %.4f) | proxy %.4f | "
+                "best %.4f%s | node R %.3f ratio %+.2f | edge AUC %.4f | %.1f it/s | elapsed %.2fh ETA %.2fh",
+                round(done / steps_per_epoch, 2),
+                round(self.config.steps / steps_per_epoch, 2),
                 done,
                 self.config.steps,
                 losses["train_loss"],
@@ -271,6 +311,22 @@ class JointTrainer:
         logger.info("best proxy score = %.4f, saved to %s", best, save_to)
         run.close(best)
         return best
+
+    def _initial_best(
+        self, model: JointModel, evaluator: ModelEvaluator, pairs: PairSplit, run: TrainingRun, save_to: Path
+    ) -> float:
+        """The score before a single step — the bar a warm start must beat, tracked and checkpointed as window 0."""
+        initial = self._evaluate(model, evaluator, pairs.val)
+        logger.info(
+            "init proxy %.4f | node R %.3f ratio %+.2f | edge AUC %.4f",
+            initial.score,
+            initial.node_recall,
+            initial.node_ratio,
+            initial.edge_auc,
+        )
+        run.window(0, self._metrics(initial, initial.score))
+        self._save_checkpoint(save_to, model)
+        return initial.score
 
     def _metrics(self, result: _EvalResult, best: float) -> dict[str, float]:
         """The eval half of one tracked row — the selected-on score, the best so far, and both halves' levers."""
@@ -465,10 +521,21 @@ class JointTrainer:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train the joint detector+edge model on the non-held-out videos.")
     parser.add_argument("--steps", type=int, default=1500)
-    # Eval cadence was a config field with NO flag, so every run silently used 500 — which also fixes what
-    # `--patience` means, since patience counts EVAL WINDOWS. At 18024 pairs (one per step) an epoch is
-    # ~18000 steps, so patience 5 at eval_every 500 is 14% of an epoch, and at 9000 it is five epochs.
     parser.add_argument("--eval-every", type=int, default=500, help="steps per eval window")
+    # The step scale above is a probe-run unit: one pair per step means the ~18000-pair corpus makes an epoch,
+    # so `--steps 3000` is 17% of ONE pass against the published pack's 50 epochs, and `--patience` counts
+    # EVAL WINDOWS — five of them is 14% of an epoch at eval-every 500 and five whole epochs at 9000. The
+    # flags below say the same things in passes over the corpus, and win over their raw twin when given.
+    parser.add_argument("--epochs", type=float, default=None, help="passes over the GT pairs; overrides --steps")
+    parser.add_argument(
+        "--evals-per-epoch", type=int, default=None, help="eval windows per epoch; overrides --eval-every"
+    )
+    parser.add_argument(
+        "--patience-epochs",
+        type=float,
+        default=None,
+        help="epochs without a gain before stopping; overrides --patience",
+    )
     parser.add_argument("--warm-start", action="store_true", help="initialise from the published pilkwang weights")
     parser.add_argument("--det-weight", type=float, default=1.0, help="weight on the detection term vs the edge term")
     parser.add_argument(
@@ -500,6 +567,9 @@ def main() -> None:
     config = JointTrainConfig(
         steps=args.steps,
         eval_every=args.eval_every,
+        epochs=args.epochs,
+        evals_per_epoch=args.evals_per_epoch,
+        patience_epochs=args.patience_epochs,
         det_weight=args.det_weight,
         contrastive_weight=args.contrastive_weight,
         temperature=args.temperature,
