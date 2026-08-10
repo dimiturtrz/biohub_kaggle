@@ -94,6 +94,12 @@ class JointTrainConfig:
     # logged as a diagnostic, but contributes exactly nothing, so an unasked run is the run of yesterday.
     contrastive_weight: float = 0.0
     temperature: float = 0.07  # the InfoNCE softmax temperature over candidate targets
+    # Sigmoid response above which an UNANNOTATED voxel stops being supervised as background (see
+    # `BalancedBCE`). Our labels cover ~1-2% of a frame's cells, so the zero target calls thousands of real
+    # cells background — and warm-starting a saturated detector aims exactly those gradients at its correct
+    # detections (measured: node recall 0.966 -> 0.936, ratio -0.15, within half an epoch). None keeps the
+    # objective of yesterday; `main` derives the value it passes from `TrackerConfig.threshold`.
+    ignore_ambiguous_above: float | None = None
     downsample: tuple[int, int, int] = (1, 4, 4)
     out_channels: int = 32
     layers: tuple[int, ...] = (32, 64, 128)
@@ -191,14 +197,22 @@ class _PairOutcome:
     contrastive: Tensor
     edge_logits: Tensor
     edge_matrix: Tensor
+    ignored_fraction: float | None = None
 
     def logged(self) -> dict[str, float]:
-        """The detached per-term floats under the names the run tracks — a summed number hides which half moved."""
+        """The detached per-term floats under the names the run tracks — a summed number hides which half moved.
+
+        The masked fraction rides along only when the mask is on, so an unasked run's rows are the rows of
+        yesterday. It is worth a column: it falling toward zero as the detector sharpens IS the self-balancing
+        property — a model whose confident responses are all annotated has nothing left to leave unsupervised.
+        """
+        ambiguous = {} if self.ignored_fraction is None else {"ignored_fraction": self.ignored_fraction}
         return {
             "train_loss": float(self.total.detach()),
             "edge_loss": float(self.edge.detach()),
             "det_loss": float(self.detection.detach()),
             "contrastive_loss": float(self.contrastive.detach()),
+            **ambiguous,
         }
 
     def difficulty(self) -> float | None:
@@ -453,14 +467,24 @@ class JointTrainer:
         with attention, torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=device == "cuda"):
             out = model.forward(frame_t, frame_t1, source_centres, target_centres)
             edge = SoftmaxFocalBCE.of(out.edge_logits, edge_matrix)
+            ignore = self.config.ignore_ambiguous_above
             det = BalancedBCE.of(
-                out.detection_t.unsqueeze(0), [centres_t_grid], self.config.neg_weight
-            ) + BalancedBCE.of(out.detection_t1.unsqueeze(0), [centres_t1_grid], self.config.neg_weight)
+                out.detection_t.unsqueeze(0), [centres_t_grid], self.config.neg_weight, ignore
+            ) + BalancedBCE.of(out.detection_t1.unsqueeze(0), [centres_t1_grid], self.config.neg_weight, ignore)
             contrastive = InfoNCE.of(
                 out.source_features, out.target_features, edge_matrix, self.config.temperature, self.config.out_channels
             )
             loss = edge + self.config.det_weight * det + self.config.contrastive_weight * contrastive
-        return _PairOutcome(loss, edge, det, contrastive, out.edge_logits, edge_matrix)
+        ignored = self._ignored((out.detection_t, centres_t_grid), (out.detection_t1, centres_t1_grid))
+        return _PairOutcome(loss, edge, det, contrastive, out.edge_logits, edge_matrix, ignored)
+
+    def _ignored(self, *frames: tuple[Tensor, Tensor]) -> float | None:
+        """The pair's mean unsupervised fraction, or `None` when nothing is masked — a sigmoid, no backward."""
+        above = self.config.ignore_ambiguous_above
+        if above is None:
+            return None
+        shares = [BalancedBCE.ignored_fraction(logits.unsqueeze(0), [centres], above) for logits, centres in frames]
+        return sum(shares) / len(shares)
 
     def _evaluate(self, model: JointModel, evaluator: ModelEvaluator, val_targets: list[PairTarget]) -> _EvalResult:
         """Both trained heads through the shipped tracker on the proxy, plus their edge ranking on the val pairs."""
@@ -576,6 +600,17 @@ def main() -> None:
         action="store_true",
         help="draw pairs in proportion to their measured top-1 defect instead of uniformly with replacement",
     )
+    # The threshold is DERIVED, not swept: given bare, the flag takes the pipeline's own inference operating
+    # point — the response at which the shipped tracker would already have called the voxel a cell, so every
+    # voxel the mask spares is one the deployed model detects and our sparse annotation cannot adjudicate.
+    parser.add_argument(
+        "--ignore-ambiguous-above",
+        type=float,
+        nargs="?",
+        const=TrackerConfig().threshold,
+        default=None,
+        help="leave unannotated voxels above this sigmoid response unsupervised (bare = the tracker threshold)",
+    )
     parser.add_argument("--patience", type=int, default=5, help="stop after N non-improving evals (<1 disables)")
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--val-videos", type=int, default=2, help="validation movies the edge AUC is measured over")
@@ -591,6 +626,7 @@ def main() -> None:
         evals_per_epoch=args.evals_per_epoch,
         patience_epochs=args.patience_epochs,
         det_weight=args.det_weight,
+        ignore_ambiguous_above=args.ignore_ambiguous_above,
         contrastive_weight=args.contrastive_weight,
         temperature=args.temperature,
         lr=args.lr,

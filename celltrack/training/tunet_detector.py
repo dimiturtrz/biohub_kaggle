@@ -69,6 +69,11 @@ class TUNetTrainConfig:
     steps: int = 1500
     lr: float = 1e-4
     neg_weight: float = 1e-2
+    # Sigmoid response above which an UNANNOTATED voxel stops being supervised as background (see
+    # `BalancedBCE`). Our labels name ~1-2% of a frame's cells, so a zero target teaches the detector to stop
+    # firing on the rest; from scratch that is survivable, warm-starting a saturated detector it is not. None
+    # keeps the objective these weights were trained under; `main` derives its value from `TrackerConfig`.
+    ignore_ambiguous_above: float | None = None
     downsample: tuple[int, int, int] = (1, 4, 4)
     out_channels: int = 32
     layers: tuple[int, ...] = (32, 64, 128)
@@ -325,7 +330,7 @@ class TUNetDetectorTrainer:
         attention = sdpa_kernel(SDPBackend.MATH) if self.config.compile_backbone else contextlib.nullcontext()
         with attention, torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=self.config.device == "cuda"):
             logits = detector.forward_batch(frames, single_frame=self.config.single_frame)
-            loss = BalancedBCE.of(logits, centres, self.config.neg_weight)
+            loss = BalancedBCE.of(logits, centres, self.config.neg_weight, self.config.ignore_ambiguous_above)
         optimization.zero_grad()
         loss.backward()
         nn.utils.clip_grad_norm_(detector.parameters(), self.config.grad_clip)
@@ -338,6 +343,17 @@ def main() -> None:
     parser.add_argument("--steps", type=int, default=1500)
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--neg-weight", type=float, default=1e-2)
+    # DERIVED, not swept: given bare, the flag takes the pipeline's own inference operating point — the
+    # response at which the shipped tracker already calls the voxel a cell, so the voxels it spares are
+    # exactly the detections our 1-2% annotation cannot adjudicate.
+    parser.add_argument(
+        "--ignore-ambiguous-above",
+        type=float,
+        nargs="?",
+        const=TrackerConfig().threshold,
+        default=None,
+        help="leave unannotated voxels above this sigmoid response unsupervised (bare = the tracker threshold)",
+    )
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--threads", type=int, default=12, help="parallel frame-decompress threads")
     parser.add_argument("--batch-size", type=int, default=8, help="frames forwarded per optimiser step (one shape)")
@@ -361,6 +377,7 @@ def main() -> None:
         steps=args.steps,
         lr=args.lr,
         neg_weight=args.neg_weight,
+        ignore_ambiguous_above=args.ignore_ambiguous_above,
         device=args.device,
         threads=args.threads,
         batch_size=args.batch_size,
