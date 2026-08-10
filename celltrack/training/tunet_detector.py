@@ -16,7 +16,7 @@ prepared frames and an evaluator as inputs; ``main`` does the fold loading.
 import argparse
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import cast
 
@@ -48,6 +48,8 @@ _DATASET = "biohub_cell_tracking"
 # The published pilkwang detector, kept under the (gitignored) data root's reference area — not vendored,
 # not a machine-specific absolute path. Fetch: copy weights/unet_transformer/split_0 from the support pack.
 _PACK_REL = Path("reference") / "pilkwang" / "split_0"
+_HEARTBEAT_UPDATES = 100  # log within-window progress this often, so a long window isn't silent
+_SECONDS_PER_HOUR = 3600.0
 
 
 @dataclass(frozen=True)
@@ -72,6 +74,9 @@ class TUNetTrainConfig:
     eval_every: int = 500  # subset eval is a full-frame forward per video, serial with training — keep it sparse
     eval_subset: int = 2
     eval_threshold: float = 0.5
+    # The in-loop eval is a checkpoint SELECTOR, not the final number — 4x flip-TTA buys a faithful score the
+    # selector doesn't need, at 4x the eval cost. Off by default; the final full-frame calibration re-enables it.
+    eval_tta: bool = False
     seed: int = 0
     augmentation: Augmentation = field(default_factory=Augmentation)
     cosine_lr: bool = False  # decay lr to zero over `steps` (cosine); off keeps the flat lr of the baseline
@@ -148,6 +153,7 @@ class TUNetDetectorTrainer:
             logger.info("init fold-0 subset score = %.4f", best)
             detector.save_checkpoint(save_to, self.config.recipe)
 
+        run_start = time.perf_counter()
         while done < self.config.steps:
             window = min(self.config.eval_every, self.config.steps - done)
             loss, rate = self._run_window(detector, optimization, targets, window, done)
@@ -158,8 +164,10 @@ class TUNetDetectorTrainer:
                 best, marker = score, " *saved"
                 detector.save_checkpoint(save_to, self.config.recipe)
             self._save_resume(resume_path, detector, optimization, done, best)
+            eta_hours = (self.config.steps - done) / rate / _SECONDS_PER_HOUR if rate else 0.0
             logger.info(
-                "step %5d/%d | loss %.4f | fold-0 subset %.4f | best %.4f%s | %.1f it/s",
+                "step %5d/%d | loss %.4f | fold-0 subset %.4f | best %.4f%s | %.1f it/s (%.0f frames/s) | "
+                "elapsed %.2fh ETA %.2fh",
                 done,
                 self.config.steps,
                 loss,
@@ -167,6 +175,9 @@ class TUNetDetectorTrainer:
                 best,
                 marker,
                 rate,
+                rate * self.config.batch_size,
+                (time.perf_counter() - run_start) / _SECONDS_PER_HOUR,
+                eta_hours,
             )
 
         logger.info("best fold-0 subset score = %.4f, saved to %s", best, save_to)
@@ -226,6 +237,16 @@ class TUNetDetectorTrainer:
         for frames, centres in dataset.batches(self.config.threads, self.config.prefetch, batch):
             running += self._step(detector, optimization, frames, centres)
             done += 1
+            if done % _HEARTBEAT_UPDATES == 0:
+                rate = done / (time.perf_counter() - t0)
+                logger.info(
+                    "  ..%d/%d in window | loss %.4f | %.1f it/s (%.0f frames/s)",
+                    done,
+                    steps,
+                    running / done,
+                    rate,
+                    rate * batch,
+                )
         return running / max(done, 1), done / (time.perf_counter() - t0)
 
     def _detector(self, *, warm_start: bool) -> TemporalUNetDetector:
@@ -259,8 +280,9 @@ class TUNetDetectorTrainer:
         """The pooled fold-0 subset score — the same edge-Jaccard the leaderboard reports — at one threshold."""
         buckets: dict[str, list[VideoMetrics]] = {}
         linker = evaluator.linker_config.build(evaluator.spacing)
+        recipe = replace(self.config.recipe, tta=self.config.eval_tta)  # selector eval skips TTA (4x cheaper)
         for path, truth in evaluator.videos:
-            detections = detector.detections(path, threshold, self.config.recipe, self.config.device)
+            detections = detector.detections(path, threshold, recipe, self.config.device)
             graph = evaluator.smooth.transform(evaluator.short.transform(linker.link(detections)))
             buckets.setdefault(AcquisitionFolds.prefix_of(path), []).append(
                 VideoMetrics.of(graph, truth, evaluator.matcher)
@@ -303,6 +325,7 @@ def main() -> None:
     parser.add_argument("--eval-every", type=int, default=500)
     parser.add_argument("--eval-subset", type=int, default=2)
     parser.add_argument("--eval-threshold", type=float, default=0.5)
+    parser.add_argument("--eval-tta", action="store_true", help="flip-TTA in the eval (4x cost; off=selector)")
     parser.add_argument("--warm-start", action="store_true", help="initialise from the published pilkwang weights")
     parser.add_argument("--aug-brightness", type=float, default=0.0, help="multiplicative intensity jitter half-range")
     parser.add_argument("--aug-offset", type=float, default=0.0, help="additive intensity jitter half-range")
@@ -322,6 +345,7 @@ def main() -> None:
         eval_every=args.eval_every,
         eval_subset=args.eval_subset,
         eval_threshold=args.eval_threshold,
+        eval_tta=args.eval_tta,
         augmentation=Augmentation(
             brightness=args.aug_brightness,
             offset=args.aug_offset,
