@@ -82,6 +82,9 @@ class TUNetTrainConfig:
     seed: int = 0
     augmentation: Augmentation = field(default_factory=Augmentation)
     cosine_lr: bool = False  # decay lr to zero over `steps` (cosine); off keeps the flat lr of the baseline
+    # Detection-only single-frame windows (skip the temporal backbone's duplicate frame) — ~half the convs,
+    # validated near-lossless (g50). Safe for training our own weights; inference stays two-frame until an LB A/B.
+    single_frame: bool = False
     channels_last: bool = False  # NHWC-style memory format for the 3D convs — measure the gain before default-on
     compile_backbone: bool = False  # torch.compile the U-Net (static 64^3 shape); one-time warmup, then fused kernels
     recipe: DetectorRecipe = field(default_factory=DetectorRecipe)
@@ -284,7 +287,7 @@ class TUNetDetectorTrainer:
         # efficient kernel whose compiled backward asserts on the temporal-attention strides. No-op when eager.
         attention = sdpa_kernel(SDPBackend.MATH) if self.config.compile_backbone else contextlib.nullcontext()
         with attention, torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=self.config.device == "cuda"):
-            logits = detector.forward_batch(frames)
+            logits = detector.forward_batch(frames, single_frame=self.config.single_frame)
             loss = self._detection_loss(logits, centres, self.config.neg_weight)
         optimization.zero_grad()
         loss.backward()
@@ -347,6 +350,7 @@ def main() -> None:
     parser.add_argument("--aug-offset", type=float, default=0.0, help="additive intensity jitter half-range")
     parser.add_argument("--aug-flip", action="store_true", help="random flips along y and x (the in-plane axes)")
     parser.add_argument("--cosine-lr", action="store_true", help="cosine-decay the learning rate to zero over the run")
+    parser.add_argument("--single-frame", action="store_true", help="detection-only T=1 windows (~2x fewer convs, g50)")
     parser.add_argument("--channels-last", action="store_true", help="channels_last_3d memory format for the convs")
     parser.add_argument("--compile-backbone", action="store_true", help="torch.compile the U-Net (static shape)")
     parser.add_argument("--resume", action="store_true", help="continue from the .resume.pt snapshot")
@@ -370,6 +374,7 @@ def main() -> None:
             flip_axes=(1, 2) if args.aug_flip else (),
         ),
         cosine_lr=args.cosine_lr,
+        single_frame=args.single_frame,
         channels_last=args.channels_last,
         compile_backbone=args.compile_backbone,
     )

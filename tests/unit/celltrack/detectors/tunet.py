@@ -77,6 +77,8 @@ def test_forward_batch():
     batched = detector.forward_batch(frames)
     assert batched.shape == (3, 4, 8, 8)
     assert torch.allclose(batched[0], detector.forward(frames[0]))
+    single = detector.forward_batch(frames, single_frame=True)  # detection-only T=1 window
+    assert single.shape == (3, 4, 8, 8)
 
 
 def test_save_checkpoint(tmp_path: Path):
