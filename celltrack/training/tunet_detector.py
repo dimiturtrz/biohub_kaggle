@@ -85,7 +85,6 @@ class TUNetTrainConfig:
     # Detection-only single-frame windows (skip the temporal backbone's duplicate frame) — ~half the convs,
     # validated near-lossless (g50). Safe for training our own weights; inference stays two-frame until an LB A/B.
     single_frame: bool = False
-    channels_last: bool = False  # NHWC-style memory format for the 3D convs — measure the gain before default-on
     compile_backbone: bool = False  # torch.compile the U-Net (static 64^3 shape); one-time warmup, then fused kernels
     recipe: DetectorRecipe = field(default_factory=DetectorRecipe)
 
@@ -150,8 +149,9 @@ class TUNetDetectorTrainer:
         torch.set_float32_matmul_precision("high")  # TF32 on the fp32 matmuls the bf16 autocast leaves alone
         torch.backends.cudnn.benchmark = True  # one static frame shape (64^3) — cudnn picks the fastest algo once
         detector = self._detector(warm_start=warm_start).to(self.config.device)
-        if self.config.channels_last:
-            # torch stubs omit the memory_format overload of Module.to; the call is runtime-valid.
+        if self.config.device == "cuda":
+            # channels_last_3d is a lossless layout that measured ~1.2x on the feature convs — always on for CUDA,
+            # not a knob. torch stubs omit the memory_format overload of Module.to; the call is runtime-valid.
             detector = detector.to(memory_format=torch.channels_last_3d)  # type: ignore[no-matching-overload]
         if self.config.compile_backbone:
             # torch.compile returns an OptimizedModule (a Module) the stubs type as Any; compile the backbone
@@ -351,7 +351,6 @@ def main() -> None:
     parser.add_argument("--aug-flip", action="store_true", help="random flips along y and x (the in-plane axes)")
     parser.add_argument("--cosine-lr", action="store_true", help="cosine-decay the learning rate to zero over the run")
     parser.add_argument("--single-frame", action="store_true", help="detection-only T=1 windows (~2x fewer convs, g50)")
-    parser.add_argument("--channels-last", action="store_true", help="channels_last_3d memory format for the convs")
     parser.add_argument("--compile-backbone", action="store_true", help="torch.compile the U-Net (static shape)")
     parser.add_argument("--resume", action="store_true", help="continue from the .resume.pt snapshot")
     parser.add_argument("--weights", type=str, default="detector_tunet_ours.pt")
@@ -375,7 +374,6 @@ def main() -> None:
         ),
         cosine_lr=args.cosine_lr,
         single_frame=args.single_frame,
-        channels_last=args.channels_last,
         compile_backbone=args.compile_backbone,
     )
     root = DataRoot.from_config(_CONFIG)
