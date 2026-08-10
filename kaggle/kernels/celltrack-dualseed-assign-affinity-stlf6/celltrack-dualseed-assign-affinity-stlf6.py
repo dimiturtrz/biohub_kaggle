@@ -40,6 +40,7 @@ sys.path.insert(0, str(pack_source()))
 
 from celltrack.linkers.linkers import LinkerConfig  # noqa: E402
 from celltrack.multi_gpu_submission import MultiGpuSubmission  # noqa: E402
+from celltrack.postproc.short_track_filter import ShortTrackRescueConfig  # noqa: E402
 from celltrack.tracker import TrackerConfig  # noqa: E402
 
 # 0.97: stack the two independent recall levers the leaderboard rewards. Threshold is a recall lever the sparse
@@ -58,17 +59,19 @@ _GATE_UM = 10.0
 _EDGE_BONUS = 20.0
 # Two edge-transformer seeds blended in logit space; 0.8·seed1 + 0.2·seed2 is the proxy peak (bead 88x).
 _EDGE_BLEND = (0.8, 0.2)
-# The CONFIRMED-BEST recipe (thr0.97, gate10, bonus20, min6, smooth0.8 = LB 0.892), restored deliberately:
-# this run is an INFRASTRUCTURE control, not a score probe. It is the first submission carrying the fp16
-# autocast (proxy-verified score-identical, 0.9334 either way) and the multi-GPU dispatcher (exact by
-# construction — same code, same weights, one device per video). Holding the config at a known LB anchor is
-# what makes the run interpretable: 0.892 confirms both are score-neutral on the hidden set and the kernel log
-# gives the real T4 speedup, while any other number indicts the infrastructure rather than a tracking knob.
-# The min7+rescue probe is already in flight on its own submission and is not duplicated here.
+# The frontier's short-track CUT-AND-RESCUE on the confirmed-best base (thr0.97, gate10, bonus20, smooth0.8 =
+# LB 0.892): min_track_length 7 with a confidence carve-out that keeps a short component whose mean edge
+# probability >= 0.90 and mean step <= 2.75um. min7 alone is LB-anti (it drops true short tracks); the rescue
+# recovers exactly those, and the frontier pairs them at its 0.897-0.908 tier. Proxy +0.0039 (a tie under the
+# noise floor) but mixed per movie, so only the LB arbitrates — which is the point: this stays ahead of the
+# public best rather than reproducing it. The fp16 autocast and the multi-GPU dispatcher ride along and are
+# verified by this same run (the dispatch log names the devices; the score is neutral or the infra is at fault).
 _CONFIG = TrackerConfig(
     threshold=_THRESHOLD,
     edge_blend=_EDGE_BLEND,
     linker=LinkerConfig(name="assignment", gate_um=_GATE_UM, affinity_bonus=_EDGE_BONUS),
+    min_track_length=7,
+    rescue=ShortTrackRescueConfig(),
 )
 _SUBMISSION = Path("/kaggle/working/submission.csv")
 
