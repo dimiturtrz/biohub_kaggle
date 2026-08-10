@@ -87,6 +87,9 @@ tests — this repo's tests cover only ITS packages. Consumer-specific detector 
 - **Cost-tiered experimenting** — iterate on the cached fold-0 eval (seconds–min); a ~1h train or the
   3-4h Kaggle hidden eval is an async confirm gated on that proxy. Kaggle is 5/day — batch candidates
   async, don't drip-and-wait.
+- **Score noise floor** — a proxy or LB difference **below ~0.01–0.02 is noise, not signal**. Don't
+  keep/kill a method, ship a default, or claim a win on a sub-0.01 delta; treat it as a tie and decide on
+  mechanism (or a bigger, repeated gap). Only differences clearing the floor count as real movement.
 - **Doc layers** — `learning/<date>_<topic>.md` = the study ramp / general understanding;
   `research/` = external / field synthesis (theirs); `interpretations/<task>/<date>_<topic>.md` =
   sense-making of *our own* results (per task, `converging/` for cross-task). The build log is git history;
