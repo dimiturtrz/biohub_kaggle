@@ -160,12 +160,15 @@ def test_pairs_draws_through_the_sampler(video_store: Path):
     """With a sampler the window walks the drawn indices, and each pair is the corpus entry that index names."""
     dataset = PairDataset(_pairs(video_store), steps=4, downsample=(1, 1, 1), seed=0)
     sampler = DifficultySampler(count=2, seed=0)
-    sampler.observe(0, 0.0)  # pair 0 solved, pair 1 still optimistic -> every draw is pair 1
+    sampler.observe(0, 0.0)
+    reference = DifficultySampler(count=2, seed=0)
+    reference.observe(0, 0.0)
 
     walked = list(JointTrainer(_cpu_config())._pairs(dataset, sampler))
 
-    assert [index for index, _ in walked] == [1, 1, 1, 1]
-    assert torch.equal(walked[0][1].edge_matrix, dataset.pair(1).edge_matrix)
+    assert [index for index, _ in walked] == [reference.draw() for _ in range(4)]
+    for index, pair in walked:
+        assert torch.equal(pair.edge_matrix, dataset.pair(index).edge_matrix)
 
 
 def test_observe(video_store: Path):
