@@ -22,6 +22,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+import torch
+
 from celltrack.detectors.pipeline import BlendDetectorScorer
 from celltrack.detectors.response_cache import EphemeralResponseStore
 from celltrack.detectors.tunet import DetectorRecipe, TemporalUNetDetector
@@ -107,7 +109,25 @@ class ModelEvaluator:
         return self._score(detector, one_seed)
 
     def _score(self, detector: TemporalUNetDetector, edge_scorer: BlendedEdgeTransformerScorer) -> EvalResult:
-        """One tracker pass per proxy movie, pooled into the split score and the detector's node levers."""
+        """One tracker pass per proxy movie, pooled into the split score and the detector's node levers.
+
+        Scored with cudnn autotuning OFF, restoring it afterwards. The trainers enable `cudnn.benchmark` —
+        correct for training, where the shape is static and the speedup is real — but it picks convolution
+        algorithms by TIMING, so the same weights can take different kernels on different runs. Under fp16
+        that shifts peak logits, which shifts which maxima survive the equality-NMS, which shifts node counts
+        and the score: two evaluations of one untrained model measured 0.8474 and 0.8457. A selector that
+        cannot reproduce itself cannot resolve a small improvement, and near a ceiling the improvements ARE
+        small — so determinism is worth more here than the few seconds it costs.
+        """
+        autotune = torch.backends.cudnn.benchmark
+        torch.backends.cudnn.benchmark = False
+        try:
+            return self._scored(detector, edge_scorer)
+        finally:
+            torch.backends.cudnn.benchmark = autotune
+
+    def _scored(self, detector: TemporalUNetDetector, edge_scorer: BlendedEdgeTransformerScorer) -> EvalResult:
+        """The scoring pass itself — see `_score` for why it runs with autotuning disabled."""
         tracker = self._tracker(detector, edge_scorer)
         matcher = DistanceMatcher(spacing=self.proxy.spacing)
         metrics: list[VideoMetrics] = []
