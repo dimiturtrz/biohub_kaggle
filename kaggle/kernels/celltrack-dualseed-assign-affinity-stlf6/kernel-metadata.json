@@ -18,5 +18,5 @@
   ],
   "kernel_sources": [],
   "model_sources": [],
-  "machine_shape": "NvidiaTeslaT4x2"
+  "machine_shape": "NvidiaTeslaT4"
 }
