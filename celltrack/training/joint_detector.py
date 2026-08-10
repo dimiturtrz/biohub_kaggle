@@ -387,7 +387,7 @@ class JointTrainer:
                 out.detection_t.unsqueeze(0), [centres_t_grid], self.config.neg_weight
             ) + BalancedBCE.of(out.detection_t1.unsqueeze(0), [centres_t1_grid], self.config.neg_weight)
             contrastive = InfoNCE.of(
-                out.source_features, out.target_features, edge_matrix, self.config.temperature, _POS_FEATURE_DIM
+                out.source_features, out.target_features, edge_matrix, self.config.temperature, self.config.out_channels
             )
             loss = edge + self.config.det_weight * det + self.config.contrastive_weight * contrastive
         return _PairOutcome(loss, edge, det, contrastive, out.edge_logits, edge_matrix)

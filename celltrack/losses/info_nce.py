@@ -27,16 +27,21 @@ class InfoNCE:
         target_features: Float[Tensor, "u d"],
         edge_matrix: Float[Tensor, "s u"],
         temperature: float,
-        position_dim: int,
+        appearance_dim: int,
     ) -> Float[Tensor, ""]:
         """Softmax over targets at `temperature`, cross-entropy against the annotated successor(s), row-meaned.
 
-        `position_dim` is the width of the TRAILING position block the caller's node features carry, and
-        dropping it is the whole point rather than a detail: node features are an appearance vector
-        concatenated with a sinusoidal embedding of the node's coordinates, so contrasting the full vector
-        lets the objective be satisfied through POSITION — nearby cells get similar embeddings, distant ones
-        different — which is exactly the lesson that produces the mislinks this term exists to fix. Only the
-        leading appearance channels are compared; do not "simplify" the slice away.
+        `appearance_dim` is the width of the LEADING appearance block, and taking only it is the whole point
+        rather than a detail: node features are an appearance vector followed by a sinusoidal embedding of
+        the node's coordinates (and, when kinematics is on, a prior-velocity block), so contrasting the full
+        vector lets the objective be satisfied through POSITION — nearby cells get similar embeddings,
+        distant ones different — which is exactly the lesson that produces the mislinks this term exists to
+        fix. Only the leading appearance channels are compared; do not "simplify" the slice away.
+
+        It names the LEADING width, not the trailing one, deliberately. An earlier version subtracted a
+        trailing position block, which silently mis-sliced the moment a THIRD block was appended after it —
+        the appearance slice would then have swallowed part of the position embed and contrasted on the very
+        thing it excludes. A leading width is invariant to whatever is appended later.
 
         A DIVISION (one source, two annotated successors) is scored as cross-entropy against the uniform
         distribution over its positives — the mean of `-log p` across them. That asks the mother to rank both
@@ -50,13 +55,13 @@ class InfoNCE:
         if not bool(annotated.any()):
             return source_features.new_zeros(())
         with torch.autocast(device_type=source_features.device.type, enabled=False):
-            source = InfoNCE._appearance(source_features, position_dim)
-            target = InfoNCE._appearance(target_features, position_dim)
+            source = InfoNCE._appearance(source_features, appearance_dim)
+            target = InfoNCE._appearance(target_features, appearance_dim)
             log_probability = torch.log_softmax(source @ target.T / temperature, dim=1)[annotated]
             weight = positives[annotated].to(log_probability.dtype)
             return -((log_probability * weight).sum(dim=1) / weight.sum(dim=1)).mean()
 
     @staticmethod
-    def _appearance(features: Float[Tensor, "n d"], position_dim: int) -> Float[Tensor, "n a"]:
-        """The L2-normalised appearance block — the leading channels, with the trailing position embed dropped."""
-        return F.normalize(features[:, : features.shape[1] - position_dim].float(), dim=1)
+    def _appearance(features: Float[Tensor, "n d"], appearance_dim: int) -> Float[Tensor, "n a"]:
+        """The L2-normalised appearance block — the leading channels, whatever blocks follow them."""
+        return F.normalize(features[:, :appearance_dim].float(), dim=1)
