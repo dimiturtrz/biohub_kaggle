@@ -42,6 +42,17 @@ class PrecomputedEdgeAffinity:
         return self.by_timepoint.get(timepoint)
 
 
+@dataclass(frozen=True)
+class EdgeGap:
+    """One `t -> t+1` gap's scoring inputs — the video, the timepoint, and both frames' node positions."""
+
+    source: _VideoSource
+    timepoint: int
+    src_positions: Float[np.ndarray, "s 3"]
+    tgt_positions: Float[np.ndarray, "t 3"]
+    device: str
+
+
 class EdgeTransformerScorer(nn.Module):
     """The pilkwang edge transformer over UNet features — a candidate-pair association probability."""
 
@@ -100,49 +111,42 @@ class EdgeTransformerScorer(nn.Module):
             tgt_rows = np.flatnonzero(timepoints == timepoint + 1)
             if len(src_rows) == 0 or len(tgt_rows) == 0:
                 continue
-            probability = self._score_gap(source, timepoint, positions[src_rows], positions[tgt_rows], device)
-            by_timepoint[int(timepoint)] = probability
+            gap = EdgeGap(source, int(timepoint), positions[src_rows], positions[tgt_rows], device)
+            by_timepoint[gap.timepoint] = self._score_gap(gap)
         return PrecomputedEdgeAffinity(by_timepoint)
 
-    def _score_gap(
-        self,
-        source: _VideoSource,
-        timepoint: int,
-        src_positions: Float[np.ndarray, "s 3"],
-        tgt_positions: Float[np.ndarray, "t 3"],
-        device: str,
-    ) -> Float[np.ndarray, "s t"]:
+    def _score_gap(self, gap: EdgeGap) -> Float[np.ndarray, "s t"]:
         """The source→target probability matrix for one gap: transformer logits soft-maxed over the sources."""
-        logits = self._gap_logits(source, timepoint, src_positions, tgt_positions, device)
-        return torch.softmax(logits, dim=0).cpu().numpy()
+        return torch.softmax(self._gap_logits(gap), dim=0).cpu().numpy()
 
-    def _gap_logits(
-        self,
-        source: _VideoSource,
-        timepoint: int,
-        src_positions: Float[np.ndarray, "s 3"],
-        tgt_positions: Float[np.ndarray, "t 3"],
-        device: str,
-    ) -> Float[Tensor, "s t"]:
+    def _gap_logits(self, gap: EdgeGap, *, reverse: bool = False) -> Float[Tensor, "early late"]:
         """The pre-softmax association logits for one gap: UNet features + position embed → transformer.
 
         Kept separate from the softmax so several seeds' logits can be blended *before* normalisation — the
         detector-blend lesson, that probabilities saturate and logits don't (see `BlendedEdgeTransformerScorer`).
         The backbone and transformer run at the device's accelerated precision; the logits return fp32, the
         space the seed blend and the softmax over sources are taken in.
+
+        `reverse` scores the same gap with the temporal pair swapped: the window is stacked `[t+1, t]`, so the
+        t+1 nodes take the window's leading slot (features[0], time fraction 0.0) and the t nodes the trailing
+        one, and the returned matrix is `(t, s)`. It is a question the head has never been asked — the same
+        weights run on a re-ordered window — not a re-normalisation of the forward logits.
         """
-        downsample = torch.tensor(self.recipe.downsample, dtype=torch.float32, device=device)
-        frame_t = TemporalUNetDetector._read_frame(source, timepoint, self.recipe.downsample, device)  # noqa: SLF001
-        frame_t1 = TemporalUNetDetector._read_frame(source, timepoint + 1, self.recipe.downsample, device)  # noqa: SLF001
-        window = torch.stack([frame_t, frame_t1], dim=0).unsqueeze(0).unsqueeze(2)
+        device, recipe = gap.device, self.recipe
+        downsample = torch.tensor(recipe.downsample, dtype=torch.float32, device=device)
+        frame_t = TemporalUNetDetector._read_frame(gap.source, gap.timepoint, recipe.downsample, device)  # noqa: SLF001
+        frame_t1 = TemporalUNetDetector._read_frame(gap.source, gap.timepoint + 1, recipe.downsample, device)  # noqa: SLF001
+        frames = [frame_t1, frame_t] if reverse else [frame_t, frame_t1]
+        early, late = (gap.tgt_positions, gap.src_positions) if reverse else (gap.src_positions, gap.tgt_positions)
+        window = torch.stack(frames, dim=0).unsqueeze(0).unsqueeze(2)
         spatial = torch.tensor(frame_t.shape, dtype=torch.float32, device=device)
-        src_voxel = torch.as_tensor(src_positions, device=device)
-        tgt_voxel = torch.as_tensor(tgt_positions, device=device)
+        early_voxel = torch.as_tensor(early, device=device)
+        late_voxel = torch.as_tensor(late, device=device)
         with AutocastPolicy.of(device):
             features = self.detector.unet(window)[0]  # (2, C, Z, Y, X)
-            feat_src = self.node_features(features[0], src_voxel / downsample, spatial, 0.0, device)
-            feat_tgt = self.node_features(features[1], tgt_voxel / downsample, spatial, 1.0, device)
-            logits = self.transformer(feat_src, feat_tgt, src_voxel, tgt_voxel)  # (s, t)
+            feat_early = self.node_features(features[0], early_voxel / downsample, spatial, 0.0, device)
+            feat_late = self.node_features(features[1], late_voxel / downsample, spatial, 1.0, device)
+            logits = self.transformer(feat_early, feat_late, early_voxel, late_voxel)  # (early, late)
         return logits.float()
 
     @staticmethod

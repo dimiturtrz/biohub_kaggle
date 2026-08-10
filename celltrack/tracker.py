@@ -98,6 +98,11 @@ class TrackerConfig:
     # raw-Jaccard gain is recall-side and does not transfer, like min_track_length/node-count. Ship the LB
     # value 0.8; 0.3 stays a swept-available knob for the proxy regime.
     smooth_strength: float = 0.8
+    # Off by default: score every gap a second time with the temporal pair swapped and fuse the two
+    # normalisations by their harmonic mean (`BlendedEdgeTransformerScorer.fuse`). Costs a second affinity
+    # forward and no retraining; it targets the affinity-inverted dense mislink, where a wrong near neighbour
+    # wins forwards but loses backwards.
+    bidirectional_edges: bool = False
 
 
 @dataclass(frozen=True)
@@ -148,12 +153,15 @@ class CellTracker:
             recipe=recipe,
             device=device,
         )
-        edge_scorer = BlendedEdgeTransformerScorer.from_packs((pack1, pack2), config.edge_blend, device)
+        edge_scorer = BlendedEdgeTransformerScorer.from_packs(
+            (pack1, pack2), config.edge_blend, device, bidirectional=config.bidirectional_edges
+        )
         return cls(detector=detector, edge_scorer=edge_scorer, device=device, config=config)
 
     def with_config(self, config: TrackerConfig) -> "CellTracker":
         """The same mounted models under a different operating point — reuses the cache across a sweep."""
-        return CellTracker(detector=self.detector, edge_scorer=self.edge_scorer, device=self.device, config=config)
+        edge_scorer = self.edge_scorer.with_bidirectional(bidirectional=config.bidirectional_edges)
+        return CellTracker(detector=self.detector, edge_scorer=edge_scorer, device=self.device, config=config)
 
     def run(self, video_key: str, path: Path) -> TrackGraph:
         """Detect, score edges, and fold the post-proc stages over one video into a linked track graph.

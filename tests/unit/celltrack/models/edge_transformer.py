@@ -12,7 +12,12 @@ import numpy as np
 import torch
 import zarr
 
-from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeTransformerScorer, PrecomputedEdgeAffinity
+from celltrack.models.edge_transformer import (
+    _POS_EMBED_DIM,
+    EdgeGap,
+    EdgeTransformerScorer,
+    PrecomputedEdgeAffinity,
+)
 from celltrack.models.temporal_unet_detector import DetectorRecipe, TemporalUNetDetector
 from core.data.tracks import TrackGraph
 
@@ -88,6 +93,21 @@ def test_from_pack(tmp_path: Path):
     loaded = EdgeTransformerScorer.from_pack(tmp_path)
     assert loaded.recipe.downsample == (1, 1, 1)
     assert torch.equal(scorer.transformer.state_dict()["proj.weight"], loaded.transformer.state_dict()["proj.weight"])
+
+
+def test_gap_logits_reverse(tmp_path: Path):
+    """The reversed pass scores the swapped pair: a `(t, s)` matrix that is not the forward one transposed."""
+    scorer = _tiny_scorer()
+    source = TemporalUNetDetector._open_source(_video(tmp_path))
+    src_positions = np.array([[1, 4, 4], [3, 4, 4]], dtype=np.float32)
+    tgt_positions = np.array([[1, 4, 4], [2, 4, 4], [3, 4, 4]], dtype=np.float32)
+    gap = EdgeGap(source, 0, src_positions, tgt_positions, "cpu")
+    with torch.no_grad():
+        forward = scorer._gap_logits(gap)
+        reverse = scorer._gap_logits(gap, reverse=True)
+    assert forward.shape == (2, 3)
+    assert reverse.shape == (3, 2)
+    assert not torch.allclose(reverse.T, forward)  # a second question of the head, not a re-read of the first
 
 
 def test_affinities(tmp_path: Path):

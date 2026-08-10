@@ -52,7 +52,9 @@ def test_mount(monkeypatch: pytest.MonkeyPatch):
     """`mount` keeps the caller's proxy and mounts the two-seed edge affinity at the config's blend, both shared."""
     captured: dict[str, object] = {}
 
-    def _fake_from_packs(packs: tuple[Path, ...], weights: tuple[float, ...], device: str) -> str:
+    def _fake_from_packs(
+        packs: tuple[Path, ...], weights: tuple[float, ...], device: str, *, bidirectional: bool
+    ) -> str:
         captured["packs"], captured["weights"], captured["device"] = packs, weights, device
         return "edge"
 

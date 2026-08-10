@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 import torch
 
-from celltrack.models.edge_transformer import EdgeTransformerScorer
+from celltrack.models.edge_transformer import EdgeGap, EdgeTransformerScorer
 from celltrack.training import edge_finetune
 from celltrack.training.edge_finetune import (
     EdgeFinetuneConfig,
@@ -33,15 +33,8 @@ class _StubScorer:
         self.detector = torch.nn.Linear(1, 1)
         self.transformer = torch.nn.Linear(1, 1)
 
-    def _gap_logits(
-        self,
-        source: object,
-        timepoint: int,
-        source_positions: np.ndarray,
-        target_positions: np.ndarray,
-        device: str,
-    ) -> torch.Tensor:
-        pairs = torch.ones(len(source_positions), len(target_positions))
+    def _gap_logits(self, gap: EdgeGap) -> torch.Tensor:
+        pairs = torch.ones(len(gap.src_positions), len(gap.tgt_positions))
         return self.transformer.weight.reshape(()) * pairs  # (s, t) logits carrying the transformer's grad
 
 

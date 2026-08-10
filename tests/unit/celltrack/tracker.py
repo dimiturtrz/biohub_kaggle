@@ -53,6 +53,9 @@ class _StubEdgeScorer:
     def affinities(self, path: Path, nodes: TrackGraph, device: str) -> None:
         return None
 
+    def with_bidirectional(self, *, bidirectional: bool) -> "_StubEdgeScorer":
+        return self
+
 
 def _tracker(monkeypatch: pytest.MonkeyPatch, config: TrackerConfig) -> CellTracker:
     monkeypatch.setattr(
@@ -99,7 +102,7 @@ def test_from_packs(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
         tracker_module.BlendedEdgeTransformerScorer,
         "from_packs",
-        staticmethod(lambda packs, weights, device: _StubEdgeScorer()),
+        staticmethod(lambda packs, weights, device, *, bidirectional: _StubEdgeScorer()),
     )
     config = TrackerConfig(linker=LinkerConfig(disappearance_cost=3.0))
     tracker = CellTracker.from_packs(Path("p1"), Path("p2"), Path("cache"), "cpu", config)
@@ -117,7 +120,7 @@ def test_ephemeral(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
         tracker_module.BlendedEdgeTransformerScorer,
         "from_packs",
-        staticmethod(lambda packs, weights, device: _StubEdgeScorer()),
+        staticmethod(lambda packs, weights, device, *, bidirectional: _StubEdgeScorer()),
     )
     tracker = CellTracker.ephemeral(Path("p1"), Path("p2"), "cpu", TrackerConfig(threshold=0.97))
 

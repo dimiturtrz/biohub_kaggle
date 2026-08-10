@@ -78,7 +78,9 @@ class ModelEvaluator:
         The caller chooses which movies the score runs over — the trainers load the proxy over `VALIDATION_MOVIES`,
         so selection pressure never lands on the test four.
         """
-        edge_scorer = BlendedEdgeTransformerScorer.from_packs(packs, config.edge_blend, device)
+        edge_scorer = BlendedEdgeTransformerScorer.from_packs(
+            packs, config.edge_blend, device, bidirectional=config.bidirectional_edges
+        )
         return cls(proxy=proxy, edge_scorer=edge_scorer, recipe=recipe, device=device, config=config)
 
     def evaluate(self, detector: TemporalUNetDetector) -> EvalResult:
@@ -101,7 +103,8 @@ class ModelEvaluator:
         """
         detector = TemporalUNetDetector.of(model.detector)
         scorer = EdgeTransformerScorer.of(detector, model.transformer, self.recipe)
-        return self._score(detector, BlendedEdgeTransformerScorer((scorer,), (1.0,)))
+        one_seed = BlendedEdgeTransformerScorer((scorer,), (1.0,), bidirectional=self.config.bidirectional_edges)
+        return self._score(detector, one_seed)
 
     def _score(self, detector: TemporalUNetDetector, edge_scorer: BlendedEdgeTransformerScorer) -> EvalResult:
         """One tracker pass per proxy movie, pooled into the split score and the detector's node levers."""

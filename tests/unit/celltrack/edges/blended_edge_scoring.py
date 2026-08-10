@@ -12,7 +12,7 @@ import torch
 import zarr
 
 from celltrack.edges.blended_edge_scoring import BlendedEdgeTransformerScorer
-from celltrack.models.edge_transformer import EdgeTransformerScorer
+from celltrack.models.edge_transformer import EdgeGap, EdgeTransformerScorer
 from celltrack.models.temporal_unet_detector import DetectorRecipe, TemporalUNetDetector
 from core.data.tracks import TrackGraph
 
@@ -77,3 +77,56 @@ def test_affinities(tmp_path: Path):
     assert blended_matrix is not None
     assert solo_matrix is not None
     assert np.allclose(blended_matrix, solo_matrix, atol=1e-5)
+
+
+def test_fuse():
+    """Fusion is the harmonic mean, hand-computed — and a pair both directions call impossible fuses to 0."""
+    forward = torch.tensor([[0.8, 0.2], [0.5, 0.0]])
+    reverse = torch.tensor([[0.4, 0.6], [0.0, 0.0]])
+    fused = BlendedEdgeTransformerScorer.fuse(forward, reverse)
+    expected = torch.tensor([[2 * 0.8 * 0.4 / 1.2, 2 * 0.2 * 0.6 / 0.8], [0.0, 0.0]])
+    assert torch.allclose(fused, expected)
+    assert not torch.isnan(fused).any()
+    assert fused[0, 0] < forward[0, 0]  # dominated by the smaller direction, unlike an arithmetic mean
+
+
+def test_affinities_disabled_is_the_forward_blend(tmp_path: Path):
+    """With fusion off the output is exactly today's: the seed-blended logits soft-maxed over the sources."""
+    a, b = _tiny_scorer(0), _tiny_scorer(1)
+    detections, video = _detections(), _video(tmp_path)
+    matrix = BlendedEdgeTransformerScorer((a, b), (0.8, 0.2)).affinities(video, detections, "cpu").probabilities(0)
+    positions = detections.positions().astype(np.float32)
+    gap = EdgeGap(TemporalUNetDetector._open_source(video), 0, positions[:2], positions[2:], "cpu")
+    with torch.no_grad():
+        weighted = torch.stack([weight * scorer._gap_logits(gap) for scorer, weight in ((a, 0.8), (b, 0.2))])
+    expected = torch.softmax(weighted.sum(dim=0), dim=0).numpy()
+    assert matrix is not None
+    assert np.array_equal(matrix, expected)
+
+
+def test_affinities_bidirectional(tmp_path: Path):
+    """Enabling fusion changes the matrix, keeps its shape, and introduces no NaNs."""
+    a, b = _tiny_scorer(0), _tiny_scorer(1)
+    detections, video = _detections(), _video(tmp_path)
+    plain = BlendedEdgeTransformerScorer((a, b), (0.8, 0.2)).affinities(video, detections, "cpu").probabilities(0)
+    fused = (
+        BlendedEdgeTransformerScorer((a, b), (0.8, 0.2), bidirectional=True)
+        .affinities(video, detections, "cpu")
+        .probabilities(0)
+    )
+    assert plain is not None
+    assert fused is not None
+    assert fused.shape == plain.shape
+    assert np.isfinite(fused).all()
+    assert not np.allclose(fused, plain)
+
+
+def test_with_bidirectional():
+    """Re-pointing the knob keeps the mounted seeds — a sweep re-uses the loaded weights."""
+    a, b = _tiny_scorer(0), _tiny_scorer(1)
+    scorer = BlendedEdgeTransformerScorer((a, b), (0.8, 0.2))
+    switched = scorer.with_bidirectional(bidirectional=True)
+    assert switched.bidirectional
+    assert not scorer.bidirectional
+    assert switched.scorers is scorer.scorers
+    assert switched.weights == scorer.weights

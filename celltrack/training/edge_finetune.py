@@ -32,7 +32,7 @@ from scipy.spatial.distance import cdist
 from celltrack.eval.dense_diagnosis import DenseDiagnosis, DenseFateDiagnosis, Fate, MislinkSignal
 from celltrack.eval.proxy import TestMovieProxy
 from celltrack.losses.softmax_focal_bce import SoftmaxFocalBCE
-from celltrack.models.edge_transformer import EdgeTransformerScorer
+from celltrack.models.edge_transformer import EdgeGap, EdgeTransformerScorer
 from celltrack.models.temporal_unet_detector import TemporalUNetDetector, _VideoSource
 from celltrack.tracker import CellTracker
 from core.data.tracks import TrackGraph
@@ -164,9 +164,8 @@ class EdgeHardNegativeFinetuner:
 
     def _loss(self, source: _VideoSource, gap: GapSupervision) -> Float[torch.Tensor, ""]:
         """Frontier focal-BCE on the annotated edges plus the hard-negative probability the mislinks inflate."""
-        logits = self._scorer._gap_logits(  # noqa: SLF001  (finetuning the scorer's own head; UNet frozen)
-            source, gap.timepoint, gap.source_positions, gap.target_positions, self._config.device
-        )
+        scored = EdgeGap(source, gap.timepoint, gap.source_positions, gap.target_positions, self._config.device)
+        logits = self._scorer._gap_logits(scored)  # noqa: SLF001  (finetuning the scorer's own head; UNet frozen)
         target = torch.as_tensor(gap.gt_matrix, device=self._config.device)
         loss = SoftmaxFocalBCE.of(logits, target)
         if len(gap.hard_negatives):
