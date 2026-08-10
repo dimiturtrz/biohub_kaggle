@@ -28,6 +28,7 @@ from celltrack.detectors.pipeline import BlendDetectorScorer
 from celltrack.detectors.response_cache import EphemeralResponseStore
 from celltrack.detectors.tunet import DetectorRecipe, TemporalUNetDetector
 from celltrack.edges.blended_edge_scoring import BlendedEdgeTransformerScorer
+from celltrack.eval.dense_diagnosis import AffinityIndex, MislinkSignal
 from celltrack.eval.proxy import TestMovieProxy
 from celltrack.models.edge_transformer import EdgeTransformerScorer
 from celltrack.models.joint_model import JointModel
@@ -49,12 +50,25 @@ class EvalResult:
     Node *recall* (over annotated cells) is the real detector lever; node precision against the sparse annotation
     is ~meaningless (most true detections land on unannotated cells), so the over-detection signal is the
     node-count ratio `(predicted - estimated) / estimated` instead — the same term the leaderboard penalises.
+
+    The association levers are the `MislinkSignal` numbers, pooled over the proxy's movies: `mislinks` is how
+    many annotated edges the linker got wrong on REAL detections with both endpoints detected, `inverted_fraction`
+    the share of those the affinity itself ranked wrong (`p_chosen > p_true`) — a training defect, as against the
+    remainder, where a nearer wrong neighbour beat a correctly-ranked successor on the distance term (a linker
+    defect) — and `mean_p_true` / `mean_p_chosen` how far apart the two are scored where it fails. This is
+    association measured where it is HARD; an AUC over ground-truth pairs is not (it reads ~1.0 untrained).
+    BASELINE, dense movie post-NMS-fix: 35 mislinks, inverted_fraction 1.00, mean p_true 0.134 vs p_chosen 0.686.
+    A run genuinely improving association moves those; a run that only moves the AUC has not.
     """
 
     score: float
     selection_score: float
     node_recall: float
     node_ratio: float
+    inverted_fraction: float
+    mean_p_true: float
+    mean_p_chosen: float
+    mislinks: int
 
 
 @dataclass(frozen=True)
@@ -133,20 +147,40 @@ class ModelEvaluator:
             torch.backends.cudnn.benchmark = autotune
 
     def _scored(self, detector: TemporalUNetDetector, edge_scorer: BlendedEdgeTransformerScorer) -> EvalResult:
-        """The scoring pass itself — see `_score` for why it runs with autotuning disabled."""
+        """The scoring pass itself — see `_score` for why it runs with autotuning disabled.
+
+        The mislink signal rides this pass for free: `run_scored` hands back the affinity and the detections it
+        was aligned to, both already computed for the linker, and the analysis over them is array algebra on the
+        CPU. No second forward, no second tracker run — so it runs EVERY window, at every window's own weights.
+        """
         tracker = self._tracker(detector, edge_scorer)
         matcher = DistanceMatcher(spacing=self.proxy.spacing)
         metrics: list[VideoMetrics] = []
         nodes: list[NodeCounts] = []
+        signals: list[MislinkSignal] = []
         for path, truth in zip(self.proxy.paths, self.proxy.truths, strict=True):
-            graph = tracker.run(path.name, path)
-            metrics.append(VideoMetrics.of(graph, truth, matcher))
-            nodes.append(NodeCounts.of(matcher.match(graph, truth.graph), len(truth.graph.node_ids)))
+            tracked = tracker.run_scored(path.name, path)
+            matching = matcher.match(tracked.graph, truth.graph)
+            metrics.append(VideoMetrics.of(tracked.graph, truth, matcher))
+            nodes.append(NodeCounts.of(matching, len(truth.graph.node_ids)))
+            index = AffinityIndex.of(tracked.detections, tracked.affinity)
+            signals.append(MislinkSignal.of(tracked.graph, truth.graph, matching, index))
         predicted = sum(metric.predicted_nodes for metric in metrics)
         estimated = sum(metric.estimated_nodes for metric in metrics)
         ratio = (predicted - estimated) / estimated if estimated > 0 else float("nan")
         split = SplitScore.of(metrics)
-        return EvalResult(split.score, split.selection_score, NodeCounts.pooled(nodes).recall(), ratio)
+        signal = MislinkSignal.pooled(signals)
+        mean_true, mean_chosen = signal.means()
+        return EvalResult(
+            score=split.score,
+            selection_score=split.selection_score,
+            node_recall=NodeCounts.pooled(nodes).recall(),
+            node_ratio=ratio,
+            inverted_fraction=signal.inverted_fraction(),
+            mean_p_true=mean_true,
+            mean_p_chosen=mean_chosen,
+            mislinks=len(signal.p_true),
+        )
 
     def _tracker(self, detector: TemporalUNetDetector, edge_scorer: BlendedEdgeTransformerScorer) -> CellTracker:
         """Mount the trained detector into the shipped tracker behind the given edge affinity — one assembly."""

@@ -86,6 +86,9 @@ def test_evaluate(video_store: Path, in_bounds_tracks: AnnotatedTracks):
     assert result.selection_score <= result.score  # the clamp only ever removes the under-detection bonus
     assert math.isfinite(result.node_recall)
     assert math.isfinite(result.node_ratio)
+    # The mislink signal rides the same pass: a share in [0, 1] over however many mislinks the movie held.
+    assert 0.0 <= result.inverted_fraction <= 1.0
+    assert result.mislinks >= 0
 
 
 def test_evaluate_joint(video_store: Path, in_bounds_tracks: AnnotatedTracks):

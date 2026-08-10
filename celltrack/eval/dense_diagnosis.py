@@ -23,10 +23,10 @@ from __future__ import annotations
 
 import argparse
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import IntEnum
 from pathlib import Path
-from typing import cast
 
 import numpy as np
 from jaxtyping import Bool, Float, Int
@@ -125,6 +125,50 @@ class DenseFateDiagnosis:
 
 
 @dataclass(frozen=True)
+class AffinityIndex:
+    """Where each node sits in an affinity's per-gap matrices — looked up by node ID, never by graph row.
+
+    A matrix's rows follow `np.flatnonzero(timepoints == t)` over the graph the affinity was SCORED on, which
+    is the detector's node set. Post-processing prunes short tracks and inserts synthetic bridge nodes, so the
+    finished track graph the mislinks live in is a different row space, and indexing it into the matrices would
+    silently read a neighbour's probability. Node IDs survive post-processing, so the lookup is by ID; a node
+    the affinity never scored (a bridge's invented midpoint) is reported absent rather than guessed at.
+    """
+
+    affinity: EdgeAffinity
+    slots: dict[int, tuple[int, int]]
+
+    @classmethod
+    def of(cls, scored: TrackGraph, affinity: EdgeAffinity) -> "AffinityIndex":
+        """Index the graph the affinity was scored over — every node ID to its `(timepoint, per-gap row)` slot."""
+        timepoints = scored.timepoints()
+        slots: dict[int, tuple[int, int]] = {}
+        for timepoint in np.unique(timepoints).tolist():
+            rows = np.flatnonzero(timepoints == timepoint)
+            for column, row in enumerate(rows.tolist()):
+                slots[int(scored.node_ids[row])] = (int(timepoint), column)
+        return cls(affinity=affinity, slots=slots)
+
+    def pair(self, source_id: int, true_id: int, chosen_id: int) -> tuple[float, float] | None:
+        """One source's P(true successor) and P(chosen neighbour), or `None` where this gap scored no such pair."""
+        source = self.slots.get(source_id)
+        if source is None:
+            return None
+        timepoint, row = source
+        matrix = self.affinity.probabilities(timepoint)
+        true_column = self._column(true_id, timepoint)
+        chosen_column = self._column(chosen_id, timepoint)
+        if matrix is None or true_column is None or chosen_column is None:
+            return None
+        return float(matrix[row, true_column]), float(matrix[row, chosen_column])
+
+    def _column(self, node_id: int, timepoint: int) -> int | None:
+        """The node's column in the `t -> t+1` matrix, or `None` when it is not a scored target of that gap."""
+        slot = self.slots.get(node_id)
+        return slot[1] if slot is not None and slot[0] == timepoint + 1 else None
+
+
+@dataclass(frozen=True)
 class MislinkSignal:
     """For each mislinked edge, the affinity's probability of the true successor vs the wrong one it chose.
 
@@ -133,6 +177,9 @@ class MislinkSignal:
     *cost* error — the affinity ranks the true successor higher, but the nearer wrong neighbour won on the
     distance term of `distance - bonus*P` anyway (`p_true >= p_chosen`), which is the bonus/gate cost lever
     already swept and refuted (e9b). The inverted fraction is the share a retrain could even target.
+
+    A mislink whose endpoints the affinity never scored — a bridge's invented midpoint, or a chosen target more
+    than one gap ahead — carries no probability pair and is left OUT of the arrays rather than imputed.
     """
 
     p_true: Float[np.ndarray, "m"]
@@ -140,27 +187,34 @@ class MislinkSignal:
 
     @classmethod
     def of(
-        cls, prediction: TrackGraph, truth: TrackGraph, matching: NodeMatching, affinity: EdgeAffinity
+        cls, prediction: TrackGraph, truth: TrackGraph, matching: NodeMatching, index: AffinityIndex
     ) -> "MislinkSignal":
         """Read the affinity's true- and chosen-target probability for every mislinked annotated edge."""
         fates = DenseFateDiagnosis.of(prediction, truth, matching).fates
         predicted_of_truth = DenseFateDiagnosis._invert(matching, len(truth.node_ids))  # noqa: SLF001
         successors = Adjacency.of(prediction).successors
-        timepoints = prediction.timepoints()
+        node_ids = prediction.node_ids
         mislinked = np.flatnonzero((fates == Fate.MISLINK_CONFLICT) | (fates == Fate.MISLINK_FREE))
-        edges = truth.edge_rows()[mislinked]
-        pairs = [
-            cls._probabilities(predicted_of_truth[source], predicted_of_truth[target], successors, timepoints, affinity)
-            for source, target in edges
-        ]
+        pairs: list[tuple[float, float]] = []
+        for source, target in truth.edge_rows()[mislinked]:
+            source_row, true_row = int(predicted_of_truth[source]), int(predicted_of_truth[target])
+            chosen_row = successors[source_row][0]
+            scored = index.pair(int(node_ids[source_row]), int(node_ids[true_row]), int(node_ids[chosen_row]))
+            if scored is not None:
+                pairs.append(scored)
         return cls(
             p_true=np.array([true for true, _ in pairs], dtype=np.float64),
             p_chosen=np.array([chosen for _, chosen in pairs], dtype=np.float64),
         )
 
     def inverted_fraction(self) -> float:
-        """The share of mislinks the affinity itself gets wrong (chosen scored above true) — the retrain target."""
-        return float(np.mean(self.p_chosen > self.p_true)) if len(self.p_true) else float("nan")
+        """The share of mislinks the affinity itself gets wrong (chosen scored above true) — the retrain target.
+
+        Zero, not NaN, on a graph with no mislinks: the quantity is how much of the residual a better-trained
+        affinity could target, and a run that mislinks nothing leaves it nothing — a defined floor, so the
+        series stays plottable across a training run instead of dropping out at its best window.
+        """
+        return float(np.mean(self.p_chosen > self.p_true)) if len(self.p_true) else 0.0
 
     def means(self) -> tuple[float, float]:
         """Mean true-successor and chosen-neighbour probability over the mislinks — NaN when there are none."""
@@ -168,25 +222,14 @@ class MislinkSignal:
             return float("nan"), float("nan")
         return float(np.mean(self.p_true)), float(np.mean(self.p_chosen))
 
-    @staticmethod
-    def _probabilities(
-        source_row: int,
-        true_row: int,
-        successors: dict[int, tuple[int, ...]],
-        timepoints: Int[np.ndarray, "n"],
-        affinity: EdgeAffinity,
-    ) -> tuple[float, float]:
-        """The affinity probability of the true successor and of the (first) successor the linker actually chose."""
-        chosen_row = successors[source_row][0]
-        timepoint = int(timepoints[source_row])
-        # A mislinked source has an out-edge, so its gap carried candidates and the affinity is populated here.
-        probability = cast(Float[np.ndarray, "s t"], affinity.probabilities(timepoint))
-        sources = np.flatnonzero(timepoints == timepoint)
-        targets = np.flatnonzero(timepoints == timepoint + 1)
-        source_local = int(np.searchsorted(sources, source_row))
-        true_local = int(np.searchsorted(targets, true_row))
-        chosen_local = int(np.searchsorted(targets, chosen_row))
-        return float(probability[source_local, true_local]), float(probability[source_local, chosen_local])
+    @classmethod
+    def pooled(cls, signals: Sequence["MislinkSignal"]) -> "MislinkSignal":
+        """Every movie's mislinks as one signal — an eval reads its inversion over the whole proxy, not per video."""
+        empty = np.empty(0, dtype=np.float64)
+        return cls(
+            p_true=np.concatenate([signal.p_true for signal in signals]) if signals else empty,
+            p_chosen=np.concatenate([signal.p_chosen for signal in signals]) if signals else empty,
+        )
 
 
 class DenseDiagnosis:
@@ -206,7 +249,7 @@ class DenseDiagnosis:
         affinity = tracker.edge_scorer.affinities(path, prediction, device)
         return (
             DenseFateDiagnosis.of(prediction, truth, matching),
-            MislinkSignal.of(prediction, truth, matching, affinity),
+            MislinkSignal.of(prediction, truth, matching, AffinityIndex.of(prediction, affinity)),
         )
 
     @staticmethod

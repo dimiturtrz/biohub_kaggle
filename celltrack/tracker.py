@@ -131,6 +131,21 @@ class TrackerConfig:
 
 
 @dataclass(frozen=True)
+class TrackedVideo:
+    """One video's finished track graph beside the two things it was built FROM — the detections and their affinity.
+
+    `run` returns the graph alone, which discards exactly what a post-hoc association diagnosis needs: the
+    per-gap affinity matrices, and the DETECTION node set those matrices are aligned to (post-processing prunes
+    short tracks and inserts synthetic bridge nodes, so the finished graph is a different row space). Handing
+    all three back makes a mislink analysis free for a caller that already ran the tracker — no second forward.
+    """
+
+    graph: TrackGraph
+    detections: TrackGraph
+    affinity: EdgeAffinity
+
+
+@dataclass(frozen=True)
 class CellTracker:
     """The mounted dual-seed tracker: forward two seeds, score edges, fold the post-proc stages — `run` a video."""
 
@@ -189,7 +204,11 @@ class CellTracker:
         return CellTracker(detector=self.detector, edge_scorer=edge_scorer, device=self.device, config=config)
 
     def run(self, video_key: str, path: Path) -> TrackGraph:
-        """Detect, score edges, and fold the post-proc stages over one video into a linked track graph.
+        """Detect, score edges, and fold the post-proc stages over one video into a linked track graph."""
+        return self.run_scored(video_key, path).graph
+
+    def run_scored(self, video_key: str, path: Path) -> TrackedVideo:
+        """The same pass as `run`, also returning the detections and the affinity the graph was built from.
 
         Each stage is timed at INFO so a slow submission is diagnosable per stage (detect / affinity / link+post)
         rather than as one opaque wall-clock — the detection forward is the GPU cost, the stages are the CPU cost.
@@ -213,7 +232,7 @@ class CellTracker:
             time.perf_counter() - stages_start,
             len(nodes.node_ids),
         )
-        return graph
+        return TrackedVideo(graph=graph, detections=nodes, affinity=affinity)
 
     def _mutual(self, path: Path, nodes: TrackGraph, affinity: EdgeAffinity | None) -> EdgeAffinity | None:
         """The bidirectionally fused probabilities the linker's agreement floor gates on — `None` when unused.

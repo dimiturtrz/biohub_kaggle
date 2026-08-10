@@ -77,6 +77,19 @@ def test_run(monkeypatch: pytest.MonkeyPatch):
     assert graph.edges.tolist() == [[0, 1]]
 
 
+def test_run_scored(monkeypatch: pytest.MonkeyPatch):
+    """`run_scored` returns the same graph `run` does, beside the detections and affinity it was built from.
+
+    The affinity and the DETECTION node set are what a post-hoc mislink diagnosis needs, and both are already
+    computed for the linker — handing them back is what makes that diagnosis free rather than a second pass.
+    """
+    tracker = _tracker(monkeypatch, TrackerConfig(min_track_length=1, smooth_strength=0.0))
+    tracked = tracker.run_scored("m.zarr", Path("m.zarr"))
+    assert tracked.graph.edges.tolist() == [[0, 1]]
+    assert tracked.detections.node_ids.tolist() == [0, 1]  # pre-post-processing, the rows the affinity is aligned to
+    assert tracked.affinity is tracker.edge_scorer.affinities(Path("m.zarr"), _CHAIN, "cpu")
+
+
 def test_run_with_topology_repair(monkeypatch: pytest.MonkeyPatch):
     """A present `topology` config folds the invariant-enforcing stage in without breaking a valid chain."""
     tracker = _tracker(monkeypatch, TrackerConfig(min_track_length=1, smooth_strength=0.0, topology=TopologyConfig()))

@@ -4,7 +4,7 @@ from typing import cast
 
 import numpy as np
 
-from celltrack.eval.dense_diagnosis import DenseDiagnosis, DenseFateDiagnosis, Fate, MislinkSignal
+from celltrack.eval.dense_diagnosis import AffinityIndex, DenseDiagnosis, DenseFateDiagnosis, Fate, MislinkSignal
 from celltrack.tracker import CellTracker
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
@@ -143,16 +143,91 @@ def test_mislink_signal_of():
     matching = NodeMatching(gt_rows=np.arange(3, dtype=np.int64))
     affinity = _Affinity({0: np.array([[0.7, 0.2]], dtype=np.float64)})  # source 0 -> [target 1, target 2]
 
-    signal = MislinkSignal.of(prediction, truth, matching, affinity)
+    signal = MislinkSignal.of(prediction, truth, matching, AffinityIndex.of(prediction, affinity))
 
     assert signal.p_true.tolist() == [0.2]
     assert signal.p_chosen.tolist() == [0.7]
+
+
+def test_mislink_signal_of_reads_a_post_processed_graph_through_the_detection_row_space():
+    """The affinity is scored over the DETECTIONS; a pruned/bridged graph is looked up by node ID, not by row.
+
+    Detections carry an extra t0 node (id 10) the short-track filter dropped, so the surviving source sits at
+    detection row 1 — row 0 of the finished graph. Reading the finished graph's rows into the matrix would take
+    the DROPPED node's probabilities (true 0.5 vs chosen 0.4, not inverted); the ID lookup takes detection row
+    1, whose true successor scores 0.2 against the chosen neighbour's 0.9. A bridge's invented node (99) sits
+    in the finished graph without an affinity slot, and indexing it is what the ID lookup avoids.
+    """
+    detections = TrackGraph(
+        node_ids=np.array([10, 11, 12, 13], dtype=np.int64),
+        coordinates=np.array([[0, 0, 0, 0], [0, 0, 0, 6], [1, 0, 0, 3], [1, 0, 0, 9]], dtype=np.int64),
+        edges=np.empty((0, 2), dtype=np.int64),
+    )
+    prediction = TrackGraph(
+        node_ids=np.array([11, 12, 13, 99], dtype=np.int64),
+        coordinates=np.array([[0, 0, 0, 6], [1, 0, 0, 3], [1, 0, 0, 9], [1, 0, 0, 5]], dtype=np.int64),
+        edges=np.array([[11, 12], [11, 99]], dtype=np.int64),  # 11 mislinks to 12 (true target 13) and to 99
+    )
+    truth = TrackGraph(
+        node_ids=np.arange(3, dtype=np.int64),
+        coordinates=np.array([[0, 0, 0, 6], [1, 0, 0, 9], [1, 0, 0, 3]], dtype=np.int64),
+        edges=np.array([[0, 1]], dtype=np.int64),
+    )
+    matching = NodeMatching(gt_rows=np.array([0, 2, 1, -1], dtype=np.int64))  # prediction row -> truth row
+    affinity = _Affinity({0: np.array([[0.4, 0.5], [0.9, 0.2]], dtype=np.float64)})  # rows: detections 10, 11
+
+    signal = MislinkSignal.of(prediction, truth, matching, AffinityIndex.of(detections, affinity))
+
+    assert signal.p_true.tolist() == [0.2]
+    assert signal.p_chosen.tolist() == [0.9]
+
+
+def test_pooled():
+    """`pooled` concatenates every movie's mislinks, so an eval's inversion is read over the whole proxy."""
+    first = MislinkSignal(p_true=np.array([0.1]), p_chosen=np.array([0.6]))
+    second = MislinkSignal(p_true=np.array([0.8, 0.3]), p_chosen=np.array([0.2, 0.9]))
+
+    pooled = MislinkSignal.pooled([first, second])
+
+    assert pooled.p_true.tolist() == [0.1, 0.8, 0.3]
+    assert pooled.inverted_fraction() == 2 / 3
+    assert MislinkSignal.pooled([]).p_true.tolist() == []
 
 
 def test_inverted_fraction():
     """`inverted_fraction` is the share of mislinks whose chosen neighbour outscored the true successor."""
     signal = MislinkSignal(p_true=np.array([0.1, 0.8, 0.3]), p_chosen=np.array([0.6, 0.2, 0.9]))
     assert signal.inverted_fraction() == 2 / 3  # edges 0 and 2 are inverted; edge 1 is not
+    # A graph with no mislinks leaves a retrain nothing to target — a defined zero, not NaN.
+    assert MislinkSignal(p_true=np.array([]), p_chosen=np.array([])).inverted_fraction() == 0.0
+
+
+def test_affinity_index_of():
+    """`of` slots every node id to its `(timepoint, per-gap column)` — the matrices' own row order, by id."""
+    graph = TrackGraph(
+        node_ids=np.array([5, 6, 7], dtype=np.int64),
+        coordinates=np.array([[0, 0, 0, 0], [1, 0, 0, 3], [1, 0, 0, 9]], dtype=np.int64),
+        edges=np.empty((0, 2), dtype=np.int64),
+    )
+
+    index = AffinityIndex.of(graph, _Affinity({}))
+
+    assert index.slots == {5: (0, 0), 6: (1, 0), 7: (1, 1)}
+
+
+def test_pair():
+    """`pair` reads a source's row and its two targets' columns by node ID, and reports an unscored gap absent."""
+    graph = TrackGraph(
+        node_ids=np.array([5, 6, 7], dtype=np.int64),
+        coordinates=np.array([[0, 0, 0, 0], [1, 0, 0, 3], [1, 0, 0, 9]], dtype=np.int64),
+        edges=np.empty((0, 2), dtype=np.int64),
+    )
+    index = AffinityIndex.of(graph, _Affinity({0: np.array([[0.7, 0.2]], dtype=np.float64)}))
+
+    assert index.pair(5, 7, 6) == (0.2, 0.7)
+    assert index.pair(6, 7, 7) is None  # gap 1 was never scored
+    assert index.pair(5, 5, 6) is None  # a "target" in the source's own frame is no column of this gap
+    assert index.pair(99, 6, 7) is None  # a node the affinity never scored (a bridge's invented midpoint)
 
 
 def test_means():

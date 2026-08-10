@@ -262,7 +262,7 @@ def test_train(video_store: Path, in_bounds_tracks: AnnotatedTracks, tmp_path: P
 def test_train_records_each_window(
     video_store: Path, in_bounds_tracks: AnnotatedTracks, tmp_path: Path, mlflow_backend: RecordingMlflow
 ):
-    """The joint loop is wired to the tracker, and keeps each loss term and the edge AUC as their own series."""
+    """The joint loop is wired to the tracker, and keeps each loss term and each eval lever as its own series."""
     torch.manual_seed(0)
     targets = _pairs(video_store)
     JointTrainer(_cpu_config()).train(
@@ -278,6 +278,10 @@ def test_train_records_each_window(
         "node_recall",
         "node_ratio",
         "edge_auc",
+        "inverted_fraction",
+        "mean_p_true",
+        "mean_p_chosen",
+        "mislinks",
         "train_loss",
         "edge_loss",
         "det_loss",

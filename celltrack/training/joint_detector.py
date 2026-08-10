@@ -43,7 +43,7 @@ from torch.nn.attention import SDPBackend, sdpa_kernel
 from celltrack.data.difficulty_sampler import DifficultySampler
 from celltrack.data.joint_dataset import PairDataset, PairSample, PairTarget
 from celltrack.detectors.tunet import DetectorRecipe
-from celltrack.eval.model_evaluator import ModelEvaluator
+from celltrack.eval.model_evaluator import EvalResult, ModelEvaluator
 from celltrack.eval.proxy import TEST_MOVIES, VALIDATION_MOVIES, TestMovieProxy
 from celltrack.losses.balanced_bce import BalancedBCE
 from celltrack.losses.info_nce import InfoNCE
@@ -237,18 +237,15 @@ class _PairOutcome:
 
 @dataclass(frozen=True)
 class _EvalResult:
-    """One eval window's numbers — the faithful proxy score, the clamped score selected on, levers, and edge AUC.
+    """One eval window's read-out: the whole shipped-pipeline eval, plus the edge head's collapse check.
 
-    Selection reads `selection_score`, never `score`: the faithful metric rewards under-detection through its
-    node-count factor, and that reward is the piece of this pipeline measured to anti-transfer to the hidden,
-    densely-annotated evaluation (see `VideoMetrics.clamped_edge_jaccard`). `score` is still carried and logged
-    so a window's line stays comparable to the leaderboard.
+    `pipeline` carries the leaderboard-comparable score, the clamped `selection_score` a window is selected on
+    (see `VideoMetrics.clamped_edge_jaccard`), the node levers, and the mislink numbers that measure association
+    where it is HARD. `edge_auc` is NOT one of those: it ranks the affinity over GROUND-TRUTH node pairs, the
+    easy case, and reads ~1.0 trained or not — a collapse alarm, logged as one (see `JointTrainer._edge_auc`).
     """
 
-    score: float
-    selection_score: float
-    node_recall: float
-    node_ratio: float
+    pipeline: EvalResult
     edge_auc: float
 
 
@@ -297,7 +294,8 @@ class JointTrainer:
             losses = self._run_window(model, optimization, dataset, sampler)
             done += window
             result = self._evaluate(model, evaluator, pairs.val)
-            selected = result.selection_score
+            pipeline = result.pipeline
+            selected = pipeline.selection_score
             improved = stop.update(selected) if stop is not None else selected >= best
             marker = ""
             if improved:
@@ -309,7 +307,8 @@ class JointTrainer:
             eta_hours = (self.config.steps - done) / rate / _SECONDS_PER_HOUR if rate else 0.0
             logger.info(
                 "epoch %g/%g | step %5d/%d | train loss %.4f (edge %.4f det %.4f nce %.4f) | proxy %.4f (sel %.4f) | "
-                "best %.4f%s | node R %.3f ratio %+.2f | edge AUC %.4f | %.1f it/s | elapsed %.2fh ETA %.2fh",
+                "best %.4f%s | node R %.3f ratio %+.2f | mislinks %d inv %.2f P true %.3f vs chosen %.3f | "
+                "sanity AUC %.4f | %.1f it/s | elapsed %.2fh ETA %.2fh",
                 round(done / steps_per_epoch, 2),
                 round(self.config.steps / steps_per_epoch, 2),
                 done,
@@ -318,12 +317,16 @@ class JointTrainer:
                 losses["edge_loss"],
                 losses["det_loss"],
                 losses["contrastive_loss"],
-                result.score,
+                pipeline.score,
                 selected,
                 best,
                 marker,
-                result.node_recall,
-                result.node_ratio,
+                pipeline.node_recall,
+                pipeline.node_ratio,
+                pipeline.mislinks,
+                pipeline.inverted_fraction,
+                pipeline.mean_p_true,
+                pipeline.mean_p_chosen,
                 result.edge_auc,
                 rate,
                 (time.perf_counter() - run_start) / _SECONDS_PER_HOUR,
@@ -345,26 +348,35 @@ class JointTrainer:
         """The score before a single step — the bar a warm start must beat, tracked and checkpointed as window 0."""
         initial = self._evaluate(model, evaluator, pairs.val)
         logger.info(
-            "init proxy %.4f (sel %.4f) | node R %.3f ratio %+.2f | edge AUC %.4f",
-            initial.score,
-            initial.selection_score,
-            initial.node_recall,
-            initial.node_ratio,
+            "init proxy %.4f (sel %.4f) | node R %.3f ratio %+.2f | mislinks %d inv %.2f P true %.3f vs chosen %.3f"
+            " | sanity AUC %.4f",
+            initial.pipeline.score,
+            initial.pipeline.selection_score,
+            initial.pipeline.node_recall,
+            initial.pipeline.node_ratio,
+            initial.pipeline.mislinks,
+            initial.pipeline.inverted_fraction,
+            initial.pipeline.mean_p_true,
+            initial.pipeline.mean_p_chosen,
             initial.edge_auc,
         )
-        run.window(0, self._metrics(initial, initial.selection_score))
+        run.window(0, self._metrics(initial, initial.pipeline.selection_score))
         self._save_checkpoint(save_to, model)
-        return initial.selection_score
+        return initial.pipeline.selection_score
 
     def _metrics(self, result: _EvalResult, best: float) -> dict[str, float]:
         """The eval half of one tracked row — the honest score, the selected-on one, the best so far, and the levers."""
         return {
-            "proxy_score": result.score,
-            "selection_score": result.selection_score,
+            "proxy_score": result.pipeline.score,
+            "selection_score": result.pipeline.selection_score,
             "best_score": best,
-            "node_recall": result.node_recall,
-            "node_ratio": result.node_ratio,
+            "node_recall": result.pipeline.node_recall,
+            "node_ratio": result.pipeline.node_ratio,
             "edge_auc": result.edge_auc,
+            "inverted_fraction": result.pipeline.inverted_fraction,
+            "mean_p_true": result.pipeline.mean_p_true,
+            "mean_p_chosen": result.pipeline.mean_p_chosen,
+            "mislinks": result.pipeline.mislinks,
         }
 
     def _schedule(self, optimizer: torch.optim.Optimizer) -> torch.optim.lr_scheduler.LRScheduler | None:
@@ -524,21 +536,19 @@ class JointTrainer:
     def _evaluate(self, model: JointModel, evaluator: ModelEvaluator, val_targets: list[PairTarget]) -> _EvalResult:
         """Both trained heads through the shipped tracker on the proxy, plus their edge ranking on the val pairs."""
         model.eval()
-        result = evaluator.evaluate_joint(model)
-        return _EvalResult(
-            result.score,
-            result.selection_score,
-            result.node_recall,
-            result.node_ratio,
-            self._edge_auc(model, val_targets),
-        )
+        return _EvalResult(evaluator.evaluate_joint(model), self._edge_auc(model, val_targets))
 
     @torch.no_grad()
     def _edge_auc(self, model: JointModel, val_targets: list[PairTarget]) -> float:
-        """Mean edge PRC-AUC over the held-out pairs — the association half's ranking quality, one number.
+        """Mean edge PRC-AUC over the held-out pairs — a COLLAPSE sanity check, not association quality.
 
         Scores are the pipeline's own: the logits soft-maxed over the sources of each target. Pairs whose
         annotation carries no link leave the average precision undefined and are skipped, not counted as zero.
+
+        Read it as a floor alarm only. It ranks candidates among GROUND-TRUTH node pairs — where the shipped
+        linker already sits at 0.9947 — so it is ~1.0 trained or not (a from-scratch run measured 0.6823 at
+        random init and 0.9987 half an epoch later, then flat); only a head that stopped ranking moves it. The
+        association number that can FAIL is the mislink inversion `ModelEvaluator` returns from the eval pass.
         """
         model.eval()
         device = self.config.device
