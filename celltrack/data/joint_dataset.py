@@ -85,7 +85,11 @@ class PairTarget:
 
 
 class PairDataset(Dataset[tuple[Tensor, Tensor, Tensor, Tensor, Tensor]]):
-    """A stream of `steps` GT pairs sampled uniformly, both frames read lazily per access."""
+    """A stream of `steps` GT pairs sampled uniformly, both frames read lazily per access.
+
+    Iteration stays uniform-with-replacement; `pair` exists for a caller that has ALREADY chosen which pair it
+    wants (a difficulty sampler picks the index, the dataset still owns how a pair becomes tensors).
+    """
 
     def __init__(self, targets: list[PairTarget], steps: int, downsample: tuple[int, int, int], seed: int) -> None:
         self._targets = targets
@@ -96,11 +100,20 @@ class PairDataset(Dataset[tuple[Tensor, Tensor, Tensor, Tensor, Tensor]]):
     def __len__(self) -> int:
         return self._steps
 
+    @property
+    def target_count(self) -> int:
+        """How many GT pairs the corpus holds — the population a non-uniform sampler draws indices over."""
+        return len(self._targets)
+
     @override
     def __getitem__(self, index: int) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
         """Sample one pair (seeded by index): both normalised frames, both centre sets, and the edge matrix."""
         rng = np.random.default_rng(self._seed + index)
-        target = self._targets[int(rng.integers(len(self._targets)))]
+        return self.pair(int(rng.integers(len(self._targets))))
+
+    def pair(self, target_index: int) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
+        """One SPECIFIC pair by corpus index: both normalised frames, both centre sets, and the edge matrix."""
+        target = self._targets[target_index]
         return (
             self._frame(target, target.timepoint),
             self._frame(target, target.timepoint + 1),

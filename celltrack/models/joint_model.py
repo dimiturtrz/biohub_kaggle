@@ -18,12 +18,11 @@ import torch
 from jaxtyping import Float, Int
 from torch import Tensor, nn
 
-from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeTransformerScorer
+from celltrack.models.edge_transformer import EdgeTransformerScorer, NodeWindowSlot
 from celltrack.models.temporal_unet_detector import TemporalUNetDetector
 
 # The published head's shape, which a checkpoint's weights were trained in and must be rebuilt at.
 _HIDDEN_DIM, _N_HEADS, _N_BLOCKS = 128, 4, 4
-_POS_FEATURE_DIM = 4 * _POS_EMBED_DIM  # sinusoidal embed of (t, z, y, x)
 
 
 @dataclass(frozen=True)
@@ -59,13 +58,15 @@ class JointModel(nn.Module):
 
         A run's saved weights are only worth what can be read back: scoring a finished checkpoint (or
         re-scoring one whose run reported nothing) needs the same two heads at the same sizes, which the
-        checkpoint carries alongside them.
+        checkpoint carries alongside them. The node-feature width is read off the saved input projection
+        rather than recomputed, so a run that widened it (the prior-velocity columns) reloads without a
+        second declaration of the same fact.
         """
         state = torch.load(path, map_location=device, weights_only=False)
         config = state["config"]
         detector = TemporalUNetDetector(config["out_channels"], tuple(config["layers"]))
         transformer = EdgeTransformerScorer._transformer_cls()(  # noqa: SLF001 — the pack's head class, mounted
-            feat_dim=config["out_channels"] + _POS_FEATURE_DIM,
+            feat_dim=state["transformer_state"]["proj.weight"].shape[1],
             hidden_dim=_HIDDEN_DIM,
             n_heads=_N_HEADS,
             n_blocks=_N_BLOCKS,
@@ -82,11 +83,18 @@ class JointModel(nn.Module):
         frame_t1: Float[Tensor, "z y x"],
         source_positions: Int[Tensor, "s 3"],
         target_positions: Int[Tensor, "u 3"],
+        source_velocity: Float[Tensor, "s 3"] | None = None,
     ) -> JointForward:
         """One backbone pass on the pair → both detection maps, the source→target edge logits, and the features.
 
         Positions are full-resolution voxels; the feature grid divides them by the downsample, exactly as the
         inference scorer does, so the edge logits match what the shipped pipeline would compute for this model.
+
+        `source_velocity` is the sources' prior step (`PriorVelocity.expected_incoming` over the t-1→t gap),
+        given in full-resolution voxels like the positions and divided by the same downsample. Only the
+        sources carry one: a target's prior gap IS the gap being scored, so its history is unavailable
+        without circularity, and targets take the zero vector — the same value a first-frame node takes.
+        Omitted, both frames' features are exactly what they were before the feature existed.
         """
         device = str(frame_t.device)
         window = torch.stack([frame_t, frame_t1], dim=0).unsqueeze(0).unsqueeze(2)  # (1, 2, 1, Z, Y, X)
@@ -97,7 +105,13 @@ class JointModel(nn.Module):
         downsample = torch.tensor(self.downsample, dtype=torch.float32, device=device)
         source_voxel = source_positions.to(torch.float32)
         target_voxel = target_positions.to(torch.float32)
-        feat_source = EdgeTransformerScorer.node_features(features[0], source_voxel / downsample, spatial, 0.0, device)
-        feat_target = EdgeTransformerScorer.node_features(features[1], target_voxel / downsample, spatial, 1.0, device)
+        source_step = None if source_velocity is None else source_velocity / downsample
+        target_step = None if source_velocity is None else torch.zeros_like(target_voxel)
+        feat_source = EdgeTransformerScorer.node_features(
+            features[0], source_voxel / downsample, NodeWindowSlot(spatial, 0.0, device), source_step
+        )
+        feat_target = EdgeTransformerScorer.node_features(
+            features[1], target_voxel / downsample, NodeWindowSlot(spatial, 1.0, device), target_step
+        )
         edge_logits = self.transformer(feat_source, feat_target, source_voxel, target_voxel)  # (s, u)
         return JointForward(detection_t, detection_t1, edge_logits, feat_source, feat_target)

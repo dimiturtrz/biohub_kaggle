@@ -5,6 +5,7 @@ shared tiny video fixture with a minimal (non-pilkwang-sized) backbone and the s
 real forward/backward/eval/save cycle over both heads is exercised without the GPU or the `external/` dep.
 """
 
+from dataclasses import replace
 from pathlib import Path
 from typing import cast
 
@@ -12,13 +13,14 @@ import numpy as np
 import torch
 import zarr
 
-from celltrack.data.joint_dataset import PairTarget
+from celltrack.data.difficulty_sampler import DifficultySampler
+from celltrack.data.joint_dataset import PairDataset, PairTarget
 from celltrack.detectors.tunet import DetectorRecipe
 from celltrack.edges.blended_edge_scoring import BlendedEdgeTransformerScorer
 from celltrack.eval.model_evaluator import ModelEvaluator
 from celltrack.eval.proxy import TestMovieProxy
 from celltrack.tracker import TrackerConfig
-from celltrack.training.joint_detector import JointTrainConfig, JointTrainer, PairSplit, _LossTerms
+from celltrack.training.joint_detector import JointTrainConfig, JointTrainer, PairSplit, _PairOutcome
 from celltrack.training.run_tracking import RunSetup, TrainingSplit
 from core.data.tracks import AnnotatedTracks
 from core.data.video import ImageStatistics
@@ -35,15 +37,34 @@ def test_config_defaults_to_pilkwangs_recipe():
     assert config.contrastive_weight == 0.0  # the contrastive term is opt-in: an unasked run is unchanged
 
 
-def test_logged():
-    """Every term reaches the run's metric table under its own name, detached from the graph."""
-    terms = _LossTerms(
+def _outcome(edge_logits: torch.Tensor, edge_matrix: torch.Tensor) -> _PairOutcome:
+    """A pair outcome whose loss terms are placeholders — these tests are about the edge tensors beside them."""
+    return _PairOutcome(
         total=torch.tensor(3.0, requires_grad=True),
         edge=torch.tensor(1.0),
         detection=torch.tensor(2.0),
         contrastive=torch.tensor(0.5),
+        edge_logits=edge_logits,
+        edge_matrix=edge_matrix,
     )
-    assert terms.logged() == {"train_loss": 3.0, "edge_loss": 1.0, "det_loss": 2.0, "contrastive_loss": 0.5}
+
+
+def test_logged():
+    """Every term reaches the run's metric table under its own name, detached from the graph."""
+    outcome = _outcome(torch.zeros(1, 1), torch.zeros(1, 1))
+    assert outcome.logged() == {"train_loss": 3.0, "edge_loss": 1.0, "det_loss": 2.0, "contrastive_loss": 0.5}
+
+
+def test_difficulty():
+    """Hand-computed: of the two ANNOTATED sources one is ranked top-1 and one is not, so the defect is 1 - 1/2."""
+    edge_matrix = torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 0.0]])
+    edge_logits = torch.tensor([[2.0, 1.0, 0.0], [0.0, 1.0, 5.0], [9.0, 0.0, 0.0]])  # row 2 is unannotated, ignored
+    assert _outcome(edge_logits, edge_matrix).difficulty() == 0.5
+
+
+def test_difficulty_is_none_without_annotated_sources():
+    """A pair whose annotation links nothing has no defect to report, so the sampler is told to keep what it stored."""
+    assert _outcome(torch.rand(2, 2), torch.zeros(2, 2)).difficulty() is None
 
 
 def _cpu_config() -> JointTrainConfig:
@@ -97,6 +118,65 @@ def _evaluator(video_store: Path, in_bounds_tracks: AnnotatedTracks) -> ModelEva
     )
 
 
+def test_config_defaults_to_uniform_sampling():
+    """Difficulty sampling is opt-in — the zero-argument config still draws pairs uniformly with replacement."""
+    assert JointTrainConfig().difficulty_sampling is False
+
+
+def test_sampler(video_store: Path):
+    """A sampler exists only when asked for, and is sized to the pair corpus rather than to the step budget."""
+    targets = _pairs(video_store)
+    assert JointTrainer(_cpu_config())._sampler(targets) is None
+
+    sampler = JointTrainer(replace(_cpu_config(), difficulty_sampling=True))._sampler(targets)
+
+    assert sampler is not None
+    sampler.observe(0, 0.5)
+    assert sampler.coverage() == 0.5  # one of the corpus's two pairs, not one of the run's two steps
+
+
+def test_pairs_leaves_the_uniform_stream_untouched(video_store: Path):
+    """With no sampler the window walks exactly `PairDataset.stream()`, index-free — the default path is unchanged."""
+    dataset = PairDataset(_pairs(video_store), steps=3, downsample=(1, 1, 1), seed=0)
+    walked = list(JointTrainer(_cpu_config())._pairs(dataset, None))
+
+    assert [index for index, _ in walked] == [None, None, None]
+    for (_, pair), expected in zip(walked, dataset.stream(), strict=True):
+        assert all(torch.equal(actual, want) for actual, want in zip(pair, expected, strict=True))
+
+
+def test_pairs_draws_through_the_sampler(video_store: Path):
+    """With a sampler the window walks the drawn indices, and each pair is the corpus entry that index names."""
+    dataset = PairDataset(_pairs(video_store), steps=4, downsample=(1, 1, 1), seed=0)
+    sampler = DifficultySampler(count=2, seed=0)
+    sampler.observe(0, 0.0)  # pair 0 solved, pair 1 still optimistic -> every draw is pair 1
+
+    walked = list(JointTrainer(_cpu_config())._pairs(dataset, sampler))
+
+    assert [index for index, _ in walked] == [1, 1, 1, 1]
+    assert torch.equal(walked[0][1][4], dataset.pair(1)[4])
+
+
+def test_observe(video_store: Path):
+    """The step's own top-1 defect reaches the sampler; with no sampler the feedback call is a no-op."""
+    sampler = DifficultySampler(count=2, seed=0)
+    outcome = _outcome(torch.tensor([[0.0, 9.0]]), torch.tensor([[1.0, 0.0]]))  # the one annotated source is missed
+    trainer = JointTrainer(_cpu_config())
+
+    trainer._observe(None, None, outcome)
+    trainer._observe(sampler, 0, outcome)
+
+    assert sampler.coverage() == 0.5
+    assert outcome.difficulty() == 1.0
+
+
+def test_sampling():
+    """The health numbers ride the window's metric dict only when the sampler is on — an unasked run logs as before."""
+    trainer = JointTrainer(_cpu_config())
+    assert trainer._sampling(None) == {}
+    assert trainer._sampling(DifficultySampler(count=4, seed=0)) == {"coverage": 0.0, "sampling_entropy": 1.0}
+
+
 def test_train(video_store: Path, in_bounds_tracks: AnnotatedTracks, tmp_path: Path):
     """The loop runs end to end — sample, step, pipeline eval, edge AUC, save — and returns the best proxy score."""
     torch.manual_seed(0)
@@ -138,3 +218,37 @@ def test_train_records_each_window(
     steps = {call[3] for call in mlflow_backend.calls if call[0] == "metric"}
     assert steps == {0, 2}  # the init eval at step 0, then the single two-step window
     assert ("end",) in mlflow_backend.calls
+    assert {"coverage", "sampling_entropy"} & mlflow_backend.metric_keys() == set()  # off: no sampler row
+
+
+def _trained_bytes(config: JointTrainConfig, video_store: Path, tracks: AnnotatedTracks, run_dir: Path) -> bytes:
+    """One full run under `config`, from the same torch seed, returned as the raw checkpoint bytes.
+
+    Each run gets its own directory under the SAME checkpoint name: torch's zip archive records the file stem,
+    so two names would differ in the bytes for a reason that has nothing to do with the weights.
+    """
+    run_dir.mkdir()
+    save_to = run_dir / "joint.pt"
+    torch.manual_seed(0)
+    targets = _pairs(video_store)
+    JointTrainer(config).train(PairSplit(targets, targets), _evaluator(video_store, tracks), RunSetup(save_to))
+    return save_to.read_bytes()
+
+
+def test_train_off_is_byte_identical(video_store: Path, in_bounds_tracks: AnnotatedTracks, tmp_path: Path):
+    """Difficulty sampling off reproduces the uniform run exactly — same draws, same weights, same bytes."""
+    default = _trained_bytes(_cpu_config(), video_store, in_bounds_tracks, tmp_path / "default")
+    explicit_off = replace(_cpu_config(), difficulty_sampling=False)
+    assert _trained_bytes(explicit_off, video_store, in_bounds_tracks, tmp_path / "off") == default
+
+
+def test_train_records_sampler_health(
+    video_store: Path, in_bounds_tracks: AnnotatedTracks, tmp_path: Path, mlflow_backend: RecordingMlflow
+):
+    """With sampling on, each window row carries the coverage and the collapse guard beside the loss terms."""
+    torch.manual_seed(0)
+    targets = _pairs(video_store)
+    JointTrainer(replace(_cpu_config(), difficulty_sampling=True)).train(
+        PairSplit(targets, targets), _evaluator(video_store, in_bounds_tracks), RunSetup(tmp_path / "joint.pt")
+    )
+    assert {"coverage", "sampling_entropy"} <= mlflow_backend.metric_keys()

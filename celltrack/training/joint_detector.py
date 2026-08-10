@@ -27,6 +27,7 @@ import contextlib
 import logging
 import math
 import time
+from collections.abc import Iterator
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import cast
@@ -36,6 +37,7 @@ import zarr
 from torch import Tensor, nn
 from torch.nn.attention import SDPBackend, sdpa_kernel
 
+from celltrack.data.difficulty_sampler import DifficultySampler
 from celltrack.data.joint_dataset import PairDataset, PairTarget
 from celltrack.detectors.tunet import DetectorRecipe
 from celltrack.eval.model_evaluator import ModelEvaluator
@@ -113,6 +115,9 @@ class JointTrainConfig:
     # earns a place — ensembles pay for disagreement, not for quality alone.
     warm_pack: Path = _PACK_REL
     compile_backbone: bool = False  # torch.compile the U-Net (static shape); one-time warmup, then fused kernels
+    # Draw each step's pair in proportion to its measured top-1 defect instead of uniformly with replacement
+    # (see `DifficultySampler`). Off by default: with it off the loop is the uniform stream of yesterday.
+    difficulty_sampling: bool = False
 
 
 @dataclass(frozen=True)
@@ -124,13 +129,19 @@ class PairSplit:
 
 
 @dataclass(frozen=True)
-class _LossTerms:
-    """One pair's loss tensors — the total that is stepped, plus each term on its own scale for the log."""
+class _PairOutcome:
+    """One pair's forward — the loss total that is stepped, each term on its own scale, and the edge tensors.
+
+    The edge logits and the annotated matrix ride along because the difficulty estimate the sampler feeds on is
+    read off exactly them, and they are free here: the training step already computed both.
+    """
 
     total: Tensor
     edge: Tensor
     detection: Tensor
     contrastive: Tensor
+    edge_logits: Tensor
+    edge_matrix: Tensor
 
     def logged(self) -> dict[str, float]:
         """The detached per-term floats under the names the run tracks — a summed number hides which half moved."""
@@ -140,6 +151,20 @@ class _LossTerms:
             "det_loss": float(self.detection.detach()),
             "contrastive_loss": float(self.contrastive.detach()),
         }
+
+    def difficulty(self) -> float | None:
+        """Fraction of ANNOTATED sources whose true successor the logits do not rank top-1; `None` if there are none.
+
+        Not the loss: with ~1-2% dense annotation a pair's loss tracks how many edges it happens to carry, so
+        weighting by it would chase label count. This is bounded [0, 1], independent of edge count, and is the
+        defect itself — a mislink is precisely a source whose argmax target is not its annotated successor.
+        """
+        annotated = self.edge_matrix.sum(dim=1) > 0
+        if not bool(annotated.any()):
+            return None
+        rows = self.edge_matrix[annotated]
+        predicted = self.edge_logits[annotated].argmax(dim=1, keepdim=True)
+        return 1.0 - float(rows.gather(1, predicted).mean())
 
 
 @dataclass(frozen=True)
@@ -202,9 +227,11 @@ class JointTrainer:
         if stop is not None:
             stop.update(best)  # seed with the init score so a first worse window doesn't read as an improvement
         run_start = time.perf_counter()
+        sampler = self._sampler(pairs.train)
         while done < self.config.steps:
             window = min(self.config.eval_every, self.config.steps - done)
-            losses = self._run_window(model, optimization, pairs.train, window, done)
+            dataset = PairDataset(pairs.train, window, self.config.downsample, self.config.seed + done)
+            losses = self._run_window(model, optimization, dataset, sampler)
             done += window
             result = self._evaluate(model, evaluator, pairs.val)
             improved = stop.update(result.score) if stop is not None else result.score >= best
@@ -235,6 +262,8 @@ class JointTrainer:
                 (time.perf_counter() - run_start) / _SECONDS_PER_HOUR,
                 eta_hours,
             )
+            if sampler is not None:
+                logger.info("  sampler | coverage %.3f | entropy %.3f", losses["coverage"], losses["sampling_entropy"])
             if stop is not None and stop.should_stop:
                 logger.info("early stop: %d evals no gain (step %d, best %.4f)", self.config.patience, done, best)
                 break
@@ -275,40 +304,69 @@ class JointTrainer:
         )
         return JointModel(detector, transformer, self.config.downsample)
 
+    def _sampler(self, targets: list[PairTarget]) -> DifficultySampler | None:
+        """One sampler for the WHOLE run (difficulty has to survive across windows), or None for the uniform stream."""
+        if not self.config.difficulty_sampling:
+            return None
+        corpus = PairDataset(targets, self.config.steps, self.config.downsample, self.config.seed)
+        return DifficultySampler(corpus.target_count, self.config.seed)
+
     def _run_window(
         self,
         model: JointModel,
         optimization: _Optimization,
-        targets: list[PairTarget],
-        steps: int,
-        seed_offset: int,
+        dataset: PairDataset,
+        sampler: DifficultySampler | None = None,
     ) -> dict[str, float]:
-        """Train `steps` optimiser steps of one GT pair each; returns each term's window mean plus `it_per_s`."""
+        """Train one optimiser step per pair of `dataset`; returns each term's window mean plus `it_per_s`."""
         model.train()
-        dataset = PairDataset(targets, steps, self.config.downsample, self.config.seed + seed_offset)
+        steps = len(dataset)
         sums: dict[str, float] = {}
         done, t0 = 0, time.perf_counter()
-        for pair in dataset.stream():
-            for name, value in self._step(model, optimization, pair).items():
+        for target_index, pair in self._pairs(dataset, sampler):
+            outcome = self._step(model, optimization, pair)
+            for name, value in outcome.logged().items():
                 sums[name] = sums.get(name, 0.0) + value
+            self._observe(sampler, target_index, outcome)
             done += 1
             if done % _HEARTBEAT_UPDATES == 0:
                 rate = done / (time.perf_counter() - t0)
                 logger.info("  ..%d/%d in window | loss %.4f | %.1f it/s", done, steps, sums["train_loss"] / done, rate)
         divisor = max(done, 1)
         means = {name: total / divisor for name, total in sums.items()}
-        return {**means, "it_per_s": done / (time.perf_counter() - t0)}
+        return {**means, "it_per_s": done / (time.perf_counter() - t0), **self._sampling(sampler)}
 
-    def _step(self, model: JointModel, optimization: _Optimization, pair: Pair) -> dict[str, float]:
-        """One optimisation step over a single GT pair; returns every loss term as its own float."""
-        terms = self._losses(model, pair)
+    def _pairs(self, dataset: PairDataset, sampler: DifficultySampler | None) -> Iterator[tuple[int | None, Pair]]:
+        """The window's pairs, each with the corpus index that produced it — `None` on the untouched uniform stream."""
+        if sampler is None:
+            yield from ((None, pair) for pair in dataset.stream())
+            return
+        for _ in range(len(dataset)):
+            index = sampler.draw()
+            yield index, dataset.pair(index)
+
+    def _observe(self, sampler: DifficultySampler | None, target_index: int | None, outcome: _PairOutcome) -> None:
+        """Close the feedback loop — the step's own top-1 defect reweights that pair. A no-op on the uniform path."""
+        if sampler is None or target_index is None:
+            return
+        sampler.observe(target_index, outcome.difficulty())
+
+    def _sampling(self, sampler: DifficultySampler | None) -> dict[str, float]:
+        """The sampler's two health numbers for the window row; empty when uniform, so an unasked run logs as before."""
+        if sampler is None:
+            return {}
+        return {"coverage": sampler.coverage(), "sampling_entropy": sampler.entropy()}
+
+    def _step(self, model: JointModel, optimization: _Optimization, pair: Pair) -> _PairOutcome:
+        """One optimisation step over a single GT pair; returns that pair's loss terms and edge tensors."""
+        outcome = self._losses(model, pair)
         optimization.zero_grad()
-        terms.total.backward()
+        outcome.total.backward()
         nn.utils.clip_grad_norm_(model.parameters(), self.config.grad_clip)
         optimization.step()
-        return terms.logged()
+        return outcome
 
-    def _losses(self, model: JointModel, pair: Pair) -> _LossTerms:
+    def _losses(self, model: JointModel, pair: Pair) -> _PairOutcome:
         """The loss tensors for one pair — shared by the training step and the no-grad eval.
 
         Positions reach the model at FULL resolution (it divides by the downsample for the feature grid,
@@ -332,7 +390,7 @@ class JointTrainer:
                 out.source_features, out.target_features, edge_matrix, self.config.temperature, _POS_FEATURE_DIM
             )
             loss = edge + self.config.det_weight * det + self.config.contrastive_weight * contrastive
-        return _LossTerms(loss, edge, det, contrastive)
+        return _PairOutcome(loss, edge, det, contrastive, out.edge_logits, edge_matrix)
 
     def _evaluate(self, model: JointModel, evaluator: ModelEvaluator, val_targets: list[PairTarget]) -> _EvalResult:
         """Both trained heads through the shipped tracker on the proxy, plus their edge ranking on the val pairs."""
@@ -351,7 +409,7 @@ class JointTrainer:
         device = self.config.device
         scored: list[float] = []
         for target in val_targets:
-            pair = PairDataset([target], 1, self.config.downsample, self.config.seed)[0]
+            pair = PairDataset([target], 1, self.config.downsample, self.config.seed).pair(0)
             frame_t, frame_t1, sources, sinks, _ = (item.to(device) for item in pair)
             with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=device == "cuda"):
                 logits = model.forward(frame_t, frame_t1, sources, sinks).edge_logits
@@ -426,6 +484,11 @@ def main() -> None:
         "--warm-pack", choices=("seed1", "seed2"), default="seed1", help="which published pack to continue"
     )
     parser.add_argument("--compile-backbone", action="store_true", help="torch.compile the U-Net (static shape)")
+    parser.add_argument(
+        "--difficulty-sampling",
+        action="store_true",
+        help="draw pairs in proportion to their measured top-1 defect instead of uniformly with replacement",
+    )
     parser.add_argument("--patience", type=int, default=5, help="stop after N non-improving evals (<1 disables)")
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--val-videos", type=int, default=2, help="validation movies the edge AUC is measured over")
@@ -447,6 +510,7 @@ def main() -> None:
         patience=args.patience,
         eval_threshold=args.eval_threshold,
         compile_backbone=args.compile_backbone,
+        difficulty_sampling=args.difficulty_sampling,
     )
     root = DataRoot.from_config(_CONFIG)
 

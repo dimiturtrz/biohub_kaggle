@@ -11,13 +11,14 @@ import torch
 
 from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeTransformerScorer
 from celltrack.models.joint_model import JointModel
+from celltrack.models.prior_velocity import PriorVelocity
 from celltrack.models.temporal_unet_detector import TemporalUNetDetector
 
 
-def _joint_model() -> JointModel:
+def _joint_model(extra_features: int = 0) -> JointModel:
     out_channels = 2
     detector = TemporalUNetDetector(out_channels, (2, 4))  # stubbed backbone via conftest
-    feat_dim = out_channels + 4 * _POS_EMBED_DIM
+    feat_dim = out_channels + 4 * _POS_EMBED_DIM + extra_features
     transformer = EdgeTransformerScorer._transformer_cls()(feat_dim=feat_dim, hidden_dim=8, n_heads=1, n_blocks=1)
     return JointModel(detector, transformer, downsample=(1, 1, 1))
 
@@ -33,6 +34,21 @@ def test_forward():
     assert out.edge_logits.shape == (1, 2)
     feature_dim = 2 + 4 * _POS_EMBED_DIM  # the appearance channels, then the sinusoidal (t, z, y, x) embed
     assert out.source_features.shape == (1, feature_dim) and out.target_features.shape == (2, feature_dim)
+
+
+def test_forward_prior_velocity():
+    """A source prior step widens both frames' features by three columns — the targets' being the zero vector."""
+    model = _joint_model(extra_features=PriorVelocity.DIM).eval()
+    frame_t, frame_t1 = torch.zeros(4, 8, 8), torch.zeros(4, 8, 8)
+    source_positions = torch.tensor([[2, 4, 4]])
+    target_positions = torch.tensor([[2, 4, 4], [1, 2, 2]])
+    velocity = torch.tensor([[0.0, 100.0, -100.0]])
+    out = model.forward(frame_t, frame_t1, source_positions, target_positions, velocity)
+    feature_dim = 2 + 4 * _POS_EMBED_DIM
+    assert out.source_features.shape == (1, feature_dim + PriorVelocity.DIM)
+    assert torch.equal(out.source_features[:, feature_dim:], velocity / PriorVelocity.SCALE)
+    assert torch.equal(out.target_features[:, feature_dim:], torch.zeros(2, PriorVelocity.DIM))
+    assert out.edge_logits.shape == (1, 2)
 
 
 def test_from_checkpoint(tmp_path: Path):

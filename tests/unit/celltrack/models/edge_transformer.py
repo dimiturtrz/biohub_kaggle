@@ -16,8 +16,10 @@ from celltrack.models.edge_transformer import (
     _POS_EMBED_DIM,
     EdgeGap,
     EdgeTransformerScorer,
+    NodeWindowSlot,
     PrecomputedEdgeAffinity,
 )
+from celltrack.models.prior_velocity import PriorVelocity
 from celltrack.models.temporal_unet_detector import DetectorRecipe, TemporalUNetDetector
 from core.data.tracks import TrackGraph
 
@@ -48,16 +50,34 @@ def _detections() -> TrackGraph:
     return TrackGraph(np.arange(4, dtype=np.int64), coords, np.empty((0, 2), dtype=np.int64))
 
 
+def _node_feature_inputs() -> tuple[torch.Tensor, torch.Tensor, NodeWindowSlot]:
+    """One node at voxel (1, 2, 2) of a 4³ grid whose channels there are distinctive."""
+    feature_map = torch.zeros(3, 4, 4, 4)
+    feature_map[:, 1, 2, 2] = torch.tensor([5.0, 6.0, 7.0])
+    return feature_map, torch.tensor([[1.0, 2.0, 2.0]]), NodeWindowSlot(torch.tensor([4.0, 4.0, 4.0]), 0.0, "cpu")
+
+
 def test_node_features():
     """A node's feature vector is its UNet channels at the voxel, concatenated with the position embedding."""
     channels = 3
-    feature_map = torch.zeros(channels, 4, 4, 4)
-    feature_map[:, 1, 2, 2] = torch.tensor([5.0, 6.0, 7.0])
-    grid_positions = torch.tensor([[1.0, 2.0, 2.0]])
-    spatial = torch.tensor([4.0, 4.0, 4.0])
-    features = EdgeTransformerScorer.node_features(feature_map, grid_positions, spatial, 0.0, "cpu")
+    feature_map, grid_positions, slot = _node_feature_inputs()
+    features = EdgeTransformerScorer.node_features(feature_map, grid_positions, slot)
     assert features.shape == (1, channels + 4 * _POS_EMBED_DIM)
     assert torch.allclose(features[0, :channels], torch.tensor([5.0, 6.0, 7.0]))
+    indexed = feature_map[:, 1, 2, 2].unsqueeze(0)
+    position = EdgeTransformerScorer._position_embedding(grid_positions, slot)
+    assert torch.equal(features, torch.cat([indexed, position], dim=-1))  # no velocity == exactly the old tensor
+
+
+def test_node_features_prior_velocity():
+    """A supplied prior step appends three raw columns at the pack's own displacement scale, leaving the rest alone."""
+    feature_map, grid_positions, slot = _node_feature_inputs()
+    velocity = torch.tensor([[10.0, -20.0, 30.0]])
+    without = EdgeTransformerScorer.node_features(feature_map, grid_positions, slot)
+    with_velocity = EdgeTransformerScorer.node_features(feature_map, grid_positions, slot, velocity)
+    assert with_velocity.shape == (1, without.shape[1] + PriorVelocity.DIM)
+    assert torch.equal(with_velocity[:, : without.shape[1]], without)
+    assert torch.equal(with_velocity[:, without.shape[1] :], velocity / PriorVelocity.SCALE)
 
 
 def test_probabilities():

@@ -24,11 +24,21 @@ import torch
 from jaxtyping import Float
 from torch import Tensor, nn
 
+from celltrack.models.prior_velocity import PriorVelocity
 from celltrack.models.temporal_unet_detector import _EXT_SRC, DetectorRecipe, TemporalUNetDetector, _VideoSource
 from celltrack.precision import AutocastPolicy
 from core.data.tracks import TrackGraph
 
 _POS_EMBED_DIM = 8
+
+
+@dataclass(frozen=True)
+class NodeWindowSlot:
+    """Which slot of the two-frame window a node's features are read from — grid extent, time fraction, device."""
+
+    spatial: Float[Tensor, "3"]
+    time_fraction: float
+    device: str
 
 
 @dataclass(frozen=True)
@@ -152,8 +162,8 @@ class EdgeTransformerScorer(nn.Module):
         late_voxel = torch.as_tensor(late, device=device)
         with AutocastPolicy.of(device):
             features = self.detector.unet(window)[0]  # (2, C, Z, Y, X)
-            feat_early = self.node_features(features[0], early_voxel / downsample, spatial, 0.0, device)
-            feat_late = self.node_features(features[1], late_voxel / downsample, spatial, 1.0, device)
+            feat_early = self.node_features(features[0], early_voxel / downsample, NodeWindowSlot(spatial, 0.0, device))
+            feat_late = self.node_features(features[1], late_voxel / downsample, NodeWindowSlot(spatial, 1.0, device))
             logits = self.transformer(feat_early, feat_late, early_voxel, late_voxel)  # (early, late)
         return logits.float()
 
@@ -161,33 +171,41 @@ class EdgeTransformerScorer(nn.Module):
     def node_features(
         feature_map: Float[Tensor, "c z y x"],
         grid_positions: Float[Tensor, "n 3"],
-        spatial: Float[Tensor, "3"],
-        time_fraction: float,
-        device: str,
+        slot: NodeWindowSlot,
+        prior_velocity: Float[Tensor, "n 3"] | None = None,
     ) -> Float[Tensor, "n d"]:
-        """A node's UNet feature vector at its voxel, concatenated with the window-relative position embed.
+        """A node's UNet feature vector at its voxel, the window-relative position embed, and its prior step.
 
         Stateless (the whole node→transformer-input step), so the joint trainer builds the same inputs the
         shipped scorer does — one definition, both callers.
+
+        `prior_velocity` is the node's expected incoming displacement (see `PriorVelocity`), in the same
+        space as `grid_positions`, appended RAW and scaled rather than sinusoidally embedded: the pair head
+        already consumes its candidate displacement `rel` as three raw numbers over the same divisor, so a
+        raw column keeps history and candidate directly comparable — a sinusoidal encoding would make that
+        comparison nonlinear and alias large steps — and it costs the widened projection only three columns.
+        Omitting it returns exactly the tensor this built before the feature existed.
         """
+        device = slot.device
         clamped = grid_positions.round().long().clamp(min=torch.zeros(3, dtype=torch.long, device=device))
-        clamped = torch.minimum(clamped, (spatial - 1).long())
+        clamped = torch.minimum(clamped, (slot.spatial - 1).long())
         indexed = feature_map[:, clamped[:, 0], clamped[:, 1], clamped[:, 2]].T  # (n, c)
-        position = EdgeTransformerScorer._position_embedding(grid_positions, spatial, time_fraction, device)
-        return torch.cat([indexed, position], dim=-1)
+        columns = [indexed, EdgeTransformerScorer._position_embedding(grid_positions, slot)]
+        if prior_velocity is not None:
+            columns.append(prior_velocity / PriorVelocity.SCALE)
+        return torch.cat(columns, dim=-1)
 
     @staticmethod
     def _position_embedding(
         grid_positions: Float[Tensor, "n 3"],
-        spatial: Float[Tensor, "3"],
-        time_fraction: float,
-        device: str,
+        slot: NodeWindowSlot,
     ) -> Float[Tensor, "n d"]:
         """Sinusoidal embedding of `(t, z, y, x)` on the downsampled window grid — the transformer's position term."""
         window_time = 2.0
-        time_column = torch.full((grid_positions.shape[0], 1), time_fraction, device=device)
+        device = slot.device
+        time_column = torch.full((grid_positions.shape[0], 1), slot.time_fraction, device=device)
         coordinates = torch.cat([time_column, grid_positions], dim=-1)  # (n, 4)
-        norms = coordinates / torch.cat([torch.tensor([window_time], device=device), spatial]).clamp(min=1.0)
+        norms = coordinates / torch.cat([torch.tensor([window_time], device=device), slot.spatial]).clamp(min=1.0)
         freqs = (2.0 ** torch.arange(_POS_EMBED_DIM // 2, device=device, dtype=torch.float32)) * torch.pi
         parts: list[Tensor] = []
         for axis in range(4):

@@ -60,6 +60,18 @@ def test_getitem(video_store: Path):
     assert matrix.shape == (1, 2)
 
 
+def test_target_count(video_store: Path):
+    """The corpus size is the number of GT pairs, independent of how many steps the stream serves."""
+    assert _dataset(video_store).target_count == 1
+
+
+def test_pair(video_store: Path):
+    """A chosen pair's tensors are the same ones the uniform draw would have produced for that corpus index."""
+    dataset = _dataset(video_store)
+    chosen, drawn = dataset.pair(0), dataset[0]
+    assert all(torch.equal(a, b) for a, b in zip(chosen, drawn, strict=True))
+
+
 def test_stream(video_store: Path):
     """The stream yields every item once, in index order, matching direct indexing."""
     dataset = _dataset(video_store)
