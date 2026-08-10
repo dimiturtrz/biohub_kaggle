@@ -129,8 +129,16 @@ class EdgeTransformerScorer(nn.Module):
 
         `reverse` scores the same gap with the temporal pair swapped: the window is stacked `[t+1, t]`, so the
         t+1 nodes take the window's leading slot (features[0], time fraction 0.0) and the t nodes the trailing
-        one, and the returned matrix is `(t, s)`. It is a question the head has never been asked — the same
-        weights run on a re-ordered window — not a re-normalisation of the forward logits.
+        one, and the returned matrix is `(t, s)`.
+
+        How much this differs from the forward pass is LESS than it looks, and the honest account matters. The
+        backbone's temporal attention carries no positional encoding, so it is permutation-invariant over time:
+        re-ordering the window returns the same features, merely swapped. What actually changes is which nodes
+        the transformer treats as sources and which time fraction (0.0 / 1.0) their features carry. So this is
+        not the wholly new question an earlier version of this docstring claimed — though it is not a pure
+        re-normalisation of the forward logits either, since the head's source/target roles genuinely swap.
+        A consequence worth taking: the UNet recompute here is avoidable, because the forward pass's features
+        could be reused with the fractions swapped.
         """
         device, recipe = gap.device, self.recipe
         downsample = torch.tensor(recipe.downsample, dtype=torch.float32, device=device)

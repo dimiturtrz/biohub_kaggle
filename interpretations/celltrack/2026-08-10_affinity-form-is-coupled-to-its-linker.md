@@ -81,3 +81,20 @@ affinity form it consumes, and for a mismatch to be refused when the config is b
 absent from the Kaggle image, so the ILP half of that bundle needs five offline wheels — the same stack that
 already failed there once. But `networkx` is present, so *our* global solver needs no packaging at all. The
 expensive port is now gated on a free experiment rather than on faith.
+
+## Correction: how different the reverse pass really is
+
+Written after reading the backbone rather than assuming it. `TemporalUNet3D`'s `_TemporalAttention` is a
+per-voxel `MultiheadAttention` over the time axis with **no positional encoding**, so it is permutation-invariant
+over time: feeding `[t+1, t]` returns the same features as `[t, t+1]`, swapped. The backbone cannot tell which
+frame came first; order reaches the pipeline only through the edge transformer's time-fraction node feature
+(0.0 for the source frame, 1.0 for the target).
+
+That weakens one claim above. The reverse pass is *not* a wholly new question put to the network — the features
+are the same and only the head's source/target roles and time fractions swap. It is still not a pure
+re-normalisation of the forward logits, but it sits far closer to one than argued here, which is a plausible
+part of why it behaved like the renormalisation `e9b` refuted. It also means the U-Net recompute in the reverse
+pass is avoidable: the forward features could be reused with the fractions swapped, halving the cost.
+
+The consumer-coupling result itself is unaffected — the sign flip between the per-frame and global linkers was
+measured, not inferred from this reasoning.
