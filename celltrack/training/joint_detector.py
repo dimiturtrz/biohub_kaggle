@@ -31,7 +31,7 @@ import logging
 import math
 import time
 from collections.abc import Iterator
-from dataclasses import asdict, dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
@@ -53,6 +53,17 @@ from celltrack.models.joint_model import JointModel
 from celltrack.models.temporal_unet_detector import TemporalUNetDetector
 from celltrack.tracker import TrackerConfig
 from celltrack.training.early_stop import EarlyStop
+from celltrack.training.joint_config import (
+    WARM_PACKS,
+    DataCfg,
+    EvalCfg,
+    JointTrainConfig,
+    LossCfg,
+    ModelCfg,
+    OptimCfg,
+    RuntimeCfg,
+    ScheduleCfg,
+)
 from celltrack.training.prior_velocity_source import PriorVelocitySource
 from celltrack.training.run_tracking import RunSetup, TrainingRun, TrainingSplit
 from celltrack.training.tunet_detector import _Optimization
@@ -66,118 +77,13 @@ logger = logging.getLogger(__name__)
 
 _CONFIG = Path(__file__).parents[2] / "paths.yaml"
 _DATASET = "biohub_cell_tracking"
-# The published pilkwang pack, under the (gitignored) data root's reference area — warm-start source.
-_PACK_REL = Path("reference") / "pilkwang" / "split_0"
-# The second pilkwang seed — the proxy eval's tracker is the shipped one, whose recipe blends two seeds' packs.
+# The proxy eval's tracker is the shipped one, whose recipe blends BOTH published seeds' packs (`WARM_PACKS`).
 # Only the PROXY needs them: a joint run's own heads supply both the nodes and the affinity being selected on.
-_PACK2_REL = Path("reference") / "pilkwang" / "seed2" / "weights" / "unet_transformer" / "split_0"
 _HEARTBEAT_UPDATES = 100  # log within-window progress this often, so a long window isn't silent
 _SECONDS_PER_HOUR = 3600.0
 # The fresh transformer's shape, matching the pilkwang head the warm-start path loads.
 _HIDDEN_DIM, _N_HEADS, _N_BLOCKS = 128, 4, 4
 _POS_FEATURE_DIM = 4 * _POS_EMBED_DIM  # sinusoidal embed of (t, z, y, x)
-# Each epoch-scale field and the step-scale field it replaces when set, so an override is logged, never silent.
-_EPOCH_OVERRIDES = (("epochs", "steps"), ("evals_per_epoch", "eval_every"), ("patience_epochs", "patience"))
-
-
-@dataclass(frozen=True)
-class JointTrainConfig:
-    """Every knob of a joint fine-tune, so a run is one object rather than a long argument list."""
-
-    steps: int = 1500
-    lr: float = 1e-4
-    neg_weight: float = 1e-2
-    det_weight: float = 1.0  # weight on the (two-frame) detection term relative to the edge term
-    # Weight on the InfoNCE term over the NODE FEATURES — the only part of the objective that asks the
-    # backbone for discrimination rather than invariance. 0.0 by default: the term is still computed and
-    # logged as a diagnostic, but contributes exactly nothing, so an unasked run is the run of yesterday.
-    contrastive_weight: float = 0.0
-    temperature: float = 0.07  # the InfoNCE softmax temperature over candidate targets
-    # Sigmoid response above which an UNANNOTATED voxel stops being supervised as background (see
-    # `BalancedBCE`). Our labels cover ~1-2% of a frame's cells, so the zero target calls thousands of real
-    # cells background — and warm-starting a saturated detector aims exactly those gradients at its correct
-    # detections (measured: node recall 0.966 -> 0.936, ratio -0.15, within half an epoch). None keeps the
-    # objective of yesterday; `main` derives the value it passes from `TrackerConfig.threshold`.
-    ignore_ambiguous_above: float | None = None
-    downsample: tuple[int, int, int] = (1, 4, 4)
-    out_channels: int = 32
-    layers: tuple[int, ...] = (32, 64, 128)
-    device: str = "cuda"
-    grad_clip: float = 1.0
-    # The eval is a full `CellTracker` pass over the four proxy movies, serial with training — keep it coarse.
-    eval_every: int = 500
-    eval_threshold: float = 0.5  # the detection threshold the selector's tracker runs at
-    # The selector eval skips flip-TTA: it buys a faithful score the checkpoint choice doesn't need, at 4x cost.
-    eval_tta: bool = False
-    # Stop after this many consecutive non-improving evals; save-best means stopping early never costs
-    # quality, only compute. <1 disables (runs the full `steps` budget).
-    patience: int = 5
-    es_min_delta: float = 0.0
-    seed: int = 0
-    # Decay the rate to zero over the run (cosine). Warm-starting a CONVERGED model is exactly the case a
-    # schedule is for: a flat rate keeps taking full-size steps away from an optimum the weights already
-    # sit in, while an annealed one explores early and settles. `_Optimization` already advances and
-    # persists a scheduler — the joint loop simply never built one.
-    cosine_lr: bool = False
-    # WHICH published pack to continue. Warm-starting from seed1 produces that seed's descendant, and a
-    # descendant adds nothing to an ensemble containing its parent (measured: +0.0075 alone, but 0.9315
-    # against the pair's 0.9334). Training the same recipe from a DIFFERENT parent is how the result
-    # earns a place — ensembles pay for disagreement, not for quality alone.
-    warm_pack: Path = _PACK_REL
-    compile_backbone: bool = False  # torch.compile the U-Net (static shape); one-time warmup, then fused kernels
-    # Draw each step's pair in proportion to its measured top-1 defect instead of uniformly with replacement
-    # (see `DifficultySampler`). Off by default: with it off the loop is the uniform stream of yesterday.
-    difficulty_sampling: bool = False
-    # Feed each source its PRIOR displacement (t-1 -> t) as three extra head-input columns, so the pair head can
-    # ask whether a candidate continues the motion the cell was already on — the axis behind our documented
-    # association failure (a fast mover's true successor lands FAR while a slower neighbour sits NEAR, and both
-    # distance and the learned probability pick the near-wrong cell). Off by default and byte-identical off.
-    # COSTS ~50% more wall-clock per step: an extra frame decode plus one extra no-grad backbone forward.
-    prior_velocity: bool = False
-    # The epoch scale. The loop consumes ONE GT pair per step, so a pass over the corpus is `len(train_targets)`
-    # steps — DERIVED from the split, never configured, since a hand-set value rots the moment the split moves.
-    # Unset (None) leaves the step-scale fields above exactly as given; set, each one wins over its raw twin.
-    epochs: float | None = None
-    evals_per_epoch: int | None = None
-    patience_epochs: float | None = None
-
-    def resolved(self, steps_per_epoch: int) -> JointTrainConfig:
-        """The same run expressed in steps — the schedule the loop, the scheduler and early-stop all read."""
-        eval_every = self._eval_every(steps_per_epoch)
-        windows_per_epoch = self.evals_per_epoch if self.evals_per_epoch is not None else steps_per_epoch / eval_every
-        steps = self.steps if self.epochs is None else round(self.epochs * steps_per_epoch)
-        patience = self.patience
-        if self.patience_epochs is not None:
-            patience = max(1, round(self.patience_epochs * windows_per_epoch))
-        self._log_schedule(steps_per_epoch, steps, eval_every, patience)
-        return replace(self, steps=steps, eval_every=eval_every, patience=patience)
-
-    def _eval_every(self, steps_per_epoch: int) -> int:
-        """Window length in steps; a corpus smaller than the requested evals still yields a one-step window."""
-        if self.evals_per_epoch is None:
-            return self.eval_every
-        return max(1, steps_per_epoch // self.evals_per_epoch)
-
-    def _overrides(self) -> list[str]:
-        """Which raw step-scale values the epoch form replaced — reported so neither form is dropped in silence."""
-        return [
-            f"{epoch}={getattr(self, epoch)} overrides {raw}={getattr(self, raw)}"
-            for epoch, raw in _EPOCH_OVERRIDES
-            if getattr(self, epoch) is not None
-        ]
-
-    def _log_schedule(self, steps_per_epoch: int, steps: int, eval_every: int, patience: int) -> None:
-        """One startup line carrying every derived value, so a run's schedule is self-documenting."""
-        overrides = self._overrides()
-        logger.info(
-            "schedule: %d steps/epoch | %d steps (%.2f epochs) | eval every %d steps | patience %d windows%s",
-            steps_per_epoch,
-            steps,
-            steps / steps_per_epoch,
-            eval_every,
-            patience,
-            " | " + "; ".join(overrides) if overrides else "",
-        )
 
 
 @dataclass(frozen=True)
@@ -267,29 +173,30 @@ class JointTrainer:
         """
         steps_per_epoch = max(1, len(pairs.train))
         self.config = self.config.resolved(steps_per_epoch)
+        schedule = self.config.schedule
         save_to = setup.save_to
         torch.set_float32_matmul_precision("high")  # TF32 on the fp32 matmuls the bf16 autocast leaves alone
         torch.backends.cudnn.benchmark = True  # one static frame shape — cudnn picks the fastest algo once
         model, optimization = self._prepare(warm_start=setup.warm_start)
 
-        run = TrainingRun.open(asdict(self.config), setup)
+        run = TrainingRun.open(self.config.model_dump(), setup)
         resume_path = save_to.with_suffix(".resume.pt")
         done, restored = self._restore(model, optimization, resume_path, resume=setup.resume)
         best = restored if restored is not None else self._initial_best(model, evaluator, pairs, run, save_to)
 
-        stop = EarlyStop(self.config.patience, self.config.es_min_delta) if self.config.patience >= 1 else None
+        stop = EarlyStop(schedule.patience, schedule.es_min_delta) if schedule.patience >= 1 else None
         if stop is not None:
             stop.update(best)  # seed with the init score so a first worse window doesn't read as an improvement
         run_start = time.perf_counter()
         sampler = self._sampler(pairs.train)
-        while done < self.config.steps:
-            window = min(self.config.eval_every, self.config.steps - done)
+        while done < schedule.steps:
+            window = min(schedule.eval_every, schedule.steps - done)
             dataset = PairDataset(
                 pairs.train,
                 window,
-                self.config.downsample,
-                self.config.seed + done,
-                with_previous=self.config.prior_velocity,
+                self.config.data.downsample,
+                self.config.runtime.seed + done,
+                with_previous=self.config.data.prior_velocity,
             )
             losses = self._run_window(model, optimization, dataset, sampler)
             done += window
@@ -304,15 +211,15 @@ class JointTrainer:
             self._save_resume(resume_path, model, optimization, done, best)
             run.window(done, {**self._metrics(result, best), **losses})
             rate = losses["it_per_s"]
-            eta_hours = (self.config.steps - done) / rate / _SECONDS_PER_HOUR if rate else 0.0
+            eta_hours = (schedule.steps - done) / rate / _SECONDS_PER_HOUR if rate else 0.0
             logger.info(
                 "epoch %g/%g | step %5d/%d | train loss %.4f (edge %.4f det %.4f nce %.4f) | proxy %.4f (sel %.4f) | "
                 "best %.4f%s | node R %.3f ratio %+.2f | mislinks %d inv %.2f P true %.3f vs chosen %.3f | "
                 "sanity AUC %.4f | %.1f it/s | elapsed %.2fh ETA %.2fh",
                 round(done / steps_per_epoch, 2),
-                round(self.config.steps / steps_per_epoch, 2),
+                round(schedule.steps / steps_per_epoch, 2),
                 done,
-                self.config.steps,
+                schedule.steps,
                 losses["train_loss"],
                 losses["edge_loss"],
                 losses["det_loss"],
@@ -335,7 +242,7 @@ class JointTrainer:
             if sampler is not None:
                 logger.info("  sampler | coverage %.3f | entropy %.3f", losses["coverage"], losses["sampling_entropy"])
             if stop is not None and stop.should_stop:
-                logger.info("early stop: %d evals no gain (step %d, best %.4f)", self.config.patience, done, best)
+                logger.info("early stop: %d evals no gain (step %d, best %.4f)", schedule.patience, done, best)
                 break
 
         logger.info("best selection score = %.4f, saved to %s", best, save_to)
@@ -381,9 +288,9 @@ class JointTrainer:
 
     def _schedule(self, optimizer: torch.optim.Optimizer) -> torch.optim.lr_scheduler.LRScheduler | None:
         """A cosine decay to zero over the whole run, or none for a flat rate."""
-        if not self.config.cosine_lr:
+        if not self.config.optim.cosine_lr:
             return None
-        return torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.config.steps)
+        return torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.config.schedule.steps)
 
     def _prepare(self, *, warm_start: bool) -> tuple[JointModel, _Optimization]:
         """The run's trained objects, built in the one order that keeps BOTH a warm start and a widened head.
@@ -393,46 +300,48 @@ class JointTrainer:
         into it → widen → and only then hand `model.parameters()` to the optimiser. An optimiser constructed
         before the widening would hold the discarded projection and train nothing through it, in silence.
         """
-        model = self._model(warm_start=warm_start).to(self.config.device)
+        model = self._model(warm_start=warm_start).to(self.config.runtime.device)
         self._velocity.widen(model)
-        if self.config.device == "cuda":
+        if self.config.runtime.device == "cuda":
             # channels_last_3d is a lossless layout that measured faster on the feature convs. torch stubs
             # omit the memory_format overload of Module.to; the call is runtime-valid.
             model = model.to(memory_format=torch.channels_last_3d)  # type: ignore[no-matching-overload]
-        if self.config.compile_backbone:
+        if self.config.runtime.compile_backbone:
             # Compile the backbone (static shape); the temporal-attention SDPA is forced to MATH at forward
             # time (see `_step`) — its efficient backward has a broken compiled meta-kernel.
             model.detector.unet = torch.compile(model.detector.unet, dynamic=False)  # type: ignore[bad-assignment]
-        optimizer = torch.optim.AdamW(model.parameters(), lr=self.config.lr)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=self.config.optim.lr)
         return model, _Optimization(optimizer, self._schedule(optimizer))
 
     @property
     def _velocity(self) -> PriorVelocitySource:
         """The run's history feed, reading the flag live — `train` re-resolves the config before the model exists."""
-        return PriorVelocitySource(enabled=self.config.prior_velocity)
+        return PriorVelocitySource(enabled=self.config.data.prior_velocity)
 
     def _model(self, *, warm_start: bool) -> JointModel:
         """A joint model to train — warm-started from the published pack, or fresh at the configured size."""
+        architecture, downsample = self.config.model, self.config.data.downsample
         if warm_start:
-            pack = DataRoot.from_config(_CONFIG).processed(_DATASET) / self.config.warm_pack
-            scorer = EdgeTransformerScorer.from_pack(pack, self.config.device)
+            pack = DataRoot.from_config(_CONFIG).processed(_DATASET) / architecture.warm_pack
+            scorer = EdgeTransformerScorer.from_pack(pack, self.config.runtime.device)
             logger.info("warm-started from pilkwang pack at %s", pack)
-            return JointModel(scorer.detector, scorer.transformer, self.config.downsample)
-        detector = TemporalUNetDetector(self.config.out_channels, self.config.layers)
+            return JointModel(scorer.detector, scorer.transformer, downsample)
+        detector = TemporalUNetDetector(architecture.out_channels, architecture.layers)
         transformer = EdgeTransformerScorer._transformer_cls()(  # noqa: SLF001 — the pilkwang head class, mounted
-            feat_dim=self.config.out_channels + _POS_FEATURE_DIM,
+            feat_dim=architecture.out_channels + _POS_FEATURE_DIM,
             hidden_dim=_HIDDEN_DIM,
             n_heads=_N_HEADS,
             n_blocks=_N_BLOCKS,
         )
-        return JointModel(detector, transformer, self.config.downsample)
+        return JointModel(detector, transformer, downsample)
 
     def _sampler(self, targets: list[PairTarget]) -> DifficultySampler | None:
         """One sampler for the WHOLE run (difficulty has to survive across windows), or None for the uniform stream."""
-        if not self.config.difficulty_sampling:
+        if not self.config.data.difficulty_sampling:
             return None
-        corpus = PairDataset(targets, self.config.steps, self.config.downsample, self.config.seed)
-        return DifficultySampler(corpus.target_count, self.config.seed)
+        seed = self.config.runtime.seed
+        corpus = PairDataset(targets, self.config.schedule.steps, self.config.data.downsample, seed)
+        return DifficultySampler(corpus.target_count, seed)
 
     def _run_window(
         self,
@@ -487,7 +396,7 @@ class JointTrainer:
         outcome = self._losses(model, pair)
         optimization.zero_grad()
         outcome.total.backward()
-        nn.utils.clip_grad_norm_(model.parameters(), self.config.grad_clip)
+        nn.utils.clip_grad_norm_(model.parameters(), self.config.optim.grad_clip)
         optimization.step()
         return outcome
 
@@ -498,36 +407,42 @@ class JointTrainer:
         mirroring the inference scorer); the detection heads emit on the downsampled grid, so their GT
         centres are divided here to match.
         """
-        device = self.config.device
+        device = self.config.runtime.device
+        loss_config = self.config.loss
         sample = pair.to(device)
         velocity = self._velocity.of(model, sample, self._autocast())
         source_centres, target_centres, edge_matrix = sample.source_centres, sample.target_centres, sample.edge_matrix
-        downsample = torch.tensor(self.config.downsample, dtype=torch.float32, device=device)
+        downsample = torch.tensor(self.config.data.downsample, dtype=torch.float32, device=device)
         centres_t_grid = (source_centres.to(torch.float32) / downsample).round().long()
         centres_t1_grid = (target_centres.to(torch.float32) / downsample).round().long()
         # Under compile, pin SDPA to the math backend so inductor traces its clean composite backward; no-op eager.
-        attention = sdpa_kernel(SDPBackend.MATH) if self.config.compile_backbone else contextlib.nullcontext()
+        compiled = self.config.runtime.compile_backbone
+        attention = sdpa_kernel(SDPBackend.MATH) if compiled else contextlib.nullcontext()
         with attention, self._autocast():
             out = model.forward(sample.frame_t, sample.frame_t1, source_centres, target_centres, velocity)
             edge = SoftmaxFocalBCE.of(out.edge_logits, edge_matrix)
-            ignore = self.config.ignore_ambiguous_above
+            ignore = loss_config.ignore_ambiguous_above
             det = BalancedBCE.of(
-                out.detection_t.unsqueeze(0), [centres_t_grid], self.config.neg_weight, ignore
-            ) + BalancedBCE.of(out.detection_t1.unsqueeze(0), [centres_t1_grid], self.config.neg_weight, ignore)
+                out.detection_t.unsqueeze(0), [centres_t_grid], loss_config.neg_weight, ignore
+            ) + BalancedBCE.of(out.detection_t1.unsqueeze(0), [centres_t1_grid], loss_config.neg_weight, ignore)
             contrastive = InfoNCE.of(
-                out.source_features, out.target_features, edge_matrix, self.config.temperature, self.config.out_channels
+                out.source_features,
+                out.target_features,
+                edge_matrix,
+                loss_config.temperature,
+                self.config.model.out_channels,
             )
-            loss = edge + self.config.det_weight * det + self.config.contrastive_weight * contrastive
+            loss = edge + loss_config.det_weight * det + loss_config.contrastive_weight * contrastive
         ignored = self._ignored((out.detection_t, centres_t_grid), (out.detection_t1, centres_t1_grid))
         return _PairOutcome(loss, edge, det, contrastive, out.edge_logits, edge_matrix, ignored)
 
     def _autocast(self) -> torch.autocast:
         """The run's precision context — bf16 on CUDA, a no-op elsewhere; one definition for every forward here."""
-        return torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=self.config.device == "cuda")
+        return torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=self.config.runtime.device == "cuda")
 
     def _ignored(self, *frames: tuple[Tensor, Tensor]) -> float | None:
         """The pair's mean unsupervised fraction, or `None` when nothing is masked — a sigmoid, no backward."""
-        above = self.config.ignore_ambiguous_above
+        above = self.config.loss.ignore_ambiguous_above
         if above is None:
             return None
         shares = [BalancedBCE.ignored_fraction(logits.unsqueeze(0), [centres], above) for logits, centres in frames]
@@ -551,11 +466,11 @@ class JointTrainer:
         association number that can FAIL is the mislink inversion `ModelEvaluator` returns from the eval pass.
         """
         model.eval()
-        device = self.config.device
+        device, data = self.config.runtime.device, self.config.data
         scored: list[float] = []
         for target in val_targets:
             corpus = PairDataset(
-                [target], 1, self.config.downsample, self.config.seed, with_previous=self.config.prior_velocity
+                [target], 1, data.downsample, self.config.runtime.seed, with_previous=data.prior_velocity
             )
             sample = corpus.pair(0).to(device)
             velocity = self._velocity.of(model, sample, self._autocast())
@@ -574,7 +489,7 @@ class JointTrainer:
         """Load a resume snapshot into both heads and the optimiser, returning (step, best) — (0, None) if fresh."""
         if not (resume and resume_path.exists()):
             return 0, None
-        state = torch.load(resume_path, map_location=self.config.device, weights_only=False)
+        state = torch.load(resume_path, map_location=self.config.runtime.device, weights_only=False)
         model.detector.load_state_dict(state["detector"])
         model.transformer.load_state_dict(state["transformer"])
         optimization.load_state_dict(state["optimization"])
@@ -603,9 +518,9 @@ class JointTrainer:
                 "detector_state": model.detector.state_dict(),
                 "transformer_state": model.transformer.state_dict(),
                 "config": {
-                    "out_channels": self.config.out_channels,
-                    "layers": list(self.config.layers),
-                    "downsample": list(self.config.downsample),
+                    "out_channels": self.config.model.out_channels,
+                    "layers": list(self.config.model.layers),
+                    "downsample": list(self.config.data.downsample),
                 },
             },
             save_to,
@@ -643,7 +558,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--lr", type=float, default=1e-4, help="learning rate; lower it when warm-starting")
     parser.add_argument("--cosine-lr", action="store_true", help="decay the rate to zero over the run")
     parser.add_argument(
-        "--warm-pack", choices=("seed1", "seed2"), default="seed1", help="which published pack to continue"
+        "--warm-pack", choices=tuple(WARM_PACKS), default="seed1", help="which published pack to continue"
     )
     parser.add_argument("--compile-backbone", action="store_true", help="torch.compile the U-Net (static shape)")
     parser.add_argument(
@@ -679,25 +594,27 @@ def _parser() -> argparse.ArgumentParser:
 def main() -> None:
     args = _parser().parse_args()
 
+    # The flat flags fan out into the concern each one belongs to — the CLI is the interface, this is the model.
     config = JointTrainConfig(
-        steps=args.steps,
-        eval_every=args.eval_every,
-        epochs=args.epochs,
-        evals_per_epoch=args.evals_per_epoch,
-        patience_epochs=args.patience_epochs,
-        det_weight=args.det_weight,
-        ignore_ambiguous_above=args.ignore_ambiguous_above,
-        contrastive_weight=args.contrastive_weight,
-        temperature=args.temperature,
-        lr=args.lr,
-        cosine_lr=args.cosine_lr,
-        warm_pack=_PACK_REL if args.warm_pack == "seed1" else _PACK2_REL,
-        device=args.device,
-        patience=args.patience,
-        eval_threshold=args.eval_threshold,
-        compile_backbone=args.compile_backbone,
-        difficulty_sampling=args.difficulty_sampling,
-        prior_velocity=args.prior_velocity,
+        model=ModelCfg(warm_pack=WARM_PACKS[args.warm_pack]),
+        data=DataCfg(difficulty_sampling=args.difficulty_sampling, prior_velocity=args.prior_velocity),
+        optim=OptimCfg(lr=args.lr, cosine_lr=args.cosine_lr),
+        loss=LossCfg(
+            det_weight=args.det_weight,
+            contrastive_weight=args.contrastive_weight,
+            temperature=args.temperature,
+            ignore_ambiguous_above=args.ignore_ambiguous_above,
+        ),
+        eval=EvalCfg(threshold=args.eval_threshold),
+        schedule=ScheduleCfg(
+            steps=args.steps,
+            eval_every=args.eval_every,
+            patience=args.patience,
+            epochs=args.epochs,
+            evals_per_epoch=args.evals_per_epoch,
+            patience_epochs=args.patience_epochs,
+        ),
+        runtime=RuntimeCfg(device=args.device, compile_backbone=args.compile_backbone),
     )
     root = DataRoot.from_config(_CONFIG)
 
@@ -710,13 +627,12 @@ def main() -> None:
     proc = root.processed(_DATASET)
     save_to = proc / args.weights
     log = Obs.setup(save_to.with_suffix(".log"), truncate=not args.resume)  # tail-able while the run goes
-    recipe = DetectorRecipe(downsample=config.downsample, tta=config.eval_tta)
-    tracker_config = TrackerConfig(threshold=config.eval_threshold)
+    recipe = DetectorRecipe(downsample=config.data.downsample, tta=config.eval.tta)
+    tracker_config = TrackerConfig(threshold=config.eval.threshold)
     with Obs.timed(log, "mounting the proxy evaluator"):
         validation = TestMovieProxy.load(root, VALIDATION_MOVIES)
-        evaluator = ModelEvaluator.mount(
-            validation, (proc / _PACK_REL, proc / _PACK2_REL), recipe, config.device, tracker_config
-        )
+        packs = (proc / WARM_PACKS["seed1"], proc / WARM_PACKS["seed2"])
+        evaluator = ModelEvaluator.mount(validation, packs, recipe, config.runtime.device, tracker_config)
 
     train_paths = TestMovieProxy.training_videos(root.videos("train"))
     split = TrainingSplit(len(train_paths), len(VALIDATION_MOVIES), len(TEST_MOVIES))

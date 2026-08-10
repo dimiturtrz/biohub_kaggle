@@ -5,7 +5,6 @@ shared tiny video fixture with a minimal (non-pilkwang-sized) backbone and the s
 real forward/backward/eval/save cycle over both heads is exercised without the GPU or the `external/` dep.
 """
 
-from dataclasses import replace
 from pathlib import Path
 from typing import cast
 
@@ -24,77 +23,29 @@ from celltrack.models.edge_transformer import _POS_EMBED_DIM
 from celltrack.models.joint_model import JointModel
 from celltrack.models.prior_velocity import PriorVelocity
 from celltrack.tracker import TrackerConfig
-from celltrack.training.joint_detector import JointTrainConfig, JointTrainer, PairSplit, _PairOutcome
+from celltrack.training.joint_config import (
+    DataCfg,
+    JointTrainConfig,
+    ModelCfg,
+    OptimCfg,
+    RuntimeCfg,
+    ScheduleCfg,
+)
+from celltrack.training.joint_detector import JointTrainer, PairSplit, _PairOutcome
 from celltrack.training.run_tracking import RunSetup, TrainingSplit
 from core.data.tracks import AnnotatedTracks
 from core.data.video import ImageStatistics
 from core.geometry import Spacing
 from tests.unit.celltrack.conftest import RecordingMlflow
 
-
-def test_config_defaults_to_pilkwangs_recipe():
-    """The zero-argument training config carries the ×4 downsample, their learning rate, and an even loss weight."""
-    config = JointTrainConfig()
-    assert config.downsample == (1, 4, 4)
-    assert config.lr == 1e-4
-    assert config.det_weight == 1.0
-    assert config.contrastive_weight == 0.0  # the contrastive term is opt-in: an unasked run is unchanged
-
-
 _CORPUS = 18024  # the real GT-pair count: one pair per step, so this is one epoch
-
-
-def test_resolved():
-    """No epoch field set means today's run: the step-scale numbers a caller passed reach the loop unchanged."""
-    config = JointTrainConfig(steps=3000, eval_every=500, patience=5)
-    assert config.resolved(_CORPUS) == config
-
-
-def test_resolved_turns_epochs_into_steps():
-    """`epochs` is passes over the corpus, so the budget is that many times the derived steps-per-epoch."""
-    assert JointTrainConfig(epochs=1.5).resolved(_CORPUS).steps == 27036
-
-
-def test_resolved_turns_evals_per_epoch_into_a_window_length():
-    """Four evals per epoch is a window of a quarter of the corpus, whatever the split's size happens to be."""
-    assert JointTrainConfig(evals_per_epoch=4).resolved(_CORPUS).eval_every == 4506
-
-
-def test_resolved_turns_patience_epochs_into_windows():
-    """Patience counts EVAL WINDOWS, so an epoch of patience is however many windows that epoch holds."""
-    resolved = JointTrainConfig(patience_epochs=2.0, evals_per_epoch=3).resolved(_CORPUS)
-    assert resolved.patience == 6
-
-    from_raw_windows = JointTrainConfig(patience_epochs=1.0, eval_every=9012).resolved(_CORPUS)
-    assert from_raw_windows.patience == 2  # no evals_per_epoch: the window count follows the raw eval_every
-
-
-def test_resolved_epoch_fields_win_over_their_raw_twins():
-    """Both forms given is not an error and neither is dropped in silence — the epoch form wins, and it is logged."""
-    config = JointTrainConfig(
-        steps=3000, eval_every=500, patience=5, epochs=2.0, evals_per_epoch=2, patience_epochs=3.0
-    )
-
-    resolved = config.resolved(_CORPUS)
-
-    assert (resolved.steps, resolved.eval_every, resolved.patience) == (36048, 9012, 6)
-    assert config._overrides() == [
-        "epochs=2.0 overrides steps=3000",
-        "evals_per_epoch=2 overrides eval_every=500",
-        "patience_epochs=3.0 overrides patience=5",
-    ]
-
-
-def test_resolved_keeps_a_window_when_the_corpus_is_smaller_than_the_eval_count():
-    """A corpus of three pairs asked for ten evals would floor to a zero-step window; it floors to one instead."""
-    resolved = JointTrainConfig(evals_per_epoch=10, patience_epochs=0.01).resolved(3)
-    assert resolved.eval_every == 1
-    assert resolved.patience == 1
 
 
 def test_schedule_spans_the_resolved_step_count():
     """The cosine horizon is built from the RESOLVED budget — resolving epochs late must not leave it stale."""
-    config = JointTrainConfig(steps=10, epochs=2.0, cosine_lr=True).resolved(_CORPUS)
+    config = JointTrainConfig(schedule=ScheduleCfg(steps=10, epochs=2.0), optim=OptimCfg(cosine_lr=True)).resolved(
+        _CORPUS
+    )
     optimizer = torch.optim.AdamW([torch.zeros(1, requires_grad=True)], lr=1e-4)
 
     schedule = JointTrainer(config)._schedule(optimizer)
@@ -136,13 +87,10 @@ def test_difficulty_is_none_without_annotated_sources():
 def _cpu_config() -> JointTrainConfig:
     """A tiny CPU config: a two-level backbone, no downsample, one eval-sized window of two steps."""
     return JointTrainConfig(
-        steps=2,
-        out_channels=2,
-        layers=(2, 4),
-        downsample=(1, 1, 1),
-        device="cpu",
-        eval_every=2,
-        patience=2,
+        model=ModelCfg(out_channels=2, layers=(2, 4)),
+        data=DataCfg(downsample=(1, 1, 1)),
+        runtime=RuntimeCfg(device="cpu"),
+        schedule=ScheduleCfg(steps=2, eval_every=2, patience=2),
     )
 
 
@@ -185,17 +133,12 @@ def _evaluator(video_store: Path, in_bounds_tracks: AnnotatedTracks) -> ModelEva
     )
 
 
-def test_config_defaults_to_uniform_sampling():
-    """Difficulty sampling is opt-in — the zero-argument config still draws pairs uniformly with replacement."""
-    assert JointTrainConfig().difficulty_sampling is False
-
-
 def test_sampler(video_store: Path):
     """A sampler exists only when asked for, and is sized to the pair corpus rather than to the step budget."""
     targets = _pairs(video_store)
     assert JointTrainer(_cpu_config())._sampler(targets) is None
 
-    sampler = JointTrainer(replace(_cpu_config(), difficulty_sampling=True))._sampler(targets)
+    sampler = JointTrainer(_sampling_config())._sampler(targets)
 
     assert sampler is not None
     sampler.observe(0, 0.5)
@@ -270,7 +213,7 @@ def test_train_records_each_window(
         _evaluator(video_store, in_bounds_tracks),
         RunSetup(tmp_path / "joint.pt", split=TrainingSplit(191, 4, 4)),
     )
-    assert mlflow_backend.logged_params()["det_weight"] == 1.0
+    assert mlflow_backend.logged_params()["loss.det_weight"] == 1.0
     assert {
         "proxy_score",
         "selection_score",
@@ -300,7 +243,8 @@ def test_train_runs_the_epoch_schedule(
     """Asked for two epochs over a two-pair corpus, the loop runs four steps in one-pair windows."""
     torch.manual_seed(0)
     targets = _pairs(video_store)
-    config = replace(_cpu_config(), steps=2, eval_every=2, patience=0, epochs=2.0, evals_per_epoch=2)
+    schedule = ScheduleCfg(steps=2, eval_every=2, patience=0, epochs=2.0, evals_per_epoch=2)
+    config = _cpu_config().model_copy(update={"schedule": schedule})
 
     JointTrainer(config).train(
         PairSplit(targets, targets), _evaluator(video_store, in_bounds_tracks), RunSetup(tmp_path / "joint.pt")
@@ -324,21 +268,31 @@ def _trained_bytes(config: JointTrainConfig, video_store: Path, tracks: Annotate
     return save_to.read_bytes()
 
 
+def test_train_is_reproducible(video_store: Path, in_bounds_tracks: AnnotatedTracks, tmp_path: Path):
+    """The same config twice from the same seed writes the same checkpoint bytes — the loop is deterministic.
+
+    This is the anchor the config restructure is measured against: nothing about grouping the knobs may make
+    a run depend on anything but its values, so a differing byte here is a real behaviour change.
+    """
+    first = _trained_bytes(_cpu_config(), video_store, in_bounds_tracks, tmp_path / "first")
+    assert _trained_bytes(_cpu_config(), video_store, in_bounds_tracks, tmp_path / "second") == first
+
+
 def test_train_off_is_byte_identical(video_store: Path, in_bounds_tracks: AnnotatedTracks, tmp_path: Path):
     """Difficulty sampling off reproduces the uniform run exactly — same draws, same weights, same bytes."""
     default = _trained_bytes(_cpu_config(), video_store, in_bounds_tracks, tmp_path / "default")
-    explicit_off = replace(_cpu_config(), difficulty_sampling=False)
+    explicit_off = _cpu_config().model_copy(update={"data": DataCfg(downsample=(1, 1, 1), difficulty_sampling=False)})
     assert _trained_bytes(explicit_off, video_store, in_bounds_tracks, tmp_path / "off") == default
 
 
 def _velocity_config() -> JointTrainConfig:
     """The tiny CPU config with the prior-velocity feature on — the only difference from the default run."""
-    return replace(_cpu_config(), prior_velocity=True)
+    return _cpu_config().model_copy(update={"data": DataCfg(downsample=(1, 1, 1), prior_velocity=True)})
 
 
-def test_config_defaults_to_no_prior_velocity():
-    """History is opt-in: the zero-argument config feeds the head exactly what it fed before the feature existed."""
-    assert JointTrainConfig().prior_velocity is False
+def _sampling_config() -> JointTrainConfig:
+    """The tiny CPU config drawing its pairs by difficulty — the only difference from the default run."""
+    return _cpu_config().model_copy(update={"data": DataCfg(downsample=(1, 1, 1), difficulty_sampling=True)})
 
 
 def test_prepare_widens_the_head_before_building_the_optimizer(video_store: Path):
@@ -351,7 +305,7 @@ def test_prepare_widens_the_head_before_building_the_optimizer(video_store: Path
     model, optimization = JointTrainer(_velocity_config())._prepare(warm_start=False)
     projection = model.transformer.proj
 
-    assert projection.in_features == _cpu_config().out_channels + 4 * _POS_EMBED_DIM + PriorVelocity.DIM
+    assert projection.in_features == _cpu_config().model.out_channels + 4 * _POS_EMBED_DIM + PriorVelocity.DIM
     optimised = {id(parameter) for group in optimization.optimizer.param_groups for parameter in group["params"]}
     assert id(projection.weight) in optimised
     assert not projection.weight[:, -PriorVelocity.DIM :].any()
@@ -385,7 +339,7 @@ def test_train_prior_velocity_off_is_byte_identical(
 ):
     """Off explicitly reproduces the default run exactly — same reads, same head width, same weights, same bytes."""
     default = _trained_bytes(_cpu_config(), video_store, in_bounds_tracks, tmp_path / "default")
-    explicit_off = replace(_cpu_config(), prior_velocity=False)
+    explicit_off = _cpu_config().model_copy(update={"data": DataCfg(downsample=(1, 1, 1), prior_velocity=False)})
     assert _trained_bytes(explicit_off, video_store, in_bounds_tracks, tmp_path / "off") == default
 
 
@@ -395,7 +349,7 @@ def test_train_records_sampler_health(
     """With sampling on, each window row carries the coverage and the collapse guard beside the loss terms."""
     torch.manual_seed(0)
     targets = _pairs(video_store)
-    JointTrainer(replace(_cpu_config(), difficulty_sampling=True)).train(
+    JointTrainer(_sampling_config()).train(
         PairSplit(targets, targets), _evaluator(video_store, in_bounds_tracks), RunSetup(tmp_path / "joint.pt")
     )
     assert {"coverage", "sampling_entropy"} <= mlflow_backend.metric_keys()
