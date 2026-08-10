@@ -105,14 +105,20 @@ class TrackerProxyEval:
         )
         return proxy, pipeline
 
-    def scores(self, root: DataRoot) -> dict[tuple[float, float], float]:
-        """The proxy score for each `(threshold, disappearance)` pair — the tracker mounted once, cache replayed."""
+    def scores(self, root: DataRoot) -> dict[tuple[float, float], SplitScore]:
+        """Both scores for each `(threshold, disappearance)` pair — the tracker mounted once, cache replayed.
+
+        The FAITHFUL score stays the headline (it is what the leaderboard reports), but the clamped
+        selection score is reported beside it because the difference between them IS the node-count bonus —
+        the one component measured to anti-transfer (threshold 0.995 vs 0.99: +0.006 proxy, -0.007 LB).
+        A cell whose two scores diverge is a cell whose proxy standing is being paid for by under-detection.
+        """
         proxy, pipeline = self._mount(root)
-        results: dict[tuple[float, float], float] = {}
+        results: dict[tuple[float, float], SplitScore] = {}
         for threshold in self.thresholds:
             for cost in self.disappearance_costs:
                 config = self.config_at(threshold, cost)
-                results[(threshold, cost)] = proxy.score(pipeline.with_config(config)).score
+                results[(threshold, cost)] = proxy.score(pipeline.with_config(config))
         return results
 
     def config_at(self, threshold: float, cost: float) -> TrackerConfig:
@@ -207,10 +213,17 @@ def main() -> None:
         logger.info("  acquisition %-6s score=%.4f", prefix, split.score)
     tracking = SweepTracking(args.stems_label)
     first_cell = (args.thresholds[0], args.disappearance_costs[0])  # the cell `breakdown` was measured at
-    for (threshold, cost), score in evaluator.scores(root).items():
-        logger.info("threshold=%-6.4f disappearance=%-6.2f proxy score=%.4f", threshold, cost, score)
+    for (threshold, cost), split in evaluator.scores(root).items():
+        logger.info(
+            "threshold=%-6.4f disappearance=%-6.2f proxy score=%.4f (clamped %.4f, bonus %+.4f)",
+            threshold,
+            cost,
+            split.score,
+            split.selection_score,
+            split.score - split.selection_score,
+        )
         per_movie = breakdown if (threshold, cost) == first_cell else {}
-        tracking.cell(evaluator.config_at(threshold, cost), score, per_movie)
+        tracking.cell(evaluator.config_at(threshold, cost), split.score, per_movie)
 
 
 if __name__ == "__main__":

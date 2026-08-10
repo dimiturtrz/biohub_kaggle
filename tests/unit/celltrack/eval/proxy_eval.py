@@ -73,9 +73,14 @@ def test_override_rejects_a_bare_key():
 
 @dataclass
 class _Score:
-    """A stand-in for SplitScore exposing only the `.score` the CLI reads."""
+    """A stand-in for SplitScore exposing the faithful and clamped scores the CLI reports."""
 
     score: float
+
+    @property
+    def selection_score(self) -> float:
+        """The clamped form; the stub keeps it just below the faithful score, as under-detection makes it."""
+        return self.score - 0.01
 
 
 class _FakePipeline:
@@ -118,7 +123,10 @@ def test_scores(monkeypatch: pytest.MonkeyPatch):
     """`scores` mounts once and returns the proxy score for every `(threshold, disappearance)` in the grid."""
     _patch(monkeypatch)
     result = TrackerProxyEval("cpu", (0.98, 0.99), (0.0,)).scores(cast(DataRoot, _Root()))
-    assert result == {(0.98, 0.0): 0.98, (0.99, 0.0): 0.99}
+    # The whole SplitScore is returned now, so the CLI can report the faithful score AND the clamped one
+    # whose difference is the node-count bonus — the component measured to anti-transfer.
+    assert {cell: split.score for cell, split in result.items()} == {(0.98, 0.0): 0.98, (0.99, 0.0): 0.99}
+    assert all(split.selection_score < split.score for split in result.values())
 
 
 def test_breakdown(monkeypatch: pytest.MonkeyPatch):
