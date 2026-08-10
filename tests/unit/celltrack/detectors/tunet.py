@@ -69,6 +69,16 @@ def test_forward():
     assert logits.shape == (4, 8, 8)
 
 
+def test_forward_batch():
+    """A batch of frames maps to a batch of same-shape logit volumes; item 0 matches the single-frame path."""
+    detector = _tiny_detector().eval()
+    frames = torch.zeros(3, 4, 8, 8)
+    frames[0, 2, 4, 4] = 1.0
+    batched = detector.forward_batch(frames)
+    assert batched.shape == (3, 4, 8, 8)
+    assert torch.allclose(batched[0], detector.forward(frames[0]))
+
+
 def test_save_checkpoint(tmp_path: Path):
     """A saved checkpoint holds the weights, the architecture shape, and the recipe."""
     path = tmp_path / "detector.pt"

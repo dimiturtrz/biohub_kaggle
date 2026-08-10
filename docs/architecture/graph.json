@@ -1412,6 +1412,12 @@
     },
     {
       "kind": "calls",
+      "source": "celltrack.detectors.tunet.TemporalUNetDetector.forward",
+      "target": "celltrack.detectors.tunet.TemporalUNetDetector.forward_batch",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
       "source": "celltrack.detectors.tunet.TemporalUNetDetector.from_checkpoint",
       "target": "celltrack.detectors.tunet.DetectorRecipe.from_config",
       "weight": 1
@@ -2102,6 +2108,30 @@
     },
     {
       "kind": "calls",
+      "source": "celltrack.eval.dense_diagnosis.DenseDiagnosis._mounted",
+      "target": "celltrack.eval.dense_diagnosis.DenseDiagnosis.diagnose",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.dense_diagnosis.DenseDiagnosis._mounted",
+      "target": "celltrack.eval.proxy.TestMovieProxy.load",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.dense_diagnosis.DenseDiagnosis._mounted",
+      "target": "celltrack.tracker.CellTracker.from_packs",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.dense_diagnosis.DenseDiagnosis._mounted",
+      "target": "core.paths.DataRoot.processed",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
       "source": "celltrack.eval.dense_diagnosis.DenseDiagnosis.diagnose",
       "target": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis.of",
       "weight": 1
@@ -2131,30 +2161,6 @@
       "weight": 1
     },
     {
-      "kind": "calls",
-      "source": "celltrack.eval.dense_diagnosis.DenseDiagnosis.mounted",
-      "target": "celltrack.eval.dense_diagnosis.DenseDiagnosis.diagnose",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.eval.dense_diagnosis.DenseDiagnosis.mounted",
-      "target": "celltrack.eval.proxy.TestMovieProxy.load",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.eval.dense_diagnosis.DenseDiagnosis.mounted",
-      "target": "celltrack.tracker.CellTracker.from_packs",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.eval.dense_diagnosis.DenseDiagnosis.mounted",
-      "target": "core.paths.DataRoot.processed",
-      "weight": 1
-    },
-    {
       "kind": "references",
       "source": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis",
       "target": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis",
@@ -2180,7 +2186,7 @@
     },
     {
       "kind": "calls",
-      "source": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis.invert",
+      "source": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis._invert",
       "target": "core.metrics.matching.NodeMatching.is_matched",
       "weight": 1
     },
@@ -2216,8 +2222,14 @@
     },
     {
       "kind": "calls",
+      "source": "celltrack.eval.dense_diagnosis.MislinkSignal._probabilities",
+      "target": "celltrack.affinity.EdgeAffinity.probabilities",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
       "source": "celltrack.eval.dense_diagnosis.MislinkSignal.of",
-      "target": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis.invert",
+      "target": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis._invert",
       "weight": 1
     },
     {
@@ -3884,92 +3896,8 @@
     },
     {
       "kind": "references",
-      "source": "celltrack.training.edge_finetune.EdgeFinetuneProbe",
-      "target": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.training.edge_finetune.EdgeFinetuneProbe",
-      "target": "celltrack.eval.dense_diagnosis.MislinkSignal",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.training.edge_finetune.EdgeFinetuneProbe",
-      "target": "celltrack.eval.proxy.TestMovieProxy",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.training.edge_finetune.EdgeFinetuneProbe",
-      "target": "celltrack.tracker.CellTracker",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.training.edge_finetune.EdgeFinetuneProbe",
-      "target": "celltrack.training.edge_finetune.EdgeFinetuneConfig",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.training.edge_finetune.EdgeFinetuneProbe",
-      "target": "celltrack.training.edge_finetune.GapSupervision",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.training.edge_finetune.EdgeFinetuneProbe",
-      "target": "core.paths.DataRoot",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.edge_finetune.EdgeFinetuneProbe.mount",
-      "target": "celltrack.eval.proxy.TestMovieProxy.load",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.edge_finetune.EdgeFinetuneProbe.mount",
-      "target": "celltrack.tracker.CellTracker.from_packs",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.edge_finetune.EdgeFinetuneProbe.mount",
-      "target": "core.paths.DataRoot.processed",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.edge_finetune.EdgeFinetuneProbe.report",
-      "target": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis.counts",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.edge_finetune.EdgeFinetuneProbe.report",
-      "target": "celltrack.eval.dense_diagnosis.MislinkSignal.inverted_fraction",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.edge_finetune.EdgeFinetuneProbe.report",
-      "target": "celltrack.eval.dense_diagnosis.MislinkSignal.means",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.edge_finetune.EdgeFinetuneProbe.training_gaps",
-      "target": "celltrack.training.edge_finetune.GapSupervision.of",
-      "weight": 1
-    },
-    {
-      "kind": "construct",
-      "source": "celltrack.training.edge_finetune.EdgeFinetuneProbe.training_gaps",
-      "target": "core.metrics.matching.DistanceMatcher",
+      "source": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner",
+      "target": "celltrack.detectors.tunet._VideoSource",
       "weight": 1
     },
     {
@@ -3979,6 +3907,30 @@
       "weight": 1
     },
     {
+      "kind": "references",
+      "source": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner",
+      "target": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner",
+      "target": "celltrack.eval.dense_diagnosis.MislinkSignal",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner",
+      "target": "celltrack.eval.proxy.TestMovieProxy",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner",
+      "target": "celltrack.tracker.CellTracker",
+      "weight": 1
+    },
+    {
       "kind": "holds",
       "source": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner",
       "target": "celltrack.training.edge_finetune.EdgeFinetuneConfig",
@@ -3988,6 +3940,12 @@
       "kind": "references",
       "source": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner",
       "target": "celltrack.training.edge_finetune.GapSupervision",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner",
+      "target": "core.paths.DataRoot",
       "weight": 1
     },
     {
@@ -4000,6 +3958,54 @@
       "kind": "calls",
       "source": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner._loss",
       "target": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner._frontier_loss",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner._mount",
+      "target": "celltrack.eval.proxy.TestMovieProxy.load",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner._mount",
+      "target": "celltrack.tracker.CellTracker.from_packs",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner._mount",
+      "target": "core.paths.DataRoot.processed",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner._report",
+      "target": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis.counts",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner._report",
+      "target": "celltrack.eval.dense_diagnosis.MislinkSignal.inverted_fraction",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner._report",
+      "target": "celltrack.eval.dense_diagnosis.MislinkSignal.means",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner._training_gaps",
+      "target": "celltrack.training.edge_finetune.GapSupervision.of",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner._training_gaps",
+      "target": "core.metrics.matching.DistanceMatcher",
       "weight": 1
     },
     {
@@ -4147,6 +4153,12 @@
       "weight": 1
     },
     {
+      "kind": "calls",
+      "source": "celltrack.training.tunet_dataset.FrameDataset.batches",
+      "target": "celltrack.training.tunet_dataset.FrameDataset.stream",
+      "weight": 1
+    },
+    {
       "kind": "references",
       "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer",
       "target": "celltrack.detectors.tunet.TemporalUNetDetector",
@@ -4209,7 +4221,7 @@
     {
       "kind": "calls",
       "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._run_window",
-      "target": "celltrack.training.tunet_dataset.FrameDataset.stream",
+      "target": "celltrack.training.tunet_dataset.FrameDataset.batches",
       "weight": 1
     },
     {
@@ -4246,6 +4258,12 @@
       "kind": "calls",
       "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._score_fold",
       "target": "core.metrics.score.VideoMetrics.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._step",
+      "target": "celltrack.detectors.tunet.TemporalUNetDetector.forward_batch",
       "weight": 1
     },
     {
@@ -6246,14 +6264,6 @@
     },
     {
       "descendants": 0,
-      "id": "celltrack.training.edge_finetune.EdgeFinetuneProbe",
-      "label": "EdgeFinetuneProbe",
-      "level": "class",
-      "parent": "celltrack.training.edge_finetune",
-      "role": "primary"
-    },
-    {
-      "descendants": 0,
       "id": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner",
       "label": "EdgeHardNegativeFinetuner",
       "level": "class",
@@ -7038,6 +7048,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.detectors.tunet.TemporalUNetDetector.forward_batch",
+      "label": "forward_batch",
+      "level": "method",
+      "parent": "celltrack.detectors.tunet.TemporalUNetDetector",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.detectors.tunet.TemporalUNetDetector.from_checkpoint",
       "label": "from_checkpoint",
       "level": "method",
@@ -7358,6 +7376,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.eval.dense_diagnosis.DenseDiagnosis._mounted",
+      "label": "_mounted",
+      "level": "method",
+      "parent": "celltrack.eval.dense_diagnosis.DenseDiagnosis",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.eval.dense_diagnosis.DenseDiagnosis.diagnose",
       "label": "diagnose",
       "level": "method",
@@ -7366,10 +7392,10 @@
     },
     {
       "descendants": 0,
-      "id": "celltrack.eval.dense_diagnosis.DenseDiagnosis.mounted",
-      "label": "mounted",
+      "id": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis._invert",
+      "label": "_invert",
       "level": "method",
-      "parent": "celltrack.eval.dense_diagnosis.DenseDiagnosis",
+      "parent": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis",
       "role": null
     },
     {
@@ -7384,14 +7410,6 @@
       "descendants": 0,
       "id": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis.counts",
       "label": "counts",
-      "level": "method",
-      "parent": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis.invert",
-      "label": "invert",
       "level": "method",
       "parent": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis",
       "role": null
@@ -8302,30 +8320,6 @@
     },
     {
       "descendants": 0,
-      "id": "celltrack.training.edge_finetune.EdgeFinetuneProbe.mount",
-      "label": "mount",
-      "level": "method",
-      "parent": "celltrack.training.edge_finetune.EdgeFinetuneProbe",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.edge_finetune.EdgeFinetuneProbe.report",
-      "label": "report",
-      "level": "method",
-      "parent": "celltrack.training.edge_finetune.EdgeFinetuneProbe",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.edge_finetune.EdgeFinetuneProbe.training_gaps",
-      "label": "training_gaps",
-      "level": "method",
-      "parent": "celltrack.training.edge_finetune.EdgeFinetuneProbe",
-      "role": null
-    },
-    {
-      "descendants": 0,
       "id": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner.__init__",
       "label": "__init__",
       "level": "method",
@@ -8344,6 +8338,30 @@
       "descendants": 0,
       "id": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner._loss",
       "label": "_loss",
+      "level": "method",
+      "parent": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner._mount",
+      "label": "_mount",
+      "level": "method",
+      "parent": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner._report",
+      "label": "_report",
+      "level": "method",
+      "parent": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner._training_gaps",
+      "label": "_training_gaps",
       "level": "method",
       "parent": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner",
       "role": null
@@ -8472,6 +8490,14 @@
       "descendants": 0,
       "id": "celltrack.training.tunet_dataset.FrameDataset.__len__",
       "label": "__len__",
+      "level": "method",
+      "parent": "celltrack.training.tunet_dataset.FrameDataset",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.tunet_dataset.FrameDataset.batches",
+      "label": "batches",
       "level": "method",
       "parent": "celltrack.training.tunet_dataset.FrameDataset",
       "role": null

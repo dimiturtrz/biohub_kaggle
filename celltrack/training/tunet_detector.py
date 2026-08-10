@@ -65,6 +65,9 @@ class TUNetTrainConfig:
     # deadlock on this Windows box on repeated spawn. `threads` parallel readers, `prefetch` frames in flight.
     threads: int = 12
     prefetch: int = 24
+    # Every fold-train frame is the same downsampled shape, so a step forwards `batch_size` frames in one pass
+    # (batch=1 starved the GPU). The loss averages over the batch, so the learning rate carries over unchanged.
+    batch_size: int = 8
     grad_clip: float = 1.0
     eval_every: int = 500  # subset eval is a full-frame forward per video, serial with training — keep it sparse
     eval_subset: int = 2
@@ -133,6 +136,7 @@ class TUNetDetectorTrainer:
         beside the checkpoint every window; ``resume=True`` picks the latest up where a killed run left off.
         """
         torch.set_float32_matmul_precision("high")  # TF32 on the fp32 matmuls the bf16 autocast leaves alone
+        torch.backends.cudnn.benchmark = True  # one static frame shape (64^3) — cudnn picks the fastest algo once
         detector = self._detector(warm_start=warm_start).to(self.config.device)
         optimizer = torch.optim.AdamW(detector.parameters(), lr=self.config.lr)
         optimization = _Optimization(optimizer, self._scheduler(optimizer))
@@ -208,15 +212,21 @@ class TUNetDetectorTrainer:
         steps: int,
         seed_offset: int,
     ) -> tuple[float, float]:
-        """Train `steps` steps, frames decompressed by a thread pool. Returns (mean loss, it/s)."""
+        """Train `steps` optimiser steps of `batch_size` frames each, decompressed by a thread pool.
+
+        Returns (mean loss, steps/s). One step forwards a whole batch, so the window draws `steps * batch_size`
+        frames from the pool; the last step of a window may run a short batch if that product isn't exact.
+        """
         detector.train()
+        batch = self.config.batch_size
         dataset = FrameDataset(
-            targets, steps, self.config.downsample, self.config.seed + seed_offset, self.config.augmentation
+            targets, steps * batch, self.config.downsample, self.config.seed + seed_offset, self.config.augmentation
         )
-        running, t0 = 0.0, time.perf_counter()
-        for frame, coords in dataset.stream(self.config.threads, self.config.prefetch):
-            running += self._step(detector, optimization, frame, coords)
-        return running / steps, steps / (time.perf_counter() - t0)
+        running, done, t0 = 0.0, 0, time.perf_counter()
+        for frames, centres in dataset.batches(self.config.threads, self.config.prefetch, batch):
+            running += self._step(detector, optimization, frames, centres)
+            done += 1
+        return running / max(done, 1), done / (time.perf_counter() - t0)
 
     def _detector(self, *, warm_start: bool) -> TemporalUNetDetector:
         """A detector to train — warm-started from the published pack, or fresh at the configured size."""
@@ -231,15 +241,14 @@ class TUNetDetectorTrainer:
         self,
         detector: TemporalUNetDetector,
         optimization: _Optimization,
-        frame: Float[Tensor, "z y x"],
-        coords: Int[Tensor, "n 3"],
+        frames: Float[Tensor, "b z y x"],
+        centres: list[Int[Tensor, "n 3"]],
     ) -> float:
-        """One optimisation step over a single frame and its GT voxel centres; returns the scalar loss."""
-        frame = frame.to(self.config.device, non_blocking=True)
-        coords = coords.to(self.config.device, non_blocking=True)
+        """One optimisation step over a batch of frames and their GT voxel centres; returns the scalar loss."""
+        frames = frames.to(self.config.device, non_blocking=True)
         with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=self.config.device == "cuda"):
-            logits = detector(frame)
-            loss = self._detection_loss(logits, coords, self.config.neg_weight)
+            logits = detector.forward_batch(frames)
+            loss = self._detection_loss(logits, centres, self.config.neg_weight)
         optimization.zero_grad()
         loss.backward()
         nn.utils.clip_grad_norm_(detector.parameters(), self.config.grad_clip)
@@ -260,18 +269,26 @@ class TUNetDetectorTrainer:
 
     @staticmethod
     def _detection_loss(
-        logits: Float[Tensor, "z y x"], coords: Int[Tensor, "n 3"], neg_weight: float
+        logits: Float[Tensor, "b z y x"], centres: list[Int[Tensor, "n 3"]], neg_weight: float
     ) -> Float[Tensor, ""]:
-        """Count-normalised BCE: GT voxels weigh 1/n_pos, others neg_weight/n_neg — pilkwang's detector loss."""
+        """Count-normalised BCE per frame, averaged over the batch — pilkwang's detector loss, batched.
+
+        Each frame weighs its own GT voxels 1/n_pos and its negatives neg_weight/n_neg, so a crowded and a
+        sparse frame contribute equally; the batch mean keeps the loss (and thus the learning rate) at the
+        same scale as the one-frame path.
+        """
         target = torch.zeros_like(logits)
-        bounds = torch.tensor(logits.shape, device=coords.device)
-        inside = (coords >= 0).all(dim=1) & (coords < bounds).all(dim=1)
-        kept = coords[inside]
-        target[kept[:, 0], kept[:, 1], kept[:, 2]] = 1.0
-        n_pos = target.sum().clamp(min=1)
-        n_neg = (target.numel() - n_pos).clamp(min=1)
-        weight = torch.where(target == 1.0, 1.0 / n_pos, neg_weight / n_neg)
-        return F.binary_cross_entropy_with_logits(logits, target, weight=weight, reduction="sum")
+        weight = torch.empty_like(logits)
+        bounds = torch.tensor(logits.shape[1:], device=logits.device)
+        for index, coords in enumerate(centres):
+            coords = coords.to(logits.device)
+            inside = (coords >= 0).all(dim=1) & (coords < bounds).all(dim=1)
+            kept = coords[inside]
+            target[index, kept[:, 0], kept[:, 1], kept[:, 2]] = 1.0
+            n_pos = target[index].sum().clamp(min=1)
+            n_neg = (target[index].numel() - n_pos).clamp(min=1)
+            weight[index] = torch.where(target[index] == 1.0, 1.0 / n_pos, neg_weight / n_neg)
+        return F.binary_cross_entropy_with_logits(logits, target, weight=weight, reduction="sum") / logits.shape[0]
 
 
 def main() -> None:
@@ -282,6 +299,7 @@ def main() -> None:
     parser.add_argument("--neg-weight", type=float, default=1e-2)
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--threads", type=int, default=12, help="parallel frame-decompress threads")
+    parser.add_argument("--batch-size", type=int, default=8, help="frames forwarded per optimiser step (one shape)")
     parser.add_argument("--eval-every", type=int, default=500)
     parser.add_argument("--eval-subset", type=int, default=2)
     parser.add_argument("--eval-threshold", type=float, default=0.5)
@@ -300,6 +318,7 @@ def main() -> None:
         neg_weight=args.neg_weight,
         device=args.device,
         threads=args.threads,
+        batch_size=args.batch_size,
         eval_every=args.eval_every,
         eval_subset=args.eval_subset,
         eval_threshold=args.eval_threshold,

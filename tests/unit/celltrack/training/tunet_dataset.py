@@ -71,3 +71,22 @@ def test_stream(video_store: Path):
     assert len(streamed) == 6
     for index, (frame, _coords) in enumerate(streamed):
         assert torch.equal(frame, dataset[index][0])
+
+
+def test_batches(video_store: Path):
+    """Batches stack same-shape frames into (b, z, y, x) with ragged per-frame centres; a short tail is kept."""
+    statistics = cast(ImageStatistics, zarr.open_group(video_store, mode="r").attrs["image_statistics"])
+    quantiles = statistics["quantiles"]
+    target = FrameTarget(
+        zarr_path=video_store,
+        timepoint=0,
+        q_low=float(quantiles["0.001"]),
+        q_high=float(quantiles["0.999"]),
+        coords=np.array([[1, 2, 2]], dtype=np.int64),
+    )
+    dataset = FrameDataset([target], steps=5, downsample=(1, 1, 1), seed=0)
+    batches = list(dataset.batches(threads=3, prefetch=2, batch_size=2))
+    assert [frames.shape[0] for frames, _ in batches] == [2, 2, 1]  # 5 frames -> 2 + 2 + short 1
+    frames, centres = batches[0]
+    assert frames.ndim == 4  # (b, z, y, x)
+    assert len(centres) == 2 and centres[0].tolist() == [[1, 2, 2]]

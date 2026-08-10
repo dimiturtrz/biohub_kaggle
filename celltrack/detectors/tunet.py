@@ -114,14 +114,18 @@ class TemporalUNetDetector(nn.Module):
 
     @override
     def forward(self, frame: Float[Tensor, "z y x"]) -> Float[Tensor, "z y x"]:
-        """Detection logits for one already-normalised, already-downsampled frame.
+        """Detection logits for one already-normalised, already-downsampled frame (the batch-of-one path)."""
+        return self.forward_batch(frame.unsqueeze(0))[0]  # (Z, Y', X')
 
-        The temporal backbone needs a pair, so the frame is duplicated into a fake two-frame window and the
-        first output frame is read — the same path the model was trained through.
+    def forward_batch(self, frames: Float[Tensor, "b z y x"]) -> Float[Tensor, "b z y x"]:
+        """Detection logits for a batch of frames of one shape — the trainer's path, GPU fed in one pass.
+
+        The temporal backbone needs a pair per item, so each frame is duplicated into a fake two-frame window
+        and the first output frame is read — the same path the model was trained through, run over the batch.
         """
-        pair = torch.stack([frame, frame], dim=0).unsqueeze(0).unsqueeze(2)  # (1, 2, 1, Z, Y', X')
-        features = self.unet(pair)  # (1, 2, C, Z, Y', X')
-        return self.detect_head(features[0, 0:1])[0, 0]  # (Z, Y', X')
+        pair = torch.stack([frames, frames], dim=1).unsqueeze(2)  # (B, 2, 1, Z, Y', X')
+        features = self.unet(pair)  # (B, 2, C, Z, Y', X')
+        return self.detect_head(features[:, 0])[:, 0]  # (B, Z, Y', X')
 
     @classmethod
     def from_pack(cls, pack: Path, map_location: str = "cpu") -> tuple["TemporalUNetDetector", DetectorRecipe]:

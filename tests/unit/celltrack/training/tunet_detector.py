@@ -30,43 +30,54 @@ from core.metrics.matching import DistanceMatcher
 
 
 def _flat_logits(shape: tuple[int, int, int], value: float) -> torch.Tensor:
-    return torch.full(shape, value, requires_grad=True)
+    """A single-frame batch (b=1) of constant logits, gradient-tracked, for the batched loss."""
+    return torch.full((1, *shape), value, requires_grad=True)
 
 
 def test_detection_loss():
     """A single GT voxel against all-zero logits yields a finite, positive, differentiable loss."""
     logits = _flat_logits((4, 4, 4), 0.0)
-    coords = torch.tensor([[1, 1, 1]])
-    loss = TUNetDetectorTrainer._detection_loss(logits, coords, neg_weight=1e-2)
+    centres = [torch.tensor([[1, 1, 1]])]
+    loss = TUNetDetectorTrainer._detection_loss(logits, centres, neg_weight=1e-2)
     assert torch.isfinite(loss) and loss.item() > 0
     loss.backward()
     assert logits.grad is not None
 
 
+def test_detection_loss_averages_over_the_batch():
+    """Two identical frames in a batch give the same loss as one — the mean keeps the scale lr-invariant."""
+    centre = torch.tensor([[1, 1, 1]])
+    one = TUNetDetectorTrainer._detection_loss(_flat_logits((4, 4, 4), 0.0), [centre], 1e-2).item()
+    two = TUNetDetectorTrainer._detection_loss(
+        torch.full((2, 4, 4, 4), 0.0, requires_grad=True), [centre, centre], 1e-2
+    ).item()
+    assert abs(one - two) < 1e-5
+
+
 def test_confident_correct_prediction_beats_confident_wrong_one():
     """Firing high on the GT voxel and low elsewhere scores a lower loss than the inverse."""
-    coords = torch.tensor([[1, 1, 1]])
-    right = torch.full((4, 4, 4), -6.0)
-    right[1, 1, 1] = 6.0
-    wrong = torch.full((4, 4, 4), 6.0)
-    wrong[1, 1, 1] = -6.0
-    lower = TUNetDetectorTrainer._detection_loss(right, coords, 1e-2).item()
-    higher = TUNetDetectorTrainer._detection_loss(wrong, coords, 1e-2).item()
+    centres = [torch.tensor([[1, 1, 1]])]
+    right = torch.full((1, 4, 4, 4), -6.0)
+    right[0, 1, 1, 1] = 6.0
+    wrong = torch.full((1, 4, 4, 4), 6.0)
+    wrong[0, 1, 1, 1] = -6.0
+    lower = TUNetDetectorTrainer._detection_loss(right, centres, 1e-2).item()
+    higher = TUNetDetectorTrainer._detection_loss(wrong, centres, 1e-2).item()
     assert lower < higher
 
 
 def test_out_of_bounds_coordinates_are_ignored():
     """GT coordinates outside the downsampled grid are dropped rather than indexing out of range."""
     logits = _flat_logits((4, 4, 4), 0.0)
-    coords = torch.tensor([[1, 1, 1], [99, 0, 0], [-1, 0, 0]])
-    assert torch.isfinite(TUNetDetectorTrainer._detection_loss(logits, coords, neg_weight=1e-2))
+    centres = [torch.tensor([[1, 1, 1], [99, 0, 0], [-1, 0, 0]])]
+    assert torch.isfinite(TUNetDetectorTrainer._detection_loss(logits, centres, neg_weight=1e-2))
 
 
 def test_empty_coordinates_give_an_all_negative_finite_loss():
     """A frame with no GT nodes is all negatives — the loss is defined and finite, not a divide-by-zero."""
     logits = _flat_logits((4, 4, 4), 0.0)
-    coords = torch.empty((0, 3), dtype=torch.long)
-    assert torch.isfinite(TUNetDetectorTrainer._detection_loss(logits, coords, neg_weight=1e-2))
+    centres = [torch.empty((0, 3), dtype=torch.long)]
+    assert torch.isfinite(TUNetDetectorTrainer._detection_loss(logits, centres, neg_weight=1e-2))
 
 
 def test_config_defaults_to_pilkwangs_recipe():
@@ -131,6 +142,7 @@ def _cpu_config() -> TUNetTrainConfig:
         device="cpu",
         threads=2,
         prefetch=2,
+        batch_size=2,
         eval_every=2,
         eval_threshold=0.0,
         recipe=DetectorRecipe(downsample=(1, 1, 1), pool_kernel_um=1.0, tta=False),

@@ -117,3 +117,24 @@ class FrameDataset(Dataset[tuple[Tensor, Tensor]]):
                 yield item
             while pending:
                 yield pending.popleft().result()
+
+    def batches(
+        self, threads: int, prefetch: int, batch_size: int
+    ) -> Iterator[tuple[Float[Tensor, "b z y x"], list[Int[Tensor, "n 3"]]]]:
+        """Group the frame stream into fixed-size batches — frames stacked (one shape), centres left ragged.
+
+        Every fold-train frame is the same downsampled shape, so the volumes stack into a single `(b, z, y, x)`
+        tensor the detector forwards in one pass; the per-frame centre counts differ, so those stay a list the
+        loss scatters per item. A short final batch is yielded as-is rather than dropped.
+        """
+        frames: list[Float[Tensor, "z y x"]] = []
+        centres: list[Int[Tensor, "n 3"]] = []
+        for frame, coords in self.stream(threads, prefetch):
+            frames.append(frame)
+            centres.append(coords)
+            if len(frames) == batch_size:
+                yield torch.stack(frames), centres
+                frames = []  # a new list, not clear(): the yielded `centres` is held by reference downstream
+                centres = []
+        if frames:
+            yield torch.stack(frames), centres
