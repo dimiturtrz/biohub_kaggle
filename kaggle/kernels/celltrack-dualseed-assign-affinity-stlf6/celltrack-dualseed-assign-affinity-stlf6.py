@@ -72,6 +72,13 @@ _CONFIG = TrackerConfig(
     linker=LinkerConfig(name="assignment", gate_um=_GATE_UM, affinity_bonus=_EDGE_BONUS),
     min_track_length=7,
     rescue=ShortTrackRescueConfig(),
+    # THE single variable under test vs v21 (same base: thr0.97, gate10, bonus20, min7, rescue, smooth0.8).
+    # A component touching the first or last observed frame is one the CLIP truncated, not the detector:
+    # a cell entering at frame 96 of 100 cannot reach min_track_length however real it is, yet the hidden
+    # annotation still scores its edges. Proxy reads -0.0005 (a tie) because our sparse annotation cannot
+    # see those tracks at all - the same blind spot that made the confidence rescue proxy-neutral. Only
+    # the LB can arbitrate a recall lever here.
+    keep_boundary_tracks=True,
 )
 _SUBMISSION = Path("/kaggle/working/submission.csv")
 
