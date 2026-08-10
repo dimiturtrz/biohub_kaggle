@@ -16,8 +16,8 @@ import torch
 from jaxtyping import Float, Int
 from torch import Tensor, nn
 
-from celltrack.detectors.tunet import TemporalUNetDetector
-from celltrack.edges.edge_scoring import EdgeTransformerScorer
+from celltrack.models.edge_transformer import EdgeTransformerScorer
+from celltrack.models.temporal_unet_detector import TemporalUNetDetector
 
 
 class JointModel(nn.Module):

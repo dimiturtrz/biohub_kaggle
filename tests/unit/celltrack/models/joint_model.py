@@ -7,9 +7,9 @@ in `conftest` stand in with the same shape contracts, so this exercises the join
 
 import torch
 
-from celltrack.detectors.tunet import TemporalUNetDetector
-from celltrack.edges.edge_scoring import _POS_EMBED_DIM, EdgeTransformerScorer
-from celltrack.training.joint_model import JointModel
+from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeTransformerScorer
+from celltrack.models.joint_model import JointModel
+from celltrack.models.temporal_unet_detector import TemporalUNetDetector
 
 
 def _joint_model() -> JointModel:

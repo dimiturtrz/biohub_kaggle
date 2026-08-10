@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 import torch
 
-from celltrack.edges.edge_scoring import EdgeTransformerScorer
+from celltrack.models.edge_transformer import EdgeTransformerScorer
 from celltrack.training import edge_finetune
 from celltrack.training.edge_finetune import (
     EdgeFinetuneConfig,

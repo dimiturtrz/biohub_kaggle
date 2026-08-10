@@ -30,13 +30,13 @@ from torch import Tensor, nn
 from torch.nn.attention import SDPBackend, sdpa_kernel
 
 from celltrack.data.joint_dataset import PairDataset, PairTarget
-from celltrack.detectors.tunet import TemporalUNetDetector
-from celltrack.edges.edge_scoring import _POS_EMBED_DIM, EdgeTransformerScorer
 from celltrack.eval.bracket import ValidationFold
 from celltrack.losses.balanced_bce import BalancedBCE
 from celltrack.losses.softmax_focal_bce import SoftmaxFocalBCE
+from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeTransformerScorer
+from celltrack.models.joint_model import JointModel
+from celltrack.models.temporal_unet_detector import TemporalUNetDetector
 from celltrack.training.early_stop import EarlyStop
-from celltrack.training.joint_model import JointModel
 from celltrack.training.tunet_detector import _Optimization
 from core.data.split import AcquisitionFolds
 from core.data.tracks import AnnotatedTracks

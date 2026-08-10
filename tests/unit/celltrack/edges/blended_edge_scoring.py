@@ -11,9 +11,9 @@ import numpy as np
 import torch
 import zarr
 
-from celltrack.detectors.tunet import DetectorRecipe, TemporalUNetDetector
 from celltrack.edges.blended_edge_scoring import BlendedEdgeTransformerScorer
-from celltrack.edges.edge_scoring import EdgeTransformerScorer
+from celltrack.models.edge_transformer import EdgeTransformerScorer
+from celltrack.models.temporal_unet_detector import DetectorRecipe, TemporalUNetDetector
 from core.data.tracks import TrackGraph
 
 _RECIPE = DetectorRecipe(downsample=(1, 1, 1), pool_kernel_um=1.0, tta=False)

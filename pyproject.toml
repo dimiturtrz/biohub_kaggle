@@ -223,7 +223,7 @@ source_modules = ["core"]
 forbidden_modules = ["celltrack"]
 
 [[tool.importlinter.contracts]]
-name = "celltrack layers: detectors is the base; edges/linkers/postproc are independent siblings above it; tracker over those; eval/training on top"
+name = "celltrack layers: models holds the nn.Module defs at the base; detectors/edges/linkers/postproc use them; tracker over those; eval/training on top"
 type = "layers"
 containers = ["celltrack"]
 layers = [
@@ -232,7 +232,7 @@ layers = [
     "tracker",
     "edges | linkers | postproc",
     "detectors",
-    "losses | data | affinity",
+    "losses | data | models | affinity",
 ]
 # <<< LOCAL-SLOT: import-contracts
 

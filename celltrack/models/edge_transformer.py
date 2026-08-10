@@ -3,7 +3,7 @@
 The detector half of the pilkwang pack (`unet.*` + `detect_head.*`) gives us cell centres; the same pack
 carries a third head we have not used — a `SimpleNodeTransformer` that scores every source→target pair
 across a frame gap from the UNet feature vectors at the two centres plus a sinusoidal position embedding.
-This mounts that head the same way `tunet.py` mounts the detector (their architecture from the pinned
+This mounts that head the same way the detector mounts the backbone (their architecture from the pinned
 `external/` checkout, the weights and the inference recipe ours), and turns it into an `EdgeAffinity`: a
 per-gap probability matrix aligned to the linker's node order, ready to blend into the assignment cost.
 
@@ -24,7 +24,7 @@ import torch
 from jaxtyping import Float
 from torch import Tensor, nn
 
-from celltrack.detectors.tunet import _EXT_SRC, DetectorRecipe, TemporalUNetDetector, _VideoSource
+from celltrack.models.temporal_unet_detector import _EXT_SRC, DetectorRecipe, TemporalUNetDetector, _VideoSource
 from core.data.tracks import TrackGraph
 
 _POS_EMBED_DIM = 8

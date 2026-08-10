@@ -15,8 +15,8 @@ import numpy as np
 import torch
 from jaxtyping import Float
 
-from celltrack.detectors.tunet import TemporalUNetDetector
-from celltrack.edges.edge_scoring import EdgeTransformerScorer, PrecomputedEdgeAffinity
+from celltrack.models.edge_transformer import EdgeTransformerScorer, PrecomputedEdgeAffinity
+from celltrack.models.temporal_unet_detector import TemporalUNetDetector
 from core.data.tracks import TrackGraph
 
 
