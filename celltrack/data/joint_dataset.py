@@ -9,10 +9,15 @@ annotated link joins a node at `t` to one at `t + 1`.
 Each item reads both frames lazily (quantile-normalised, downsampled — the same recipe as the detector) and
 returns them with the two centre sets and the `s x u` edge matrix. Node counts vary per pair, so the matrix
 is ragged across items — the trainer processes a pair (or a padded batch), not a stacked tensor.
+
+A pair can also carry its PREDECESSOR — frame `t - 1` and that frame's annotated centres — which is what the
+prior-velocity feature needs to ask where each source was already heading (see `celltrack.models.prior_velocity`).
+It is served only when asked for (`with_previous`), because it costs a third frame read per item; the first
+annotated pair of a video has no predecessor at all, and says so with `None` rather than with an empty array.
 """
 
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import override
 
@@ -37,6 +42,9 @@ class PairTarget:
     source_centres: Int[np.ndarray, "s 3"]  # downsampled (z, y', x') at t
     target_centres: Int[np.ndarray, "u 3"]  # downsampled (z, y', x') at t + 1
     edge_matrix: Float[np.ndarray, "s u"]  # 1 where an annotated link joins a source to a target
+    # The annotated centres at `t - 1`, or None when this is the video's first annotated frame — the prior
+    # gap the sources' velocity is read off. `None` is the explicit "no history" case, not an empty array.
+    previous_centres: Int[np.ndarray, "p 3"] | None = None
 
     @classmethod
     def enumerate(cls, graph: TrackGraph, zarr_path: Path, q_low: float, q_high: float) -> list["PairTarget"]:
@@ -46,6 +54,9 @@ class PairTarget:
         `t + 1`. The edge matrix is read off the GT edges directly — no matching — so `[i, j] = 1` exactly when
         the annotation links the `i`-th source node to the `j`-th target node. Centres are full-resolution voxels
         (the model divides by the downsample, mirroring the inference scorer's `_gap_logits`).
+
+        `t - 1`'s annotated centres ride along when that frame has any, so a pair knows its own history without
+        a second pass over the graph; the video's first annotated frame keeps `None`.
         """
         timepoints = graph.timepoints()
         positions = graph.positions()
@@ -56,6 +67,7 @@ class PairTarget:
             target_rows = np.flatnonzero(timepoints == timepoint + 1)
             if not (len(source_rows) and len(target_rows)):
                 continue
+            previous_rows = np.flatnonzero(timepoints == timepoint - 1)
             targets.append(
                 cls(
                     zarr_path=zarr_path,
@@ -65,6 +77,7 @@ class PairTarget:
                     source_centres=positions[source_rows].astype(np.int64),
                     target_centres=positions[target_rows].astype(np.int64),
                     edge_matrix=cls._edge_matrix(edge_rows, source_rows, target_rows),
+                    previous_centres=positions[previous_rows].astype(np.int64) if len(previous_rows) else None,
                 )
             )
         return targets
@@ -84,18 +97,54 @@ class PairTarget:
         return matrix
 
 
-class PairDataset(Dataset[tuple[Tensor, Tensor, Tensor, Tensor, Tensor]]):
+@dataclass(frozen=True)
+class PairSample:
+    """One pair as tensors — both frames, both centre sets, the edge matrix, and the predecessor when served.
+
+    Named rather than a positional tuple because the predecessor half is optional: a seven-slot tuple whose
+    last two entries are sometimes `None` is exactly the shape a caller unpacks wrong once.
+    """
+
+    frame_t: Float[Tensor, "z y x"]
+    frame_t1: Float[Tensor, "z y x"]
+    source_centres: Int[Tensor, "s 3"]
+    target_centres: Int[Tensor, "u 3"]
+    edge_matrix: Float[Tensor, "s u"]
+    previous_frame: Float[Tensor, "z y x"] | None = None
+    previous_centres: Int[Tensor, "p 3"] | None = None
+
+    @property
+    def has_previous(self) -> bool:
+        """Whether this pair carries the `t - 1` gap — false for a video's first pair, and whenever unasked for."""
+        return self.previous_frame is not None and self.previous_centres is not None
+
+    def to(self, device: str) -> "PairSample":
+        """The same sample with every tensor it holds moved to `device`; absent predecessor stays absent."""
+        moved = {name: value.to(device) for name, value in vars(self).items() if isinstance(value, Tensor)}
+        return replace(self, **moved)
+
+
+class PairDataset(Dataset[PairSample]):
     """A stream of `steps` GT pairs sampled uniformly, both frames read lazily per access.
 
     Iteration stays uniform-with-replacement; `pair` exists for a caller that has ALREADY chosen which pair it
     wants (a difficulty sampler picks the index, the dataset still owns how a pair becomes tensors).
     """
 
-    def __init__(self, targets: list[PairTarget], steps: int, downsample: tuple[int, int, int], seed: int) -> None:
+    def __init__(
+        self,
+        targets: list[PairTarget],
+        steps: int,
+        downsample: tuple[int, int, int],
+        seed: int,
+        *,
+        with_previous: bool = False,
+    ) -> None:
         self._targets = targets
         self._steps = steps
         self._downsample = downsample
         self._seed = seed
+        self._with_previous = with_previous
 
     def __len__(self) -> int:
         return self._steps
@@ -106,21 +155,35 @@ class PairDataset(Dataset[tuple[Tensor, Tensor, Tensor, Tensor, Tensor]]):
         return len(self._targets)
 
     @override
-    def __getitem__(self, index: int) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
+    def __getitem__(self, index: int) -> PairSample:
         """Sample one pair (seeded by index): both normalised frames, both centre sets, and the edge matrix."""
         rng = np.random.default_rng(self._seed + index)
         return self.pair(int(rng.integers(len(self._targets))))
 
-    def pair(self, target_index: int) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
+    def pair(self, target_index: int) -> PairSample:
         """One SPECIFIC pair by corpus index: both normalised frames, both centre sets, and the edge matrix."""
         target = self._targets[target_index]
-        return (
-            self._frame(target, target.timepoint),
-            self._frame(target, target.timepoint + 1),
-            torch.from_numpy(target.source_centres),
-            torch.from_numpy(target.target_centres),
-            torch.from_numpy(target.edge_matrix),
+        previous_frame, previous_centres = self._previous(target)
+        return PairSample(
+            frame_t=self._frame(target, target.timepoint),
+            frame_t1=self._frame(target, target.timepoint + 1),
+            source_centres=torch.from_numpy(target.source_centres),
+            target_centres=torch.from_numpy(target.target_centres),
+            edge_matrix=torch.from_numpy(target.edge_matrix),
+            previous_frame=previous_frame,
+            previous_centres=previous_centres,
         )
+
+    def _previous(self, target: PairTarget) -> tuple[Float[Tensor, "z y x"] | None, Int[Tensor, "p 3"] | None]:
+        """Frame `t - 1` and its annotated centres — `(None, None)` when unasked for, or when there is no `t - 1`.
+
+        The extra frame read is a third of this item's decode cost, so it happens only for a run that consumes
+        it; a pair whose predecessor carries no annotation is indistinguishable here from one that has no
+        predecessor at all, and both degrade to the same zero velocity downstream.
+        """
+        if not self._with_previous or target.previous_centres is None:
+            return None, None
+        return self._frame(target, target.timepoint - 1), torch.from_numpy(target.previous_centres)
 
     def _frame(self, target: PairTarget, timepoint: int) -> Float[Tensor, "z y x"]:
         """One quantile-normalised, downsampled, non-negative frame of the pair."""
@@ -130,7 +193,7 @@ class PairDataset(Dataset[tuple[Tensor, Tensor, Tensor, Tensor, Tensor]]):
         normed = (torch.from_numpy(raw) - target.q_low) / (target.q_high - target.q_low + 1e-6)
         return normed.clamp(0.0)
 
-    def stream(self) -> Iterator[tuple[Tensor, Tensor, Tensor, Tensor, Tensor]]:
+    def stream(self) -> Iterator[PairSample]:
         """Yield every pair once, in index order — reproducible; batching is the trainer's job (ragged matrices)."""
         for index in range(self._steps):
             yield self[index]

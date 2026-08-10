@@ -31,19 +31,41 @@ def test_enumerate():
     assert target.edge_matrix.tolist() == [[1.0, 0.0], [0.0, 0.0]]
 
 
-def _dataset(video_store: Path) -> PairDataset:
+def _three_frame_graph() -> TrackGraph:
+    """One node per timepoint at t=0,1,2, linked in a chain — so the pair at t=1 has a real predecessor."""
+    node_ids = np.array([0, 1, 2], dtype=np.int64)
+    coordinates = np.array([[0, 0, 0, 0], [1, 1, 1, 1], [2, 1, 2, 2]], dtype=np.int64)
+    edges = np.array([[0, 1], [1, 2]], dtype=np.int64)
+    return TrackGraph(node_ids=node_ids, coordinates=coordinates, edges=edges)
+
+
+def test_enumerate_carries_the_predecessors_centres():
+    """The pair at t=1 knows t=0's annotated centres; the video's FIRST pair has no predecessor and says so."""
+    first, second = PairTarget.enumerate(_three_frame_graph(), Path("v.zarr"), q_low=0.0, q_high=1.0)
+
+    assert first.previous_centres is None
+    assert second.previous_centres is not None
+    assert second.previous_centres.tolist() == [[0, 0, 0]]
+
+
+def _target(video_store: Path, timepoint: int = 0, previous: np.ndarray | None = None) -> PairTarget:
+    """One synthetic pair over the tiny video fixture, optionally carrying a predecessor's centres."""
     statistics = cast(ImageStatistics, zarr.open_group(video_store, mode="r").attrs["image_statistics"])
     quantiles = statistics["quantiles"]
-    target = PairTarget(
+    return PairTarget(
         zarr_path=video_store,
-        timepoint=0,
+        timepoint=timepoint,
         q_low=float(quantiles["0.001"]),
         q_high=float(quantiles["0.999"]),
         source_centres=np.array([[1, 2, 2]], dtype=np.int64),
         target_centres=np.array([[1, 2, 2], [0, 1, 1]], dtype=np.int64),
         edge_matrix=np.array([[1.0, 0.0]], dtype=np.float32),
+        previous_centres=previous,
     )
-    return PairDataset([target], steps=4, downsample=(1, 1, 1), seed=0)
+
+
+def _dataset(video_store: Path) -> PairDataset:
+    return PairDataset([_target(video_store)], steps=4, downsample=(1, 1, 1), seed=0)
 
 
 def test_len(video_store: Path):
@@ -52,12 +74,45 @@ def test_len(video_store: Path):
 
 
 def test_getitem(video_store: Path):
-    """An item is (frame_t, frame_t1, source_centres, target_centres, edge_matrix) with matching shapes."""
-    frame_t, frame_t1, sources, targets, matrix = _dataset(video_store)[0]
-    assert frame_t.ndim == 3 and frame_t1.ndim == 3
-    assert torch.all(frame_t >= 0.0) and torch.all(frame_t1 >= 0.0)
-    assert sources.shape == (1, 3) and targets.shape == (2, 3)
-    assert matrix.shape == (1, 2)
+    """An item carries both frames, both centre sets and the edge matrix — and no predecessor unless asked."""
+    sample = _dataset(video_store)[0]
+    assert sample.frame_t.ndim == 3 and sample.frame_t1.ndim == 3
+    assert torch.all(sample.frame_t >= 0.0) and torch.all(sample.frame_t1 >= 0.0)
+    assert sample.source_centres.shape == (1, 3) and sample.target_centres.shape == (2, 3)
+    assert sample.edge_matrix.shape == (1, 2)
+    assert sample.has_previous is False
+
+
+def test_has_previous(video_store: Path):
+    """A pair at t=1 whose t=0 is annotated serves that frame and its centres — the prior gap the velocity needs."""
+    target = _target(video_store, timepoint=1, previous=np.array([[0, 1, 1]], dtype=np.int64))
+    dataset = PairDataset([target], steps=1, downsample=(1, 1, 1), seed=0, with_previous=True)
+
+    sample = dataset.pair(0)
+
+    assert sample.has_previous
+    assert sample.previous_frame is not None and sample.previous_centres is not None
+    assert sample.previous_frame.shape == sample.frame_t.shape
+    assert sample.previous_centres.tolist() == [[0, 1, 1]]
+    frame_zero = PairDataset([_target(video_store)], steps=1, downsample=(1, 1, 1), seed=0).pair(0).frame_t
+    assert torch.equal(sample.previous_frame, frame_zero)  # the pair at t=1 reads frame 0 as its predecessor
+
+
+def test_pair_has_no_predecessor_for_a_videos_first_pair(video_store: Path):
+    """Asked for history a first pair does not have, the sample is explicitly empty rather than silently zeroed."""
+    dataset = PairDataset([_target(video_store)], steps=1, downsample=(1, 1, 1), seed=0, with_previous=True)
+
+    sample = dataset.pair(0)
+
+    assert sample.previous_frame is None and sample.previous_centres is None
+    assert sample.has_previous is False
+
+
+def test_to(video_store: Path):
+    """Moving a sample without history leaves the absent halves absent — no zero tensor invented on the way."""
+    moved = _dataset(video_store)[0].to("cpu")
+    assert moved.previous_frame is None
+    assert moved.edge_matrix.device.type == "cpu"
 
 
 def test_target_count(video_store: Path):
@@ -69,7 +124,8 @@ def test_pair(video_store: Path):
     """A chosen pair's tensors are the same ones the uniform draw would have produced for that corpus index."""
     dataset = _dataset(video_store)
     chosen, drawn = dataset.pair(0), dataset[0]
-    assert all(torch.equal(a, b) for a, b in zip(chosen, drawn, strict=True))
+    assert torch.equal(chosen.frame_t, drawn.frame_t)
+    assert torch.equal(chosen.edge_matrix, drawn.edge_matrix)
 
 
 def test_stream(video_store: Path):
@@ -77,4 +133,4 @@ def test_stream(video_store: Path):
     dataset = _dataset(video_store)
     streamed = list(dataset.stream())
     assert len(streamed) == 4
-    assert torch.equal(streamed[0][0], dataset[0][0])
+    assert torch.equal(streamed[0].frame_t, dataset[0].frame_t)

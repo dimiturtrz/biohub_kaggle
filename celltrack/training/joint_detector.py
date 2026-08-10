@@ -41,7 +41,7 @@ from torch import Tensor, nn
 from torch.nn.attention import SDPBackend, sdpa_kernel
 
 from celltrack.data.difficulty_sampler import DifficultySampler
-from celltrack.data.joint_dataset import PairDataset, PairTarget
+from celltrack.data.joint_dataset import PairDataset, PairSample, PairTarget
 from celltrack.detectors.tunet import DetectorRecipe
 from celltrack.eval.model_evaluator import ModelEvaluator
 from celltrack.eval.proxy import TEST_MOVIES, VALIDATION_MOVIES, TestMovieProxy
@@ -53,6 +53,7 @@ from celltrack.models.joint_model import JointModel
 from celltrack.models.temporal_unet_detector import TemporalUNetDetector
 from celltrack.tracker import TrackerConfig
 from celltrack.training.early_stop import EarlyStop
+from celltrack.training.prior_velocity_source import PriorVelocitySource
 from celltrack.training.run_tracking import RunSetup, TrainingRun, TrainingSplit
 from celltrack.training.tunet_detector import _Optimization
 from core.data.tracks import AnnotatedTracks
@@ -77,8 +78,6 @@ _HIDDEN_DIM, _N_HEADS, _N_BLOCKS = 128, 4, 4
 _POS_FEATURE_DIM = 4 * _POS_EMBED_DIM  # sinusoidal embed of (t, z, y, x)
 # Each epoch-scale field and the step-scale field it replaces when set, so an override is logged, never silent.
 _EPOCH_OVERRIDES = (("epochs", "steps"), ("evals_per_epoch", "eval_every"), ("patience_epochs", "patience"))
-
-Pair = tuple[Tensor, Tensor, Tensor, Tensor, Tensor]
 
 
 @dataclass(frozen=True)
@@ -129,6 +128,12 @@ class JointTrainConfig:
     # Draw each step's pair in proportion to its measured top-1 defect instead of uniformly with replacement
     # (see `DifficultySampler`). Off by default: with it off the loop is the uniform stream of yesterday.
     difficulty_sampling: bool = False
+    # Feed each source its PRIOR displacement (t-1 -> t) as three extra head-input columns, so the pair head can
+    # ask whether a candidate continues the motion the cell was already on — the axis behind our documented
+    # association failure (a fast mover's true successor lands FAR while a slower neighbour sits NEAR, and both
+    # distance and the learned probability pick the near-wrong cell). Off by default and byte-identical off.
+    # COSTS ~50% more wall-clock per step: an extra frame decode plus one extra no-grad backbone forward.
+    prior_velocity: bool = False
     # The epoch scale. The loop consumes ONE GT pair per step, so a pass over the corpus is `len(train_targets)`
     # steps — DERIVED from the split, never configured, since a hand-set value rots the moment the split moves.
     # Unset (None) leaves the step-scale fields above exactly as given; set, each one wins over its raw twin.
@@ -268,17 +273,7 @@ class JointTrainer:
         save_to = setup.save_to
         torch.set_float32_matmul_precision("high")  # TF32 on the fp32 matmuls the bf16 autocast leaves alone
         torch.backends.cudnn.benchmark = True  # one static frame shape — cudnn picks the fastest algo once
-        model = self._model(warm_start=setup.warm_start).to(self.config.device)
-        if self.config.device == "cuda":
-            # channels_last_3d is a lossless layout that measured faster on the feature convs. torch stubs
-            # omit the memory_format overload of Module.to; the call is runtime-valid.
-            model = model.to(memory_format=torch.channels_last_3d)  # type: ignore[no-matching-overload]
-        if self.config.compile_backbone:
-            # Compile the backbone (static shape); the temporal-attention SDPA is forced to MATH at forward
-            # time (see `_step`) — its efficient backward has a broken compiled meta-kernel.
-            model.detector.unet = torch.compile(model.detector.unet, dynamic=False)  # type: ignore[bad-assignment]
-        optimizer = torch.optim.AdamW(model.parameters(), lr=self.config.lr)
-        optimization = _Optimization(optimizer, self._schedule(optimizer))
+        model, optimization = self._prepare(warm_start=setup.warm_start)
 
         run = TrainingRun.open(asdict(self.config), setup)
         resume_path = save_to.with_suffix(".resume.pt")
@@ -292,7 +287,13 @@ class JointTrainer:
         sampler = self._sampler(pairs.train)
         while done < self.config.steps:
             window = min(self.config.eval_every, self.config.steps - done)
-            dataset = PairDataset(pairs.train, window, self.config.downsample, self.config.seed + done)
+            dataset = PairDataset(
+                pairs.train,
+                window,
+                self.config.downsample,
+                self.config.seed + done,
+                with_previous=self.config.prior_velocity,
+            )
             losses = self._run_window(model, optimization, dataset, sampler)
             done += window
             result = self._evaluate(model, evaluator, pairs.val)
@@ -372,6 +373,32 @@ class JointTrainer:
             return None
         return torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.config.steps)
 
+    def _prepare(self, *, warm_start: bool) -> tuple[JointModel, _Optimization]:
+        """The run's trained objects, built in the one order that keeps BOTH a warm start and a widened head.
+
+        The order is load-bearing. `widen_linear_inputs` REPLACES the head's input projection with a new
+        parameter object, so the sequence must be: build at the published width → load the pretrained weights
+        into it → widen → and only then hand `model.parameters()` to the optimiser. An optimiser constructed
+        before the widening would hold the discarded projection and train nothing through it, in silence.
+        """
+        model = self._model(warm_start=warm_start).to(self.config.device)
+        self._velocity.widen(model)
+        if self.config.device == "cuda":
+            # channels_last_3d is a lossless layout that measured faster on the feature convs. torch stubs
+            # omit the memory_format overload of Module.to; the call is runtime-valid.
+            model = model.to(memory_format=torch.channels_last_3d)  # type: ignore[no-matching-overload]
+        if self.config.compile_backbone:
+            # Compile the backbone (static shape); the temporal-attention SDPA is forced to MATH at forward
+            # time (see `_step`) — its efficient backward has a broken compiled meta-kernel.
+            model.detector.unet = torch.compile(model.detector.unet, dynamic=False)  # type: ignore[bad-assignment]
+        optimizer = torch.optim.AdamW(model.parameters(), lr=self.config.lr)
+        return model, _Optimization(optimizer, self._schedule(optimizer))
+
+    @property
+    def _velocity(self) -> PriorVelocitySource:
+        """The run's history feed, reading the flag live — `train` re-resolves the config before the model exists."""
+        return PriorVelocitySource(enabled=self.config.prior_velocity)
+
     def _model(self, *, warm_start: bool) -> JointModel:
         """A joint model to train — warm-started from the published pack, or fresh at the configured size."""
         if warm_start:
@@ -420,7 +447,9 @@ class JointTrainer:
         means = {name: total / divisor for name, total in sums.items()}
         return {**means, "it_per_s": done / (time.perf_counter() - t0), **self._sampling(sampler)}
 
-    def _pairs(self, dataset: PairDataset, sampler: DifficultySampler | None) -> Iterator[tuple[int | None, Pair]]:
+    def _pairs(
+        self, dataset: PairDataset, sampler: DifficultySampler | None
+    ) -> Iterator[tuple[int | None, PairSample]]:
         """The window's pairs, each with the corpus index that produced it — `None` on the untouched uniform stream."""
         if sampler is None:
             yield from ((None, pair) for pair in dataset.stream())
@@ -441,7 +470,7 @@ class JointTrainer:
             return {}
         return {"coverage": sampler.coverage(), "sampling_entropy": sampler.entropy()}
 
-    def _step(self, model: JointModel, optimization: _Optimization, pair: Pair) -> _PairOutcome:
+    def _step(self, model: JointModel, optimization: _Optimization, pair: PairSample) -> _PairOutcome:
         """One optimisation step over a single GT pair; returns that pair's loss terms and edge tensors."""
         outcome = self._losses(model, pair)
         optimization.zero_grad()
@@ -450,7 +479,7 @@ class JointTrainer:
         optimization.step()
         return outcome
 
-    def _losses(self, model: JointModel, pair: Pair) -> _PairOutcome:
+    def _losses(self, model: JointModel, pair: PairSample) -> _PairOutcome:
         """The loss tensors for one pair — shared by the training step and the no-grad eval.
 
         Positions reach the model at FULL resolution (it divides by the downsample for the feature grid,
@@ -458,14 +487,16 @@ class JointTrainer:
         centres are divided here to match.
         """
         device = self.config.device
-        frame_t, frame_t1, source_centres, target_centres, edge_matrix = (item.to(device) for item in pair)
+        sample = pair.to(device)
+        velocity = self._velocity.of(model, sample, self._autocast())
+        source_centres, target_centres, edge_matrix = sample.source_centres, sample.target_centres, sample.edge_matrix
         downsample = torch.tensor(self.config.downsample, dtype=torch.float32, device=device)
         centres_t_grid = (source_centres.to(torch.float32) / downsample).round().long()
         centres_t1_grid = (target_centres.to(torch.float32) / downsample).round().long()
         # Under compile, pin SDPA to the math backend so inductor traces its clean composite backward; no-op eager.
         attention = sdpa_kernel(SDPBackend.MATH) if self.config.compile_backbone else contextlib.nullcontext()
-        with attention, torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=device == "cuda"):
-            out = model.forward(frame_t, frame_t1, source_centres, target_centres)
+        with attention, self._autocast():
+            out = model.forward(sample.frame_t, sample.frame_t1, source_centres, target_centres, velocity)
             edge = SoftmaxFocalBCE.of(out.edge_logits, edge_matrix)
             ignore = self.config.ignore_ambiguous_above
             det = BalancedBCE.of(
@@ -477,6 +508,10 @@ class JointTrainer:
             loss = edge + self.config.det_weight * det + self.config.contrastive_weight * contrastive
         ignored = self._ignored((out.detection_t, centres_t_grid), (out.detection_t1, centres_t1_grid))
         return _PairOutcome(loss, edge, det, contrastive, out.edge_logits, edge_matrix, ignored)
+
+    def _autocast(self) -> torch.autocast:
+        """The run's precision context — bf16 on CUDA, a no-op elsewhere; one definition for every forward here."""
+        return torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=self.config.device == "cuda")
 
     def _ignored(self, *frames: tuple[Tensor, Tensor]) -> float | None:
         """The pair's mean unsupervised fraction, or `None` when nothing is masked — a sigmoid, no backward."""
@@ -509,10 +544,15 @@ class JointTrainer:
         device = self.config.device
         scored: list[float] = []
         for target in val_targets:
-            pair = PairDataset([target], 1, self.config.downsample, self.config.seed).pair(0)
-            frame_t, frame_t1, sources, sinks, _ = (item.to(device) for item in pair)
-            with torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=device == "cuda"):
-                logits = model.forward(frame_t, frame_t1, sources, sinks).edge_logits
+            corpus = PairDataset(
+                [target], 1, self.config.downsample, self.config.seed, with_previous=self.config.prior_velocity
+            )
+            sample = corpus.pair(0).to(device)
+            velocity = self._velocity.of(model, sample, self._autocast())
+            with self._autocast():
+                logits = model.forward(
+                    sample.frame_t, sample.frame_t1, sample.source_centres, sample.target_centres, velocity
+                ).edge_logits
             auc = EdgeAUC.of(torch.softmax(logits.float(), dim=0).cpu().numpy(), target.edge_matrix)
             if not math.isnan(auc):
                 scored.append(auc)
@@ -562,7 +602,8 @@ class JointTrainer:
         )
 
 
-def main() -> None:
+def _parser() -> argparse.ArgumentParser:
+    """Every flag a joint run takes — kept apart from `main` so the run's WIRING reads as its own short function."""
     parser = argparse.ArgumentParser(description="Train the joint detector+edge model on the non-held-out videos.")
     parser.add_argument("--steps", type=int, default=1500)
     parser.add_argument("--eval-every", type=int, default=500, help="steps per eval window")
@@ -600,6 +641,11 @@ def main() -> None:
         action="store_true",
         help="draw pairs in proportion to their measured top-1 defect instead of uniformly with replacement",
     )
+    parser.add_argument(
+        "--prior-velocity",
+        action="store_true",
+        help="feed each source its t-1 -> t displacement as head input (~50%% slower per step)",
+    )
     # The threshold is DERIVED, not swept: given bare, the flag takes the pipeline's own inference operating
     # point — the response at which the shipped tracker would already have called the voxel a cell, so every
     # voxel the mask spares is one the deployed model detects and our sparse annotation cannot adjudicate.
@@ -617,7 +663,11 @@ def main() -> None:
     parser.add_argument("--eval-threshold", type=float, default=0.5, help="detection threshold of the selector eval")
     parser.add_argument("--resume", action="store_true", help="continue from the .resume.pt snapshot")
     parser.add_argument("--weights", type=str, default="joint_tunet_ours.pt")
-    args = parser.parse_args()
+    return parser
+
+
+def main() -> None:
+    args = _parser().parse_args()
 
     config = JointTrainConfig(
         steps=args.steps,
@@ -637,6 +687,7 @@ def main() -> None:
         eval_threshold=args.eval_threshold,
         compile_backbone=args.compile_backbone,
         difficulty_sampling=args.difficulty_sampling,
+        prior_velocity=args.prior_velocity,
     )
     root = DataRoot.from_config(_CONFIG)
 

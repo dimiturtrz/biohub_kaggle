@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import cast
 
 import numpy as np
+import pytest
 import torch
 import zarr
 
@@ -19,6 +20,9 @@ from celltrack.detectors.tunet import DetectorRecipe
 from celltrack.edges.blended_edge_scoring import BlendedEdgeTransformerScorer
 from celltrack.eval.model_evaluator import ModelEvaluator
 from celltrack.eval.proxy import TestMovieProxy
+from celltrack.models.edge_transformer import _POS_EMBED_DIM
+from celltrack.models.joint_model import JointModel
+from celltrack.models.prior_velocity import PriorVelocity
 from celltrack.tracker import TrackerConfig
 from celltrack.training.joint_detector import JointTrainConfig, JointTrainer, PairSplit, _PairOutcome
 from celltrack.training.run_tracking import RunSetup, TrainingSplit
@@ -165,6 +169,7 @@ def _pairs(video_store: Path) -> list[PairTarget]:
             source_centres=np.array([[0, 0, 0], [1, 3, 3]], dtype=np.int64),
             target_centres=np.array([[1, 3, 3]], dtype=np.int64),
             edge_matrix=np.array([[0.0], [1.0]], dtype=np.float32),
+            previous_centres=np.array([[1, 2, 2]], dtype=np.int64),  # the pair at t=0 is this one's history
         ),
     ]
 
@@ -204,7 +209,8 @@ def test_pairs_leaves_the_uniform_stream_untouched(video_store: Path):
 
     assert [index for index, _ in walked] == [None, None, None]
     for (_, pair), expected in zip(walked, dataset.stream(), strict=True):
-        assert all(torch.equal(actual, want) for actual, want in zip(pair, expected, strict=True))
+        assert torch.equal(pair.frame_t, expected.frame_t)
+        assert torch.equal(pair.edge_matrix, expected.edge_matrix)
 
 
 def test_pairs_draws_through_the_sampler(video_store: Path):
@@ -216,7 +222,7 @@ def test_pairs_draws_through_the_sampler(video_store: Path):
     walked = list(JointTrainer(_cpu_config())._pairs(dataset, sampler))
 
     assert [index for index, _ in walked] == [1, 1, 1, 1]
-    assert torch.equal(walked[0][1][4], dataset.pair(1)[4])
+    assert torch.equal(walked[0][1].edge_matrix, dataset.pair(1).edge_matrix)
 
 
 def test_observe(video_store: Path):
@@ -318,6 +324,64 @@ def test_train_off_is_byte_identical(video_store: Path, in_bounds_tracks: Annota
     """Difficulty sampling off reproduces the uniform run exactly — same draws, same weights, same bytes."""
     default = _trained_bytes(_cpu_config(), video_store, in_bounds_tracks, tmp_path / "default")
     explicit_off = replace(_cpu_config(), difficulty_sampling=False)
+    assert _trained_bytes(explicit_off, video_store, in_bounds_tracks, tmp_path / "off") == default
+
+
+def _velocity_config() -> JointTrainConfig:
+    """The tiny CPU config with the prior-velocity feature on — the only difference from the default run."""
+    return replace(_cpu_config(), prior_velocity=True)
+
+
+def test_config_defaults_to_no_prior_velocity():
+    """History is opt-in: the zero-argument config feeds the head exactly what it fed before the feature existed."""
+    assert JointTrainConfig().prior_velocity is False
+
+
+def test_prepare_widens_the_head_before_building_the_optimizer(video_store: Path):
+    """ORDER: widening replaces the projection object, so the optimiser must be built AFTER it, over the new one.
+
+    Built the other way round the run still trains — it just never moves the live projection, in silence. The
+    pin is identity: the parameter the optimiser holds IS the widened layer's weight, and its new columns
+    start at exactly zero so the (pretrained) head's output is unchanged at step 0.
+    """
+    model, optimization = JointTrainer(_velocity_config())._prepare(warm_start=False)
+    projection = model.transformer.proj
+
+    assert projection.in_features == _cpu_config().out_channels + 4 * _POS_EMBED_DIM + PriorVelocity.DIM
+    optimised = {id(parameter) for group in optimization.optimizer.param_groups for parameter in group["params"]}
+    assert id(projection.weight) in optimised
+    assert not projection.weight[:, -PriorVelocity.DIM :].any()
+
+
+def test_losses_hands_the_velocity_to_the_model(video_store: Path, monkeypatch: pytest.MonkeyPatch):
+    """A pair WITH a predecessor reaches `JointModel.forward` carrying a real, non-zero prior displacement."""
+    trainer = JointTrainer(_velocity_config())
+    model, _ = trainer._prepare(warm_start=False)
+    sample = PairDataset(_pairs(video_store), 1, (1, 1, 1), 0, with_previous=True).pair(1)
+    seen: list[torch.Tensor | None] = []
+    forward = JointModel.forward
+
+    def _recording(self: JointModel, *args: object, **kwargs: object) -> object:
+        seen.append(cast(torch.Tensor | None, args[4] if len(args) > 4 else kwargs.get("source_velocity")))
+        return forward(self, *args, **kwargs)  # pyrefly: ignore[bad-argument-type]
+
+    monkeypatch.setattr(JointModel, "forward", _recording)
+
+    trainer._losses(model, sample)
+
+    assert len(seen) == 2  # the no-grad forward on the previous gap, then the scored pair
+    assert seen[0] is not None and not seen[0].any()  # the previous gap carries no history of its own
+    velocity = seen[1]
+    assert velocity is not None
+    assert velocity.abs().sum() > 0
+
+
+def test_train_prior_velocity_off_is_byte_identical(
+    video_store: Path, in_bounds_tracks: AnnotatedTracks, tmp_path: Path
+):
+    """Off explicitly reproduces the default run exactly — same reads, same head width, same weights, same bytes."""
+    default = _trained_bytes(_cpu_config(), video_store, in_bounds_tracks, tmp_path / "default")
+    explicit_off = replace(_cpu_config(), prior_velocity=False)
     assert _trained_bytes(explicit_off, video_store, in_bounds_tracks, tmp_path / "off") == default
 
 
