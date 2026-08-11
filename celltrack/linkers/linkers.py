@@ -31,6 +31,7 @@ from celltrack.linkers.flow_linking import FlowLinker
 from celltrack.linkers.ilp_linking import ILPLinker
 from celltrack.linkers.linking import Linker, NearestNeighbourLinker
 from celltrack.linkers.motion_linking import MotionHungarianLinker
+from celltrack.linkers.motion_prediction import MotionPrediction
 from celltrack.linkers.mutual_bonus import MutualBonus
 from celltrack.linkers.ranker_bonus import RankerBonus
 from core.geometry import Spacing
@@ -58,6 +59,7 @@ class LinkerParts:
     mutual: MutualBonus | None = None
     ranker: RankerBonus | None = None
     boundary: BoundaryPrior | None = None
+    prediction: MotionPrediction | None = None
 
 
 class LinkerConfig(BaseModel):
@@ -105,6 +107,14 @@ class LinkerConfig(BaseModel):
     # (see `_EXPLAINED_FACTOR`), so this is an on/off claim about the observation window, not a tuning surface.
     # Setting it makes `build` require the video's volume shape.
     boundary_prior: bool = False
+    # OFF = the shipped raw-distance cost, byte for byte. ON prices each candidate by the MOTION-PREDICTED
+    # distance instead (`MotionPrediction`): how far the target is from where the source was already heading,
+    # with the step taken from the previous gap's affinity and damped by the motion linker's argued half step.
+    # The GATE is unchanged — it keeps reading the raw separation, because admissibility is physics and a
+    # prediction is an estimate. There is no strength knob: the damping is argued once in `motion_linking`, so
+    # this is an on/off claim about which geometry the cost is written in, not a tuning surface. Setting it makes
+    # `build` require the edge affinity the velocity is derived from.
+    motion_distance: bool = False
 
     @property
     def effective_bonus(self) -> float:
@@ -153,8 +163,8 @@ class LinkerConfig(BaseModel):
         The context is an INPUT to the features, not part of the swept cost, so pass 1 spends the FULL budget
         (`learned_budget`) on the evidence it does have. Two splits of one budget then produce the identical
         pass-1 config, and hence the identical context graph — the invariance the sweep needs to mean anything.
-        Everything else (gate, floor, mutual bonus) is held, because the context graph only describes "the
-        current best link set" if it was produced by the cost being re-ranked.
+        Everything else (gate, floor, mutual bonus, the cost's geometry) is held, because the context graph only
+        describes "the current best link set" if it was produced by the cost being re-ranked.
         """
         return self.model_copy(update={"ranker_bonus": None, "affinity_bonus": self.learned_budget})
 
@@ -196,6 +206,22 @@ class LinkerConfig(BaseModel):
             raise ValueError(message)
         return self
 
+    @model_validator(mode="after")
+    def _motion_distance_is_readable(self) -> "LinkerConfig":
+        """Refuse the motion-predicted distance on a linker that does not price one — same reason as the prior.
+
+        `motion` already competes on a predicted distance unconditionally and the rest read the raw one, so only
+        the flow linker has a cost this flag can rewrite; anywhere else it would be accepted, silently dropped,
+        and sweep as a flat curve.
+        """
+        if self.motion_distance and self.name not in _MOTION_DISTANCE_READERS:
+            message = (
+                f"linker {self.name!r} does not price a motion-predicted distance, so motion_distance cannot "
+                f"affect it; choose one of {sorted(_MOTION_DISTANCE_READERS)} or drop the flag"
+            )
+            raise ValueError(message)
+        return self
+
     @field_validator("name")
     @classmethod
     def _known_name(cls, name: str) -> str:
@@ -224,7 +250,13 @@ class LinkerConfig(BaseModel):
         """
         if affinity is not None and self.name not in _BONUS_READERS:
             logger.warning("linker %r ignores the mounted edge affinity — it was computed and discarded", self.name)
-        parts = LinkerParts(self._gate(mutual), self._bonus(mutual), self._ranker(ranker), self._boundary(volume_shape))
+        parts = LinkerParts(
+            self._gate(mutual),
+            self._bonus(mutual),
+            self._ranker(ranker),
+            self._boundary(volume_shape),
+            self._prediction(affinity),
+        )
         return _BUILDERS[self.name](self, spacing, affinity, parts)
 
     def _gate(self, mutual: EdgeAffinity | None) -> AgreementGate | None:
@@ -293,6 +325,23 @@ class LinkerConfig(BaseModel):
             raise ValueError(message)
         return BoundaryPrior(volume_shape=volume_shape)
 
+    def _prediction(self, affinity: EdgeAffinity | None) -> MotionPrediction | None:
+        """The cost's motion-predicted geometry — `None` when off, an error without the affinity it reads.
+
+        The predicted step is the previous gap's affinity-weighted expected displacement, so without an affinity
+        every velocity would be exactly zero and the flag would silently reproduce the raw-distance cost — a knob
+        that reports a flat sweep curve because it never actually ran, the same failure the other refusals prevent.
+        """
+        if not self.motion_distance:
+            return None
+        if affinity is None:
+            message = (
+                "motion_distance needs the edge affinity its velocity is derived from (the previous gap's "
+                "source->target probabilities); pass `affinity`, or drop the flag"
+            )
+            raise ValueError(message)
+        return MotionPrediction(affinity=affinity)
+
 
 _Builder = Callable[[LinkerConfig, Spacing, EdgeAffinity | None, LinkerParts], Linker]
 
@@ -325,6 +374,11 @@ _KNOB_READERS: dict[str, frozenset[str]] = {
 # Which linkers price a track boundary per node. Only the flow linker charges appearance and disappearance at all,
 # so it is the only one with a price the boundary prior can modulate.
 _BOUNDARY_PRIOR_READERS = frozenset({"flow"})
+
+# Which linkers can be told which GEOMETRY to price a pair in. `motion` is absent on purpose: it is the linker
+# that already predicts, unconditionally, so the flag would mean nothing there. Only `flow` has a raw-distance
+# cost this can rewrite.
+_MOTION_DISTANCE_READERS = frozenset({"flow"})
 
 _BUILDERS: dict[str, _Builder] = {
     "assignment": lambda config, spacing, affinity, parts: AssignmentLinker(
@@ -367,5 +421,6 @@ _BUILDERS: dict[str, _Builder] = {
         mutual=parts.mutual,
         ranker=parts.ranker,
         boundary=parts.boundary,
+        prediction=parts.prediction,
     ),
 }

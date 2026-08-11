@@ -31,7 +31,9 @@ _BEYOND_GATE = 1.0e9
 # The successor is predicted half a step ahead, not a full one: a full-velocity extrapolation overshoots a
 # cell that is decelerating or turning, and cells here move smoothly rather than ballistically, so a damped
 # prediction tracks the real displacement more closely than a naive constant-velocity one.
-_VELOCITY_DAMPING = 0.5
+# Public because `MotionPrediction` carries the same prediction into the flow linker's cost: the argument is
+# about how these cells move, not about which optimiser reads it, so both must damp by one constant.
+VELOCITY_DAMPING = 0.5
 
 
 @dataclass(frozen=True)
@@ -82,7 +84,7 @@ class MotionHungarianLinker:
         """Source→target row pairs for one frame gap: a tight assignment, then a loose one over the leftovers."""
         if len(sources) == 0 or len(targets) == 0:
             return []
-        predicted = positions_um[sources] + _VELOCITY_DAMPING * velocity[sources]
+        predicted = positions_um[sources] + VELOCITY_DAMPING * velocity[sources]
         cost = self._blended_cost(timepoint, cdist(predicted, positions_um[targets]))
         displacement = cdist(positions_um[sources], positions_um[targets])
         tight = self._assign(cost, displacement <= self.tight_gate_um)

@@ -13,6 +13,7 @@ from celltrack.linkers.ilp_linking import ILPLinker
 from celltrack.linkers.linkers import LINKER_NAMES, LinkerConfig
 from celltrack.linkers.linking import NearestNeighbourLinker
 from celltrack.linkers.motion_linking import MotionHungarianLinker
+from celltrack.linkers.motion_prediction import MotionPrediction
 from celltrack.linkers.mutual_bonus import MutualBonus
 from celltrack.linkers.ranker_bonus import RankerBonus
 from core.data.tracks import TrackGraph
@@ -208,6 +209,38 @@ def test_build_without_the_volume_shape_refuses_the_prior():
 def test_build_leaves_the_boundary_prior_off_by_default():
     """No flag means no prior, even when the volume shape is available — the shipped cost stays flat."""
     assert LinkerConfig(name="flow").build(SPACING, volume_shape=(20, 100, 100)).boundary is None
+
+
+def test_motion_distance_is_readable():
+    """The flag on a linker whose cost it cannot rewrite is refused — including the one that already predicts."""
+    for name in ("assignment", "motion"):
+        with pytest.raises(ValidationError, match="does not price a motion-predicted distance"):
+            LinkerConfig(name=name, motion_distance=True)
+
+    assert LinkerConfig(name="flow", motion_distance=True).motion_distance
+
+
+def test_build_wires_the_motion_predicted_distance_with_the_affinity_its_velocity_reads():
+    """Enabled, the term reaches the flow linker carrying the affinity the previous gap's step is derived from."""
+    affinity = cast(EdgeAffinity, _Mutual())
+    built = LinkerConfig(name="flow", motion_distance=True).build(SPACING, affinity)
+    assert built.prediction == MotionPrediction(affinity=affinity)
+
+
+def test_build_without_the_affinity_refuses_the_motion_predicted_distance():
+    """Without an affinity every velocity would be zero, so the flag is refused rather than silently inert."""
+    with pytest.raises(ValueError, match="needs the edge affinity"):
+        LinkerConfig(name="flow", motion_distance=True).build(SPACING)
+
+
+def test_build_leaves_the_motion_predicted_distance_off_by_default():
+    """No flag means the shipped raw-distance cost, even with an affinity mounted for the learned terms."""
+    assert LinkerConfig(name="flow").build(SPACING, cast(EdgeAffinity, _Mutual())).prediction is None
+
+
+def test_without_ranker_holds_the_cost_geometry():
+    """The context pass links in the SAME geometry as the re-ranked one — only the evidence weights move."""
+    assert LinkerConfig(name="flow", motion_distance=True, ranker_bonus=17.0).without_ranker().motion_distance
 
 
 def test_ranker_bonus_is_readable():

@@ -4,6 +4,7 @@ from celltrack.linkers.agreement_gating import AgreementGate
 from celltrack.linkers.assignment_linking import AssignmentLinker
 from celltrack.linkers.boundary_prior import BoundaryPrior
 from celltrack.linkers.flow_linking import FlowLinker
+from celltrack.linkers.motion_prediction import MotionPrediction
 from celltrack.linkers.mutual_bonus import MutualBonus
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
@@ -185,3 +186,53 @@ def test_link_boundary_prior_off_is_byte_identical():
     assert linked.edges.tobytes() == reference.edges.tobytes()
     assert linked.node_ids.tobytes() == reference.node_ids.tobytes()
     assert linked.coordinates.tobytes() == reference.coordinates.tobytes()
+
+
+# A mover carried +6 um into row 1, then two equally-probable candidates: the true far successor (row 2, 6 um
+# away) and a near neighbour (row 3, 3 um). Raw distance prefers the near one; measured from the damped
+# prediction at x=9 the preference inverts (3 um vs 6 um) with nothing else changed.
+_MOVER_SCENE = [[0, 0, 0, 0], [1, 0, 0, 6], [2, 0, 0, 12], [2, 0, 0, 3]]
+_MOVER_AFFINITY = _Affinity({0: np.array([[1.0]]), 1: np.array([[0.5, 0.5]])})
+
+
+def _mover_flow(prediction: MotionPrediction | None) -> FlowLinker:
+    return FlowLinker(
+        ISOTROPIC, max_distance_um=10.0, affinity=_MOVER_AFFINITY, affinity_bonus=20.0, prediction=prediction
+    )
+
+
+def test_link_motion_predicted_distance_prices_the_far_true_successor_nearer():
+    """The cost's geometry decides between two equally-probable candidates — and predicting inverts the choice."""
+    graph = _graph(_MOVER_SCENE)
+
+    assert _sorted_edges(_mover_flow(None).link(graph)) == [(0, 1), (1, 3)]
+    assert _sorted_edges(_mover_flow(MotionPrediction(affinity=_MOVER_AFFINITY)).link(graph)) == [(0, 1), (1, 2)]
+
+
+def test_link_motion_predicted_distance_still_gates_on_the_raw_separation():
+    """A target 11 um away is out of a 10 um gate however near the prediction puts it — admissibility is physics.
+
+    The same +6 um mover, and a single candidate at raw 11 um whose PREDICTED distance is 8 um. Were the gate
+    reading the predicted distance the pair would be admitted (and, at this bonus, linked); it is refused,
+    because how far a cell can travel in one gap is a statement about travel, not about our estimate of it.
+    """
+    graph = _graph([[0, 0, 0, 0], [1, 0, 0, 6], [2, 0, 0, 17]])
+    affinity = _Affinity({0: np.array([[1.0]]), 1: np.array([[0.9]])})
+    linker = FlowLinker(
+        ISOTROPIC,
+        max_distance_um=10.0,
+        affinity=affinity,
+        affinity_bonus=20.0,
+        prediction=MotionPrediction(affinity=affinity),
+    )
+
+    assert _sorted_edges(linker.link(graph)) == [(0, 1)]
+
+
+def test_link_motion_predicted_distance_off_is_byte_identical():
+    """Unset, the term is inert on the scene where it CHANGES the answer — the shipped raw-distance cost stands."""
+    graph = _graph(_MOVER_SCENE)
+    default = FlowLinker(ISOTROPIC, max_distance_um=10.0, affinity=_MOVER_AFFINITY, affinity_bonus=20.0)
+
+    assert default.prediction is None  # the shipped default is OFF
+    assert default.link(graph).edges.tobytes() == _mover_flow(None).link(graph).edges.tobytes()

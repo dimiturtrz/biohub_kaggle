@@ -29,6 +29,7 @@ from scipy.spatial.distance import cdist
 from celltrack.affinity import EdgeAffinity
 from celltrack.linkers.agreement_gating import AgreementGate
 from celltrack.linkers.boundary_prior import BoundaryPrior
+from celltrack.linkers.motion_prediction import MotionPrediction
 from celltrack.linkers.mutual_bonus import MutualBonus
 from celltrack.linkers.ranker_bonus import RankerBonus
 from core.data.tracks import TrackGraph
@@ -52,7 +53,9 @@ class FlowLinker:
     can beat the per-frame-optimal one. `boundary_cost = 0` reproduces `AssignmentLinker` edge for edge.
 
     That charge is flat by default — the same wherever and whenever a track ends. An optional `BoundaryPrior`
-    makes it position- and time-aware, discounting a boundary the observation window itself explains.
+    makes it position- and time-aware, discounting a boundary the observation window itself explains. An
+    optional `MotionPrediction` changes the other half of the cost, replacing the raw distance a pair competes
+    on with a motion-predicted one while the gate keeps reading the raw separation.
     """
 
     spacing: Spacing
@@ -74,6 +77,12 @@ class FlowLinker:
     # the boundary arcs of detections whose appearance or disappearance the observation window already explains —
     # see `BoundaryPrior`. It is purely a per-arc PRICE: the arcs, the gate and the transition costs are untouched.
     boundary: BoundaryPrior | None = None
+    # Off by default (`None` = the shipped raw-distance cost, byte for byte). Set, the `distance` term of the
+    # transition cost becomes the MOTION-PREDICTED distance — how far the target is from where the source was
+    # heading (`MotionPrediction`) — while the gate keeps reading the raw one, since admissibility is a physical
+    # statement about travel and a prediction is an estimate. The learned terms are untouched: this changes only
+    # the geometry they are corrections to.
+    prediction: MotionPrediction | None = None
 
     def link(self, detections: TrackGraph) -> TrackGraph:
         """Select the min-cost set of 1-to-1 links over the whole video, coupled through the track-boundary cost."""
@@ -127,7 +136,14 @@ class FlowLinker:
             targets = np.flatnonzero(timepoints == timepoint + 1)
             if len(sources) == 0 or len(targets) == 0:
                 continue
-            cost = self._gated_cost(int(timepoint), cdist(positions_um[sources], positions_um[targets]))
+            gap = int(timepoint)
+            distance = cdist(positions_um[sources], positions_um[targets])
+            priced = (
+                distance
+                if self.prediction is None
+                else self.prediction.distances(gap, sources, targets, timepoints, positions_um)
+            )
+            cost = self._gated_cost(gap, distance, priced)
             source_local, target_local = np.nonzero(np.isfinite(cost))
             transitions.extend(
                 (int(sources[s]), int(targets[t]), round(float(_COST_SCALE * cost[s, t])))
@@ -135,8 +151,15 @@ class FlowLinker:
             )
         return transitions
 
-    def _gated_cost(self, timepoint: int, distance: Float[np.ndarray, "s t"]) -> Float[np.ndarray, "s t"]:
-        """`distance - bonus*P` in-gate, infinite beyond it — the assignment linker's transition cost.
+    def _gated_cost(
+        self, timepoint: int, distance: Float[np.ndarray, "s t"], priced: Float[np.ndarray, "s t"]
+    ) -> Float[np.ndarray, "s t"]:
+        """`priced - bonus*P` in-gate, infinite beyond it — the assignment linker's transition cost.
+
+        Two distances, deliberately: `distance` is the RAW separation and is what the gate reads, because the
+        gate states how far a cell can physically travel in one gap; `priced` is the geometry the surviving
+        pairs then compete on, which `MotionPrediction` may replace with a motion-predicted distance. They are
+        the same array unless that term is wired, so the shipped cost is untouched.
 
         An infinite cost is how a pair is kept out of the network at all (`_transitions` keeps only the finite
         ones), so the agreement gate excludes a candidate here by the same route the distance gate does.
@@ -144,7 +167,7 @@ class FlowLinker:
         within_gate = distance <= self.max_distance_um
         if self.agreement is not None:
             within_gate = self.agreement.narrow(timepoint, within_gate)
-        cost = distance.astype(np.float64)
+        cost = priced.astype(np.float64)
         if self.affinity is not None and self.affinity_bonus != 0.0:
             probability = self.affinity.probabilities(timepoint)
             if probability is not None:
