@@ -626,6 +626,66 @@
     },
     {
       "kind": "import",
+      "source": "celltrack.eval.seed_dispersion",
+      "target": "celltrack.affinity",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.seed_dispersion",
+      "target": "celltrack.edges.blended_edge_scoring",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.seed_dispersion",
+      "target": "celltrack.eval.dense_diagnosis",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.seed_dispersion",
+      "target": "celltrack.eval.proxy",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.seed_dispersion",
+      "target": "celltrack.eval.proxy_eval",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.seed_dispersion",
+      "target": "celltrack.eval.shortcut_diagnosis",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.seed_dispersion",
+      "target": "celltrack.operating_point",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.seed_dispersion",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.seed_dispersion",
+      "target": "core.metrics.matching",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.seed_dispersion",
+      "target": "core.paths",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "celltrack.eval.shortcut_diagnosis",
       "target": "celltrack.affinity",
       "weight": 1
@@ -2601,6 +2661,12 @@
     {
       "kind": "references",
       "source": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer",
+      "target": "celltrack.edges.blended_edge_scoring.GapSeedScores",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer",
       "target": "celltrack.models.edge_transformer.EdgeGap",
       "weight": 1
     },
@@ -2695,6 +2761,18 @@
       "weight": 1
     },
     {
+      "kind": "calls",
+      "source": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer._seed_probabilities",
+      "target": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer._reverse_seed_logits",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer._seed_probabilities",
+      "target": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer.fuse",
+      "weight": 1
+    },
+    {
       "kind": "construct",
       "source": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer._seed_scored",
       "target": "celltrack.edges.flip_view_edge_scoring.FlipViewEdgeScorer",
@@ -2751,6 +2829,30 @@
     {
       "kind": "construct",
       "source": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer.seed_logit_moments",
+      "target": "celltrack.models.prior_velocity.GapHistory",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer.seed_scores",
+      "target": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer._seed_probabilities",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer.seed_scores",
+      "target": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer._seed_scored",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer.seed_scores",
+      "target": "celltrack.edges.blended_edge_scoring.GapSeedScores",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer.seed_scores",
       "target": "celltrack.models.prior_velocity.GapHistory",
       "weight": 1
     },
@@ -3127,6 +3229,12 @@
       "weight": 1
     },
     {
+      "kind": "holds",
+      "source": "celltrack.eval.dense_diagnosis.AffinityIndex",
+      "target": "celltrack.eval.dense_diagnosis.GapSlots",
+      "weight": 1
+    },
+    {
       "kind": "references",
       "source": "celltrack.eval.dense_diagnosis.AffinityIndex",
       "target": "core.data.tracks.TrackGraph",
@@ -3135,7 +3243,7 @@
     {
       "kind": "calls",
       "source": "celltrack.eval.dense_diagnosis.AffinityIndex.of",
-      "target": "core.data.tracks.TrackGraph.timepoints",
+      "target": "celltrack.eval.dense_diagnosis.GapSlots.of",
       "weight": 1
     },
     {
@@ -3147,7 +3255,13 @@
     {
       "kind": "calls",
       "source": "celltrack.eval.dense_diagnosis.AffinityIndex.pair",
-      "target": "celltrack.eval.dense_diagnosis.AffinityIndex._column",
+      "target": "celltrack.eval.dense_diagnosis.GapSlots.column",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.dense_diagnosis.AffinityIndex.pair",
+      "target": "celltrack.eval.dense_diagnosis.GapSlots.source",
       "weight": 1
     },
     {
@@ -3416,14 +3530,32 @@
     },
     {
       "kind": "calls",
-      "source": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis._invert",
-      "target": "core.metrics.matching.NodeMatching.is_matched",
+      "source": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis.of",
+      "target": "core.data.tracks.TrackGraph.edge_rows",
       "weight": 1
     },
     {
       "kind": "calls",
-      "source": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis.of",
-      "target": "core.data.tracks.TrackGraph.edge_rows",
+      "source": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis.predicted_of_truth",
+      "target": "core.metrics.matching.NodeMatching.is_matched",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.dense_diagnosis.GapSlots",
+      "target": "celltrack.eval.dense_diagnosis.GapSlots",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.dense_diagnosis.GapSlots",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.dense_diagnosis.GapSlots.of",
+      "target": "core.data.tracks.TrackGraph.timepoints",
       "weight": 1
     },
     {
@@ -3459,13 +3591,13 @@
     {
       "kind": "calls",
       "source": "celltrack.eval.dense_diagnosis.MislinkSignal.of",
-      "target": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis._invert",
+      "target": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis.of",
       "weight": 1
     },
     {
       "kind": "calls",
       "source": "celltrack.eval.dense_diagnosis.MislinkSignal.of",
-      "target": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis.of",
+      "target": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis.predicted_of_truth",
       "weight": 1
     },
     {
@@ -4706,6 +4838,330 @@
     },
     {
       "kind": "references",
+      "source": "celltrack.eval.seed_dispersion.DispersionSample",
+      "target": "celltrack.eval.seed_dispersion.DispersionSample",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.seed_dispersion.DispersionSample",
+      "target": "celltrack.eval.seed_dispersion.PairScores",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.seed_dispersion.Quartiles",
+      "target": "celltrack.eval.seed_dispersion.Quartiles",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.eval.seed_dispersion.SeedDispersion",
+      "target": "celltrack.eval.seed_dispersion.DispersionSample",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.seed_dispersion.SeedDispersion",
+      "target": "celltrack.eval.seed_dispersion.SeedDispersion",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.seed_dispersion.SeedDispersion",
+      "target": "celltrack.eval.seed_dispersion.SeedScoreIndex",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.seed_dispersion.SeedDispersion",
+      "target": "celltrack.eval.seed_dispersion.Separation",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.seed_dispersion.SeedDispersion",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.seed_dispersion.SeedDispersion",
+      "target": "core.metrics.matching.NodeMatching",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.SeedDispersion._sample",
+      "target": "celltrack.eval.seed_dispersion.DispersionSample.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.SeedDispersion._sample",
+      "target": "celltrack.eval.seed_dispersion.SeedScoreIndex.pair",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.SeedDispersion.of",
+      "target": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.SeedDispersion.of",
+      "target": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis.predicted_of_truth",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.SeedDispersion.of",
+      "target": "core.data.tracks.Adjacency.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.SeedDispersion.of",
+      "target": "core.data.tracks.TrackGraph.edge_rows",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.eval.seed_dispersion.SeedDispersion.separations",
+      "target": "celltrack.eval.seed_dispersion.Separation",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.seed_dispersion.SeedDispersionDiagnosis",
+      "target": "celltrack.eval.seed_dispersion.SeedDispersion",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.seed_dispersion.SeedDispersionDiagnosis",
+      "target": "celltrack.operating_point.TrackerConfig",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.seed_dispersion.SeedDispersionDiagnosis",
+      "target": "core.paths.DataRoot",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.SeedDispersionDiagnosis.of_movie",
+      "target": "celltrack.eval.dense_diagnosis.DenseDiagnosis.configured",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.SeedDispersionDiagnosis.of_movie",
+      "target": "celltrack.eval.proxy.TestMovieProxy.load",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.SeedDispersionDiagnosis.of_movie",
+      "target": "celltrack.eval.seed_dispersion.SeedDispersion.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.SeedDispersionDiagnosis.of_movie",
+      "target": "celltrack.eval.seed_dispersion.SeedScoreIndex.of",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.eval.seed_dispersion.SeedDispersionDiagnosis.of_movie",
+      "target": "core.metrics.matching.DistanceMatcher",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.SeedDispersionDiagnosis.of_movie",
+      "target": "core.metrics.matching.DistanceMatcher.match",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.eval.seed_dispersion.SeedScoreIndex",
+      "target": "celltrack.affinity.EdgeAffinity",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.eval.seed_dispersion.SeedScoreIndex",
+      "target": "celltrack.edges.blended_edge_scoring.GapSeedScores",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.eval.seed_dispersion.SeedScoreIndex",
+      "target": "celltrack.eval.dense_diagnosis.GapSlots",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.seed_dispersion.SeedScoreIndex",
+      "target": "celltrack.eval.seed_dispersion.PairScores",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.seed_dispersion.SeedScoreIndex",
+      "target": "celltrack.eval.seed_dispersion.SeedScoreIndex",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.seed_dispersion.SeedScoreIndex",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.SeedScoreIndex.of",
+      "target": "celltrack.eval.dense_diagnosis.GapSlots.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.SeedScoreIndex.pair",
+      "target": "celltrack.affinity.EdgeAffinity.probabilities",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.SeedScoreIndex.pair",
+      "target": "celltrack.eval.dense_diagnosis.GapSlots.column",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.SeedScoreIndex.pair",
+      "target": "celltrack.eval.dense_diagnosis.GapSlots.source",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.eval.seed_dispersion.SeedScoreIndex.pair",
+      "target": "celltrack.eval.seed_dispersion.PairScores",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.eval.seed_dispersion.Separation",
+      "target": "celltrack.eval.seed_dispersion.DispersionSample",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.Separation.auc_blended_probability",
+      "target": "celltrack.eval.seed_dispersion.Separation._auc",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.Separation.auc_logit_spread",
+      "target": "celltrack.eval.seed_dispersion.Separation._auc",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.Separation.auc_probability_spread",
+      "target": "celltrack.eval.seed_dispersion.Separation._auc",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.Separation.base_rate",
+      "target": "celltrack.eval.seed_dispersion.Separation.positives",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.Separation.base_rate",
+      "target": "celltrack.eval.seed_dispersion.Separation.size",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.Separation.is_reportable",
+      "target": "celltrack.eval.seed_dispersion.Separation.base_rate",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.Separation.is_reportable",
+      "target": "celltrack.eval.shortcut_diagnosis.BaseRateGuard.allows",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.Separation.lines",
+      "target": "celltrack.eval.seed_dispersion.Separation.auc_blended_probability",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.Separation.lines",
+      "target": "celltrack.eval.seed_dispersion.Separation.auc_logit_spread",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.Separation.lines",
+      "target": "celltrack.eval.seed_dispersion.Separation.auc_probability_spread",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.Separation.lines",
+      "target": "celltrack.eval.seed_dispersion.Separation.base_rate",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.Separation.lines",
+      "target": "celltrack.eval.seed_dispersion.Separation.is_reportable",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.Separation.lines",
+      "target": "celltrack.eval.seed_dispersion.Separation.positives",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.Separation.lines",
+      "target": "celltrack.eval.seed_dispersion.Separation.size",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.Separation.lines",
+      "target": "celltrack.eval.shortcut_diagnosis.BaseRateGuard.refusal",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.Separation.positives",
+      "target": "celltrack.eval.seed_dispersion.DispersionSample.size",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.Separation.size",
+      "target": "celltrack.eval.seed_dispersion.DispersionSample.size",
+      "weight": 1
+    },
+    {
+      "kind": "references",
       "source": "celltrack.eval.shortcut_diagnosis.CandidatePairs",
       "target": "celltrack.affinity.EdgeAffinity",
       "weight": 1
@@ -4738,18 +5194,6 @@
       "kind": "calls",
       "source": "celltrack.eval.shortcut_diagnosis.CandidatePairs._gap",
       "target": "celltrack.eval.shortcut_diagnosis.MatchedAnnotation.judge",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.eval.shortcut_diagnosis.CandidatePairs._ranking",
-      "target": "celltrack.eval.shortcut_diagnosis.CandidatePairs.positives",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.eval.shortcut_diagnosis.CandidatePairs._ranking",
-      "target": "celltrack.eval.shortcut_diagnosis.CandidatePairs.size",
       "weight": 1
     },
     {
@@ -4792,6 +5236,12 @@
       "kind": "calls",
       "source": "celltrack.eval.shortcut_diagnosis.CandidatePairs.correlation",
       "target": "celltrack.eval.shortcut_diagnosis.CandidatePairs.size",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.shortcut_diagnosis.CandidatePairs.is_reportable",
+      "target": "celltrack.eval.shortcut_diagnosis.BaseRateGuard.allows",
       "weight": 1
     },
     {
@@ -4960,6 +5410,12 @@
       "kind": "calls",
       "source": "celltrack.eval.shortcut_diagnosis.ShortcutReport._population",
       "target": "celltrack.eval.shortcut_diagnosis.CandidatePairs.size",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.shortcut_diagnosis.ShortcutReport._refusal",
+      "target": "celltrack.eval.shortcut_diagnosis.BaseRateGuard.refusal",
       "weight": 1
     },
     {
@@ -9321,7 +9777,7 @@
   ],
   "nodes": [
     {
-      "descendants": 79,
+      "descendants": 80,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -9497,7 +9953,7 @@
       "role": null
     },
     {
-      "descendants": 9,
+      "descendants": 10,
       "id": "celltrack.eval",
       "label": "eval",
       "level": "module",
@@ -9556,6 +10012,14 @@
       "descendants": 0,
       "id": "celltrack.eval.ranker_distribution",
       "label": "ranker_distribution",
+      "level": "module",
+      "parent": "celltrack.eval",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.seed_dispersion",
+      "label": "seed_dispersion",
       "level": "module",
       "parent": "celltrack.eval",
       "role": null
@@ -10378,6 +10842,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.edges.blended_edge_scoring.GapSeedScores",
+      "label": "GapSeedScores",
+      "level": "class",
+      "parent": "celltrack.edges.blended_edge_scoring",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.edges.flip_view_edge_scoring.FlipViewEdgeScorer",
       "label": "FlipViewEdgeScorer",
       "level": "class",
@@ -10476,6 +10948,14 @@
       "descendants": 0,
       "id": "celltrack.eval.dense_diagnosis.Fate",
       "label": "Fate",
+      "level": "class",
+      "parent": "celltrack.eval.dense_diagnosis",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.dense_diagnosis.GapSlots",
+      "label": "GapSlots",
       "level": "class",
       "parent": "celltrack.eval.dense_diagnosis",
       "role": "satellite"
@@ -10671,6 +11151,70 @@
       "level": "class",
       "parent": "celltrack.eval.ranker_distribution",
       "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.seed_dispersion.DispersionSample",
+      "label": "DispersionSample",
+      "level": "class",
+      "parent": "celltrack.eval.seed_dispersion",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.seed_dispersion.PairScores",
+      "label": "PairScores",
+      "level": "class",
+      "parent": "celltrack.eval.seed_dispersion",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.seed_dispersion.Quartiles",
+      "label": "Quartiles",
+      "level": "class",
+      "parent": "celltrack.eval.seed_dispersion",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.seed_dispersion.SeedDispersion",
+      "label": "SeedDispersion",
+      "level": "class",
+      "parent": "celltrack.eval.seed_dispersion",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.seed_dispersion.SeedDispersionDiagnosis",
+      "label": "SeedDispersionDiagnosis",
+      "level": "class",
+      "parent": "celltrack.eval.seed_dispersion",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.seed_dispersion.SeedScoreIndex",
+      "label": "SeedScoreIndex",
+      "level": "class",
+      "parent": "celltrack.eval.seed_dispersion",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.seed_dispersion.Separation",
+      "label": "Separation",
+      "level": "class",
+      "parent": "celltrack.eval.seed_dispersion",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.shortcut_diagnosis.BaseRateGuard",
+      "label": "BaseRateGuard",
+      "level": "class",
+      "parent": "celltrack.eval.shortcut_diagnosis",
+      "role": "primary"
     },
     {
       "descendants": 0,
@@ -12634,6 +13178,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer._seed_probabilities",
+      "label": "_seed_probabilities",
+      "level": "method",
+      "parent": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer._seed_scored",
       "label": "_seed_scored",
       "level": "method",
@@ -12668,6 +13220,14 @@
       "descendants": 0,
       "id": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer.seed_logit_moments",
       "label": "seed_logit_moments",
+      "level": "method",
+      "parent": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer.seed_scores",
+      "label": "seed_scores",
       "level": "method",
       "parent": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer",
       "role": null
@@ -12850,14 +13410,6 @@
     },
     {
       "descendants": 0,
-      "id": "celltrack.eval.dense_diagnosis.AffinityIndex._column",
-      "label": "_column",
-      "level": "method",
-      "parent": "celltrack.eval.dense_diagnosis.AffinityIndex",
-      "role": null
-    },
-    {
-      "descendants": 0,
       "id": "celltrack.eval.dense_diagnosis.AffinityIndex.of",
       "label": "of",
       "level": "method",
@@ -12970,14 +13522,6 @@
     },
     {
       "descendants": 0,
-      "id": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis._invert",
-      "label": "_invert",
-      "level": "method",
-      "parent": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis",
-      "role": null
-    },
-    {
-      "descendants": 0,
       "id": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis._label",
       "label": "_label",
       "level": "method",
@@ -12998,6 +13542,38 @@
       "label": "of",
       "level": "method",
       "parent": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis.predicted_of_truth",
+      "label": "predicted_of_truth",
+      "level": "method",
+      "parent": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.dense_diagnosis.GapSlots.column",
+      "label": "column",
+      "level": "method",
+      "parent": "celltrack.eval.dense_diagnosis.GapSlots",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.dense_diagnosis.GapSlots.of",
+      "label": "of",
+      "level": "method",
+      "parent": "celltrack.eval.dense_diagnosis.GapSlots",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.dense_diagnosis.GapSlots.source",
+      "label": "source",
+      "level": "method",
+      "parent": "celltrack.eval.dense_diagnosis.GapSlots",
       "role": null
     },
     {
@@ -13614,6 +14190,190 @@
       "label": "of",
       "level": "method",
       "parent": "celltrack.eval.ranker_distribution.ScoredMovie",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.seed_dispersion.DispersionSample.of",
+      "label": "of",
+      "level": "method",
+      "parent": "celltrack.eval.seed_dispersion.DispersionSample",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.seed_dispersion.DispersionSample.size",
+      "label": "size",
+      "level": "method",
+      "parent": "celltrack.eval.seed_dispersion.DispersionSample",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.seed_dispersion.PairScores.logit_spread",
+      "label": "logit_spread",
+      "level": "method",
+      "parent": "celltrack.eval.seed_dispersion.PairScores",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.seed_dispersion.PairScores.probability_spread",
+      "label": "probability_spread",
+      "level": "method",
+      "parent": "celltrack.eval.seed_dispersion.PairScores",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.seed_dispersion.Quartiles.of",
+      "label": "of",
+      "level": "method",
+      "parent": "celltrack.eval.seed_dispersion.Quartiles",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.seed_dispersion.Quartiles.spread",
+      "label": "spread",
+      "level": "method",
+      "parent": "celltrack.eval.seed_dispersion.Quartiles",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.seed_dispersion.SeedDispersion._sample",
+      "label": "_sample",
+      "level": "method",
+      "parent": "celltrack.eval.seed_dispersion.SeedDispersion",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.seed_dispersion.SeedDispersion.of",
+      "label": "of",
+      "level": "method",
+      "parent": "celltrack.eval.seed_dispersion.SeedDispersion",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.seed_dispersion.SeedDispersion.separations",
+      "label": "separations",
+      "level": "method",
+      "parent": "celltrack.eval.seed_dispersion.SeedDispersion",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.seed_dispersion.SeedDispersionDiagnosis.of_movie",
+      "label": "of_movie",
+      "level": "method",
+      "parent": "celltrack.eval.seed_dispersion.SeedDispersionDiagnosis",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.seed_dispersion.SeedScoreIndex.of",
+      "label": "of",
+      "level": "method",
+      "parent": "celltrack.eval.seed_dispersion.SeedScoreIndex",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.seed_dispersion.SeedScoreIndex.pair",
+      "label": "pair",
+      "level": "method",
+      "parent": "celltrack.eval.seed_dispersion.SeedScoreIndex",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.seed_dispersion.Separation._auc",
+      "label": "_auc",
+      "level": "method",
+      "parent": "celltrack.eval.seed_dispersion.Separation",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.seed_dispersion.Separation.auc_blended_probability",
+      "label": "auc_blended_probability",
+      "level": "method",
+      "parent": "celltrack.eval.seed_dispersion.Separation",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.seed_dispersion.Separation.auc_logit_spread",
+      "label": "auc_logit_spread",
+      "level": "method",
+      "parent": "celltrack.eval.seed_dispersion.Separation",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.seed_dispersion.Separation.auc_probability_spread",
+      "label": "auc_probability_spread",
+      "level": "method",
+      "parent": "celltrack.eval.seed_dispersion.Separation",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.seed_dispersion.Separation.base_rate",
+      "label": "base_rate",
+      "level": "method",
+      "parent": "celltrack.eval.seed_dispersion.Separation",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.seed_dispersion.Separation.is_reportable",
+      "label": "is_reportable",
+      "level": "method",
+      "parent": "celltrack.eval.seed_dispersion.Separation",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.seed_dispersion.Separation.lines",
+      "label": "lines",
+      "level": "method",
+      "parent": "celltrack.eval.seed_dispersion.Separation",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.seed_dispersion.Separation.positives",
+      "label": "positives",
+      "level": "method",
+      "parent": "celltrack.eval.seed_dispersion.Separation",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.seed_dispersion.Separation.size",
+      "label": "size",
+      "level": "method",
+      "parent": "celltrack.eval.seed_dispersion.Separation",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.shortcut_diagnosis.BaseRateGuard.allows",
+      "label": "allows",
+      "level": "method",
+      "parent": "celltrack.eval.shortcut_diagnosis.BaseRateGuard",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.shortcut_diagnosis.BaseRateGuard.refusal",
+      "label": "refusal",
+      "level": "method",
+      "parent": "celltrack.eval.shortcut_diagnosis.BaseRateGuard",
       "role": null
     },
     {

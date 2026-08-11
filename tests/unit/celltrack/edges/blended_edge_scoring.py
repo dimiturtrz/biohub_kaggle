@@ -300,6 +300,54 @@ def test_with_options():
     assert scorer.options == EdgeBlendOptions()  # the original is untouched — a sweep re-points, not mutates
 
 
+def test_seed_scores(tmp_path: Path):
+    """Every gap comes back as raw per-seed logits plus each seed's own probabilities — the blend, un-collapsed.
+
+    The logits must be the seeds' RAW ones (pre-weighting), and the probabilities each seed's own softmax, so
+    a caller can recover the shipped blended matrix from what is reported and see that nothing was normalised
+    away on the trip out.
+    """
+    a, b = _tiny_scorer(0), _tiny_scorer(1)
+    detections, video = _detections(), _video(tmp_path)
+    scorer = BlendedEdgeTransformerScorer((a, b), (0.8, 0.2))
+
+    reported = scorer.seed_scores(video, detections, "cpu")
+
+    positions = detections.positions().astype(np.float32)
+    gap = EdgeGap(TemporalUNetDetector._open_source(video), 0, positions[:2], positions[2:], "cpu")
+    with torch.no_grad():
+        expected = [seed._gap_logits(gap) for seed in (a, b)]
+    assert len(reported) == 1
+    assert reported[0].timepoint == 0
+    assert reported[0].logits.shape == (2, 2, 2)
+    assert np.allclose(reported[0].logits, torch.stack(expected).numpy())
+    assert np.allclose(reported[0].probabilities, torch.softmax(torch.stack(expected), dim=1).numpy())
+
+    blended = scorer.affinities(video, detections, "cpu").probabilities(0)
+    assert blended is not None
+    weighted = 0.8 * reported[0].logits[0] + 0.2 * reported[0].logits[1]
+    assert np.allclose(blended, torch.softmax(torch.from_numpy(weighted), dim=0).numpy(), atol=1e-6)
+
+
+def test_seed_scores_bidirectional_fuses_each_seed_alone(tmp_path: Path):
+    """Under fusion each seed's probabilities are ITS forward fused with ITS reverse — not the blend's.
+
+    A per-seed number taken forward-only while the blend was bidirectional would differ from the matrix the
+    linker consumed for a reason that has nothing to do with the seeds disagreeing.
+    """
+    a = _tiny_scorer(0)
+    detections, video = _detections(), _video(tmp_path)
+
+    reported = BlendedEdgeTransformerScorer((a,), (1.0,), bidirectional=True).seed_scores(video, detections, "cpu")
+
+    positions = detections.positions().astype(np.float32)
+    gap = EdgeGap(TemporalUNetDetector._open_source(video), 0, positions[:2], positions[2:], "cpu")
+    with torch.no_grad():
+        forward = torch.softmax(a._gap_logits(gap), dim=0)
+        reverse = torch.softmax(a._gap_logits(gap, reverse=True), dim=0).T
+    assert np.allclose(reported[0].probabilities[0], BlendedEdgeTransformerScorer.fuse(forward, reverse).numpy())
+
+
 def test_seed_logit_moments(tmp_path: Path):
     """The reporter returns one entry per gap, per seed, holding those seeds' actual raw logit mean and std."""
     a, b = _tiny_scorer(0), _tiny_scorer(1)

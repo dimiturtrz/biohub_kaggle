@@ -83,6 +83,48 @@ _MIN_CORRELATION_POINTS = 2
 _CHANCE_AUC = 0.5
 
 
+class BaseRateGuard:
+    """The refusal rule every separability number in this repo sits behind — one home, so it cannot drift.
+
+    Public, and imported by sibling diagnoses (`celltrack.eval.seed_dispersion`), because the rule is not
+    about candidate pairs specifically: ANY ranking read on a population that is nearly all-positive or
+    nearly all-negative measures how the population was built rather than what the model knows, and this
+    project has been burned by exactly that more than once (see the module docstring for the two cases). The
+    interval's derivation is the block of prose above `_MIN_BASE_RATE`; re-deriving it per tool is how two
+    tools end up refusing at different rates and neither reader notices.
+    """
+
+    @staticmethod
+    def allows(rate: float) -> bool:
+        """Whether a base rate leaves a ranking number any meaning — the guard, as one predicate."""
+        return bool(_MIN_BASE_RATE <= rate <= _MAX_BASE_RATE)
+
+    @staticmethod
+    def refusal(rate: float) -> str:
+        """Why this population gets no AUC — stated as the defect, so the refusal is actionable, not a shrug."""
+        side = "so nearly every candidate is true" if rate > _MAX_BASE_RATE else "so almost none is"
+        return (
+            f"base rate {rate:.4f} is outside [{_MIN_BASE_RATE}, {_MAX_BASE_RATE}], {side}; an AUC here "
+            "measures how the population was built, not what the model knows (see the module docstring)"
+        )
+
+
+def rank_auc(scores: Float[np.ndarray, "n"], labels: Bool[np.ndarray, "n"]) -> float:
+    """Rank (ROC) AUC of `scores` against binary `labels` — the Mann-Whitney statistic, ties scored 0.5.
+
+    ROC rather than the average precision `core.metrics.edge_auc` reports, because these numbers are compared
+    ACROSS populations (whole movie vs distance band; correct edges vs mislinks) whose base rates differ by
+    design, and average precision moves with the base rate while the rank AUC does not. NaN when either class
+    is empty — undefined, not 0.5, so a degenerate split cannot read as chance.
+    """
+    positives = int(labels.sum())
+    negatives = int(labels.size) - positives
+    if positives == 0 or negatives == 0:
+        return float("nan")
+    ranks = rankdata(scores)
+    return float((ranks[labels].sum() - positives * (positives + 1) / 2) / (positives * negatives))
+
+
 @dataclass(frozen=True)
 class MatchedAnnotation:
     """The ground truth as seen from DETECTION rows: which pairs the annotation joins, and which it judges at all.
@@ -207,7 +249,7 @@ class CandidatePairs:
 
     def is_reportable(self) -> bool:
         """Whether the base rate leaves a separability number any meaning — the guard every AUC is behind."""
-        return bool(_MIN_BASE_RATE <= self.base_rate() <= _MAX_BASE_RATE)
+        return BaseRateGuard.allows(self.base_rate())
 
     def auc_probability(self) -> float:
         """How well the learned `P` alone ranks true pairs above false ones (0.5 = chance)."""
@@ -241,18 +283,8 @@ class CandidatePairs:
         )
 
     def _ranking(self, scores: Float[np.ndarray, "c"]) -> float:
-        """Rank (ROC) AUC of `scores` against the truth labels — the Mann-Whitney statistic, ties scored 0.5.
-
-        ROC rather than the average precision `core.metrics.edge_auc` reports, because these numbers are
-        compared ACROSS populations (whole movie vs distance band) whose base rates differ by design, and
-        average precision moves with the base rate while the rank AUC does not.
-        """
-        positives = self.positives()
-        negatives = self.size() - positives
-        if positives == 0 or negatives == 0:
-            return float("nan")
-        ranks = rankdata(scores)
-        return float((ranks[self.is_true].sum() - positives * (positives + 1) / 2) / (positives * negatives))
+        """This population's rank AUC for `scores` — the shared `rank_auc` against its own truth labels."""
+        return rank_auc(scores, self.is_true)
 
     @staticmethod
     def _scored_gaps(
@@ -349,12 +381,7 @@ class ShortcutReport:
         """Why this population gets no AUC — stated as the defect, so the refusal is actionable, not a shrug."""
         if not candidates.size():
             return "no judged in-gate candidate pairs at all — nothing to rank"
-        rate = candidates.base_rate()
-        side = "so nearly every candidate is true" if rate > _MAX_BASE_RATE else "so almost none is"
-        return (
-            f"base rate {rate:.4f} is outside [{_MIN_BASE_RATE}, {_MAX_BASE_RATE}], {side}; an AUC here "
-            "measures how the population was built, not what the model knows (see the module docstring)"
-        )
+        return BaseRateGuard.refusal(candidates.base_rate())
 
 
 @dataclass(frozen=True)

@@ -13,7 +13,8 @@ Two further transforms ride on `EdgeBlendOptions`, both default OFF, so the ship
 asked for: `align_seed_moments` puts the seeds on one logit scale before the weighted sum
 (`seed_moment_alignment`), and `view_tta` scores each seed over four flip views fused by a logarithmic opinion
 pool (`flip_view_edge_scoring`). `seed_logit_moments` reports the raw per-seed scales the first of those acts
-on, so the quality-versus-units question is settled by measurement rather than by a sweep.
+on, so the quality-versus-units question is settled by measurement rather than by a sweep, and `seed_scores`
+reports the whole un-collapsed per-seed matrices the weighted sum throws away.
 """
 
 from __future__ import annotations
@@ -64,6 +65,26 @@ class GapSeedMoments:
 
     timepoint: int
     moments: tuple[LogitMoments, ...]
+
+
+@dataclass(frozen=True)
+class GapSeedScores:
+    """One gap's per-seed RAW logits and per-seed probabilities, seed order matching the blend's.
+
+    The blend keeps only the weighted MEAN of the seeds' logits; the DISPERSION between them — the one
+    quantity an ensemble has that a single model cannot — is destroyed by the weighted sum before any
+    consumer sees it. This carries both halves out intact so a diagnosis can ask whether that dispersion
+    knows anything (`celltrack.eval.seed_dispersion`).
+
+    `logits` are raw: pre-alignment and pre-weighting, the same convention `seed_logit_moments` reports in,
+    because a scale difference between the seeds is part of what a dispersion read has to account for rather
+    than something to normalise away first. `probabilities` are what each seed ALONE would hand the linker
+    under this scorer's fusion setting, so they are directly comparable to the blended matrix beside them.
+    """
+
+    timepoint: int
+    logits: Float[np.ndarray, "k s t"]
+    probabilities: Float[np.ndarray, "k s t"]
 
 
 class BlendedEdgeTransformerScorer:
@@ -168,6 +189,48 @@ class BlendedEdgeTransformerScorer:
                 moments = tuple(SeedMomentAlignment.moments(logits) for logits, _ in scored)
                 reported.append(GapSeedMoments(gap.timepoint, moments))
         return reported
+
+    @torch.no_grad()
+    def seed_scores(self, path: Path, detections: TrackGraph, device: str) -> list[GapSeedScores]:
+        """Every gap's per-seed logits AND per-seed probabilities, in ascending time — the blend, un-collapsed.
+
+        `affinities` returns the weighted sum only, so the seeds' spread is gone by the time a linker or a
+        diagnosis can look at it. This is the same streaming pass (each seed carrying its own history, gaps in
+        time order, so the numbers are the ones the shipped run computes) with the collapse omitted.
+        """
+        histories = tuple(GapHistory() for _ in self.scorers)
+        reported: list[GapSeedScores] = []
+        for gap in video_gaps(path, detections, device):
+            scored = self._seed_scored(gap, histories)
+            histories = tuple(history for _, history in scored)
+            logits = [seed_logits for seed_logits, _ in scored]
+            probabilities = [
+                self._seed_probabilities(scorer, gap, seed_logits)
+                for scorer, seed_logits in zip(self.scorers, logits, strict=True)
+            ]
+            reported.append(
+                GapSeedScores(
+                    timepoint=gap.timepoint,
+                    logits=torch.stack(logits).cpu().numpy(),
+                    probabilities=torch.stack(probabilities).cpu().numpy(),
+                )
+            )
+        return reported
+
+    def _seed_probabilities(
+        self, scorer: EdgeTransformerScorer, gap: EdgeGap, logits: Float[Tensor, "s t"]
+    ) -> Float[Tensor, "s t"]:
+        """What ONE seed alone would hand the linker for this gap — its own softmax, fused as the blend fuses.
+
+        The fusion setting is applied per seed rather than skipped, because the comparison a dispersion read
+        makes is against the blended matrix the linker consumed: a per-seed number taken forward-only while the
+        blend was bidirectional would differ from it for a reason that has nothing to do with the seeds.
+        """
+        forward = torch.softmax(logits, dim=0)
+        if not self.bidirectional:
+            return forward
+        reverse = torch.softmax(self._reverse_seed_logits(scorer, gap), dim=0).T
+        return self.fuse(forward, reverse)
 
     def _seed_scored(
         self, gap: EdgeGap, histories: tuple[GapHistory, ...]

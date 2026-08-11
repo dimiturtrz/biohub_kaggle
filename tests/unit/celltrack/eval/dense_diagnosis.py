@@ -12,6 +12,7 @@ from celltrack.eval.dense_diagnosis import (
     DenseDiagnosis,
     DenseFateDiagnosis,
     Fate,
+    GapSlots,
     MislinkSignal,
 )
 from celltrack.linkers.linkers import LinkerConfig
@@ -256,27 +257,55 @@ def test_inverted_fraction():
     assert MislinkSignal(p_true=np.array([]), p_chosen=np.array([])).inverted_fraction() == 0.0
 
 
-def test_affinity_index_of():
-    """`of` slots every node id to its `(timepoint, per-gap column)` — the matrices' own row order, by id."""
-    graph = TrackGraph(
+def _slotted_graph() -> TrackGraph:
+    """One t0 node and two t1 nodes with non-row node ids — the row space a by-id lookup has to survive."""
+    return TrackGraph(
         node_ids=np.array([5, 6, 7], dtype=np.int64),
         coordinates=np.array([[0, 0, 0, 0], [1, 0, 0, 3], [1, 0, 0, 9]], dtype=np.int64),
         edges=np.empty((0, 2), dtype=np.int64),
     )
 
-    index = AffinityIndex.of(graph, _Affinity({}))
 
-    assert index.slots == {5: (0, 0), 6: (1, 0), 7: (1, 1)}
+def test_predicted_of_truth():
+    """The matching reversed: each truth row's predicted row, `UNMATCHED` where the annotation matched nothing."""
+    matching = NodeMatching(gt_rows=np.array([2, -1, 0], dtype=np.int64))  # prediction row -> truth row
+
+    inverted = DenseFateDiagnosis.predicted_of_truth(matching, truth_count=4)
+
+    assert inverted.tolist() == [2, -1, 0, -1]
+
+
+def test_gap_slots_of():
+    """`GapSlots.of` slots every node id to its `(timepoint, per-gap column)` — the matrices' own row order."""
+    assert GapSlots.of(_slotted_graph()).slots == {5: (0, 0), 6: (1, 0), 7: (1, 1)}
+
+
+def test_source():
+    """`source` returns a node's `(timepoint, row)` as a gap's source, and `None` for a node never scored."""
+    slots = GapSlots.of(_slotted_graph())
+    assert slots.source(5) == (0, 0)
+    assert slots.source(7) == (1, 1)
+    assert slots.source(99) is None
+
+
+def test_column():
+    """`column` accepts a node only as a target of the NEXT frame — its own frame and a stranger are absent."""
+    slots = GapSlots.of(_slotted_graph())
+    assert slots.column(7, 0) == 1
+    assert slots.column(5, 0) is None  # a "target" in the source's own frame is no column of this gap
+    assert slots.column(99, 0) is None
+
+
+def test_affinity_index_of():
+    """`of` builds the by-id slots over the graph the affinity was scored on, and keeps the affinity beside them."""
+    index = AffinityIndex.of(_slotted_graph(), _Affinity({}))
+
+    assert index.slots.slots == {5: (0, 0), 6: (1, 0), 7: (1, 1)}
 
 
 def test_pair():
     """`pair` reads a source's row and its two targets' columns by node ID, and reports an unscored gap absent."""
-    graph = TrackGraph(
-        node_ids=np.array([5, 6, 7], dtype=np.int64),
-        coordinates=np.array([[0, 0, 0, 0], [1, 0, 0, 3], [1, 0, 0, 9]], dtype=np.int64),
-        edges=np.empty((0, 2), dtype=np.int64),
-    )
-    index = AffinityIndex.of(graph, _Affinity({0: np.array([[0.7, 0.2]], dtype=np.float64)}))
+    index = AffinityIndex.of(_slotted_graph(), _Affinity({0: np.array([[0.7, 0.2]], dtype=np.float64)}))
 
     assert index.pair(5, 7, 6) == (0.2, 0.7)
     assert index.pair(6, 7, 7) is None  # gap 1 was never scored

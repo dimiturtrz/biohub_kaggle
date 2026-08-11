@@ -73,11 +73,15 @@ class DenseFateDiagnosis:
     fates: Int[np.ndarray, "e"]
 
     @staticmethod
-    def _invert(matching: NodeMatching, truth_count: int) -> Int[np.ndarray, "g"]:
+    def predicted_of_truth(matching: NodeMatching, truth_count: int) -> Int[np.ndarray, "g"]:
         """For each ground-truth node, the predicted row matched to it, or `UNMATCHED` — the matching reversed.
 
         The per-timepoint assignment is one-to-one, so no ground-truth node is claimed by two detections; the
         inverse is well defined and lets a ground-truth edge be looked up as the detections standing in for it.
+
+        Public because every per-edge diagnosis needs exactly this lookup to reach a truth edge's endpoints
+        through the prediction (`MislinkSignal` here, `celltrack.eval.seed_dispersion` next door), and a second
+        copy of the inversion is a second chance to invert it differently.
         """
         predicted_of_truth = np.full(truth_count, UNMATCHED, dtype=np.int64)
         matched = np.flatnonzero(matching.is_matched())
@@ -93,7 +97,7 @@ class DenseFateDiagnosis:
         detection standing in for it — and the tracker's own edges then say whether that detection linked to the
         truth's target, to a wrong neighbour, or to nothing.
         """
-        predicted_of_truth = cls._invert(matching, len(truth.node_ids))
+        predicted_of_truth = cls.predicted_of_truth(matching, len(truth.node_ids))
         truth_edges = truth.edge_rows()
         source = predicted_of_truth[truth_edges[:, 0]]
         target = predicted_of_truth[truth_edges[:, 1]]
@@ -276,47 +280,67 @@ class ChargeDiagnosis:
 
 
 @dataclass(frozen=True)
-class AffinityIndex:
-    """Where each node sits in an affinity's per-gap matrices — looked up by node ID, never by graph row.
+class GapSlots:
+    """Where each node sits in a per-gap matrix — looked up by node ID, never by graph row.
 
-    A matrix's rows follow `np.flatnonzero(timepoints == t)` over the graph the affinity was SCORED on, which
+    A matrix's rows follow `np.flatnonzero(timepoints == t)` over the graph the scores were computed on, which
     is the detector's node set. Post-processing prunes short tracks and inserts synthetic bridge nodes, so the
     finished track graph the mislinks live in is a different row space, and indexing it into the matrices would
-    silently read a neighbour's probability. Node IDs survive post-processing, so the lookup is by ID; a node
-    the affinity never scored (a bridge's invented midpoint) is reported absent rather than guessed at.
+    silently read a neighbour's number. Node IDs survive post-processing, so the lookup is by ID; a node that
+    was never scored (a bridge's invented midpoint) is reported absent rather than guessed at.
+
+    Its own type, and public, because more than one per-gap quantity is indexed this way — the blended
+    probabilities (`AffinityIndex`) and the per-seed scores (`celltrack.eval.seed_dispersion`) — and the row
+    space is exactly the thing that must not be re-derived twice with one of them subtly off.
     """
 
-    affinity: EdgeAffinity
     slots: dict[int, tuple[int, int]]
 
     @classmethod
-    def of(cls, scored: TrackGraph, affinity: EdgeAffinity) -> "AffinityIndex":
-        """Index the graph the affinity was scored over — every node ID to its `(timepoint, per-gap row)` slot."""
+    def of(cls, scored: TrackGraph) -> "GapSlots":
+        """Index the graph the scores were computed over — every node ID to its `(timepoint, per-gap row)` slot."""
         timepoints = scored.timepoints()
         slots: dict[int, tuple[int, int]] = {}
         for timepoint in np.unique(timepoints).tolist():
             rows = np.flatnonzero(timepoints == timepoint)
             for column, row in enumerate(rows.tolist()):
                 slots[int(scored.node_ids[row])] = (int(timepoint), column)
-        return cls(affinity=affinity, slots=slots)
+        return cls(slots=slots)
+
+    def source(self, node_id: int) -> tuple[int, int] | None:
+        """The node's `(timepoint, row)` as the SOURCE side of a gap, or `None` when it was never scored."""
+        return self.slots.get(node_id)
+
+    def column(self, node_id: int, timepoint: int) -> int | None:
+        """The node's column in the `t -> t+1` matrix, or `None` when it is not a scored target of that gap."""
+        slot = self.slots.get(node_id)
+        return slot[1] if slot is not None and slot[0] == timepoint + 1 else None
+
+
+@dataclass(frozen=True)
+class AffinityIndex:
+    """An affinity's per-gap probabilities reached by node ID — `GapSlots` over the graph it was scored on."""
+
+    affinity: EdgeAffinity
+    slots: GapSlots
+
+    @classmethod
+    def of(cls, scored: TrackGraph, affinity: EdgeAffinity) -> "AffinityIndex":
+        """Index the graph the affinity was scored over — every node ID to its `(timepoint, per-gap row)` slot."""
+        return cls(affinity=affinity, slots=GapSlots.of(scored))
 
     def pair(self, source_id: int, true_id: int, chosen_id: int) -> tuple[float, float] | None:
         """One source's P(true successor) and P(chosen neighbour), or `None` where this gap scored no such pair."""
-        source = self.slots.get(source_id)
+        source = self.slots.source(source_id)
         if source is None:
             return None
         timepoint, row = source
         matrix = self.affinity.probabilities(timepoint)
-        true_column = self._column(true_id, timepoint)
-        chosen_column = self._column(chosen_id, timepoint)
+        true_column = self.slots.column(true_id, timepoint)
+        chosen_column = self.slots.column(chosen_id, timepoint)
         if matrix is None or true_column is None or chosen_column is None:
             return None
         return float(matrix[row, true_column]), float(matrix[row, chosen_column])
-
-    def _column(self, node_id: int, timepoint: int) -> int | None:
-        """The node's column in the `t -> t+1` matrix, or `None` when it is not a scored target of that gap."""
-        slot = self.slots.get(node_id)
-        return slot[1] if slot is not None and slot[0] == timepoint + 1 else None
 
 
 @dataclass(frozen=True)
@@ -342,7 +366,7 @@ class MislinkSignal:
     ) -> "MislinkSignal":
         """Read the affinity's true- and chosen-target probability for every mislinked annotated edge."""
         fates = DenseFateDiagnosis.of(prediction, truth, matching).fates
-        predicted_of_truth = DenseFateDiagnosis._invert(matching, len(truth.node_ids))  # noqa: SLF001
+        predicted_of_truth = DenseFateDiagnosis.predicted_of_truth(matching, len(truth.node_ids))
         successors = Adjacency.of(prediction).successors
         node_ids = prediction.node_ids
         mislinked = np.flatnonzero((fates == Fate.MISLINK_CONFLICT) | (fates == Fate.MISLINK_FREE))

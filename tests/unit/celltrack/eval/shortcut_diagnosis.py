@@ -9,10 +9,12 @@ import pytest
 from celltrack.eval.dense_diagnosis import DenseDiagnosis
 from celltrack.eval.proxy import TestMovieProxy
 from celltrack.eval.shortcut_diagnosis import (
+    BaseRateGuard,
     CandidatePairs,
     MatchedAnnotation,
     ShortcutDiagnosis,
     ShortcutReport,
+    rank_auc,
 )
 from core.data.tracks import AnnotatedTracks, TrackGraph
 from core.geometry import Spacing
@@ -230,6 +232,29 @@ def test_is_reportable():
     assert not _uniform(size=40, positives=39).is_reportable()  # 0.975 — the GT-graph degeneracy
     assert not _uniform(size=1000, positives=1).is_reportable()  # 0.001 — too few positives to rank
     assert _uniform(size=20, positives=4).is_reportable()  # 0.2 — a real-detection gate's regime
+
+
+def test_allows():
+    """The shared guard's predicate, which sibling diagnoses reuse rather than re-deriving their own interval."""
+    assert BaseRateGuard.allows(0.2)
+    assert not BaseRateGuard.allows(0.975)
+    assert not BaseRateGuard.allows(0.001)
+
+
+def test_refusal():
+    """A refusal states the defect and the rate it was measured at, so a reader can act on it, not just shrug."""
+    message = BaseRateGuard.refusal(0.975)
+    assert "0.9750" in message
+    assert "nearly every candidate is true" in message
+    assert "almost none is" in BaseRateGuard.refusal(0.001)
+
+
+def test_rank_auc():
+    """The Mann-Whitney statistic: positives at ranks 2 and 4 give (6 - 3) / (2*2) = 0.75, ties scored 0.5."""
+    labels = np.array([False, True, False, True])
+    assert rank_auc(np.array([0.1, 0.2, 0.3, 0.4]), labels) == 0.75
+    assert rank_auc(np.array([1.0, 1.0, 1.0, 1.0]), labels) == 0.5
+    assert math.isnan(rank_auc(np.array([0.1, 0.2]), np.array([True, True])))  # one class only
 
 
 def test_auc_probability():
