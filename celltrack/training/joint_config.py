@@ -176,6 +176,13 @@ class LossCfg(BaseModel):
     # constant 66.67 loss — 28.8% of our real pairs), and a rival TARGET can otherwise only be pushed down when
     # another supervised source claims its column, which no unannotated mislink partner ever has.
     symmetric_links: bool = False
+    # Whether the link loss counts one DECISION at a time and balances the true candidate against its rivals
+    # inside it, instead of averaging over cells. The cell mean leaves the association objective unbalanced in
+    # a way the DETECTION objective beside it already refuses: `BalancedBCE` weighs positives 1/n_pos and
+    # negatives w/n_neg per frame, while the link loss lets the single true candidate be outnumbered by its
+    # rivals — up to 38 to 1 on the detected corpus (targets/gap mean 8.3, max 39), with only the focal power
+    # pushing back and by an amount nobody chose. False keeps the cell mean and every number measured under it.
+    balanced_links: bool = False
 
     @property
     def link_axes(self) -> tuple[int, ...]:

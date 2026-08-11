@@ -216,6 +216,11 @@ class JointTrainer:
             action="store_true",
             help="normalise the link loss across TARGETS too (one child per source), not sources alone",
         )
+        parser.add_argument(
+            "--balanced-links",
+            action="store_true",
+            help="count the link loss once per decision, balancing the true candidate against its rivals",
+        )
         # Fine-tuning a CONVERGED model at its original training rate is the classic way to walk off its optimum,
         # which is what 3000 warm-start steps at 1e-4 did (never beat the init). Exposed so the rate is a
         # variable of the experiment rather than an inherited constant.
@@ -594,7 +599,9 @@ class JointTrainer:
         attention = sdpa_kernel(SDPBackend.MATH) if compiled else contextlib.nullcontext()
         with attention, self._autocast():
             out = model.forward(sample.frame_t, sample.frame_t1, source_centres, target_centres, velocity)
-            edge = SoftmaxFocalBCE.of(out.edge_logits, edge_matrix, loss_config.link_axes)
+            edge = SoftmaxFocalBCE.of(
+                out.edge_logits, edge_matrix, loss_config.link_axes, balanced=loss_config.balanced_links
+            )
             ignore = loss_config.ignore_ambiguous_above
             det = BalancedBCE.of(
                 out.detection_t.unsqueeze(0), [centres_t_grid], loss_config.neg_weight, ignore
@@ -702,6 +709,7 @@ def main() -> None:
             hard_negatives=args.hard_negatives,
             ignore_ambiguous_above=args.ignore_ambiguous_above,
             symmetric_links=args.symmetric_links,
+            balanced_links=args.balanced_links,
         ),
         eval=EvalCfg(tracker=replace(TrackerConfig.shipped(), threshold=args.eval_threshold)),
         schedule=ScheduleCfg(

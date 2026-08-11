@@ -45,6 +45,8 @@ class SoftmaxFocalBCE:
         logits: Float[Tensor, "s t"],
         target: Float[Tensor, "s t"],
         axes: Sequence[int] = (SOURCE_AXIS,),
+        *,
+        balanced: bool = False,
     ) -> Float[Tensor, ""]:
         """Mean focal BCE across `axes`, over the rows and columns the annotation touches.
 
@@ -72,10 +74,11 @@ class SoftmaxFocalBCE:
         constraining = [axis for axis in axes if logits.shape[axis] > _ONE_CANDIDATE]
         if not active.any() or not constraining:
             return logits.new_zeros(())
+        along = SoftmaxFocalBCE._balanced_along if balanced else SoftmaxFocalBCE._along
         with torch.autocast(device_type=logits.device.type, enabled=False):
             scores = logits.float()
             truth = target.float()
-            terms = [SoftmaxFocalBCE._along(scores, truth, active, axis) for axis in constraining]
+            terms = [along(scores, truth, active, axis) for axis in constraining]
             return torch.stack(terms).sum() / len(axes)
 
     @staticmethod
@@ -83,7 +86,49 @@ class SoftmaxFocalBCE:
         scores: Float[Tensor, "s t"], truth: Float[Tensor, "s t"], active: Bool[Tensor, "s t"], axis: int
     ) -> Float[Tensor, ""]:
         """Focal BCE over the softmax along one axis, averaged over the active cells."""
+        return SoftmaxFocalBCE._focal(scores, truth, axis)[active].mean()
+
+    @staticmethod
+    def _balanced_along(
+        scores: Float[Tensor, "s t"], truth: Float[Tensor, "s t"], active: Bool[Tensor, "s t"], axis: int
+    ) -> Float[Tensor, ""]:
+        """The same focal BCE, counted once per DECISION and class-balanced inside it.
+
+        `_along` averages over active CELLS, which leaves the objective unbalanced twice over, and in the same
+        two ways `BalancedBCE` already refuses for detection:
+
+          * WITHIN a decision the single true candidate is outnumbered by its rivals — up to 38 to 1 on our
+            detected corpus (targets/gap mean 8.3, max 39) — so the gradient is mostly "not that one" and only
+            the focal power pushes back, implicitly and by an amount nobody chose.
+          * ACROSS decisions a cell mean weighs each decision by HOW MANY ACTIVE CELLS it holds, so a decision
+            is heard in proportion to its rival count rather than once. (The active mask is a union of touched
+            rows and columns, so widths are often equal and this is the weaker of the two effects — the class
+            imbalance above is the one that bites at every width.)
+
+        Here each decision (a column when normalising over sources — "who is this target's parent") contributes
+        the mean over its positives plus the mean over its rivals, exactly `BalancedBCE`'s positives-1/n_pos,
+        negatives-1/n_neg rule read at the row level, and the decisions are then averaged. So one decision is
+        one vote whatever its width, and inside it the true candidate carries the same total weight as the field.
+        No constant enters: the balance is the two class counts, which the data supplies.
+        """
+        focal = SoftmaxFocalBCE._focal(scores, truth, axis)
+        # Reduce ALONG the normalised axis: the softmax runs down it, so the competitors of one decision are
+        # exactly the entries it spans, and what survives the reduction is one number per decision.
+        positive = SoftmaxFocalBCE._class_mean(focal, (truth > 0) & active, axis)
+        negative = SoftmaxFocalBCE._class_mean(focal, (truth == 0) & active, axis)
+        decided = active.any(dim=axis)
+        return (positive + negative)[decided].mean()
+
+    @staticmethod
+    def _focal(scores: Float[Tensor, "s t"], truth: Float[Tensor, "s t"], axis: int) -> Float[Tensor, "s t"]:
+        """Per-cell focal BCE over the softmax along `axis` — the quantity both reductions differ only in reading."""
         probability = torch.softmax(scores, dim=axis)
         bce = F.binary_cross_entropy(probability, truth, reduction="none")
         p_t = probability * truth + (1 - probability) * (1 - truth)
-        return (((1 - p_t) ** _FOCAL_POWER) * bce)[active].mean()
+        return ((1 - p_t) ** _FOCAL_POWER) * bce
+
+    @staticmethod
+    def _class_mean(focal: Float[Tensor, "s t"], mask: Bool[Tensor, "s t"], over: int) -> Float[Tensor, " d"]:
+        """Each decision's mean over one class — zero where that class is empty, never a division by zero."""
+        counted = mask.sum(dim=over)
+        return (focal * mask).sum(dim=over) / counted.clamp(min=1)

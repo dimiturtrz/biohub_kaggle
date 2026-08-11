@@ -1,5 +1,6 @@
 """Unit test for the softmax-focal BCE link loss — and for the axis that decides what it can teach."""
 
+import pytest
 import torch
 
 from celltrack.losses.softmax_focal_bce import SOURCE_AXIS, TARGET_AXIS, SoftmaxFocalBCE
@@ -77,6 +78,52 @@ def test_softmax_focal_b_c_e_of_drops_an_axis_that_constrains_nothing():
 
     assert SoftmaxFocalBCE.of(logits, target).item() == 0.0  # nothing to say, so it says nothing
     assert SoftmaxFocalBCE.of(logits, target, axes=_BOTH).item() < 1.0  # the target axis alone, at half weight
+
+
+def test_softmax_focal_b_c_e_of_balanced_is_off_by_default():
+    """The balanced reduction is opt-in — a run that does not ask sees the cell mean it always saw."""
+    target = torch.tensor([[1.0, 0.0], [0.0, 0.0]])
+    logits = torch.tensor([[2.0, -1.0], [-3.0, 0.5]])
+
+    assert SoftmaxFocalBCE.of(logits, target).item() == SoftmaxFocalBCE.of(logits, target, balanced=False).item()
+
+
+def test_softmax_focal_b_c_e_of_balanced_gives_the_truth_the_weight_of_the_whole_field():
+    """One true candidate carries as much as all its rivals together, however many of them there are.
+
+    Under the cell mean a wide decision is mostly "not that one": with 39 rivals the truth holds 1/40 of the
+    term, so widening the candidate set quietly dilutes the only cell that says what the answer IS. Balanced,
+    the positive mean and the negative mean each count once, so the truth's share is 1/2 at every width — the
+    same rule `BalancedBCE` already applies to detection, read per decision.
+    """
+    target = torch.tensor([[1.0], [0.0], [0.0], [0.0], [0.0]])  # one parent among five candidates for one target
+    logits = torch.zeros(5, 1, requires_grad=True)
+
+    SoftmaxFocalBCE.of(logits, target, balanced=True).backward()
+
+    assert logits.grad is not None
+    truth, *rivals = logits.grad[:, 0].tolist()
+    assert truth < 0 and all(rival > 0 for rival in rivals)
+    assert abs(truth) == pytest.approx(sum(rivals), rel=1e-5)  # the field pushes back exactly as hard as the truth
+
+
+def test_softmax_focal_b_c_e_of_balanced_is_the_mean_over_decisions():
+    """Hand-computed: each column contributes its own positive mean plus its own rival mean, then averaged.
+
+    At uniform logits every cell's focal BCE is 0.25 * -log(0.5) = 0.1733. The left column holds the truth and
+    one rival, so it contributes 0.1733 + 0.1733; the right column holds two rivals and no truth, so it
+    contributes 0 + 0.1733. The loss is the mean of the two, 0.2599 — where the cell mean returns 0.1733,
+    every cell being identical. The gap IS the balance: the decision that has an answer to teach now carries
+    more than the one that only has rivals to push down.
+    """
+    logits = torch.zeros(2, 2)
+    target = torch.tensor([[1.0, 0.0], [0.0, 0.0]])
+    cell = 0.25 * -torch.log(torch.tensor(0.5))
+
+    balanced = SoftmaxFocalBCE.of(logits, target, balanced=True)
+
+    assert balanced.item() == pytest.approx(((cell + cell) + cell).item() / 2, rel=1e-5)
+    assert SoftmaxFocalBCE.of(logits, target).item() == pytest.approx(cell.item(), rel=1e-5)
 
 
 def test_softmax_focal_b_c_e_of_weights_a_pair_by_the_constraints_it_can_state():
