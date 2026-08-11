@@ -18,7 +18,7 @@ from celltrack.edges.blended_edge_scoring import BlendedEdgeTransformerScorer
 from celltrack.eval.model_evaluator import ModelEvaluator
 from celltrack.eval.proxy import TestMovieProxy
 from celltrack.models.edge_transformer import PrecomputedEdgeAffinity
-from celltrack.tracker import TrackerConfig
+from celltrack.operating_point import TrackerConfig
 from celltrack.training.run_tracking import RunSetup, TrainingSplit
 from celltrack.training.tunet_detector import (
     TUNetDetectorTrainer,

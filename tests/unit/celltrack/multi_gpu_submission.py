@@ -7,7 +7,7 @@ import pytest
 
 from celltrack import multi_gpu_submission as dispatch
 from celltrack.multi_gpu_submission import MultiGpuSubmission
-from celltrack.tracker import TrackerConfig
+from celltrack.operating_point import TrackerConfig
 from core.data.submission import Submission
 from core.data.tracks import TrackGraph
 

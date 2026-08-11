@@ -9,7 +9,7 @@ behaviour the config carries beyond holding values.
 import pytest
 from pydantic import ValidationError
 
-from celltrack.tracker import TrackerConfig
+from celltrack.operating_point import TrackerConfig
 from celltrack.training.joint_config import (
     WARM_PACKS,
     ContrastiveSite,

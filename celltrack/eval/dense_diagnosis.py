@@ -41,7 +41,8 @@ from jaxtyping import Bool, Float, Int
 from celltrack.affinity import EdgeAffinity
 from celltrack.eval.proxy import TestMovieProxy
 from celltrack.eval.proxy_eval import ConfigOverride
-from celltrack.tracker import CellTracker, TrackerConfig
+from celltrack.operating_point import TrackerConfig
+from celltrack.tracker import CellTracker
 from core.data.tracks import Adjacency, TrackGraph
 from core.geometry import Spacing
 from core.metrics.edges import ChargedLinks, EdgeCounts

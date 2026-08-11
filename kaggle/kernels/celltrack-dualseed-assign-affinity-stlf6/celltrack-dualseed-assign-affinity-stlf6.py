@@ -40,7 +40,7 @@ sys.path.insert(0, str(pack_source()))
 
 from celltrack.linkers.linkers import LinkerConfig  # noqa: E402
 from celltrack.multi_gpu_submission import MultiGpuSubmission  # noqa: E402
-from celltrack.tracker import TrackerConfig  # noqa: E402
+from celltrack.operating_point import TrackerConfig  # noqa: E402
 
 # thr 0.97 is the measured LB best of the ladder probed so far (0.99/0.98/0.97 = 0.887/0.891/0.892).
 _THRESHOLD = 0.97

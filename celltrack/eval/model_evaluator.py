@@ -32,7 +32,8 @@ from celltrack.eval.dense_diagnosis import AffinityIndex, MislinkSignal
 from celltrack.eval.proxy import TestMovieProxy
 from celltrack.models.edge_transformer import EdgeTransformerScorer
 from celltrack.models.joint_model import JointModel
-from celltrack.tracker import CellTracker, TrackerConfig
+from celltrack.operating_point import TrackerConfig
+from celltrack.tracker import CellTracker
 from core.metrics.detection import NodeCounts
 from core.metrics.matching import DistanceMatcher
 from core.metrics.score import SplitScore, VideoMetrics

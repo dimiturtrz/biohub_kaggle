@@ -31,7 +31,7 @@ from jaxtyping import Float, Int
 from celltrack.eval.dense_diagnosis import DENSE_MOVIE, DenseDiagnosis, DenseFateDiagnosis, Fate
 from celltrack.eval.proxy import TestMovieProxy
 from celltrack.eval.proxy_eval import ConfigOverride
-from celltrack.tracker import TrackerConfig
+from celltrack.operating_point import TrackerConfig
 from core.data.tracks import Adjacency, TrackGraph
 from core.geometry import Spacing
 from core.metrics.matching import UNMATCHED, DistanceMatcher, NodeMatching

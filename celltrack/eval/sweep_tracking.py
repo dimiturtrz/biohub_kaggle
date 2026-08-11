@@ -11,7 +11,7 @@ from dataclasses import asdict
 
 from pydantic import BaseModel
 
-from celltrack.tracker import TrackerConfig
+from celltrack.operating_point import TrackerConfig
 from core.metrics.score import VideoMetrics
 from core.tracking import Tracker
 

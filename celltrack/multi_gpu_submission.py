@@ -26,7 +26,8 @@ from queue import Empty
 import torch
 import torch.multiprocessing as torch_mp
 
-from celltrack.tracker import CellTracker, TrackerConfig
+from celltrack.operating_point import TrackerConfig
+from celltrack.tracker import CellTracker
 from core.data.submission import Submission
 from core.data.tracks import TrackGraph
 

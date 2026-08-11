@@ -15,7 +15,8 @@ from celltrack.eval.dense_diagnosis import (
     MislinkSignal,
 )
 from celltrack.linkers.linkers import LinkerConfig
-from celltrack.tracker import CellTracker, TrackedVideo, TrackerConfig
+from celltrack.operating_point import TrackerConfig
+from celltrack.tracker import CellTracker, TrackedVideo
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
 from core.metrics.edges import EdgeCounts

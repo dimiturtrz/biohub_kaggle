@@ -40,7 +40,7 @@ from celltrack.detectors.tunet import DetectorRecipe, TemporalUNetDetector
 from celltrack.eval.model_evaluator import EvalResult, ModelEvaluator
 from celltrack.eval.proxy import TEST_MOVIES, VALIDATION_MOVIES, TestMovieProxy
 from celltrack.losses.balanced_bce import BalancedBCE
-from celltrack.tracker import TrackerConfig
+from celltrack.operating_point import TrackerConfig
 from celltrack.training.early_stop import EarlyStop
 from celltrack.training.run_tracking import RunSetup, TrainingRun, TrainingSplit
 from core.data.tracks import AnnotatedTracks

@@ -52,7 +52,7 @@ from celltrack.losses.softmax_focal_bce import SoftmaxFocalBCE
 from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeTransformerScorer
 from celltrack.models.joint_model import JointModel
 from celltrack.models.temporal_unet_detector import TemporalUNetDetector
-from celltrack.tracker import TrackerConfig
+from celltrack.operating_point import TrackerConfig
 from celltrack.training.contrastive_term import ContrastiveTerm
 from celltrack.training.early_stop import EarlyStop
 from celltrack.training.joint_config import (

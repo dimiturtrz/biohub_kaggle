@@ -23,7 +23,8 @@ from pydantic import BaseModel
 from celltrack.eval.proxy import CV_MOVIES, TEST_MOVIES, TestMovieProxy
 from celltrack.eval.sweep_tracking import SweepTracking
 from celltrack.linkers.linkers import LinkerConfig
-from celltrack.tracker import CellTracker, TrackerConfig
+from celltrack.operating_point import TrackerConfig
+from celltrack.tracker import CellTracker
 from core.metrics.score import SplitScore, VideoMetrics
 from core.paths import DataRoot
 

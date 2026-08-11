@@ -10,7 +10,8 @@ from celltrack.eval import proxy_eval
 from celltrack.eval.proxy import CV_MOVIES
 from celltrack.eval.proxy_eval import ConfigOverride, TrackerProxyEval, _Args
 from celltrack.eval.sweep_tracking import SweepTracking
-from celltrack.tracker import CellTracker, TrackerConfig
+from celltrack.operating_point import TrackerConfig
+from celltrack.tracker import CellTracker
 from core.metrics.score import VideoMetrics
 from core.paths import DataRoot
 from tests.unit.celltrack.conftest import RecordingMlflow

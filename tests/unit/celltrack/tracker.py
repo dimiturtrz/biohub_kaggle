@@ -12,8 +12,9 @@ from celltrack.detectors.tunet import DetectorRecipe
 from celltrack.edges.blended_edge_scoring import EdgeBlendOptions
 from celltrack.linkers.linkers import LinkerConfig
 from celltrack.linkers.linking import Linker
+from celltrack.operating_point import TrackerConfig
 from celltrack.postproc.topology_repair import TopologyConfig
-from celltrack.tracker import CellTracker, LinkerStage, TrackerConfig
+from celltrack.tracker import CellTracker, LinkerStage
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
 
@@ -200,18 +201,6 @@ def test_transform():
     stage = LinkerStage(cast(Linker, _Linker()))
     linked = stage.transform(_CHAIN)
     assert linked.edges.tolist() == [[0, 1]]
-
-
-def test_post_init():
-    """An operating point that cannot mean what it says is refused at construction, not obeyed quietly."""
-    with pytest.raises(ValueError, match="edge_blend must sum to 1"):
-        TrackerConfig(edge_blend=(0.8, 0.8))  # rescales the logits -> shifts the softmax temperature
-    with pytest.raises(ValueError, match="threshold must be a probability"):
-        TrackerConfig(threshold=5.0)
-    with pytest.raises(ValueError, match="min_track_length"):
-        TrackerConfig(min_track_length=0)
-
-    assert TrackerConfig().threshold == 0.97  # the LB-measured best, not the round number
 
 
 class _FusedAffinity:

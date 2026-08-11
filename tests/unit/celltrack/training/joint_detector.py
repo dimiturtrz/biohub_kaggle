@@ -22,7 +22,7 @@ from celltrack.eval.proxy import TestMovieProxy
 from celltrack.models.edge_transformer import _POS_EMBED_DIM
 from celltrack.models.joint_model import JointModel
 from celltrack.models.prior_velocity import PriorVelocity
-from celltrack.tracker import TrackerConfig
+from celltrack.operating_point import TrackerConfig
 from celltrack.training.joint_config import (
     ContrastiveSite,
     DataCfg,

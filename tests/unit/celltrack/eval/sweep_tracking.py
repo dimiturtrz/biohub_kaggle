@@ -6,7 +6,7 @@ stem so a sweep stays comparable months later.
 """
 
 from celltrack.eval.sweep_tracking import SweepTracking
-from celltrack.tracker import TrackerConfig
+from celltrack.operating_point import TrackerConfig
 
 
 def test_params():
