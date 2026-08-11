@@ -4849,6 +4849,12 @@
       "weight": 1
     },
     {
+      "kind": "calls",
+      "source": "celltrack.eval.mitotic_appearance.DivisionCandidates.of",
+      "target": "celltrack.operating_point.TrackerConfig.shipped",
+      "weight": 1
+    },
+    {
       "kind": "construct",
       "source": "celltrack.eval.mitotic_appearance.DivisionCandidates.of",
       "target": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig",
@@ -7435,6 +7441,12 @@
       "weight": 1
     },
     {
+      "kind": "calls",
+      "source": "celltrack.losses.softmax_focal_bce.SoftmaxFocalBCE.of",
+      "target": "celltrack.losses.softmax_focal_bce.SoftmaxFocalBCE._along",
+      "weight": 1
+    },
+    {
       "kind": "holds",
       "source": "celltrack.models.contrastive_projection.ContrastiveProjection",
       "target": "celltrack.models.contrastive_projection.ContrastiveProjectionConfig",
@@ -8065,6 +8077,12 @@
       "weight": 1
     },
     {
+      "kind": "construct",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig.build",
+      "target": "celltrack.postproc.affinity_division_recovery.SurvivingDaughterRanking",
+      "weight": 1
+    },
+    {
       "kind": "holds",
       "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery",
       "target": "celltrack.affinity.EdgeAffinity",
@@ -8121,6 +8139,12 @@
     {
       "kind": "calls",
       "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._division_edges",
+      "target": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._frames_ahead",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._division_edges",
       "target": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._gap_proposals",
       "weight": 1
     },
@@ -8128,6 +8152,12 @@
       "kind": "calls",
       "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._division_edges",
       "target": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery.budget",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._division_edges",
+      "target": "celltrack.postproc.affinity_division_recovery._Gap",
       "weight": 1
     },
     {
@@ -8158,12 +8188,6 @@
       "kind": "calls",
       "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._gap_proposals",
       "target": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._runner_up",
-      "weight": 1
-    },
-    {
-      "kind": "construct",
-      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._gap_proposals",
-      "target": "celltrack.postproc.affinity_division_recovery._Gap",
       "weight": 1
     },
     {
@@ -8290,6 +8314,30 @@
       "kind": "calls",
       "source": "celltrack.postproc.affinity_division_recovery.SplitSymmetryRanking.cost",
       "target": "celltrack.postproc.affinity_division_recovery.ForkCandidate.split_imbalance",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.postproc.affinity_division_recovery.SurvivingDaughterRanking",
+      "target": "celltrack.postproc.affinity_division_recovery.ForkCandidate",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.postproc.affinity_division_recovery.SurvivingDaughterRanking",
+      "target": "celltrack.postproc.affinity_division_recovery.ForkRanking",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.postproc.affinity_division_recovery.SurvivingDaughterRanking.cost",
+      "target": "celltrack.postproc.affinity_division_recovery.ForkRanking.cost",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.postproc.affinity_division_recovery.SurvivingDaughterRanking.cost",
+      "target": "celltrack.postproc.affinity_division_recovery.SurvivingDaughterRanking._shortfall",
       "weight": 1
     },
     {
@@ -9868,12 +9916,6 @@
       "kind": "construct",
       "source": "celltrack.training.joint_detector.JointTrainer._pairs",
       "target": "celltrack.data.pair_curriculum.PairDraw",
-      "weight": 1
-    },
-    {
-      "kind": "construct",
-      "source": "celltrack.training.joint_detector.JointTrainer._parser",
-      "target": "celltrack.operating_point.TrackerConfig",
       "weight": 1
     },
     {
@@ -13396,6 +13438,14 @@
       "descendants": 0,
       "id": "celltrack.postproc.affinity_division_recovery.SplitSymmetryRanking",
       "label": "SplitSymmetryRanking",
+      "level": "class",
+      "parent": "celltrack.postproc.affinity_division_recovery",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.affinity_division_recovery.SurvivingDaughterRanking",
+      "label": "SurvivingDaughterRanking",
       "level": "class",
       "parent": "celltrack.postproc.affinity_division_recovery",
       "role": "satellite"
@@ -17578,6 +17628,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.losses.softmax_focal_bce.SoftmaxFocalBCE._along",
+      "label": "_along",
+      "level": "method",
+      "parent": "celltrack.losses.softmax_focal_bce.SoftmaxFocalBCE",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.losses.softmax_focal_bce.SoftmaxFocalBCE.of",
       "label": "of",
       "level": "method",
@@ -18170,6 +18228,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._frames_ahead",
+      "label": "_frames_ahead",
+      "level": "method",
+      "parent": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._gap_proposals",
       "label": "_gap_proposals",
       "level": "method",
@@ -18302,6 +18368,22 @@
       "label": "cost",
       "level": "method",
       "parent": "celltrack.postproc.affinity_division_recovery.SplitSymmetryRanking",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.affinity_division_recovery.SurvivingDaughterRanking._shortfall",
+      "label": "_shortfall",
+      "level": "method",
+      "parent": "celltrack.postproc.affinity_division_recovery.SurvivingDaughterRanking",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.affinity_division_recovery.SurvivingDaughterRanking.cost",
+      "label": "cost",
+      "level": "method",
+      "parent": "celltrack.postproc.affinity_division_recovery.SurvivingDaughterRanking",
       "role": null
     },
     {
@@ -18926,6 +19008,14 @@
       "label": "resolved",
       "level": "method",
       "parent": "celltrack.training.joint_config.JointTrainConfig",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.joint_config.LossCfg.link_axes",
+      "label": "link_axes",
+      "level": "method",
+      "parent": "celltrack.training.joint_config.LossCfg",
       "role": null
     },
     {
