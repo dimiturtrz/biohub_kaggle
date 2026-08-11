@@ -1070,6 +1070,24 @@
     },
     {
       "kind": "import",
+      "source": "celltrack.linkers.evidence_prior",
+      "target": "celltrack.affinity",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.linkers.evidence_prior",
+      "target": "celltrack.linkers.boundary_prior",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.linkers.evidence_prior",
+      "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "celltrack.linkers.flow_linking",
       "target": "celltrack.affinity",
       "weight": 1
@@ -6836,6 +6854,18 @@
     },
     {
       "kind": "references",
+      "source": "celltrack.linkers.boundary_prior.BoundaryFactorSource",
+      "target": "celltrack.linkers.boundary_prior.BoundaryFactors",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.linkers.boundary_prior.BoundaryFactorSource",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "references",
       "source": "celltrack.linkers.boundary_prior.BoundaryPrior",
       "target": "celltrack.linkers.boundary_prior.BoundaryFactors",
       "weight": 1
@@ -6949,6 +6979,54 @@
       "weight": 1
     },
     {
+      "kind": "holds",
+      "source": "celltrack.linkers.evidence_prior.EvidencePrior",
+      "target": "celltrack.affinity.EdgeAffinity",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.linkers.evidence_prior.EvidencePrior",
+      "target": "celltrack.linkers.boundary_prior.BoundaryFactors",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.linkers.evidence_prior.EvidencePrior",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.linkers.evidence_prior.EvidencePrior._in_gate_mass",
+      "target": "celltrack.affinity.EdgeAffinity.probabilities",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.linkers.evidence_prior.EvidencePrior._in_gate_mass",
+      "target": "celltrack.linkers.evidence_prior.EvidencePrior._within_gate",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.linkers.evidence_prior.EvidencePrior.factors",
+      "target": "celltrack.linkers.boundary_prior.BoundaryFactors",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.linkers.evidence_prior.EvidencePrior.factors",
+      "target": "celltrack.linkers.evidence_prior.EvidencePrior._in_gate_mass",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.linkers.evidence_prior.EvidencePrior.factors",
+      "target": "celltrack.linkers.evidence_prior.EvidencePrior._normalised",
+      "weight": 1
+    },
+    {
       "kind": "references",
       "source": "celltrack.linkers.evidence_ramp.EvidenceRamp",
       "target": "celltrack.linkers.evidence_ramp.EvidenceRamp",
@@ -6975,7 +7053,7 @@
     {
       "kind": "holds",
       "source": "celltrack.linkers.flow_linking.FlowLinker",
-      "target": "celltrack.linkers.boundary_prior.BoundaryPrior",
+      "target": "celltrack.linkers.boundary_prior.BoundaryFactorSource",
       "weight": 1
     },
     {
@@ -7017,7 +7095,7 @@
     {
       "kind": "calls",
       "source": "celltrack.linkers.flow_linking.FlowLinker._boundary_costs",
-      "target": "celltrack.linkers.boundary_prior.BoundaryPrior.factors",
+      "target": "celltrack.linkers.boundary_prior.BoundaryFactorSource.factors",
       "weight": 1
     },
     {
@@ -7167,7 +7245,7 @@
     {
       "kind": "references",
       "source": "celltrack.linkers.linkers.LinkerConfig",
-      "target": "celltrack.linkers.boundary_prior.BoundaryPrior",
+      "target": "celltrack.linkers.boundary_prior.BoundaryFactorSource",
       "weight": 1
     },
     {
@@ -7228,6 +7306,12 @@
       "kind": "construct",
       "source": "celltrack.linkers.linkers.LinkerConfig._boundary",
       "target": "celltrack.linkers.boundary_prior.BoundaryPrior",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.linkers.linkers.LinkerConfig._boundary",
+      "target": "celltrack.linkers.evidence_prior.EvidencePrior",
       "weight": 1
     },
     {
@@ -7305,7 +7389,7 @@
     {
       "kind": "holds",
       "source": "celltrack.linkers.linkers.LinkerParts",
-      "target": "celltrack.linkers.boundary_prior.BoundaryPrior",
+      "target": "celltrack.linkers.boundary_prior.BoundaryFactorSource",
       "weight": 1
     },
     {
@@ -11487,7 +11571,7 @@
   ],
   "nodes": [
     {
-      "descendants": 93,
+      "descendants": 94,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -11823,7 +11907,7 @@
       "role": null
     },
     {
-      "descendants": 14,
+      "descendants": 15,
       "id": "celltrack.linkers",
       "label": "linkers",
       "level": "module",
@@ -11866,6 +11950,14 @@
       "descendants": 0,
       "id": "celltrack.linkers.division_linking",
       "label": "division_linking",
+      "level": "module",
+      "parent": "celltrack.linkers",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.linkers.evidence_prior",
+      "label": "evidence_prior",
       "level": "module",
       "parent": "celltrack.linkers",
       "role": null
@@ -13272,6 +13364,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.linkers.boundary_prior.BoundaryFactorSource",
+      "label": "BoundaryFactorSource",
+      "level": "class",
+      "parent": "celltrack.linkers.boundary_prior",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.linkers.boundary_prior.BoundaryFactors",
       "label": "BoundaryFactors",
       "level": "class",
@@ -13292,6 +13392,14 @@
       "label": "DivisionAwareLinker",
       "level": "class",
       "parent": "celltrack.linkers.division_linking",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.linkers.evidence_prior.EvidencePrior",
+      "label": "EvidencePrior",
+      "level": "class",
+      "parent": "celltrack.linkers.evidence_prior",
       "role": "satellite"
     },
     {
@@ -17448,6 +17556,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.linkers.boundary_prior.BoundaryFactorSource.factors",
+      "label": "factors",
+      "level": "method",
+      "parent": "celltrack.linkers.boundary_prior.BoundaryFactorSource",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.linkers.boundary_prior.BoundaryPrior._factor",
       "label": "_factor",
       "level": "method",
@@ -17500,6 +17616,38 @@
       "label": "link",
       "level": "method",
       "parent": "celltrack.linkers.division_linking.DivisionAwareLinker",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.linkers.evidence_prior.EvidencePrior._in_gate_mass",
+      "label": "_in_gate_mass",
+      "level": "method",
+      "parent": "celltrack.linkers.evidence_prior.EvidencePrior",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.linkers.evidence_prior.EvidencePrior._normalised",
+      "label": "_normalised",
+      "level": "method",
+      "parent": "celltrack.linkers.evidence_prior.EvidencePrior",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.linkers.evidence_prior.EvidencePrior._within_gate",
+      "label": "_within_gate",
+      "level": "method",
+      "parent": "celltrack.linkers.evidence_prior.EvidencePrior",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.linkers.evidence_prior.EvidencePrior.factors",
+      "label": "factors",
+      "level": "method",
+      "parent": "celltrack.linkers.evidence_prior.EvidencePrior",
       "role": null
     },
     {
