@@ -23,6 +23,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt
 
+from celltrack.losses.softmax_focal_bce import SOURCE_AXIS, TARGET_AXIS
 from celltrack.operating_point import TrackerConfig
 
 logger = logging.getLogger(__name__)
@@ -161,6 +162,17 @@ class LossCfg(BaseModel):
     # detections (measured: node recall 0.966 -> 0.936, ratio -0.15, within half an epoch). None keeps the
     # objective of yesterday; `main` derives the value it passes from `TrackerConfig.threshold`.
     ignore_ambiguous_above: float | None = Field(None, gt=0, lt=1)
+    # Whether the link loss ALSO normalises across targets ("one child per source") rather than across sources
+    # alone. False keeps the frontier's form and yesterday's numbers exactly. True fixes two measured defects:
+    # a single-source pair is degenerate under the source axis (identically-1.0 softmax, zero gradient, a
+    # constant 66.67 loss — 28.8% of our real pairs), and a rival TARGET can otherwise only be pushed down when
+    # another supervised source claims its column, which no unannotated mislink partner ever has.
+    symmetric_links: bool = False
+
+    @property
+    def link_axes(self) -> tuple[int, ...]:
+        """The axes the link loss normalises over — the source axis always, the target axis when asked."""
+        return (SOURCE_AXIS, TARGET_AXIS) if self.symmetric_links else (SOURCE_AXIS,)
 
 
 class EvalCfg(BaseModel):

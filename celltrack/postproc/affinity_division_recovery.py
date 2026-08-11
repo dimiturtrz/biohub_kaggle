@@ -19,6 +19,12 @@ its implementations — kept as the default so no configured pipeline shifts sil
   sits at a random angle. Ranking a fork by how far the candidate is from the mother, penalised by how badly
   the two daughters fail to balance around her.
 
+Orthogonal to all three, and composable with any of them, is what a fork IMPLIES rather than how it looks:
+
+* `SurvivingDaughterRanking` — a decorator penalising a proposed daughter that does not go on to survive as a
+  track. A real mitosis leaves two lineages that persist; a false fork typically grafts a fragment. The linked
+  graph already knows, so this costs no model, no training and no asset.
+
 `min_second_prob` survives as an admission FLOOR, never as the sort key. A per-video budget bounds the
 speculation from both ends — a fraction of the graph's edges and an absolute ceiling, whichever is smaller.
 
@@ -38,6 +44,11 @@ the two are indistinguishable in the total score. It is UNMEASURED. The quantity
 `nodes_kept(with) - nodes_kept(without) - forks_emitted`: a fork adds exactly one edge, so any surplus is
 rescue rather than division. `reuse` documents the same merge effect deliberately; this one arrives with the
 ordering rather than by design.
+
+MEASURED since: at the derived budget the whole stage costs the edge term 0.0006 across the four proxy movies
+for 157 forks — under a third of one mislink — so the merge is not what the division arms are buying. That
+leaves the effect real but small, and `SurvivingDaughterRanking` is the handle on it either way: the fragments
+it smuggles are exactly the daughters that fail to persist.
 """
 
 import logging
@@ -59,6 +70,7 @@ _UNPARENTED = 0
 _TOP_TARGET = 0
 _RUNNER_UP = 1
 _DEGENERATE = 0.0
+_SHORTEST_TRACK = 1
 
 logger = logging.getLogger(__name__)
 
@@ -71,16 +83,17 @@ _DIVISION_RATE = 0.00113
 
 @dataclass(frozen=True)
 class _Gap:
-    """One frame gap's node context: the t+1 target rows, which of them are unparented, and all positions."""
+    """One frame gap's node context: the t+1 target rows, which are unparented, all positions, all futures."""
 
     targets: Int[np.ndarray, "t"]
     orphan: Bool[np.ndarray, "t"]
     positions_um: Float[np.ndarray, "n 3"]
+    frames_ahead: Int[np.ndarray, "n"]
 
 
 @dataclass(frozen=True)
 class ForkCandidate:
-    """One proposed fork and every quantity a ranking may read: the head's score and the split's geometry.
+    """One proposed fork and every quantity a ranking may read: the head's score, the split's geometry, its future.
 
     The three nodes are graph ROWS; the micrometre positions are the whole video's, so a candidate carries no
     copied coordinates. Public because a `ForkRanking` is written against this vocabulary.
@@ -91,6 +104,10 @@ class ForkCandidate:
     child: int
     probability: float
     positions_um: Float[np.ndarray, "n 3"]
+    # How many frames each daughter's track survives from this gap onward, the mother's kept child included.
+    # The linker admits one child per node, so a daughter's future is a chain and its length is well defined.
+    kept_frames: int
+    child_frames: int
 
     def parent_distance_um(self) -> float:
         """Mother to the proposed new daughter."""
@@ -187,6 +204,45 @@ class SplitSymmetryRanking:
 
 
 @dataclass(frozen=True)
+class SurvivingDaughterRanking:
+    """Any ranking, penalised by how far the proposed daughter falls short of surviving as a track.
+
+    A real mitosis leaves two lineages that PERSIST. A false fork typically grafts a fragment onto a track —
+    which is also what makes the stage's component-merge side effect indistinguishable from a division in the
+    total score. Nothing in the geometry can tell those apart, and the graph already knows: the recovery runs
+    on the linked graph, so both daughters' futures are in hand at ranking time. No model, no training, no
+    asset — the only cue here that reads what a fork IMPLIES rather than how it looks.
+
+    Normalised, like the terms it decorates, by the constraint that already decides the daughter's own
+    admissibility: `ShortTrackFilter`'s length rule. A daughter that survives it contributes 0, one that dies
+    at the fork contributes 1, so the term lands in [0, 1] and the equal weighting stays the untuned choice.
+
+    It decorates rather than replaces because persistence is orthogonal to geometry — every existing ranking
+    should be able to carry it, and none of them should have to restate the other's terms to do so.
+    """
+
+    base: ForkRanking
+    min_track_length: int
+
+    def cost(self, candidate: ForkCandidate) -> float:
+        """The base ranking's cost plus the daughter's shortfall against the length a track must reach."""
+        return self.base.cost(candidate) + self._shortfall(candidate.child_frames)
+
+    def _shortfall(self, frames: int) -> float:
+        """How far short of the length rule this daughter's track stops, over the range a daughter can span.
+
+        A daughter always spans at least the frame it appears in, so the reachable range is `1` to the length
+        rule and the normaliser is that span — not the rule itself, which would cap the penalty below 1 and
+        quietly weight this term under the geometry it is added to. Saturating at the rule is deliberate: a
+        long-lived daughter cannot buy its way past a bad split, it only stops being suspicious.
+        """
+        span = self.min_track_length - _SHORTEST_TRACK
+        if span <= _DEGENERATE:
+            return _DEGENERATE
+        return (self.min_track_length - min(frames, self.min_track_length)) / span
+
+
+@dataclass(frozen=True)
 class AffinityDivisionRecovery:
     """Add the second daughter the edge head proposes and the chosen ranking prefers, under gates and a budget."""
 
@@ -236,6 +292,7 @@ class AffinityDivisionRecovery:
         adjacency = Adjacency.of(graph)
         positions_um = self.spacing.to_micrometres(graph.positions())
         timepoints = graph.timepoints()
+        frames_ahead = self._frames_ahead(adjacency, timepoints)
         cap = self.budget(len(graph.node_ids))
         proposals: list[ForkCandidate] = []
         for timepoint in np.unique(timepoints)[:-1].tolist():
@@ -244,13 +301,35 @@ class AffinityDivisionRecovery:
                 continue
             sources = np.flatnonzero(timepoints == timepoint)
             targets = np.flatnonzero(timepoints == timepoint + 1)
-            proposals.extend(self._gap_proposals(sources, targets, probability, adjacency, positions_um))
+            gap = _Gap(
+                targets=targets,
+                orphan=np.array([adjacency.in_degrees[row] == _UNPARENTED for row in targets], dtype=bool),
+                positions_um=positions_um,
+                frames_ahead=frames_ahead,
+            )
+            proposals.extend(self._gap_proposals(sources, probability, adjacency, gap))
         accepted = self._admitted(proposals, cap)
         logger.info("division recovery: %d proposals, %d forks emitted (budget %d)", len(proposals), len(accepted), cap)
         if not accepted:
             return np.empty((0, 2), dtype=np.int64)
         pairs = [(int(graph.node_ids[fork.parent]), int(graph.node_ids[fork.child])) for fork in accepted]
         return np.array(pairs, dtype=np.int64)
+
+    @staticmethod
+    def _frames_ahead(adjacency: Adjacency, timepoints: Int[np.ndarray, "n"]) -> Int[np.ndarray, "n"]:
+        """For every node, the number of frames its track still spans, itself included.
+
+        One backward sweep over the frames: a node's future is one more than its successor's, and a node with
+        no successor ends its track at 1. Computed once per graph rather than walked per candidate, so the
+        whole ranking stays linear in the graph however many forks are proposed.
+        """
+        frames = np.ones(len(timepoints), dtype=np.int64)
+        for timepoint in np.unique(timepoints)[::-1].tolist():
+            for node in np.flatnonzero(timepoints == timepoint).tolist():
+                successors = adjacency.successors[node]
+                if len(successors):
+                    frames[node] = 1 + int(frames[successors].max())
+        return frames
 
     def _admitted(self, proposals: list[ForkCandidate], cap: int) -> list[ForkCandidate]:
         """The cheapest forks the budget allows, each proposed daughter claimed by at most one mother.
@@ -275,17 +354,11 @@ class AffinityDivisionRecovery:
     def _gap_proposals(
         self,
         sources: Int[np.ndarray, "s"],
-        targets: Int[np.ndarray, "t"],
         probability: Float[np.ndarray, "s t"],
         adjacency: Adjacency,
-        positions_um: Float[np.ndarray, "n 3"],
+        gap: _Gap,
     ) -> list[ForkCandidate]:
         """Candidate forks across one gap: a confident single-child parent's orphan runner-up target."""
-        gap = _Gap(
-            targets=targets,
-            orphan=np.array([adjacency.in_degrees[row] == _UNPARENTED for row in targets], dtype=bool),
-            positions_um=positions_um,
-        )
         found: list[ForkCandidate] = []
         for source_index, parent in enumerate(sources.tolist()):
             if adjacency.out_degrees[parent] != _SINGLE_CHILD:
@@ -293,7 +366,7 @@ class AffinityDivisionRecovery:
             kept = adjacency.successors[parent][_TOP_TARGET]
             probabilities = probability[source_index]
             order = np.argsort(-probabilities)
-            if targets[order[_TOP_TARGET]] != kept or probabilities[order[_TOP_TARGET]] < self.min_kept_prob:
+            if gap.targets[order[_TOP_TARGET]] != kept or probabilities[order[_TOP_TARGET]] < self.min_kept_prob:
                 continue
             candidate = self._runner_up(order, probabilities, parent, kept, gap)
             if candidate is not None:
@@ -327,6 +400,8 @@ class AffinityDivisionRecovery:
             child=child,
             probability=float(probabilities[runner_up]),
             positions_um=gap.positions_um,
+            kept_frames=int(gap.frames_ahead[kept]),
+            child_frames=int(gap.frames_ahead[child]),
         )
         return candidate if self._within_gates(candidate) else None
 
@@ -373,15 +448,25 @@ class AffinityDivisionConfig(BaseModel):
     # what an arm bracketing that derivation sets.
     max_added_forks: int | None = None
     min_kept_prob: float = 0.5
+    # Whether the chosen ranking is penalised by a daughter that does not survive as a track. Off keeps today's
+    # behaviour; it is a decorator rather than a fourth ranking because persistence is orthogonal to geometry —
+    # any ranking can carry it, and none should have to restate another's terms to do so.
+    require_persistence: bool = False
 
-    def build(self, spacing: Spacing, affinity: EdgeAffinity) -> AffinityDivisionRecovery:
-        """The recovery stage wired with this ranking, these gates and the video's edge-head probabilities."""
+    def build(self, spacing: Spacing, affinity: EdgeAffinity, min_track_length: int) -> AffinityDivisionRecovery:
+        """The recovery stage wired with this ranking, these gates and the video's edge-head probabilities.
+
+        `min_track_length` is the tracker's own — the length rule a daughter's track must reach to survive
+        `ShortTrackFilter`. The persistence term normalises by it rather than restating it, so the two stages
+        cannot disagree about how long a track has to be.
+        """
         if self.ranking not in FORK_RANKINGS:
             raise ValueError(f"unknown division ranking {self.ranking!r}, expected one of {sorted(FORK_RANKINGS)}")
+        ranking = FORK_RANKINGS[self.ranking](self)
         return AffinityDivisionRecovery(
             spacing=spacing,
             affinity=affinity,
-            ranking=FORK_RANKINGS[self.ranking](self),
+            ranking=SurvivingDaughterRanking(ranking, min_track_length) if self.require_persistence else ranking,
             min_second_prob=self.min_second_prob,
             parent_gate_um=self.parent_gate_um,
             sister_gate_um=self.sister_gate_um,

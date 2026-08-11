@@ -210,6 +210,11 @@ class JointTrainer:
         parser.add_argument(
             "--hard-negatives", type=int, default=4, help="nearest wrong targets mined per annotated source"
         )
+        parser.add_argument(
+            "--symmetric-links",
+            action="store_true",
+            help="normalise the link loss across TARGETS too (one child per source), not sources alone",
+        )
         # Fine-tuning a CONVERGED model at its original training rate is the classic way to walk off its optimum,
         # which is what 3000 warm-start steps at 1e-4 did (never beat the init). Exposed so the rate is a
         # variable of the experiment rather than an inherited constant.
@@ -262,7 +267,7 @@ class JointTrainer:
             "--ignore-ambiguous-above",
             type=float,
             nargs="?",
-            const=TrackerConfig().threshold,
+            const=TrackerConfig.shipped().threshold,
             default=None,
             help="leave unannotated voxels above this sigmoid response unsupervised (bare = the tracker threshold)",
         )
@@ -571,7 +576,7 @@ class JointTrainer:
         attention = sdpa_kernel(SDPBackend.MATH) if compiled else contextlib.nullcontext()
         with attention, self._autocast():
             out = model.forward(sample.frame_t, sample.frame_t1, source_centres, target_centres, velocity)
-            edge = SoftmaxFocalBCE.of(out.edge_logits, edge_matrix)
+            edge = SoftmaxFocalBCE.of(out.edge_logits, edge_matrix, loss_config.link_axes)
             ignore = loss_config.ignore_ambiguous_above
             det = BalancedBCE.of(
                 out.detection_t.unsqueeze(0), [centres_t_grid], loss_config.neg_weight, ignore
@@ -708,6 +713,7 @@ def main() -> None:
             hard_negative_weight=args.hard_negative_weight,
             hard_negatives=args.hard_negatives,
             ignore_ambiguous_above=args.ignore_ambiguous_above,
+            symmetric_links=args.symmetric_links,
         ),
         eval=EvalCfg(tracker=replace(TrackerConfig.shipped(), threshold=args.eval_threshold)),
         schedule=ScheduleCfg(

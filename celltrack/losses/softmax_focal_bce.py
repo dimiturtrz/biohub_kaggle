@@ -1,24 +1,50 @@
-"""Focal BCE over source-softmaxed logits — the link association objective, named by its form, not its use.
+"""Focal BCE over softmaxed link logits — the association objective, named by its form, not its use.
 
-`SoftmaxFocalBCE` soft-maxes the source→target logits across the source axis (so each target has one parent),
-then applies focal binary cross-entropy over the rows and columns the annotation touches. The edge finetuner
-and the joint trainer both pick it for links; neither owns it.
+`SoftmaxFocalBCE` soft-maxes the source→target logits along a normalisation axis, then applies focal binary
+cross-entropy over the rows and columns the annotation touches. The edge finetuner and the joint trainer both
+pick it for links; neither owns it.
+
+WHICH AXIS IS NORMALISED IS THE WHOLE DESIGN. Over SOURCES it states "each target has one parent" — the
+frontier's form, and the one the inference scorer reads. That axis alone leaves two measured defects:
+
+  * a pair carrying ONE source is degenerate. `softmax(dim=0)` of a single row is identically 1.0, so the
+    gradient is exactly zero while the loss reads a constant 66.67 (a clamped BCE(1, 0) on every rival).
+    28.8% of our real training pairs are that shape, and 61.7% carry two sources or fewer.
+  * a source can only be discouraged from preferring a RIVAL TARGET when some other supervised source claims
+    that rival's column. Every dense mislink we have measured picks an UNANNOTATED detection, which no source
+    claims — so the axis the linker actually chooses along has never been supervised.
+
+Normalising over TARGETS as well states "each source has one child", is a real distribution even for a single
+source, and costs no parameter and no scale (a slack row would need one: our edge logits sit near -11, so a
+zero-logit slack would take essentially all the mass).
 """
+
+from collections.abc import Sequence
 
 import torch
 import torch.nn.functional as F
-from jaxtyping import Float
+from jaxtyping import Bool, Float
 from torch import Tensor
 
 _FOCAL_POWER = 2.0
 
+SOURCE_AXIS = 0
+"""Normalise across sources: one parent per target — the frontier's form, and what the scorer reads."""
+
+TARGET_AXIS = 1
+"""Normalise across targets: one child per source — the axis the linker chooses along."""
+
 
 class SoftmaxFocalBCE:
-    """Focal BCE over logits soft-maxed across the source axis — the frontier link loss (one parent per target)."""
+    """Focal BCE over logits soft-maxed along one or both axes of the source→target matrix."""
 
     @staticmethod
-    def of(logits: Float[Tensor, "s t"], target: Float[Tensor, "s t"]) -> Float[Tensor, ""]:
-        """Focal BCE over the rows and columns the target touches; the source-softmax enforces a single parent.
+    def of(
+        logits: Float[Tensor, "s t"],
+        target: Float[Tensor, "s t"],
+        axes: Sequence[int] = (SOURCE_AXIS,),
+    ) -> Float[Tensor, ""]:
+        """Mean focal BCE across `axes`, over the rows and columns the annotation touches.
 
         Computed in fp32 with autocast disabled: `binary_cross_entropy` runs on probabilities (not logits) and
         is unsafe under a bf16 autocast, so a joint step's autocast must not reach it.
@@ -27,8 +53,17 @@ class SoftmaxFocalBCE:
         if not active.any():
             return logits.new_zeros(())
         with torch.autocast(device_type=logits.device.type, enabled=False):
-            probability = torch.softmax(logits.float(), dim=0)
-            target = target.float()
-            bce = F.binary_cross_entropy(probability, target, reduction="none")
-            p_t = probability * target + (1 - probability) * (1 - target)
-            return (((1 - p_t) ** _FOCAL_POWER) * bce)[active].mean()
+            scores = logits.float()
+            truth = target.float()
+            terms = [SoftmaxFocalBCE._along(scores, truth, active, axis) for axis in axes]
+            return torch.stack(terms).mean()
+
+    @staticmethod
+    def _along(
+        scores: Float[Tensor, "s t"], truth: Float[Tensor, "s t"], active: Bool[Tensor, "s t"], axis: int
+    ) -> Float[Tensor, ""]:
+        """Focal BCE over the softmax along one axis, averaged over the active cells."""
+        probability = torch.softmax(scores, dim=axis)
+        bce = F.binary_cross_entropy(probability, truth, reduction="none")
+        p_t = probability * truth + (1 - probability) * (1 - truth)
+        return (((1 - p_t) ** _FOCAL_POWER) * bce)[active].mean()

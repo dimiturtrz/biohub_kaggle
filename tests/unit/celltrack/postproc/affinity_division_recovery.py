@@ -13,6 +13,7 @@ from celltrack.postproc.affinity_division_recovery import (
     GeometryRanking,
     ProbabilityRanking,
     SplitSymmetryRanking,
+    SurvivingDaughterRanking,
 )
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
@@ -53,7 +54,7 @@ def recovery(matrix: list[list[float]], **overrides: object) -> AffinityDivision
     )
 
 
-def candidate(kept: list[float], child: list[float], probability: float = 0.5) -> ForkCandidate:
+def candidate(kept: list[float], child: list[float], probability: float = 0.5, child_frames: int = 1) -> ForkCandidate:
     """A fork whose mother sits at the origin, with both daughters placed in micrometres around her."""
     return ForkCandidate(
         parent=0,
@@ -61,6 +62,8 @@ def candidate(kept: list[float], child: list[float], probability: float = 0.5) -
         child=2,
         probability=probability,
         positions_um=np.array([[0.0, 0.0, 0.0], kept, child]),
+        kept_frames=1,
+        child_frames=child_frames,
     )
 
 
@@ -73,7 +76,7 @@ def test_build():
     """`AffinityDivisionConfig.build` binds its gates and the per-video affinity into the recovery stage."""
     affinity = cast(EdgeAffinity, FakeAffinity({}))
     stage = AffinityDivisionConfig(min_second_prob=0.6, parent_gate_um=4.0).build(
-        Spacing(z=1.0, y=1.0, x=1.0), affinity
+        Spacing(z=1.0, y=1.0, x=1.0), affinity, 6
     )
 
     assert isinstance(stage, AffinityDivisionRecovery)
@@ -193,6 +196,36 @@ def test_split_symmetry_ranking_cost():
     assert opposite < aligned
 
 
+def test_surviving_daughter_ranking_cost():
+    """A daughter that dies at the fork pays the full penalty; one that reaches the length rule pays none."""
+    ranking = SurvivingDaughterRanking(SplitSymmetryRanking(parent_gate_um=4.0), min_track_length=6)
+    split = ([2.0, 0.0, 0.0], [-2.0, 0.0, 0.0])
+    survives = ranking.cost(candidate(*split, child_frames=6))
+    dies = ranking.cost(candidate(*split, child_frames=1))
+    halfway = ranking.cost(candidate(*split, child_frames=3))
+
+    assert survives == 0.5  # exactly the base ranking's cost: a surviving daughter is not penalised at all
+    assert dies == 1.5  # the shortfall spans the whole reachable range
+    assert survives < halfway < dies
+
+
+def test_surviving_daughter_ranking_cost_does_not_reward_outliving_the_rule():
+    """The penalty saturates at the length rule, so a long track cannot buy its way past a bad split."""
+    ranking = SurvivingDaughterRanking(SplitSymmetryRanking(parent_gate_um=4.0), min_track_length=6)
+    split = ([2.0, 0.0, 0.0], [-2.0, 0.0, 0.0])
+
+    assert ranking.cost(candidate(*split, child_frames=60)) == ranking.cost(candidate(*split, child_frames=6))
+
+
+def test_frames_ahead_counts_a_daughters_whole_future():
+    """The candidate carries how long each daughter's track runs — read off the linked graph, not walked twice."""
+    # Parent 0 at t=0; kept child 1 and orphan 2 at t=1; the orphan continues to 3 at t=2.
+    coordinates = [[0, 0, 0, 0], [1, 0, 0, 1], [1, 0, 0, 2], [2, 0, 0, 2]]
+    forked = recovery(_KEPT_TOP).transform(graph(coordinates, [[0, 1], [2, 3]]))
+
+    assert forked.edges.tolist() == [[0, 10], [20, 30], [0, 20]]
+
+
 def test_budget():
     """The edge fraction and the absolute ceiling, whichever binds first."""
     stage = recovery(_KEPT_TOP, max_added_forks=100)
@@ -248,7 +281,7 @@ def test_rejects_an_unknown_ranking():
     """A misspelled `--set division.ranking=…` is a typo, not a silent fallback to the default."""
     affinity = cast(EdgeAffinity, FakeAffinity({}))
     with pytest.raises(ValueError, match="nearest"):
-        AffinityDivisionConfig(ranking="nearest").build(Spacing(z=1.0, y=1.0, x=1.0), affinity)
+        AffinityDivisionConfig(ranking="nearest").build(Spacing(z=1.0, y=1.0, x=1.0), affinity, 6)
 
 
 def test_budget_derives_the_ceiling_from_the_measured_division_rate():

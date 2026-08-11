@@ -355,7 +355,7 @@ def main() -> None:
         "--ignore-ambiguous-above",
         type=float,
         nargs="?",
-        const=TrackerConfig().threshold,
+        const=TrackerConfig.shipped().threshold,
         default=None,
         help="leave unannotated voxels above this sigmoid response unsupervised (bare = the tracker threshold)",
     )

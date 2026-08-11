@@ -9,6 +9,7 @@ behaviour the config carries beyond holding values.
 import pytest
 from pydantic import ValidationError
 
+from celltrack.losses.softmax_focal_bce import SOURCE_AXIS, TARGET_AXIS
 from celltrack.operating_point import TrackerConfig
 from celltrack.training.joint_config import (
     WARM_PACKS,
@@ -171,3 +172,13 @@ def test_resolved_leaves_every_other_group_untouched():
         config.data,
         config.optim,
     )
+
+
+def test_link_axes():
+    """Which axes the link loss normalises over — sources always, targets only when a run asks.
+
+    The default is the frontier's form and yesterday's numbers. Asking adds the target axis, which is what
+    gives a single-source pair a gradient at all: over sources alone its softmax is identically 1.0.
+    """
+    assert LossCfg().link_axes == (SOURCE_AXIS,)
+    assert LossCfg(symmetric_links=True).link_axes == (SOURCE_AXIS, TARGET_AXIS)

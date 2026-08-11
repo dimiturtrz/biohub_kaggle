@@ -383,7 +383,9 @@ class DivisionCandidates:
         # per-video fork BUDGET (which the shipped stage derives from the division rate) would silently
         # truncate the population being described. A budget belongs to shipping forks, not to describing them.
         config = AffinityDivisionConfig(min_second_prob=floor, min_kept_prob=floor, max_added_forks=_UNBOUNDED)
-        forked = config.build(spacing, affinity).transform(prediction)
+        # The length rule only reaches the ranking when persistence is asked for, which this diagnosis does not
+        # do; it is still taken from the shipped point rather than restated, so the two cannot drift apart.
+        forked = config.build(spacing, affinity, TrackerConfig.shipped().min_track_length).transform(prediction)
         added = forked.edges[len(prediction.edges) :]
         if not len(added):
             return cls(rows=np.empty(0, dtype=np.int64))

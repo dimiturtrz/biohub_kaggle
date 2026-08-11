@@ -275,7 +275,9 @@ class CellTracker:
         # Division recovery reads the edge affinity, so it needs a learned head and runs before the short-track
         # filter (whose division-preserving carve-out can only protect a fork that already exists).
         divide = (
-            (config.division.build(spacing, affinity),) if config.division is not None and affinity is not None else ()
+            (config.division.build(spacing, affinity, config.min_track_length),)
+            if config.division is not None and affinity is not None
+            else ()
         )
         # Reuse-bridge runs before the short-track filter so the isolated t+1 nodes it links through survive as
         # part of a bridged track rather than being pruned as length-1 fragments first.

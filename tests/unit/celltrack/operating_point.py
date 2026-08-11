@@ -1,6 +1,13 @@
+import ast
+from pathlib import Path
+
 import pytest
 
 from celltrack.operating_point import TrackerConfig
+
+# The layers whose whole output is a NUMBER — a score, a checkpoint, a diagnosis. A bare `TrackerConfig()`
+# here silently describes the 0.892 pipeline while the run reports on the 0.895 one we submit.
+_MEASURING_LAYERS = (Path("celltrack/eval"), Path("celltrack/training"))
 
 
 def test_post_init():
@@ -30,3 +37,30 @@ def test_shipped():
     assert (shipped.linker.gate_um, shipped.linker.affinity_bonus) == (10.0, 20.0)
     assert (shipped.min_track_length, shipped.smooth_strength) == (6, 0.8)  # both LB-arbitrated, not proxy
     assert shipped.division is None  # divisions stay opt-in: the proxy cannot arbitrate that axis
+
+
+def test_no_measuring_module_constructs_a_bare_operating_point():
+    """Nothing that reports a number may build `TrackerConfig()` — it must ask for the recipe it means.
+
+    The class carries TWO operating points: the field defaults (per-frame assignment linker, no fusion — the
+    0.892 tier) and `shipped()` (flow + fusion — the 0.895 recipe we submit). They are NOT interchangeable:
+    re-ranking two saved checkpoints under both INVERTS which one wins, and the threshold ladder reverses
+    order. So "which one a caller got" decides which pipeline an unlabelled measurement describes.
+
+    Merging the two was considered and rejected — `LinkerConfig()` alone still defaults to `assignment`, so
+    merging protects PARTIALLY while reading as total, and a default meaning "our current best" silently
+    re-points every note written against it. Keeping both is right; reaching the neutral one by ACCIDENT is
+    what must be impossible, and only these layers can corrupt a number by doing so.
+    """
+    offenders = [
+        f"{source}:{node.lineno}"
+        for layer in _MEASURING_LAYERS
+        for source in layer.rglob("*.py")
+        for node in ast.walk(ast.parse(source.read_text(encoding="utf-8")))
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "TrackerConfig"
+        and not (node.args or node.keywords)
+    ]
+
+    assert not offenders, f"measuring modules must mount TrackerConfig.shipped(): {offenders}"
