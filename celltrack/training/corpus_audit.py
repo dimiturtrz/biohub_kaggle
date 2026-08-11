@@ -46,7 +46,7 @@ def main() -> None:
     parser.add_argument("--sequences", type=int, default=64, help="synthetic sequences to measure")
     args = parser.parse_args()
 
-    config = TrackerConfig()
+    config = TrackerConfig.shipped()
     gate = config.linker.gate_um
     root = DataRoot.from_config(args.config)
     logger.info("gate = %.1f um (the shipped linker's own)", gate)

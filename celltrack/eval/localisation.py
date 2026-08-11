@@ -504,7 +504,7 @@ def main() -> None:
     """Measure the localisation error of the matched detections, and cut it by the mislinked edges' endpoints."""
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     args = LocalisationDiagnosis._arguments()  # noqa: SLF001
-    config = TrackerConfig()
+    config = TrackerConfig.shipped()
     for assignment in args.overrides:
         config = ConfigOverride.apply(config, assignment)
     logger.info("movie=%s  set=%s", args.movie, list(args.overrides))

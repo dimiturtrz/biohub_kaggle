@@ -31,7 +31,7 @@ from __future__ import annotations
 import argparse
 import logging
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import IntEnum
 from pathlib import Path
 
@@ -489,7 +489,8 @@ class DenseDiagnosis:
         (`shortcut_diagnosis`) mounts through this instead of repeating the paths. `threshold` overrides the
         shipped detection threshold — the one operating point a diagnosis of the DETECTIONS has to be able to move.
         """
-        config = TrackerConfig() if threshold is None else TrackerConfig(threshold=threshold)
+        shipped = TrackerConfig.shipped()
+        config = shipped if threshold is None else replace(shipped, threshold=threshold)
         return DenseDiagnosis.configured(root, device, config)
 
     @staticmethod
@@ -518,7 +519,7 @@ class DenseDiagnosis:
     ) -> tuple[DenseFateDiagnosis, MislinkSignal]:
         """Mount the tracker at `config` (the shipped default when unset), run it on `movie`, and decompose it."""
         proxy = TestMovieProxy.load(root, (movie,))
-        tracker = DenseDiagnosis.configured(root, device, config if config is not None else TrackerConfig())
+        tracker = DenseDiagnosis.configured(root, device, config if config is not None else TrackerConfig.shipped())
         return DenseDiagnosis.diagnose(tracker, proxy.paths[0], proxy.truths[0].graph, proxy.spacing, device)
 
     @staticmethod
@@ -553,7 +554,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    config = TrackerConfig()
+    config = TrackerConfig.shipped()
     for assignment in args.overrides:
         config = ConfigOverride.apply(config, assignment)
     logger.info("set=%s", list(args.overrides))

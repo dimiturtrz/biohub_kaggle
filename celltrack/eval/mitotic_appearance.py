@@ -521,7 +521,7 @@ def main() -> None:
     """Measure the appearance of the true and the candidate division mothers, and report both distributions."""
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     args = MitoticAppearanceGate._arguments()  # noqa: SLF001
-    config = TrackerConfig()
+    config = TrackerConfig.shipped()
     for assignment in args.overrides:
         config = ConfigOverride.apply(config, assignment)
     logger.info("movie=%s  floor=%.2f  set=%s", args.movie, args.floor, list(args.overrides))

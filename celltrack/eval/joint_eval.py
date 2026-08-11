@@ -16,11 +16,13 @@ from __future__ import annotations
 
 import argparse
 import logging
+from dataclasses import replace
 from pathlib import Path
 
 from celltrack.detectors.tunet import DetectorRecipe
 from celltrack.eval.model_evaluator import ModelEvaluator
 from celltrack.eval.proxy import TEST_MOVIES, TestMovieProxy
+from celltrack.eval.proxy_eval import ConfigOverride
 from celltrack.models.joint_model import JointModel
 from celltrack.operating_point import TrackerConfig
 from core.paths import DataRoot
@@ -64,17 +66,40 @@ def main() -> None:
         default=",".join(TEST_MOVIES),
         help="comma-separated movie stems to score (default: the untouched test four)",
     )
-    parser.add_argument("--threshold", type=float, default=TrackerConfig().threshold, help="detection threshold")
+    parser.add_argument(
+        "--threshold", type=float, default=TrackerConfig.shipped().threshold, help="detection threshold"
+    )
+    parser.add_argument(
+        "--set",
+        dest="overrides",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="override any tracker knob, exactly as `proxy_eval --set` does",
+    )
     args = parser.parse_args()
 
     root = DataRoot.from_config(args.config)
     checkpoint = args.checkpoint if args.checkpoint.is_absolute() else root.processed(_DATASET) / args.checkpoint
     stems = tuple(args.movies.split(","))
     model = JointModel.from_checkpoint(checkpoint, args.device)
-    config = TrackerConfig(threshold=args.threshold)
+    # The base is the SHIPPED operating point, not TrackerConfig's neutral defaults: those default to the
+    # per-frame assignment linker with no fusion, which is the 0.892 pipeline rather than the 0.895 one we
+    # submit — and scoring our own heads under a linker we do not deploy is how a better model gets discarded.
+    config = replace(TrackerConfig.shipped(), threshold=args.threshold)
+    for assignment in args.overrides:
+        config = ConfigOverride.apply(config, assignment)
     evaluator = JointCheckpointEval.mounted(root, stems, model.downsample, args.device, config)
     result = evaluator.evaluate_joint(model)
-    logger.info("checkpoint=%s movies=%s threshold=%.3f", checkpoint.name, list(stems), args.threshold)
+    logger.info(
+        "checkpoint=%s movies=%s threshold=%.3f linker=%s boundary=%.1f bidirectional=%s",
+        checkpoint.name,
+        list(stems),
+        config.threshold,
+        config.linker.name,
+        config.linker.disappearance_cost,
+        config.bidirectional_edges,
+    )
     logger.info(
         "faithful %.4f | clamped %.4f | node recall %.4f ratio %+.3f | mislinks %d inverted %.3f "
         "P_true %.3f vs P_chosen %.3f",

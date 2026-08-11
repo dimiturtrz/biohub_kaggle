@@ -37,7 +37,7 @@ from __future__ import annotations
 import argparse
 import logging
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
@@ -391,7 +391,8 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    config = TrackerConfig() if args.threshold is None else TrackerConfig(threshold=args.threshold)
+    shipped = TrackerConfig.shipped()
+    config = shipped if args.threshold is None else replace(shipped, threshold=args.threshold)
     for assignment in args.overrides:
         config = ConfigOverride.apply(config, assignment)
     logger.info("movie=%s  threshold=%g  set=%s", args.movie, config.threshold, list(args.overrides))
