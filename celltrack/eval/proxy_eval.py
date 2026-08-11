@@ -35,7 +35,9 @@ _ACQUISITION_PREFIX = 4
 
 # Where the downloaded CC0 re-ranker artifact sits UNDER THE DATA ROOT — a relative reference resolved against
 # `paths.yaml`, so no machine's directory layout is written into the repo (the Kaggle kernel resolves its own).
-_RANKER_ARTIFACT = "reference/association_ranker"
+# Public because the ranker drift diagnosis mounts the SAME artifact, and two spellings of one path is exactly
+# how a diagnosis ends up characterising a different mount than the sweep it is diagnosing.
+RANKER_ARTIFACT = "reference/association_ranker"
 
 
 class _ConfigOverride:
@@ -113,7 +115,7 @@ class TrackerProxyEval:
             self.device,
         )
         if self.config_at(self.thresholds[0], self.disappearance_costs[0]).linker.needs_ranker:
-            pipeline = pipeline.with_ranker(proc / _RANKER_ARTIFACT)
+            pipeline = pipeline.with_ranker(proc / RANKER_ARTIFACT)
         return proxy, pipeline
 
     def scores(self, root: DataRoot) -> dict[tuple[float, float], SplitScore]:

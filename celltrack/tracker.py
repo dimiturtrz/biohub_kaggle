@@ -242,7 +242,7 @@ class CellTracker:
         nodes = self.detector.nodes(video_key, path, self.config.threshold, blend)
         affinity_start = time.perf_counter()
         affinity = self.edge_scorer.affinities(path, nodes, self.device)
-        mutual = self._mutual(path, nodes, affinity)
+        mutual = self.fused_affinities(path, nodes, affinity)
         stages_start = time.perf_counter()
         graph = nodes
         video = CellVideo.from_ome_zarr(path)
@@ -259,8 +259,12 @@ class CellTracker:
         )
         return TrackedVideo(graph=graph, detections=nodes, affinity=affinity)
 
-    def _mutual(self, path: Path, nodes: TrackGraph, affinity: EdgeAffinity | None) -> EdgeAffinity | None:
+    def fused_affinities(self, path: Path, nodes: TrackGraph, affinity: EdgeAffinity | None) -> EdgeAffinity | None:
         """The bidirectionally fused probabilities the linker's agreement knobs read — `None` when unused.
+
+        Public because a diagnosis that reconstructs the tracker's own first linking pass
+        (`celltrack.eval.ranker_distribution`) must resolve the fused affinity by exactly this rule; a second
+        copy of it would let the reconstruction silently link under a different cost than the tracker does.
 
         Scored only when a knob consumes it (`LinkerConfig.needs_mutual`: the admission floor, the cost's
         mutual-agreement term, or both), because it costs a second reversed pass over every gap. When the

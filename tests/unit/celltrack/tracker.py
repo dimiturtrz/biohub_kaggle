@@ -246,6 +246,26 @@ def test_run_reuses_the_bidirectional_affinity_for_the_gate(monkeypatch: pytest.
     assert scored == [True]
 
 
+def test_fused_affinities(monkeypatch: pytest.MonkeyPatch):
+    """The fusion rule, called directly: off when nothing reads it, the mounted affinity under `bidirectional_edges`,
+    and a second reversed pass otherwise. It is public because `celltrack.eval.ranker_distribution` reconstructs
+    the tracker's first linking pass and must resolve the fused affinity by exactly this rule, not a copy of it."""
+    forward = _FusedAffinity()
+
+    unused, _ = _recording_tracker(monkeypatch, TrackerConfig())
+    assert unused.fused_affinities(Path("m.zarr"), _CHAIN, forward) is None
+
+    reused, scored = _recording_tracker(
+        monkeypatch, TrackerConfig(bidirectional_edges=True, linker=LinkerConfig(agreement_floor=0.5))
+    )
+    assert reused.fused_affinities(Path("m.zarr"), _CHAIN, forward) is forward
+    assert scored == []  # the mounted affinity already IS the fused one
+
+    rescored, passes = _recording_tracker(monkeypatch, TrackerConfig(linker=LinkerConfig(agreement_floor=0.5)))
+    assert rescored.fused_affinities(Path("m.zarr"), _CHAIN, forward) is not forward
+    assert passes == [True]
+
+
 def test_run_without_a_floor_scores_once(monkeypatch: pytest.MonkeyPatch):
     """No floor, no fused pass: the default tracker pays for exactly the one scoring pass it always did."""
     tracker, scored = _recording_tracker(monkeypatch, TrackerConfig(min_track_length=1, smooth_strength=0.0))
