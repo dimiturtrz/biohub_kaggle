@@ -275,7 +275,7 @@ class CellTracker:
         # Division recovery reads the edge affinity, so it needs a learned head and runs before the short-track
         # filter (whose division-preserving carve-out can only protect a fork that already exists).
         divide = (
-            (config.division.build(spacing, affinity, config.min_track_length),)
+            (config.division.build(spacing, affinity, config.min_track_length, config.linker.gate_um),)
             if config.division is not None and affinity is not None
             else ()
         )

@@ -79,6 +79,8 @@ logger = logging.getLogger(__name__)
 # to ten times higher, because a division rate is a property of the OBSERVATION WINDOW as much as the biology
 # and ours is ~100 frames against a longer cell cycle. Importing one would over-budget every movie.
 _DIVISION_RATE = 0.00113
+# Two daughters, each within the parent gate of one mother, are at most twice that apart.
+_SISTERS_PER_PARENT = 2.0
 
 
 @dataclass(frozen=True)
@@ -414,10 +416,10 @@ class AffinityDivisionRecovery:
         )
 
 
-FORK_RANKINGS: dict[str, Callable[["AffinityDivisionConfig"], ForkRanking]] = {
-    "probability": lambda _: ProbabilityRanking(),
-    "geometry": lambda config: GeometryRanking(sister_weight=config.sister_weight),
-    "symmetry": lambda config: SplitSymmetryRanking(parent_gate_um=config.parent_gate_um),
+FORK_RANKINGS: dict[str, Callable[["AffinityDivisionConfig", float], ForkRanking]] = {
+    "probability": lambda _, __: ProbabilityRanking(),
+    "geometry": lambda config, _: GeometryRanking(sister_weight=config.sister_weight),
+    "symmetry": lambda config, gate_um: SplitSymmetryRanking(parent_gate_um=config.parent_gate(gate_um)),
 }
 
 
@@ -435,8 +437,16 @@ class AffinityDivisionConfig(BaseModel):
 
     ranking: str = "probability"
     min_second_prob: float = 0.5
-    parent_gate_um: float = 4.7
-    sister_gate_um: float = 7.2
+    # None DERIVES both gates from the linker's own, which is the only argued value in reach. A daughter is
+    # one frame's travel from her mother, and the linker gate IS our statement of the furthest a cell travels
+    # between consecutive frames (10um, the maximum observed annotated displacement of 9.96um) — every longer
+    # step is already refused as a link, so a wider parent gate would admit a daughter the linker itself calls
+    # impossible. The sister gate then follows with no second choice: two daughters each within `parent` of the
+    # mother can be at most `2 * parent` apart, so it is the triangle inequality, not a threshold.
+    # The frontier's 4.7 / 7.2 remain settable, and a submission that widened them by hand to 7.0 / 14.0 is what
+    # this replaces: 14 was already exactly twice 7, so only ONE number was ever really being chosen.
+    parent_gate_um: float | None = None
+    sister_gate_um: float | None = None
     # The frontier disqualifies a parent whose existing link is already long (7.65um) before looking at any
     # candidate; infinity is that gate OFF, which is what this stage has always run.
     existing_child_gate_um: float = math.inf
@@ -453,7 +463,19 @@ class AffinityDivisionConfig(BaseModel):
     # any ranking can carry it, and none should have to restate another's terms to do so.
     require_persistence: bool = False
 
-    def build(self, spacing: Spacing, affinity: EdgeAffinity, min_track_length: int) -> AffinityDivisionRecovery:
+    def parent_gate(self, gate_um: float) -> float:
+        """The mother-to-daughter gate — the linker's own unless one is set, since a fork IS a one-frame step."""
+        return self.parent_gate_um if self.parent_gate_um is not None else gate_um
+
+    def sister_gate(self, gate_um: float) -> float:
+        """The daughter-to-daughter gate — twice the parent gate unless set, by the triangle inequality."""
+        return (
+            self.sister_gate_um if self.sister_gate_um is not None else _SISTERS_PER_PARENT * self.parent_gate(gate_um)
+        )
+
+    def build(
+        self, spacing: Spacing, affinity: EdgeAffinity, min_track_length: int, gate_um: float
+    ) -> AffinityDivisionRecovery:
         """The recovery stage wired with this ranking, these gates and the video's edge-head probabilities.
 
         `min_track_length` is the tracker's own — the length rule a daughter's track must reach to survive
@@ -462,14 +484,14 @@ class AffinityDivisionConfig(BaseModel):
         """
         if self.ranking not in FORK_RANKINGS:
             raise ValueError(f"unknown division ranking {self.ranking!r}, expected one of {sorted(FORK_RANKINGS)}")
-        ranking = FORK_RANKINGS[self.ranking](self)
+        ranking = FORK_RANKINGS[self.ranking](self, gate_um)
         return AffinityDivisionRecovery(
             spacing=spacing,
             affinity=affinity,
             ranking=SurvivingDaughterRanking(ranking, min_track_length) if self.require_persistence else ranking,
             min_second_prob=self.min_second_prob,
-            parent_gate_um=self.parent_gate_um,
-            sister_gate_um=self.sister_gate_um,
+            parent_gate_um=self.parent_gate(gate_um),
+            sister_gate_um=self.sister_gate(gate_um),
             existing_child_gate_um=self.existing_child_gate_um,
             max_added_forks=self.max_added_forks,
             min_kept_prob=self.min_kept_prob,

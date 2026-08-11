@@ -57,6 +57,8 @@ logger = logging.getLogger(__name__)
 
 # A ceiling no candidate set reaches — this diagnosis describes the population, it does not budget it.
 _UNBOUNDED = 10**9
+# The submitted operating point, mounted rather than restated — the gates a fork is judged by are ITS gates.
+_SHIPPED = TrackerConfig.shipped()
 
 FEATURE_NAMES: tuple[str, ...] = (
     "intensity_mean",
@@ -383,9 +385,11 @@ class DivisionCandidates:
         # per-video fork BUDGET (which the shipped stage derives from the division rate) would silently
         # truncate the population being described. A budget belongs to shipping forks, not to describing them.
         config = AffinityDivisionConfig(min_second_prob=floor, min_kept_prob=floor, max_added_forks=_UNBOUNDED)
-        # The length rule only reaches the ranking when persistence is asked for, which this diagnosis does not
-        # do; it is still taken from the shipped point rather than restated, so the two cannot drift apart.
-        forked = config.build(spacing, affinity, TrackerConfig.shipped().min_track_length).transform(prediction)
+        # The length rule and the gate reach the stage from the SHIPPED point rather than being restated, so
+        # this diagnosis and the submission cannot disagree about what a fork is allowed to be.
+        forked = config.build(spacing, affinity, _SHIPPED.min_track_length, _SHIPPED.linker.gate_um).transform(
+            prediction
+        )
         added = forked.edges[len(prediction.edges) :]
         if not len(added):
             return cls(rows=np.empty(0, dtype=np.int64))

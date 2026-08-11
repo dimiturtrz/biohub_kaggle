@@ -76,12 +76,25 @@ def test_build():
     """`AffinityDivisionConfig.build` binds its gates and the per-video affinity into the recovery stage."""
     affinity = cast(EdgeAffinity, FakeAffinity({}))
     stage = AffinityDivisionConfig(min_second_prob=0.6, parent_gate_um=4.0).build(
-        Spacing(z=1.0, y=1.0, x=1.0), affinity, 6
+        Spacing(z=1.0, y=1.0, x=1.0), affinity, 6, 10.0
     )
 
     assert isinstance(stage, AffinityDivisionRecovery)
     assert stage.affinity is affinity  # the video's edge-head probabilities are threaded through
     assert (stage.min_second_prob, stage.parent_gate_um) == (0.6, 4.0)
+
+
+def test_parent_gate():
+    """Unset, the mother-to-daughter gate IS the linker's — a fork is one frame's travel, like any other link."""
+    assert AffinityDivisionConfig().parent_gate(10.0) == 10.0
+    assert AffinityDivisionConfig(parent_gate_um=4.7).parent_gate(10.0) == 4.7
+
+
+def test_sister_gate():
+    """Unset, the daughter-to-daughter gate is twice the parent gate — the triangle inequality, not a threshold."""
+    assert AffinityDivisionConfig().sister_gate(10.0) == 20.0
+    assert AffinityDivisionConfig(parent_gate_um=7.0).sister_gate(10.0) == 14.0  # what a submission set by hand
+    assert AffinityDivisionConfig(sister_gate_um=7.2).sister_gate(10.0) == 7.2
 
 
 def test_transform():
@@ -281,7 +294,7 @@ def test_rejects_an_unknown_ranking():
     """A misspelled `--set division.ranking=…` is a typo, not a silent fallback to the default."""
     affinity = cast(EdgeAffinity, FakeAffinity({}))
     with pytest.raises(ValueError, match="nearest"):
-        AffinityDivisionConfig(ranking="nearest").build(Spacing(z=1.0, y=1.0, x=1.0), affinity, 6)
+        AffinityDivisionConfig(ranking="nearest").build(Spacing(z=1.0, y=1.0, x=1.0), affinity, 6, 10.0)
 
 
 def test_budget_derives_the_ceiling_from_the_measured_division_rate():
