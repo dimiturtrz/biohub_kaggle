@@ -27,7 +27,14 @@ from jaxtyping import Float
 from torch import Tensor, nn
 
 from celltrack.models.prior_velocity import GapHistory, PriorVelocity
-from celltrack.models.temporal_unet_detector import _EXT_SRC, DetectorRecipe, TemporalUNetDetector, _VideoSource
+from celltrack.models.temporal_unet_detector import (
+    _EXT_SRC,
+    IDENTITY_VIEW,
+    DetectorRecipe,
+    FlipView,
+    TemporalUNetDetector,
+    _VideoSource,
+)
 from celltrack.precision import AutocastPolicy
 from core.data.tracks import TrackGraph
 
@@ -199,22 +206,33 @@ class EdgeTransformerScorer(nn.Module):
         projection = cast(nn.Linear, self.transformer.proj)
         return projection.in_features == self.detector.out_channels + 4 * _POS_EMBED_DIM + PriorVelocity.DIM
 
-    def _gap_window(self, gap: EdgeGap, *, reverse: bool) -> _GapWindow:
-        """Read the gap's two frames and run the backbone once — the half of a pass no velocity can change."""
+    def _gap_window(self, gap: EdgeGap, *, reverse: bool, view: FlipView = IDENTITY_VIEW) -> _GapWindow:
+        """Read the gap's two frames and run the backbone once — the half of a pass no velocity can change.
+
+        `view` mirrors the frames the backbone sees AND the node positions read out of it, so a flipped view is
+        the same scene under a different presentation rather than a different scene: the returned logit matrix
+        stays in the caller's node order and needs no un-flipping. Positions mirror in FULL-RESOLUTION voxels
+        about `downsample * (spatial - 1)`, which is exactly the grid extent they land on once divided by the
+        downsample. The identity view rebuilds today's window, tensor for tensor.
+        """
         device, recipe = gap.device, self.recipe
-        frame_t = TemporalUNetDetector._read_frame(gap.source, gap.timepoint, recipe.downsample, device)  # noqa: SLF001
-        frame_t1 = TemporalUNetDetector._read_frame(gap.source, gap.timepoint + 1, recipe.downsample, device)  # noqa: SLF001
+        read_t = TemporalUNetDetector._read_frame(gap.source, gap.timepoint, recipe.downsample, device)  # noqa: SLF001
+        read_t1 = TemporalUNetDetector._read_frame(gap.source, gap.timepoint + 1, recipe.downsample, device)  # noqa: SLF001
+        frame_t, frame_t1 = view.apply(read_t), view.apply(read_t1)
         frames = [frame_t1, frame_t] if reverse else [frame_t, frame_t1]
         early, late = (gap.tgt_positions, gap.src_positions) if reverse else (gap.src_positions, gap.tgt_positions)
         window = torch.stack(frames, dim=0).unsqueeze(0).unsqueeze(2)
+        spatial = torch.tensor(frame_t.shape, dtype=torch.float32, device=device)
+        downsample = torch.tensor(recipe.downsample, dtype=torch.float32, device=device)
+        extent = downsample * (spatial - 1.0)
         with AutocastPolicy.of(device):
             features = self.detector.unet(window)[0]  # (2, C, Z, Y, X)
         return _GapWindow(
             features=features,
-            early=torch.as_tensor(early, device=device),
-            late=torch.as_tensor(late, device=device),
-            spatial=torch.tensor(frame_t.shape, dtype=torch.float32, device=device),
-            downsample=torch.tensor(recipe.downsample, dtype=torch.float32, device=device),
+            early=view.mirror(torch.as_tensor(early, device=device), extent),
+            late=view.mirror(torch.as_tensor(late, device=device), extent),
+            spatial=spatial,
+            downsample=downsample,
             device=device,
         )
 

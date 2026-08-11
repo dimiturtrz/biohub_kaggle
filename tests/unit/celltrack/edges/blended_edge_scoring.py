@@ -11,7 +11,8 @@ import numpy as np
 import torch
 import zarr
 
-from celltrack.edges.blended_edge_scoring import BlendedEdgeTransformerScorer
+from celltrack.edges.blended_edge_scoring import BlendedEdgeTransformerScorer, EdgeBlendOptions
+from celltrack.edges.seed_moment_alignment import SeedMomentAlignment
 from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeGap, EdgeTransformerScorer, video_gaps
 from celltrack.models.prior_velocity import GapHistory, PriorVelocity
 from celltrack.models.temporal_unet_detector import DetectorRecipe, TemporalUNetDetector
@@ -191,3 +192,114 @@ def test_with_bidirectional():
     assert not scorer.bidirectional
     assert switched.scorers is scorer.scorers
     assert switched.weights == scorer.weights
+
+
+def test_alignment_and_view_tta_default_off(tmp_path: Path):
+    """Both new mechanisms are opt-in: an unspecified scorer computes the byte-identical matrix it always did."""
+    a, b = _tiny_scorer(0), _tiny_scorer(1)
+    detections, video = _detections(), _video(tmp_path)
+    scorer = BlendedEdgeTransformerScorer((a, b), (0.8, 0.2))
+    assert not scorer.options.align_seed_moments
+    assert not scorer.options.view_tta
+
+    matrix = scorer.affinities(video, detections, "cpu").probabilities(0)
+    positions = detections.positions().astype(np.float32)
+    gap = EdgeGap(TemporalUNetDetector._open_source(video), 0, positions[:2], positions[2:], "cpu")
+    with torch.no_grad():
+        weighted = torch.stack([weight * scorer._gap_logits(gap) for scorer, weight in ((a, 0.8), (b, 0.2))])
+    assert matrix is not None
+    assert np.array_equal(matrix, torch.softmax(weighted.sum(dim=0), dim=0).numpy())
+
+
+def test_alignment_changes_the_blend(tmp_path: Path):
+    """Turning alignment on rescales seed 1 onto seed 0 before the weighted sum, so the matrix moves."""
+    a, b = _tiny_scorer(0), _tiny_scorer(1)
+    detections, video = _detections(), _video(tmp_path)
+    plain = BlendedEdgeTransformerScorer((a, b), (0.8, 0.2)).affinities(video, detections, "cpu").probabilities(0)
+    aligned = (
+        BlendedEdgeTransformerScorer((a, b), (0.8, 0.2), options=EdgeBlendOptions(align_seed_moments=True))
+        .affinities(video, detections, "cpu")
+        .probabilities(0)
+    )
+    assert plain is not None
+    assert aligned is not None
+    assert np.isfinite(aligned).all()
+    assert not np.allclose(aligned, plain)
+
+
+def test_alignment_is_a_no_op_on_a_single_seed(tmp_path: Path):
+    """With nothing to align against, the reference seed passes through untouched."""
+    a = _tiny_scorer(0)
+    detections, video = _detections(), _video(tmp_path)
+    plain = BlendedEdgeTransformerScorer((a,), (1.0,)).affinities(video, detections, "cpu").probabilities(0)
+    aligned = (
+        BlendedEdgeTransformerScorer((a,), (1.0,), options=EdgeBlendOptions(align_seed_moments=True))
+        .affinities(video, detections, "cpu")
+        .probabilities(0)
+    )
+    assert plain is not None
+    assert aligned is not None
+    assert np.array_equal(aligned, plain)
+
+
+def test_view_tta_changes_the_blend(tmp_path: Path):
+    """Turning the four-view edge pool on changes the matrix and keeps it a valid over-sources distribution."""
+    a, b = _tiny_scorer(0), _tiny_scorer(1)
+    detections, video = _detections(), _video(tmp_path)
+    plain = BlendedEdgeTransformerScorer((a, b), (0.8, 0.2)).affinities(video, detections, "cpu").probabilities(0)
+    pooled = (
+        BlendedEdgeTransformerScorer((a, b), (0.8, 0.2), options=EdgeBlendOptions(view_tta=True))
+        .affinities(video, detections, "cpu")
+        .probabilities(0)
+    )
+    assert plain is not None
+    assert pooled is not None
+    assert np.allclose(pooled.sum(axis=0), 1.0, atol=1e-5)
+    assert not np.allclose(pooled, plain)
+
+
+def test_view_tta_reaches_the_reverse_direction(tmp_path: Path):
+    """The pool applies to both directions, so a bidirectional run fuses two pooled normalisations."""
+    a = _tiny_scorer(0)
+    detections, video = _detections(), _video(tmp_path)
+    fused = (
+        BlendedEdgeTransformerScorer((a,), (1.0,), bidirectional=True, options=EdgeBlendOptions(view_tta=True))
+        .affinities(video, detections, "cpu")
+        .probabilities(0)
+    )
+    forward_only = (
+        BlendedEdgeTransformerScorer((a,), (1.0,), options=EdgeBlendOptions(view_tta=True))
+        .affinities(video, detections, "cpu")
+        .probabilities(0)
+    )
+    assert fused is not None
+    assert forward_only is not None
+    assert np.isfinite(fused).all()
+    assert not np.allclose(fused, forward_only)
+
+
+def test_with_bidirectional_carries_the_opt_ins():
+    """Re-pointing the fusion knob must not silently drop the other two — a sweep would then compare two things."""
+    a = _tiny_scorer(0)
+    scorer = BlendedEdgeTransformerScorer(
+        (a,), (1.0,), options=EdgeBlendOptions(align_seed_moments=True, view_tta=True)
+    )
+    switched = scorer.with_bidirectional(bidirectional=True)
+    assert switched.options.align_seed_moments
+    assert switched.options.view_tta
+
+
+def test_seed_logit_moments(tmp_path: Path):
+    """The reporter returns one entry per gap, per seed, holding those seeds' actual raw logit mean and std."""
+    a, b = _tiny_scorer(0), _tiny_scorer(1)
+    detections, video = _detections(), _video(tmp_path)
+    reported = BlendedEdgeTransformerScorer((a, b), (0.8, 0.2)).seed_logit_moments(video, detections, "cpu")
+
+    positions = detections.positions().astype(np.float32)
+    gap = EdgeGap(TemporalUNetDetector._open_source(video), 0, positions[:2], positions[2:], "cpu")
+    with torch.no_grad():
+        expected = tuple(SeedMomentAlignment.moments(seed._gap_logits(gap)) for seed in (a, b))
+
+    assert len(reported) == 1
+    assert reported[0].timepoint == 0
+    assert reported[0].moments == expected

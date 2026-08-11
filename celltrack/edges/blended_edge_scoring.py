@@ -8,10 +8,17 @@ from 0.9125→0.9146 (with the density gap-bridge, 0.9134→0.9154) at 0.8·seed
 
 Optionally the blended probabilities are then fused with a second, reversed pass — see
 `BlendedEdgeTransformerScorer.fuse`.
+
+Two further transforms ride on `EdgeBlendOptions`, both default OFF, so the shipped path is unchanged unless
+asked for: `align_seed_moments` puts the seeds on one logit scale before the weighted sum
+(`seed_moment_alignment`), and `view_tta` scores each seed over four flip views fused by a logarithmic opinion
+pool (`flip_view_edge_scoring`). `seed_logit_moments` reports the raw per-seed scales the first of those acts
+on, so the quality-versus-units question is settled by measurement rather than by a sweep.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -19,11 +26,37 @@ import torch
 from jaxtyping import Float
 from torch import Tensor
 
+from celltrack.edges.flip_view_edge_scoring import FlipViewEdgeScorer
+from celltrack.edges.seed_moment_alignment import LogitMoments, SeedMomentAlignment
 from celltrack.models.edge_transformer import EdgeGap, EdgeTransformerScorer, PrecomputedEdgeAffinity, video_gaps
 from celltrack.models.prior_velocity import GapHistory
 from core.data.tracks import TrackGraph
 
 _DENOMINATOR_FLOOR = 1e-12
+
+
+@dataclass(frozen=True)
+class EdgeBlendOptions:
+    """The two disclosed frontier transforms around the blend, both default OFF — one knob object, not three flags.
+
+    They travel together because they are asked the same way (a candidate arm of a proxy sweep) and neither is
+    part of the shipped path until one of them earns it. `bidirectional` stays a separate argument: it is a
+    shipped setting the tracker re-points per run, not a candidate.
+    """
+
+    align_seed_moments: bool = False
+    view_tta: bool = False
+
+
+_DEFAULT_OPTIONS = EdgeBlendOptions()
+
+
+@dataclass(frozen=True)
+class GapSeedMoments:
+    """One gap's per-seed logit moments, seed order matching the blend's — the alignment's evidence, per gap."""
+
+    timepoint: int
+    moments: tuple[LogitMoments, ...]
 
 
 class BlendedEdgeTransformerScorer:
@@ -43,12 +76,14 @@ class BlendedEdgeTransformerScorer:
         weights: tuple[float, ...],
         *,
         bidirectional: bool = False,
+        options: EdgeBlendOptions = _DEFAULT_OPTIONS,
     ) -> None:
         if len(scorers) != len(weights):
             raise ValueError(f"got {len(scorers)} scorers but {len(weights)} weights")
         self.scorers = scorers
         self.weights = weights
         self.bidirectional = bidirectional
+        self.options = options
 
     @classmethod
     def from_packs(
@@ -58,14 +93,17 @@ class BlendedEdgeTransformerScorer:
         device: str = "cpu",
         *,
         bidirectional: bool = False,
+        options: EdgeBlendOptions = _DEFAULT_OPTIONS,
     ) -> BlendedEdgeTransformerScorer:
         """Mount one `EdgeTransformerScorer` per pack and pair each with its blend weight."""
         scorers = tuple(EdgeTransformerScorer.from_pack(pack, device) for pack in packs)
-        return cls(scorers, weights, bidirectional=bidirectional)
+        return cls(scorers, weights, bidirectional=bidirectional, options=options)
 
     def with_bidirectional(self, *, bidirectional: bool) -> BlendedEdgeTransformerScorer:
         """The same mounted seeds under the other fusion setting — so a sweep re-points the knob, not the mount."""
-        return BlendedEdgeTransformerScorer(self.scorers, self.weights, bidirectional=bidirectional)
+        return BlendedEdgeTransformerScorer(
+            self.scorers, self.weights, bidirectional=bidirectional, options=self.options
+        )
 
     @torch.no_grad()
     def affinities(self, path: Path, detections: TrackGraph, device: str) -> PrecomputedEdgeAffinity:
@@ -95,15 +133,45 @@ class BlendedEdgeTransformerScorer:
         reverse = torch.softmax(self._reverse_logits(gap), dim=0).T
         return self.fuse(forward, reverse), carried
 
+    def seed_logit_moments(self, path: Path, detections: TrackGraph, device: str) -> list[GapSeedMoments]:
+        """Every gap's per-seed logit mean and std, in ascending time — the numbers the blend weights act on.
+
+        Reported BEFORE any alignment and before the weighting, because the question this answers is whether
+        the seeds' raw scales differ at all: if they do, the shipped 0.8/0.2 is partly a temperature fix and
+        aligning should move the best blend toward even; if they do not, 0.8/0.2 is the quality weighting we
+        recorded it as. One pass over the video answers it — no sweep, no inference from a curve's shape.
+        """
+        histories = tuple(GapHistory() for _ in self.scorers)
+        reported: list[GapSeedMoments] = []
+        with torch.no_grad():
+            for gap in video_gaps(path, detections, device):
+                scored = self._seed_scored(gap, histories)
+                histories = tuple(history for _, history in scored)
+                moments = tuple(SeedMomentAlignment.moments(logits) for logits, _ in scored)
+                reported.append(GapSeedMoments(gap.timepoint, moments))
+        return reported
+
+    def _seed_scored(
+        self, gap: EdgeGap, histories: tuple[GapHistory, ...]
+    ) -> list[tuple[Float[Tensor, "s t"], GapHistory]]:
+        """Each seed's raw forward logits for the gap, with the history it hands the next gap — one per seed."""
+        if self.options.view_tta:
+            return [
+                FlipViewEdgeScorer(scorer).gap_logits(gap, history)
+                for scorer, history in zip(self.scorers, histories, strict=True)
+            ]
+        return [
+            scorer._seed_logits(gap, history)  # noqa: SLF001
+            for scorer, history in zip(self.scorers, histories, strict=True)
+        ]
+
     def _forward_logits(
         self, gap: EdgeGap, histories: tuple[GapHistory, ...]
     ) -> tuple[Float[Tensor, "s t"], tuple[GapHistory, ...]]:
         """The seeds' forward logits convex-combined, plus the history each seed hands the next gap."""
-        scored = [
-            scorer._seed_logits(gap, history)  # noqa: SLF001
-            for scorer, history in zip(self.scorers, histories, strict=True)
-        ]
-        weighted = torch.stack([weight * logits for weight, (logits, _) in zip(self.weights, scored, strict=True)])
+        scored = self._seed_scored(gap, histories)
+        aligned = self._aligned([logits for logits, _ in scored])
+        weighted = torch.stack([weight * logits for weight, logits in zip(self.weights, aligned, strict=True)])
         return weighted.sum(dim=0), tuple(history for _, history in scored)
 
     def _reverse_logits(self, gap: EdgeGap) -> Float[Tensor, "t s"]:
@@ -112,13 +180,29 @@ class BlendedEdgeTransformerScorer:
         The reverse direction carries no prior velocity — see `EdgeTransformerScorer._gap_logits` for why its
         sources have no non-circular history — so a widened head reads zeros here and no state crosses gaps.
         """
+        scored = [self._reverse_seed_logits(scorer, gap) for scorer in self.scorers]
         weighted = torch.stack(
-            [
-                weight * scorer._gap_logits(gap, reverse=True)  # noqa: SLF001
-                for scorer, weight in zip(self.scorers, self.weights, strict=True)
-            ]
+            [weight * logits for weight, logits in zip(self.weights, self._aligned(scored), strict=True)]
         )
         return weighted.sum(dim=0)
+
+    def _reverse_seed_logits(self, scorer: EdgeTransformerScorer, gap: EdgeGap) -> Float[Tensor, "t s"]:
+        """One seed's reverse-direction logits — pooled over the flip views when view TTA is on."""
+        if self.options.view_tta:
+            return FlipViewEdgeScorer(scorer).reverse_gap_logits(gap)
+        return scorer._gap_logits(gap, reverse=True)  # noqa: SLF001
+
+    def _aligned(self, logits: list[Float[Tensor, "s t"]]) -> list[Float[Tensor, "s t"]]:
+        """Seeds after the first rescaled onto the first seed's moments — the identity when alignment is off.
+
+        Seed 0 is the reference rather than, say, the mean of all seeds, so the aligned blend is expressed in
+        the units the shipped 0.8/0.2 was tuned in: a weight sweep run on top of this is directly comparable to
+        the one already recorded, which is what makes the quality-vs-units question answerable.
+        """
+        if not self.options.align_seed_moments:
+            return logits
+        reference = logits[0]
+        return [reference, *(SeedMomentAlignment.align(other, reference) for other in logits[1:])]
 
     @staticmethod
     def fuse(forward: Float[Tensor, "s t"], reverse: Float[Tensor, "s t"]) -> Float[Tensor, "s t"]:

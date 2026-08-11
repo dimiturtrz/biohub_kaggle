@@ -24,7 +24,7 @@ from jaxtyping import Float, Int
 from torch import Tensor
 
 from celltrack.detectors.peaks import PeakExtractor
-from celltrack.models.temporal_unet_detector import DetectorRecipe, _VideoSource
+from celltrack.models.temporal_unet_detector import IDENTITY_VIEW, DetectorRecipe, FlipView, _VideoSource
 from celltrack.models.temporal_unet_detector import TemporalUNetDetector as _TemporalUNetNet
 from celltrack.precision import AutocastPolicy
 from core.data.tracks import TrackGraph
@@ -119,12 +119,12 @@ class TemporalUNetDetector(_TemporalUNetNet):
 
     def _pair_logits(self, frames: Float[Tensor, "two z y x"], tta: bool) -> Float[Tensor, "two z y x"]:  # noqa: FBT001
         """Both frames' detection logits, flip-TTA averaged with the pair kept together under each flip."""
+        views = FlipView.tta_ensemble() if tta else (IDENTITY_VIEW,)
         with AutocastPolicy.of(str(frames.device)):
             logits = self.forward_pair(frames)
-            if tta:
-                for dims in [(-1,), (-2,), (-2, -1)]:
-                    logits = logits + self.forward_pair(frames.flip(dims)).flip(dims)
-                logits = logits / 4
+            for view in views[1:]:
+                logits = logits + view.apply(self.forward_pair(view.apply(frames)))
+            logits = logits / len(views)
         return logits.float()
 
     @classmethod
@@ -164,12 +164,12 @@ class TemporalUNetDetector(_TemporalUNetNet):
         The forward runs at the device's accelerated precision and comes back fp32: the peak read-out compares
         a volume against its max-pool for equality, and half precision ties a nucleus to the valley beside it.
         """
+        views = FlipView.tta_ensemble() if tta else (IDENTITY_VIEW,)
         with AutocastPolicy.of(str(frame.device)):
             logits = self(frame)
-            if tta:
-                for dims in [(-1,), (-2,), (-2, -1)]:
-                    logits = logits + self(frame.flip(dims)).flip(dims)
-                logits = logits / 4
+            for view in views[1:]:
+                logits = logits + view.apply(self(view.apply(frame)))
+            logits = logits / len(views)
         return logits.float()
 
     @staticmethod

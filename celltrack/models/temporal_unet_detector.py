@@ -29,6 +29,47 @@ from zarr.core.metadata import ArrayV3Metadata
 from core.data.video import ImageStatistics, Multiscale
 
 _EXT_SRC = Path(__file__).parents[2] / "external" / "kaggle-cell-tracking-competition" / "src"
+_SPATIAL_AXES = 3
+
+
+@dataclass(frozen=True)
+class FlipView:
+    """One spatial mirroring of a frame — the unit of flip-TTA, defined ONCE for every stage that ensembles.
+
+    `dims` are negative tensor dims into a trailing `(z, y, x)`, so one view applies unchanged to a bare frame,
+    a stacked pair, or a batched window. The empty tuple is the identity and returns its input untouched rather
+    than calling `flip(())`, which keeps an ensemble whose first member is the identity numerically identical
+    to the plain forward it replaces.
+    """
+
+    dims: tuple[int, ...] = ()
+
+    @classmethod
+    def tta_ensemble(cls) -> tuple["FlipView", ...]:
+        """Identity plus the three in-plane mirrorings — the four views, identity first.
+
+        In-plane `(y, x)` only, and no rotations: the network is trained with in-plane flips alone, so a
+        mirrored frame is a scene it has seen and a rotated or z-mirrored one is a different input
+        distribution wearing the same label.
+        """
+        return (cls(), cls((-1,)), cls((-2,)), cls((-2, -1)))
+
+    def apply(self, volume: Float[Tensor, "*batch z y x"]) -> Float[Tensor, "*batch z y x"]:
+        """The volume mirrored along this view's dims — the identity view returns the very same tensor."""
+        return volume.flip(self.dims) if self.dims else volume
+
+    def mirror(self, positions: Float[Tensor, "n 3"], extent: Float[Tensor, "3"]) -> Float[Tensor, "n 3"]:
+        """Voxel positions mirrored to track `apply`, in a grid whose last valid coordinate per axis is `extent`."""
+        if not self.dims:
+            return positions
+        mirrored = positions.clone()
+        for dim in self.dims:
+            axis = dim % _SPATIAL_AXES
+            mirrored[:, axis] = extent[axis] - mirrored[:, axis]
+        return mirrored
+
+
+IDENTITY_VIEW = FlipView()
 
 
 @dataclass(frozen=True)

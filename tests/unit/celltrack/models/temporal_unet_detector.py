@@ -11,7 +11,7 @@ from pathlib import Path
 
 import torch
 
-from celltrack.models.temporal_unet_detector import DetectorRecipe, TemporalUNetDetector
+from celltrack.models.temporal_unet_detector import IDENTITY_VIEW, DetectorRecipe, FlipView, TemporalUNetDetector
 
 
 def _tiny_detector() -> TemporalUNetDetector:
@@ -113,3 +113,34 @@ def test_forward_pair():
 
     assert logits.shape == (2, 4, 8, 8)  # one map per frame of the pair
     assert not torch.allclose(logits[0], logits[1])  # genuinely different frames -> different responses
+
+
+def test_tta_ensemble():
+    """The one flip set every stage ensembles: identity first, then the three in-plane mirrorings, no rotations."""
+    assert FlipView.tta_ensemble() == (FlipView(), FlipView((-1,)), FlipView((-2,)), FlipView((-2, -1)))
+    assert FlipView.tta_ensemble()[0] == IDENTITY_VIEW
+
+
+def test_identity_view_applies_nothing():
+    """The identity returns the very same tensor, so an ensemble starting there matches the plain forward."""
+    volume = torch.arange(8.0).reshape(2, 2, 2)
+    assert IDENTITY_VIEW.apply(volume) is volume
+    positions = torch.tensor([[1.0, 2.0, 3.0]])
+    assert IDENTITY_VIEW.mirror(positions, torch.tensor([9.0, 9.0, 9.0])) is positions
+
+
+def test_apply():
+    """Every view undoes itself, which is what lets the detector un-flip a flipped forward."""
+    volume = torch.arange(24.0).reshape(2, 3, 4)
+    for view in FlipView.tta_ensemble():
+        assert torch.equal(view.apply(view.apply(volume)), volume)
+
+
+def test_mirror():
+    """A mirrored position indexes the flipped volume at the value the original indexed the unflipped one."""
+    volume = torch.arange(24.0).reshape(2, 3, 4)
+    extent = torch.tensor([1.0, 2.0, 3.0])
+    position = torch.tensor([[1.0, 0.0, 3.0]])
+    for view in FlipView.tta_ensemble():
+        z, y, x = view.mirror(position, extent)[0].long().tolist()
+        assert view.apply(volume)[z, y, x] == volume[1, 0, 3]
