@@ -93,6 +93,16 @@ class _Score:
         """The clamped form; the stub keeps it just below the faithful score, as under-detection makes it."""
         return self.score - 0.01
 
+    @property
+    def adjusted_edge_jaccard(self) -> float:
+        """The edge half of the sum — reported beside the division half so an arm's two terms stay separable."""
+        return self.score
+
+    @property
+    def division_jaccard(self) -> float:
+        """The division half; zero here, which is what every configuration without division recovery scores."""
+        return 0.0
+
 
 class _FakePipeline:
     """A mounted tracker whose score depends on the config, so the grid produces distinct values."""

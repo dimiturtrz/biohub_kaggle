@@ -239,13 +239,21 @@ def main() -> None:
     first_cell = (args.thresholds[0], args.disappearance_costs[0])  # the cell `breakdown` was measured at
     for (threshold, cost), split in evaluator.scores(root).items():
         resolved = evaluator.config_at(threshold, cost)  # `--set` wins over the swept coordinate, so report THIS
+        # BOTH TERMS, never just the sum. score = adjusted_edge_jaccard + 0.1 * division_jaccard, and printing
+        # only the total makes a division arm that RAISES div_jac while costing more edge jaccard
+        # indistinguishable from one that does nothing — which is exactly the ambiguity that left the
+        # 2026-08-11 division re-test with an unresolved mechanism after it had already been measured. Both
+        # terms are already on `SplitScore`; only the reporting dropped them.
         logger.info(
-            "threshold=%-6.4f disappearance=%-6.2f proxy score=%.4f (clamped %.4f, bonus %+.4f)",
+            "threshold=%-6.4f disappearance=%-6.2f proxy score=%.4f (clamped %.4f, bonus %+.4f) "
+            "= edge %.4f + 0.1 * div %.4f",
             resolved.threshold,
             resolved.linker.disappearance_cost,
             split.score,
             split.selection_score,
             split.score - split.selection_score,
+            split.adjusted_edge_jaccard,
+            split.division_jaccard,
         )
         per_movie = breakdown if (threshold, cost) == first_cell else {}
         tracking.cell(resolved, split.score, per_movie)
