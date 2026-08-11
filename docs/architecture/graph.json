@@ -399,6 +399,12 @@
     {
       "kind": "import",
       "source": "celltrack.eval.joint_eval",
+      "target": "celltrack.eval.proxy_eval",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.joint_eval",
       "target": "celltrack.models.joint_model",
       "weight": 1
     },
@@ -3919,9 +3925,9 @@
       "weight": 1
     },
     {
-      "kind": "construct",
+      "kind": "calls",
       "source": "celltrack.eval.dense_diagnosis.DenseDiagnosis._mounted",
-      "target": "celltrack.operating_point.TrackerConfig",
+      "target": "celltrack.operating_point.TrackerConfig.shipped",
       "weight": 1
     },
     {
@@ -4015,9 +4021,9 @@
       "weight": 1
     },
     {
-      "kind": "construct",
+      "kind": "calls",
       "source": "celltrack.eval.dense_diagnosis.DenseDiagnosis.shipped",
-      "target": "celltrack.operating_point.TrackerConfig",
+      "target": "celltrack.operating_point.TrackerConfig.shipped",
       "weight": 1
     },
     {
