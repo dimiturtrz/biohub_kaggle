@@ -8911,9 +8911,9 @@
       "weight": 1
     },
     {
-      "kind": "construct",
+      "kind": "calls",
       "source": "celltrack.tracker.CellTracker._mounted",
-      "target": "celltrack.operating_point.TrackerConfig",
+      "target": "celltrack.operating_point.TrackerConfig.shipped",
       "weight": 1
     },
     {
