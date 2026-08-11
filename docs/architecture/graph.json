@@ -3,6 +3,12 @@
     {
       "kind": "import",
       "source": "celltrack.data.candidate_density",
+      "target": "celltrack.data.joint_dataset",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.data.candidate_density",
       "target": "celltrack.data.synthetic_pairs",
       "weight": 1
     },
@@ -40,6 +46,42 @@
       "kind": "import",
       "source": "celltrack.data.crops",
       "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.data.detection_pairs",
+      "target": "celltrack.data.frame_source",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.data.detection_pairs",
+      "target": "celltrack.data.joint_dataset",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.data.detection_pairs",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.data.detection_pairs",
+      "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.data.detection_pairs",
+      "target": "core.metrics.matching",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.data.joint_dataset",
+      "target": "celltrack.data.frame_source",
       "weight": 1
     },
     {
@@ -1521,6 +1563,18 @@
     {
       "kind": "import",
       "source": "celltrack.training.corpus_audit",
+      "target": "celltrack.data.detection_pairs",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.corpus_audit",
+      "target": "celltrack.data.frame_source",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.corpus_audit",
       "target": "celltrack.data.synthetic_pairs",
       "weight": 1
     },
@@ -2049,6 +2103,12 @@
     {
       "kind": "references",
       "source": "celltrack.data.candidate_density.CandidateDensity",
+      "target": "celltrack.data.joint_dataset.PairTarget",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.data.candidate_density.CandidateDensity",
       "target": "core.data.tracks.TrackGraph",
       "weight": 1
     },
@@ -2061,6 +2121,12 @@
     {
       "kind": "calls",
       "source": "celltrack.data.candidate_density.CandidateDensity.of",
+      "target": "core.geometry.Spacing.to_micrometres",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.candidate_density.CandidateDensity.of_pairs",
       "target": "core.geometry.Spacing.to_micrometres",
       "weight": 1
     },
@@ -2164,6 +2230,90 @@
       "kind": "calls",
       "source": "celltrack.data.crops.CropSampler.sample",
       "target": "core.data.video.CellVideo.window",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.data.detection_pairs.DetectionPairs",
+      "target": "celltrack.data.frame_source.FrameSource",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.data.detection_pairs.DetectionPairs",
+      "target": "celltrack.data.joint_dataset.PairTarget",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.data.detection_pairs.DetectionPairs",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.data.detection_pairs.DetectionPairs",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.detection_pairs.DetectionPairs._successor_of",
+      "target": "core.data.tracks.TrackGraph.edge_rows",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.detection_pairs.DetectionPairs.of",
+      "target": "celltrack.data.detection_pairs.DetectionPairs._detection_of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.detection_pairs.DetectionPairs.of",
+      "target": "celltrack.data.detection_pairs.DetectionPairs._one_hot",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.detection_pairs.DetectionPairs.of",
+      "target": "celltrack.data.detection_pairs.DetectionPairs._successor_of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.detection_pairs.DetectionPairs.of",
+      "target": "celltrack.data.detection_pairs.DetectionPairs._supervised",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.data.detection_pairs.DetectionPairs.of",
+      "target": "celltrack.data.joint_dataset.PairTarget",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.detection_pairs.DetectionPairs.of",
+      "target": "core.data.tracks.TrackGraph.positions",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.detection_pairs.DetectionPairs.of",
+      "target": "core.data.tracks.TrackGraph.timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.data.detection_pairs.DetectionPairs.of",
+      "target": "core.metrics.matching.DistanceMatcher",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.detection_pairs.DetectionPairs.of",
+      "target": "core.metrics.matching.DistanceMatcher.match",
       "weight": 1
     },
     {
@@ -11049,7 +11199,7 @@
   ],
   "nodes": [
     {
-      "descendants": 89,
+      "descendants": 90,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -11065,7 +11215,7 @@
       "role": null
     },
     {
-      "descendants": 9,
+      "descendants": 10,
       "id": "celltrack.data",
       "label": "data",
       "level": "module",
@@ -11084,6 +11234,14 @@
       "descendants": 0,
       "id": "celltrack.data.crops",
       "label": "crops",
+      "level": "module",
+      "parent": "celltrack.data",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.detection_pairs",
+      "label": "detection_pairs",
       "level": "module",
       "parent": "celltrack.data",
       "role": null
@@ -11951,6 +12109,14 @@
       "level": "class",
       "parent": "celltrack.data.crops",
       "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.detection_pairs.DetectionPairs",
+      "label": "DetectionPairs",
+      "level": "class",
+      "parent": "celltrack.data.detection_pairs",
+      "role": "primary"
     },
     {
       "descendants": 0,
@@ -13842,6 +14008,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.data.candidate_density.CandidateDensity.of_pairs",
+      "label": "of_pairs",
+      "level": "method",
+      "parent": "celltrack.data.candidate_density.CandidateDensity",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.data.candidate_density.CandidateDensity.report",
       "label": "report",
       "level": "method",
@@ -13926,6 +14100,46 @@
       "label": "sample",
       "level": "method",
       "parent": "celltrack.data.crops.CropSampler",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.detection_pairs.DetectionPairs._detection_of",
+      "label": "_detection_of",
+      "level": "method",
+      "parent": "celltrack.data.detection_pairs.DetectionPairs",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.detection_pairs.DetectionPairs._one_hot",
+      "label": "_one_hot",
+      "level": "method",
+      "parent": "celltrack.data.detection_pairs.DetectionPairs",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.detection_pairs.DetectionPairs._successor_of",
+      "label": "_successor_of",
+      "level": "method",
+      "parent": "celltrack.data.detection_pairs.DetectionPairs",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.detection_pairs.DetectionPairs._supervised",
+      "label": "_supervised",
+      "level": "method",
+      "parent": "celltrack.data.detection_pairs.DetectionPairs",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.detection_pairs.DetectionPairs.of",
+      "label": "of",
+      "level": "method",
+      "parent": "celltrack.data.detection_pairs.DetectionPairs",
       "role": null
     },
     {
