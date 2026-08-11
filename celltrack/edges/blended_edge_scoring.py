@@ -133,6 +133,18 @@ class BlendedEdgeTransformerScorer:
             self.scorers, self.weights, bidirectional=bidirectional, options=self.options
         )
 
+    def with_weights(self, weights: tuple[float, ...]) -> BlendedEdgeTransformerScorer:
+        """The same mounted seeds under a different mix — the third re-pointable knob, and the one that was missing.
+
+        Without this, `CellTracker.with_config` carried the fusion flag and the options into the scorer but left
+        the WEIGHTS at whatever the mount was built with, so `--set edge_blend=…` changed `config.edge_blend`
+        and nothing else. A sweep over the blend then scored one scorer repeatedly and reported it as a flat
+        curve — which is exactly what "0.8/0.2 and 0.5/0.5 are identical to four decimals" was.
+        """
+        return BlendedEdgeTransformerScorer(
+            self.scorers, weights, bidirectional=self.bidirectional, options=self.options
+        )
+
     def with_options(self, options: EdgeBlendOptions) -> BlendedEdgeTransformerScorer:
         """The same mounted seeds under a different transform set — the options half of re-pointing a sweep.
 

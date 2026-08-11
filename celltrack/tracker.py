@@ -142,8 +142,12 @@ class CellTracker:
 
     def with_config(self, config: TrackerConfig) -> "CellTracker":
         """The same mounted models under a different operating point — reuses the cache across a sweep."""
-        edge_scorer = self.edge_scorer.with_options(config.edge_options).with_bidirectional(
-            bidirectional=config.bidirectional_edges
+        # All THREE of the scorer's operating-point knobs, not two: the weights were missing, so a sweep over
+        # `edge_blend` re-pointed the config and scored the mount's original mix every time.
+        edge_scorer = (
+            self.edge_scorer.with_options(config.edge_options)
+            .with_bidirectional(bidirectional=config.bidirectional_edges)
+            .with_weights(config.edge_blend)
         )
         return CellTracker(
             detector=self.detector,

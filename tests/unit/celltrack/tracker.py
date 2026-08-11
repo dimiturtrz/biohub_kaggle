@@ -57,8 +57,9 @@ class _StubEdgeScorer:
     the tracker asked its scorer for without mounting weights.
     """
 
-    def __init__(self, options: EdgeBlendOptions | None = None) -> None:
+    def __init__(self, options: EdgeBlendOptions | None = None, weights: tuple[float, ...] = ()) -> None:
         self.options = options if options is not None else EdgeBlendOptions()
+        self.weights = weights
 
     def affinities(self, path: Path, nodes: TrackGraph, device: str) -> None:
         return None
@@ -67,7 +68,10 @@ class _StubEdgeScorer:
         return self
 
     def with_options(self, options: EdgeBlendOptions) -> "_StubEdgeScorer":
-        return _StubEdgeScorer(options)
+        return _StubEdgeScorer(options, self.weights)
+
+    def with_weights(self, weights: tuple[float, ...]) -> "_StubEdgeScorer":
+        return _StubEdgeScorer(self.options, weights)
 
 
 def _tracker(monkeypatch: pytest.MonkeyPatch, config: TrackerConfig) -> CellTracker:
@@ -492,3 +496,18 @@ def test_with_ranker(monkeypatch: pytest.MonkeyPatch):
     assert elsewhere.ranker is not None
     assert tracker.ranker is None  # the original tracker is untouched
     assert elsewhere.with_config(TrackerConfig(threshold=0.9)).ranker is elsewhere.ranker  # survives a sweep step
+
+
+def test_with_config_repoints_the_blend_weights(monkeypatch: pytest.MonkeyPatch):
+    """The blend MIX reaches the mounted scorer through the config — the knob that silently did not.
+
+    `with_config` carried the fusion flag and the options but left the weights at whatever the mount was built
+    with, so `--set edge_blend=…` moved `config.edge_blend` and nothing else. A sweep over the blend therefore
+    scored ONE scorer repeatedly and read as a flat curve, which is how "0.8/0.2 and 0.5/0.5 are identical to
+    four decimals" was produced. Asserting the config route is what makes the knob measurable at all.
+    """
+    tracker = _tracker(monkeypatch, TrackerConfig())
+
+    swapped = tracker.with_config(TrackerConfig(edge_blend=(0.5, 0.5)))
+
+    assert cast(_StubEdgeScorer, swapped.edge_scorer).weights == (0.5, 0.5)

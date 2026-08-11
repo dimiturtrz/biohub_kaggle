@@ -183,6 +183,19 @@ def test_bidirectional_reverse_carries_no_history(tmp_path: Path):
     assert np.array_equal(fused, BlendedEdgeTransformerScorer.fuse(forward, reverse).numpy())
 
 
+def test_with_weights():
+    """Re-pointing the MIX keeps the mounted seeds and every other setting — the knob a blend sweep moves."""
+    a, b = _tiny_scorer(0), _tiny_scorer(1)
+    scorer = BlendedEdgeTransformerScorer((a, b), (0.8, 0.2), bidirectional=True)
+
+    remixed = scorer.with_weights((0.5, 0.5))
+
+    assert remixed.weights == (0.5, 0.5)
+    assert scorer.weights == (0.8, 0.2)  # the original is untouched, so a sweep cell cannot leak into the next
+    assert remixed.scorers is scorer.scorers  # the seeds are re-used, not remounted
+    assert remixed.bidirectional == scorer.bidirectional
+
+
 def test_with_bidirectional():
     """Re-pointing the knob keeps the mounted seeds — a sweep re-uses the loaded weights."""
     a, b = _tiny_scorer(0), _tiny_scorer(1)

@@ -48,7 +48,7 @@ class KernelRuntime:
         wheels = sorted(glob.glob(f"{kit_root.parent}/**/*.whl", recursive=True))
         if wheels:
             install = [sys.executable, "-m", "pip", "install", "--no-index", "--no-deps", *wheels]
-            subprocess.run(install, check=True)  # noqa: S603
+            subprocess.run(install, check=True)  # noqa: S603 — a fixed argv over paths we globbed, never a shell
         logger.info("installed wheels: %s", [os.path.basename(wheel) for wheel in wheels])
         return wheels
 

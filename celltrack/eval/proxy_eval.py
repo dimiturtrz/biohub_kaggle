@@ -22,13 +22,14 @@ from pydantic import BaseModel
 
 from celltrack.eval.proxy import CV_MOVIES, TEST_MOVIES, TestMovieProxy
 from celltrack.eval.sweep_tracking import SweepTracking
-from celltrack.linkers.linkers import LinkerConfig
 from celltrack.operating_point import TrackerConfig
 from celltrack.tracker import CellTracker
 from core.metrics.score import SplitScore, VideoMetrics
 from core.paths import DataRoot
 
 logger = logging.getLogger(__name__)
+
+_SHIPPED = TrackerConfig.shipped()
 
 # The acquisition a movie belongs to is its filename prefix; the two acquisitions differ by ~10x in
 # annotation density, and the node-count term of the score bites hardest where annotation is densest.
@@ -102,8 +103,11 @@ class TrackerProxyEval:
     """Scores the tracker across a threshold × disappearance grid on a chosen proxy, mounting once."""
 
     device: str
-    thresholds: tuple[float, ...] = (0.99,)
-    disappearance_costs: tuple[float, ...] = (0.0,)
+    # The swept coordinates DEFAULT to the shipped operating point's own values, so an unswept run measures
+    # what we submit. They used to be (0.99,) and (0.0,) — neither shipped, and the second one silently
+    # reduced the global flow linker to the per-frame assignment linker it provably equals at boundary 0.
+    thresholds: tuple[float, ...] = (_SHIPPED.threshold,)
+    disappearance_costs: tuple[float, ...] = (_SHIPPED.linker.disappearance_cost,)
     stems: tuple[str, ...] = TEST_MOVIES
     overrides: tuple[str, ...] = ()
 
@@ -143,8 +147,16 @@ class TrackerProxyEval:
         return results
 
     def config_at(self, threshold: float, cost: float) -> TrackerConfig:
-        """The resolved config of one grid cell — the swept point with every `--set` override folded on top."""
-        config = TrackerConfig(threshold=threshold, linker=LinkerConfig(disappearance_cost=cost))
+        """The resolved config of one grid cell — the swept point with every `--set` override folded on top.
+
+        The BASE is the shipped recipe, not a bare TrackerConfig: bare defaults are the per-frame assignment
+        linker with no fusion (the 0.892 tier), so every cell of every sweep that did not explicitly `--set
+        linker.name=flow` was measuring a pipeline we do not submit. Only the two swept coordinates are
+        replaced on top of it.
+        """
+        config = replace(
+            _SHIPPED, threshold=threshold, linker=_SHIPPED.linker.model_copy(update={"disappearance_cost": cost})
+        )
         for assignment in self.overrides:
             config = ConfigOverride.apply(config, assignment)
         return config

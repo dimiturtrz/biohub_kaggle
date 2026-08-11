@@ -110,14 +110,14 @@ class TemporalUNetDetector(_TemporalUNetNet):
         previous = self._read_frame(source, 0, recipe.downsample, device)
         for timepoint in range(frames - 1):
             current = self._read_frame(source, timepoint + 1, recipe.downsample, device)
-            pair = self._pair_logits(torch.stack([previous, current]), recipe.tta)
+            pair = self._pair_logits(torch.stack([previous, current]), tta=recipe.tta)
             read.append(pair[0])
             if timepoint == frames - 2:
                 read.append(pair[1])
             previous = current
         return read
 
-    def _pair_logits(self, frames: Float[Tensor, "two z y x"], tta: bool) -> Float[Tensor, "two z y x"]:  # noqa: FBT001
+    def _pair_logits(self, frames: Float[Tensor, "two z y x"], *, tta: bool) -> Float[Tensor, "two z y x"]:
         """Both frames' detection logits, flip-TTA averaged with the pair kept together under each flip."""
         views = FlipView.tta_ensemble() if tta else (IDENTITY_VIEW,)
         with AutocastPolicy.of(str(frames.device)):
