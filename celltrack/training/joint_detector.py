@@ -59,6 +59,7 @@ from celltrack.models.temporal_unet_detector import TemporalUNetDetector
 from celltrack.operating_point import TrackerConfig
 from celltrack.training.contrastive_term import ContrastiveTerm
 from celltrack.training.early_stop import EarlyStop
+from celltrack.training.joint_checkpoint import RESUME_SUFFIX, JointCheckpoint, RunProgress
 from celltrack.training.joint_config import (
     WARM_PACKS,
     ContrastiveSite,
@@ -309,7 +310,7 @@ class JointTrainer:
         model, optimization = self._prepare(warm_start=setup.warm_start)
 
         run = TrainingRun.open(self.config.model_dump(), setup)
-        resume_path = save_to.with_suffix(".resume.pt")
+        resume_path = save_to.with_suffix(RESUME_SUFFIX)
         done, restored = self._restore(model, optimization, resume_path, resume=setup.resume)
         best = restored if restored is not None else self._initial_best(model, evaluator, pairs, run, save_to)
 
@@ -341,8 +342,9 @@ class JointTrainer:
             marker = ""
             if improved:
                 best, marker = selected, " *saved"
-                self._save_checkpoint(save_to, model)
-            self._save_resume(resume_path, model, optimization, done, best)
+                self._checkpoint().save_best(save_to, model)
+            progress = RunProgress(done=done, best=best)
+            self._checkpoint().save_snapshot(resume_path, model, self.contrastive, optimization, progress)
             run.window(done, {**self._metrics(result, best), **losses})
             rate = losses["it_per_s"]
             eta_hours = (schedule.steps - done) / rate / _SECONDS_PER_HOUR if rate else 0.0
@@ -405,7 +407,7 @@ class JointTrainer:
             initial.edge_auc,
         )
         run.window(0, self._metrics(initial, initial.pipeline.selection_score))
-        self._save_checkpoint(save_to, model)
+        self._checkpoint().save_best(save_to, model)
         return initial.pipeline.selection_score
 
     def _metrics(self, result: _EvalResult, best: float) -> dict[str, float]:
@@ -646,47 +648,17 @@ class JointTrainer:
         """Load a resume snapshot into both heads and the optimiser, returning (step, best) — (0, None) if fresh."""
         if not (resume and resume_path.exists()):
             return 0, None
-        state = torch.load(resume_path, map_location=self.config.runtime.device, weights_only=False)
-        model.detector.load_state_dict(state["detector"])
-        model.transformer.load_state_dict(state["transformer"])
-        # A snapshot written before the contrastive head existed carries no entry; its optimiser state has
-        # no slot for one either, so a run resuming such a file is by construction one that projects nothing.
-        projection = state.get("contrastive")
-        if projection is not None:
-            self.contrastive.load_state_dict(projection)
-        optimization.load_state_dict(state["optimization"])
-        logger.info("resumed from %s at step %d (best %.4f)", resume_path, state["done"], state["best"])
-        return int(state["done"]), float(state["best"])
+        progress = self._checkpoint().restore(resume_path, model, self.contrastive, optimization)
+        logger.info("resumed from %s at step %d (best %.4f)", resume_path, progress.done, progress.best)
+        return progress.done, progress.best
 
-    def _save_resume(
-        self, resume_path: Path, model: JointModel, optimization: _Optimization, done: int, best: float
-    ) -> None:
-        """Write the full run state — both heads, optimiser, step, best — so a killed run can continue."""
-        torch.save(
-            {
-                "detector": model.detector.state_dict(),
-                "transformer": model.transformer.state_dict(),
-                "contrastive": self.contrastive.state_dict(),
-                "optimization": optimization.state_dict(),
-                "done": done,
-                "best": best,
-            },
-            resume_path,
-        )
-
-    def _save_checkpoint(self, save_to: Path, model: JointModel) -> None:
-        """Persist both trained heads plus the structure needed to reconstruct the joint model."""
-        torch.save(
-            {
-                "detector_state": model.detector.state_dict(),
-                "transformer_state": model.transformer.state_dict(),
-                "config": {
-                    "out_channels": self.config.model.out_channels,
-                    "layers": list(self.config.model.layers),
-                    "downsample": list(self.config.data.downsample),
-                },
-            },
-            save_to,
+    def _checkpoint(self) -> JointCheckpoint:
+        """The run's persistence, carrying the shape a saved model is rebuilt from."""
+        return JointCheckpoint(
+            out_channels=self.config.model.out_channels,
+            layers=tuple(self.config.model.layers),
+            downsample=self.config.data.downsample,
+            device=self.config.runtime.device,
         )
 
 
