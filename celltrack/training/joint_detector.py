@@ -220,6 +220,12 @@ class JointTrainer:
         # which is what 3000 warm-start steps at 1e-4 did (never beat the init). Exposed so the rate is a
         # variable of the experiment rather than an inherited constant.
         parser.add_argument("--lr", type=float, default=1e-4, help="learning rate; lower it when warm-starting")
+        parser.add_argument(
+            "--accumulate-pairs",
+            type=int,
+            default=1,
+            help="pairs averaged into one update (1 = the per-pair step every arm so far has taken)",
+        )
         parser.add_argument("--cosine-lr", action="store_true", help="decay the rate to zero over the run")
         parser.add_argument(
             "--warm-pack", choices=tuple(WARM_PACKS), default="seed1", help="which published pack to continue"
@@ -515,7 +521,11 @@ class JointTrainer:
         sums: dict[str, float] = {}
         done, t0 = 0, time.perf_counter()
         for draw, pair in self._pairs(dataset, curriculum):
-            outcome = self._step(model, optimization, pair, draw.weight)
+            # The update lands every `accumulate_pairs` pairs, and ALWAYS on the window's last pair so no
+            # half-built gradient survives into the next window (where the evaluation and a checkpoint sit).
+            batched = done + 1
+            apply = batched % self.config.optim.accumulate_pairs == 0 or batched == steps
+            outcome = self._step(model, optimization, pair, draw.weight, apply=apply)
             for name, value in outcome.logged().items():
                 sums[name] = sums.get(name, 0.0) + value
             self._observe(curriculum, draw.index, outcome)
@@ -544,18 +554,24 @@ class JointTrainer:
         curriculum.observe(index, outcome.difficulty())
 
     def _step(
-        self, model: JointModel, optimization: _Optimization, pair: PairSample, weight: float = 1.0
+        self, model: JointModel, optimization: _Optimization, pair: PairSample, weight: float = 1.0, *, apply: bool
     ) -> _PairOutcome:
-        """One optimisation step over a single GT pair; returns that pair's loss terms and edge tensors.
+        """One pair's contribution to the current update; the optimiser moves only when `apply`.
 
         `weight` is the curriculum's per-sample say in the update. It scales the GRADIENT only: the logged
         terms stay the pair's own unweighted numbers, so a window's loss row still compares across arms.
+
+        Dividing by `accumulate_pairs` makes the applied gradient the MEAN over the accumulated pairs rather
+        than their sum, so the effective learning rate does not scale with the batch and an arm's `lr` keeps
+        its meaning across accumulation settings. The clip then bounds that mean — the quantity the optimiser
+        actually follows — where it used to bound one pair's own gradient.
         """
         outcome = self._losses(model, pair)
-        optimization.zero_grad()
-        (weight * outcome.total).backward()
-        nn.utils.clip_grad_norm_(self._trained(model), self.config.optim.grad_clip)
-        optimization.step()
+        ((weight / self.config.optim.accumulate_pairs) * outcome.total).backward()
+        if apply:
+            nn.utils.clip_grad_norm_(self._trained(model), self.config.optim.grad_clip)
+            optimization.step()
+            optimization.zero_grad()
         return outcome
 
     def _losses(self, model: JointModel, pair: PairSample) -> _PairOutcome:
@@ -676,7 +692,7 @@ def main() -> None:
             synthetic_sequences=args.synthetic_sequences,
             paced_curriculum=args.paced_curriculum,
         ),
-        optim=OptimCfg(lr=args.lr, cosine_lr=args.cosine_lr),
+        optim=OptimCfg(lr=args.lr, cosine_lr=args.cosine_lr, accumulate_pairs=args.accumulate_pairs),
         loss=LossCfg(
             det_weight=args.det_weight,
             contrastive_weight=args.contrastive_weight,

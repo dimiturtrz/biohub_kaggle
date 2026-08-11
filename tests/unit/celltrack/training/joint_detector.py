@@ -26,6 +26,7 @@ from celltrack.models.edge_transformer import _POS_EMBED_DIM
 from celltrack.models.joint_model import JointModel
 from celltrack.models.prior_velocity import PriorVelocity
 from celltrack.operating_point import TrackerConfig
+from celltrack.training.joint_checkpoint import RESUME_SUFFIX
 from celltrack.training.joint_config import (
     ContrastiveSite,
     DataCfg,
@@ -296,6 +297,23 @@ def _trained_bytes(config: JointTrainConfig, video_store: Path, tracks: Annotate
     return save_to.read_bytes()
 
 
+def _trained_weights(config: JointTrainConfig, video_store: Path, tracks: AnnotatedTracks, run_dir: Path) -> bytes:
+    """One full run's TRAINED weights, off the resume snapshot — what the loop did, not what it chose to keep.
+
+    `_trained_bytes` reads the best-checkpoint, which `save_best` fills with the INIT when no window improves
+    on it. Comparing two such files can therefore compare two untrained models and read as agreement. The
+    snapshot is written every window regardless of the score, so both heads' tensors here are the run's own.
+    """
+    run_dir.mkdir()
+    save_to = run_dir / "joint.pt"
+    torch.manual_seed(0)
+    targets = _pairs(video_store)
+    JointTrainer(config).train(PairSplit(targets, targets), _evaluator(video_store, tracks), RunSetup(save_to))
+    state = torch.load(save_to.with_suffix(RESUME_SUFFIX), map_location="cpu", weights_only=False)
+    heads = (state["detector_state"], state["transformer_state"])
+    return b"".join(tensor.numpy().tobytes() for head in heads for tensor in head.values())
+
+
 def test_train_is_reproducible(video_store: Path, in_bounds_tracks: AnnotatedTracks, tmp_path: Path):
     """The same config twice from the same seed writes the same checkpoint bytes — the loop is deterministic.
 
@@ -311,6 +329,31 @@ def test_train_off_is_byte_identical(video_store: Path, in_bounds_tracks: Annota
     default = _trained_bytes(_cpu_config(), video_store, in_bounds_tracks, tmp_path / "default")
     explicit_off = _cpu_config().model_copy(update={"data": DataCfg(downsample=(1, 1, 1), difficulty_sampling=False)})
     assert _trained_bytes(explicit_off, video_store, in_bounds_tracks, tmp_path / "off") == default
+
+
+def test_train_accumulate_one_leaves_the_weights_untouched(
+    video_store: Path, in_bounds_tracks: AnnotatedTracks, tmp_path: Path
+):
+    """Accumulating over one pair IS the per-pair step, so every arm measured before it stays comparable."""
+    default = _trained_weights(_cpu_config(), video_store, in_bounds_tracks, tmp_path / "default")
+    explicit = _cpu_config().model_copy(update={"optim": OptimCfg(lr=1e-4, accumulate_pairs=1)})
+    assert _trained_weights(explicit, video_store, in_bounds_tracks, tmp_path / "one") == default
+
+
+def test_train_accumulate_averages_instead_of_stepping(
+    video_store: Path, in_bounds_tracks: AnnotatedTracks, tmp_path: Path
+):
+    """Accumulating changes the weights the run TRAINS — the pairs are averaged into one update, not applied singly.
+
+    Read off the resume snapshot rather than the best-checkpoint, and that choice is the point: `save_best`
+    writes the INIT whenever no window beats it, so two arms that both fail to improve produce identical files
+    whatever they did to the weights. A byte-identity assertion over the best-checkpoint can therefore pass by
+    comparing one untrained model with another — it proves the knob is inert exactly as loudly as it proves the
+    run never saved. The snapshot holds the trained weights unconditionally, so a difference here is a real one.
+    """
+    default = _trained_weights(_cpu_config(), video_store, in_bounds_tracks, tmp_path / "single")
+    batched = _cpu_config().model_copy(update={"optim": OptimCfg(lr=1e-4, accumulate_pairs=2)})
+    assert _trained_weights(batched, video_store, in_bounds_tracks, tmp_path / "batched") != default
 
 
 def _velocity_config() -> JointTrainConfig:
