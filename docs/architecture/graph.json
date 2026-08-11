@@ -807,6 +807,12 @@
     {
       "kind": "import",
       "source": "celltrack.eval.seed_dispersion",
+      "target": "core.metrics.edge_auc",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.seed_dispersion",
       "target": "core.metrics.matching",
       "weight": 1
     },
@@ -850,6 +856,12 @@
       "kind": "import",
       "source": "celltrack.eval.shortcut_diagnosis",
       "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.shortcut_diagnosis",
+      "target": "core.metrics.edge_auc",
       "weight": 1
     },
     {
@@ -1623,6 +1635,12 @@
     {
       "kind": "import",
       "source": "celltrack.training.joint_detector",
+      "target": "celltrack.data.pair_curriculum",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.joint_detector",
       "target": "celltrack.detectors.tunet",
       "weight": 1
     },
@@ -1642,6 +1660,12 @@
       "kind": "import",
       "source": "celltrack.training.joint_detector",
       "target": "celltrack.losses.balanced_bce",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.joint_detector",
+      "target": "celltrack.losses.hard_negative_margin",
       "weight": 1
     },
     {
@@ -1695,6 +1719,12 @@
     {
       "kind": "import",
       "source": "celltrack.training.joint_detector",
+      "target": "celltrack.training.pair_split",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.joint_detector",
       "target": "celltrack.training.prior_velocity_source",
       "weight": 1
     },
@@ -1708,18 +1738,6 @@
       "kind": "import",
       "source": "celltrack.training.joint_detector",
       "target": "celltrack.training.tunet_detector",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.training.joint_detector",
-      "target": "core.data.tracks",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.training.joint_detector",
-      "target": "core.data.video",
       "weight": 1
     },
     {
@@ -2036,8 +2054,20 @@
     },
     {
       "kind": "calls",
+      "source": "celltrack.data.candidate_density.CandidateDensity.report",
+      "target": "celltrack.data.candidate_density.CandidateDensity.summary",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
       "source": "celltrack.data.candidate_density.CandidateDensity.summary",
       "target": "celltrack.data.candidate_density.CandidateDensity.mean",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.data.candidate_density.CandidateDensity.synthetic_spacing",
+      "target": "core.geometry.Spacing",
       "weight": 1
     },
     {
@@ -2296,6 +2326,24 @@
       "kind": "references",
       "source": "celltrack.data.pair_curriculum._Blocks",
       "target": "celltrack.data.pair_curriculum._Blocks",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.data.synthetic_pairs.SyntheticFrames",
+      "target": "celltrack.data.synthetic_pairs._Sequence",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.data.synthetic_pairs.SyntheticFrames._decoded",
+      "target": "celltrack.data.synthetic_pairs._Sequence",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.synthetic_pairs.SyntheticFrames.frame",
+      "target": "celltrack.data.synthetic_pairs.SyntheticFrames._decoded",
       "weight": 1
     },
     {
@@ -2882,6 +2930,18 @@
     },
     {
       "kind": "calls",
+      "source": "celltrack.edges.association_ranker.AssociationContext._link_probabilities",
+      "target": "celltrack.affinity.EdgeAffinity.probabilities",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.edges.association_ranker.AssociationContext._link_rows",
+      "target": "core.data.tracks.TrackGraph.rows_of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
       "source": "celltrack.edges.association_ranker.AssociationContext.of",
       "target": "core.data.tracks.TrackGraph.positions",
       "weight": 1
@@ -3187,6 +3247,12 @@
       "weight": 1
     },
     {
+      "kind": "calls",
+      "source": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer.affinities",
+      "target": "celltrack.models.edge_transformer.EdgeGap.over",
+      "weight": 1
+    },
+    {
       "kind": "construct",
       "source": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer.affinities",
       "target": "celltrack.models.edge_transformer.PrecomputedEdgeAffinity",
@@ -3223,6 +3289,12 @@
       "weight": 1
     },
     {
+      "kind": "calls",
+      "source": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer.seed_logit_moments",
+      "target": "celltrack.models.edge_transformer.EdgeGap.over",
+      "weight": 1
+    },
+    {
       "kind": "construct",
       "source": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer.seed_logit_moments",
       "target": "celltrack.models.prior_velocity.GapHistory",
@@ -3244,6 +3316,12 @@
       "kind": "construct",
       "source": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer.seed_scores",
       "target": "celltrack.edges.blended_edge_scoring.GapSeedScores",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer.seed_scores",
+      "target": "celltrack.models.edge_transformer.EdgeGap.over",
       "weight": 1
     },
     {
@@ -3675,6 +3753,12 @@
     {
       "kind": "references",
       "source": "celltrack.eval.dense_diagnosis.ChargeDiagnosis",
+      "target": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.dense_diagnosis.ChargeDiagnosis",
       "target": "core.data.tracks.TrackGraph",
       "weight": 1
     },
@@ -3682,6 +3766,12 @@
       "kind": "references",
       "source": "celltrack.eval.dense_diagnosis.ChargeDiagnosis",
       "target": "core.metrics.edges.ChargedLinks",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.dense_diagnosis.ChargeDiagnosis",
+      "target": "core.metrics.edges.EdgeCounts",
       "weight": 1
     },
     {
@@ -3706,6 +3796,30 @@
       "kind": "calls",
       "source": "celltrack.eval.dense_diagnosis.ChargeDiagnosis.of",
       "target": "core.metrics.edges.ChargedLinks.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.dense_diagnosis.ChargeDiagnosis.report",
+      "target": "celltrack.eval.dense_diagnosis.ChargeDiagnosis.counts",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.dense_diagnosis.ChargeDiagnosis.report",
+      "target": "celltrack.eval.dense_diagnosis.ChargeDiagnosis.split",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.dense_diagnosis.ChargeDiagnosis.report",
+      "target": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis.counts",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.dense_diagnosis.ChargeDiagnosis.report",
+      "target": "core.metrics.edges.EdgeCounts.jaccard",
       "weight": 1
     },
     {
@@ -5587,6 +5701,18 @@
       "weight": 1
     },
     {
+      "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.DispersionSample.lines",
+      "target": "celltrack.eval.seed_dispersion.DispersionSample.size",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.DispersionSample.lines",
+      "target": "celltrack.eval.seed_dispersion.Quartiles.of",
+      "weight": 1
+    },
+    {
       "kind": "references",
       "source": "celltrack.eval.seed_dispersion.Quartiles",
       "target": "celltrack.eval.seed_dispersion.Quartiles",
@@ -5798,6 +5924,12 @@
     },
     {
       "kind": "calls",
+      "source": "celltrack.eval.seed_dispersion.Separation._auc",
+      "target": "core.metrics.edge_auc.EdgeAUC.ranked",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
       "source": "celltrack.eval.seed_dispersion.Separation.auc_blended_probability",
       "target": "celltrack.eval.seed_dispersion.Separation._auc",
       "weight": 1
@@ -5950,6 +6082,12 @@
       "kind": "calls",
       "source": "celltrack.eval.shortcut_diagnosis.CandidatePairs._gap",
       "target": "celltrack.eval.shortcut_diagnosis.MatchedAnnotation.judge",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.shortcut_diagnosis.CandidatePairs._ranking",
+      "target": "core.metrics.edge_auc.EdgeAUC.ranked",
       "weight": 1
     },
     {
@@ -6357,6 +6495,12 @@
     {
       "kind": "calls",
       "source": "celltrack.linkers.assignment_linking.AssignmentLinker._gated_cost",
+      "target": "celltrack.linkers.evidence_ramp.EvidenceRamp.applied",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.linkers.assignment_linking.AssignmentLinker._gated_cost",
       "target": "celltrack.linkers.mutual_bonus.MutualBonus.discount",
       "weight": 1
     },
@@ -6523,6 +6667,18 @@
       "weight": 1
     },
     {
+      "kind": "references",
+      "source": "celltrack.linkers.evidence_ramp.EvidenceRamp",
+      "target": "celltrack.linkers.evidence_ramp.EvidenceRamp",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.linkers.evidence_ramp.EvidenceRamp.applied",
+      "target": "celltrack.linkers.evidence_ramp.EvidenceRamp.weights",
+      "weight": 1
+    },
+    {
       "kind": "holds",
       "source": "celltrack.linkers.flow_linking.FlowLinker",
       "target": "celltrack.affinity.EdgeAffinity",
@@ -6592,6 +6748,12 @@
       "kind": "calls",
       "source": "celltrack.linkers.flow_linking.FlowLinker._gated_cost",
       "target": "celltrack.linkers.agreement_gating.AgreementGate.narrow",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.linkers.flow_linking.FlowLinker._gated_cost",
+      "target": "celltrack.linkers.evidence_ramp.EvidenceRamp.applied",
       "weight": 1
     },
     {
@@ -7099,9 +7261,39 @@
       "weight": 1
     },
     {
+      "kind": "references",
+      "source": "celltrack.models.edge_transformer.EdgeGap",
+      "target": "celltrack.models.edge_transformer.EdgeGap",
+      "weight": 1
+    },
+    {
       "kind": "holds",
       "source": "celltrack.models.edge_transformer.EdgeGap",
       "target": "celltrack.models.temporal_unet_detector._VideoSource",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.models.edge_transformer.EdgeGap",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.models.edge_transformer.EdgeGap.over",
+      "target": "celltrack.models.temporal_unet_detector.TemporalUNetDetector._open_source",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.models.edge_transformer.EdgeGap.over",
+      "target": "core.data.tracks.TrackGraph.positions",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.models.edge_transformer.EdgeGap.over",
+      "target": "core.data.tracks.TrackGraph.timepoints",
       "weight": 1
     },
     {
@@ -7281,6 +7473,12 @@
     {
       "kind": "calls",
       "source": "celltrack.models.edge_transformer.EdgeTransformerScorer.affinities",
+      "target": "celltrack.models.edge_transformer.EdgeGap.over",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.models.edge_transformer.EdgeTransformerScorer.affinities",
       "target": "celltrack.models.edge_transformer.EdgeTransformerScorer._seed_logits",
       "weight": 1
     },
@@ -7412,8 +7610,20 @@
     },
     {
       "kind": "calls",
+      "source": "celltrack.models.relative_position_transformer.RelativePositionEdgeTransformer._attend",
+      "target": "celltrack.models.relative_position_transformer.RelativePositionEdgeTransformer._part",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
       "source": "celltrack.models.relative_position_transformer.RelativePositionEdgeTransformer._block",
       "target": "celltrack.models.relative_position_transformer.RelativePositionEdgeTransformer._merge_padding",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.models.relative_position_transformer.RelativePositionEdgeTransformer._pair_logits",
+      "target": "celltrack.models.relative_position_transformer.RelativePositionEdgeTransformer._part",
       "weight": 1
     },
     {
@@ -9460,6 +9670,12 @@
       "kind": "construct",
       "source": "celltrack.training.joint_detector.JointTrainer._pairs",
       "target": "celltrack.data.pair_curriculum.PairDraw",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.joint_detector.JointTrainer._parser",
+      "target": "celltrack.operating_point.TrackerConfig",
       "weight": 1
     },
     {
@@ -13596,8 +13812,24 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.data.candidate_density.CandidateDensity.report",
+      "label": "report",
+      "level": "method",
+      "parent": "celltrack.data.candidate_density.CandidateDensity",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.data.candidate_density.CandidateDensity.summary",
       "label": "summary",
+      "level": "method",
+      "parent": "celltrack.data.candidate_density.CandidateDensity",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.candidate_density.CandidateDensity.synthetic_spacing",
+      "label": "synthetic_spacing",
       "level": "method",
       "parent": "celltrack.data.candidate_density.CandidateDensity",
       "role": null
@@ -13996,6 +14228,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.data.pair_curriculum._Blocks.falls_below",
+      "label": "falls_below",
+      "level": "method",
+      "parent": "celltrack.data.pair_curriculum._Blocks",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.data.pair_curriculum._Blocks.index",
       "label": "index",
       "level": "method",
@@ -14008,6 +14248,14 @@
       "label": "of",
       "level": "method",
       "parent": "celltrack.data.pair_curriculum._Blocks",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.synthetic_pairs.SyntheticFrames._decoded",
+      "label": "_decoded",
+      "level": "method",
+      "parent": "celltrack.data.synthetic_pairs.SyntheticFrames",
       "role": null
     },
     {
@@ -14548,6 +14796,54 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.edges.association_ranker.AssociationContext._best_outgoing",
+      "label": "_best_outgoing",
+      "level": "method",
+      "parent": "celltrack.edges.association_ranker.AssociationContext",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.edges.association_ranker.AssociationContext._frame_density",
+      "label": "_frame_density",
+      "level": "method",
+      "parent": "celltrack.edges.association_ranker.AssociationContext",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.edges.association_ranker.AssociationContext._frame_positions",
+      "label": "_frame_positions",
+      "level": "method",
+      "parent": "celltrack.edges.association_ranker.AssociationContext",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.edges.association_ranker.AssociationContext._link_probabilities",
+      "label": "_link_probabilities",
+      "level": "method",
+      "parent": "celltrack.edges.association_ranker.AssociationContext",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.edges.association_ranker.AssociationContext._link_rows",
+      "label": "_link_rows",
+      "level": "method",
+      "parent": "celltrack.edges.association_ranker.AssociationContext",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.edges.association_ranker.AssociationContext._predicted_positions",
+      "label": "_predicted_positions",
+      "level": "method",
+      "parent": "celltrack.edges.association_ranker.AssociationContext",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.edges.association_ranker.AssociationContext.of",
       "label": "of",
       "level": "method",
@@ -15020,6 +15316,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.eval.dense_diagnosis.ChargeDiagnosis.report",
+      "label": "report",
+      "level": "method",
+      "parent": "celltrack.eval.dense_diagnosis.ChargeDiagnosis",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.eval.dense_diagnosis.ChargeDiagnosis.split",
       "label": "split",
       "level": "method",
@@ -15484,6 +15788,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.eval.mitotic_appearance.MitoticAppearanceGate._arguments",
+      "label": "_arguments",
+      "level": "method",
+      "parent": "celltrack.eval.mitotic_appearance.MitoticAppearanceGate",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.eval.mitotic_appearance.MitoticAppearanceGate._distributions",
       "label": "_distributions",
       "level": "method",
@@ -15936,6 +16248,14 @@
       "label": "of",
       "level": "method",
       "parent": "celltrack.eval.ranker_distribution.ScoredMovie",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.seed_dispersion.DispersionSample.lines",
+      "label": "lines",
+      "level": "method",
+      "parent": "celltrack.eval.seed_dispersion.DispersionSample",
       "role": null
     },
     {
@@ -16524,6 +16844,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.linkers.evidence_ramp.EvidenceRamp.applied",
+      "label": "applied",
+      "level": "method",
+      "parent": "celltrack.linkers.evidence_ramp.EvidenceRamp",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.linkers.evidence_ramp.EvidenceRamp.weights",
       "label": "weights",
       "level": "method",
@@ -16940,6 +17268,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.models.edge_transformer.EdgeGap.over",
+      "label": "over",
+      "level": "method",
+      "parent": "celltrack.models.edge_transformer.EdgeGap",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.models.edge_transformer.EdgeTransformerScorer.__init__",
       "label": "__init__",
       "level": "method",
@@ -17174,6 +17510,14 @@
       "descendants": 0,
       "id": "celltrack.models.relative_position_transformer.RelativePositionEdgeTransformer._pair_logits",
       "label": "_pair_logits",
+      "level": "method",
+      "parent": "celltrack.models.relative_position_transformer.RelativePositionEdgeTransformer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.relative_position_transformer.RelativePositionEdgeTransformer._part",
+      "label": "_part",
       "level": "method",
       "parent": "celltrack.models.relative_position_transformer.RelativePositionEdgeTransformer",
       "role": null
@@ -18356,6 +18700,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.training.joint_detector.JointTrainer._parser",
+      "label": "_parser",
+      "level": "method",
+      "parent": "celltrack.training.joint_detector.JointTrainer",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.training.joint_detector.JointTrainer._prepare",
       "label": "_prepare",
       "level": "method",
@@ -19110,6 +19462,14 @@
       "descendants": 0,
       "id": "core.metrics.edge_auc.EdgeAUC.of",
       "label": "of",
+      "level": "method",
+      "parent": "core.metrics.edge_auc.EdgeAUC",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.edge_auc.EdgeAUC.ranked",
+      "label": "ranked",
       "level": "method",
       "parent": "core.metrics.edge_auc.EdgeAUC",
       "role": null
