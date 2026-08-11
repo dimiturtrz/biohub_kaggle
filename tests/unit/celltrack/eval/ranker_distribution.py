@@ -283,13 +283,18 @@ def test_lines():
 
 
 def test_pass_one():
-    """The context graph is linked under the arm minus the term that cannot exist before anything has linked."""
+    """The diagnosis reads the arm's real context: the tracker's own `without_ranker`, budget and all.
+
+    The population this module characterises is defined by the cost pass 1 links under, so it must be the
+    tracker's rule and not a local paraphrase of it — the whole learned-evidence budget on the affinity, which
+    is what makes the population invariant to the split under test (bead ic44).
+    """
     diagnosis = RankerDriftDiagnosis(linker=LinkerConfig(ranker_bonus=17.0, affinity_bonus=3.0))
 
     pass_one = diagnosis.pass_one()
 
     assert pass_one.ranker_bonus is None
-    assert pass_one.affinity_bonus == 3.0  # every other knob held identical
+    assert pass_one.affinity_bonus == 20.0  # the split's own budget, not the arm's leftover affinity share
     assert not pass_one.needs_ranker
 
 

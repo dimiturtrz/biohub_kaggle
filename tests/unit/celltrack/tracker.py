@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import cast
 
@@ -399,6 +399,42 @@ def test_run_relinks_against_the_context_graph(monkeypatch: pytest.MonkeyPatch):
 
     assert ranker.contexts == [[[0, 1]]]  # scored ONCE, against the raw links of the first pass
     assert graph.edges.tolist() == [[0, 2]]  # 4 um - 10*1.0 beats 1 um - 0, so the far candidate wins
+
+
+class _ForkAffinity:
+    """An edge scorer whose one gap prefers the FAR candidate — so the pass-1 bonus decides what pass 1 links."""
+
+    def affinities(self, path: Path, nodes: TrackGraph, device: str) -> _GapAffinity:
+        return _GapAffinity(np.array([[0.1, 0.9]]))
+
+    def with_bidirectional(self, *, bidirectional: bool) -> "_ForkAffinity":
+        return self
+
+
+def test_the_context_pass_is_invariant_to_the_split_of_one_budget(monkeypatch: pytest.MonkeyPatch):
+    """Two splits of ONE learned-evidence budget hand the re-ranker the IDENTICAL context graph (bead ic44).
+
+    The ranker's features are facts about pass 1's emitted edge list, so a context that moved with the weight
+    under test would make "the score is monotone in ranker_bonus" indistinguishable from "the score is monotone
+    in how degraded the graph its own features were read off". Here the affinity prefers the far candidate
+    (4 um vs 1 um at P 0.9 vs 0.1), so a pass-1 bonus of 20 links it and a bonus of 3 does not — the contexts
+    are equal only because the budget, not the split, sets that bonus.
+    """
+    contexts = []
+    for affinity_bonus, ranker_bonus in ((20.0, 0.0), (3.0, 17.0)):
+        ranker = _ContrarianRanker()
+        config = TrackerConfig(
+            min_track_length=1,
+            smooth_strength=0.0,
+            linker=LinkerConfig(gate_um=10.0, affinity_bonus=affinity_bonus, ranker_bonus=ranker_bonus),
+        )
+        tracker, _, _ = _forked_tracker(monkeypatch, config, ranker)
+        tracker = replace(tracker, edge_scorer=cast(tracker_module.BlendedEdgeTransformerScorer, _ForkAffinity()))
+        tracker.run("m.zarr", Path("m.zarr"))
+        contexts.append(ranker.contexts)
+
+    assert contexts[0] == [[[0, 2]]]  # the full budget links the far, high-probability candidate
+    assert contexts[0] == contexts[1]
 
 
 def test_run_reuses_the_detections_and_affinity_across_both_passes(monkeypatch: pytest.MonkeyPatch):

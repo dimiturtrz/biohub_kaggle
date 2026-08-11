@@ -213,17 +213,53 @@ def test_needs_ranker():
     assert LinkerConfig(ranker_bonus=17.0).needs_ranker
 
 
-def test_without_ranker():
-    """The context pass runs the SAME operating point minus the term that cannot exist yet.
+def test_learned_budget():
+    """The learned-evidence budget is the two probability weights summed, over the derived bonus as well."""
+    assert LinkerConfig(gate_um=10.0).learned_budget == 20.0  # derived affinity bonus, no ranker
+    assert LinkerConfig(affinity_bonus=3.0, ranker_bonus=17.0).learned_budget == 20.0
+    assert LinkerConfig(gate_um=10.0, ranker_bonus=5.0).learned_budget == 25.0
 
-    Everything else is held: the graph the 22 features describe is only a description of "the current best link
-    set" if it was produced by the cost being re-ranked.
+
+def test_without_ranker():
+    """The context pass spends the WHOLE learned-evidence budget on the affinity — the term it can price.
+
+    Dropping the ranker's weight instead of folding it would link the context at the arm's leftover bonus, so
+    the graph the 22 features describe would degrade in lockstep with the weight under test. Everything else
+    is held: the context only describes "the current best link set" if it came from the cost being re-ranked.
     """
-    config = LinkerConfig(gate_um=12.0, mutual_bonus=4.0, ranker_bonus=17.0)
+    config = LinkerConfig(gate_um=12.0, affinity_bonus=3.0, mutual_bonus=4.0, ranker_bonus=17.0)
     context = config.without_ranker()
     assert context.ranker_bonus is None
+    assert context.affinity_bonus == 20.0
     assert (context.gate_um, context.mutual_bonus, context.name) == (12.0, 4.0, config.name)
-    assert config.ranker_bonus == 17.0  # the priced config itself is unchanged
+    assert (config.affinity_bonus, config.ranker_bonus) == (3.0, 17.0)  # the priced config itself is unchanged
+
+
+def test_the_context_pass_is_invariant_to_the_split_of_one_budget():
+    """Two splits of the SAME learned-evidence budget link an IDENTICAL pass-1 context — the ic44 invariance.
+
+    This is the property that makes a sweep over the split readable: the ranker's features are computed off the
+    context graph, so if the context moved with the split, "monotone in ranker_bonus" would be indistinguishable
+    from "monotone in how degraded the context is". The graph is compared, not only the config, because the
+    invariance that matters is the one the features see.
+    """
+    detections = TrackGraph(
+        node_ids=np.array([1, 2, 3, 4]),
+        coordinates=np.array([[0, 0, 0, 0], [0, 0, 0, 6], [1, 0, 0, 1], [1, 0, 0, 5]]),
+        edges=np.empty((0, 2), dtype=np.int64),
+    )
+    scored = cast(EdgeAffinity, _Scored(np.array([[0.9, 0.1], [0.1, 0.9]])))
+    splits = ((20.0, 0.0), (17.0, 3.0), (3.0, 17.0), (0.0, 20.0))
+    for name in ("assignment", "flow"):
+        contexts = [
+            LinkerConfig(
+                name=name, gate_um=10.0, disappearance_cost=3.0, affinity_bonus=a, ranker_bonus=b
+            ).without_ranker()
+            for a, b in splits
+        ]
+        assert len({context.model_dump_json() for context in contexts}) == 1
+        graphs = [context.build(SPACING, scored).link(detections) for context in contexts]
+        assert len({graph.edges.tobytes() for graph in graphs}) == 1
 
 
 def test_build_without_the_scored_ranker_refuses_a_ranker_bonus():

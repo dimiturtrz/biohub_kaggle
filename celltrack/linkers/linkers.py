@@ -126,15 +126,33 @@ class LinkerConfig(BaseModel):
         """
         return self.ranker_bonus is not None
 
-    def without_ranker(self) -> "LinkerConfig":
-        """This config with the re-ranker term dropped — the cost the CONTEXT pass links under.
+    @property
+    def learned_budget(self) -> float:
+        """The total weight this cost puts on learned evidence — the affinity's share plus the re-ranker's.
 
-        The re-ranker cannot score until something has linked, so the first pass must run the same operating
-        point minus the term that does not exist yet. Everything else (gate, bonuses, floor) is held identical,
-        because the context graph is only a faithful description of "the current best link set" if it was
-        produced by the cost we are re-ranking.
+        The two bonuses are one budget split two ways (see `ranker_bonus`'s note): both discount the same
+        micrometre distance by a probability, so what a sweep over the split varies is WHERE the evidence comes
+        from, not how strongly evidence beats distance. Naming the sum is what lets the context pass hold that
+        second quantity fixed while the split moves.
         """
-        return self.model_copy(update={"ranker_bonus": None})
+        return self.effective_bonus + (self.ranker_bonus or 0.0)
+
+    def without_ranker(self) -> "LinkerConfig":
+        """This config with the re-ranker's weight moved onto the affinity — the cost the CONTEXT pass links under.
+
+        The re-ranker cannot score until something has linked, so the first pass cannot price it. But merely
+        DELETING the term (the previous behaviour) leaves pass 1 spending only the affinity's share of the
+        learned-evidence budget, so a sweep over the split silently degrades the very graph the re-ranker's 22
+        features are computed from: at an 85/15 split the context links at `affinity_bonus=3`, where a link
+        costs more than a track boundary and the flow terminates tracks instead of linking them (bead ic44 —
+        8 of 22 features off-distribution there against 3 of 22 at the control).
+        The context is an INPUT to the features, not part of the swept cost, so pass 1 spends the FULL budget
+        (`learned_budget`) on the evidence it does have. Two splits of one budget then produce the identical
+        pass-1 config, and hence the identical context graph — the invariance the sweep needs to mean anything.
+        Everything else (gate, floor, mutual bonus) is held, because the context graph only describes "the
+        current best link set" if it was produced by the cost being re-ranked.
+        """
+        return self.model_copy(update={"ranker_bonus": None, "affinity_bonus": self.learned_budget})
 
     @model_validator(mode="after")
     def _affinity_knobs_are_readable(self) -> "LinkerConfig":

@@ -290,10 +290,13 @@ class CellTracker:
         This is the tracker's only TWO-PASS path, and it is two-pass by necessity rather than by choice: seven
         of the ranker's 22 features (`edge_prob`, `has_learned_edge`, the two degrees, the two `has_*` flags,
         `target_best_next_prob`) are facts about an EMITTED EDGE LIST, so nothing can be scored until something
-        has linked. Pass 1 links under this exact operating point minus the term that does not exist yet
-        (`LinkerConfig.without_ranker`), pass 2 re-links the SAME detections and the SAME affinity with the
-        ranker's probability priced in — a second link is ~11% of the video's runtime, where a second detection
-        or affinity forward would be ~88%.
+        has linked. Pass 1 links under this operating point with the ranker's weight folded back onto the
+        affinity (`LinkerConfig.without_ranker`, which spends the whole learned-evidence budget on the evidence
+        that exists yet), pass 2 re-links the SAME detections and the SAME affinity with the ranker's
+        probability priced in — a second link is ~11% of the video's runtime, where a second detection or
+        affinity forward would be ~88%. Folding the weight rather than dropping it is what makes the context
+        INVARIANT to the affinity/ranker split, so sweeping the split measures the ranker rather than measuring
+        how degraded a graph its own features were read off (bead ic44).
 
         The context graph is the RAW output of pass 1's linker, taken before any post-processing. Two reasons,
         one of them fatal: the gap bridge INSERTS synthetic nodes and the short-track filter removes real ones,

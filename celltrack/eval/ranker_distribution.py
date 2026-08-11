@@ -369,8 +369,10 @@ class RankerDriftDiagnosis:
     max_gaps: int | None = None
 
     def pass_one(self) -> LinkerConfig:
-        """The cost the CONTEXT graph is linked under — the arm minus the term that cannot exist yet.
+        """The cost the CONTEXT graph is linked under — the tracker's own `without_ranker`, never a paraphrase.
 
+        That rule folds the ranker's weight back onto the affinity, so this population is invariant to the
+        affinity/ranker split (bead ic44) instead of degrading with it.
         Dropping the ranker bonus is also what lets the tracker run here without the re-ranker mounted into it:
         the pass this diagnosis reads is by definition the one that ran before any ranker probability existed.
         """
