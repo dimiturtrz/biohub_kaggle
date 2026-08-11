@@ -129,6 +129,15 @@ class LossCfg(BaseModel):
     # default so a run asking for nothing is still yesterday's run, and the term is off at weight 0 anyway.
     contrastive_site: ContrastiveSite = ContrastiveSite.FEATURES
     temperature: float = Field(0.07, gt=0)  # the InfoNCE softmax temperature over candidate targets
+    # Weight on the hard-negative RANKING term (`HardNegativeMargin`) — each annotated source's true logit held
+    # above its nearest wrong targets'. 0.0 by default, so the term is computed and logged as a diagnostic (its
+    # magnitude is what a run matches the weight to) while an unasked run is byte-for-byte the run of yesterday.
+    # The zni probe's ABSOLUTE form of this (push the decoy's probability to zero, UNet frozen) was refuted by
+    # flattening; the margin form is invariant to depressing a whole row, so it can only be satisfied by re-ranking.
+    hard_negative_weight: float = Field(0.0, ge=0)
+    # How many nearest wrong targets each annotated source contributes — the zni probe's mined count, kept so the
+    # two tools mine the same set and only the OBJECTIVE over it differs.
+    hard_negatives: PositiveInt = 4
     # Sigmoid response above which an UNANNOTATED voxel stops being supervised as background (see
     # `BalancedBCE`). Our labels cover ~1-2% of a frame's cells, so the zero target calls thousands of real
     # cells background — and warm-starting a saturated detector aims exactly those gradients at its correct

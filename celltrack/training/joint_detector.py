@@ -3,13 +3,17 @@
 Detection-only training (`tunet_detector`) freezes association; the joint loop runs the temporal backbone
 once on the real consecutive pair `(t, t+1)` and reads all three heads off the shared features — the
 detection head on each frame and the edge transformer on the node features (see `joint_model`). The losses are
-kept SEPARATE (a detection BalancedBCE per frame, a SoftmaxFocalBCE over the links, and an optional InfoNCE
-over the node features themselves) so a window logs each term on its own: that decoupling is the whole point,
+kept SEPARATE (a detection BalancedBCE per frame, a SoftmaxFocalBCE over the links, an optional InfoNCE
+over the node features themselves, and an optional hard-negative ranking term over the mined near-decoys of
+each annotated source) so a window logs each term on its own: that decoupling is the whole point,
 since the curves move on different scales and a summed number hides which one is learning. The contrastive
 term is the only one that asks for discrimination at all — the edge loss only asks the head to rank pairs
 given whatever features it is handed — and it is off (weight 0) unless a run asks for it. WHERE it acts is
 its own decision (`ContrastiveSite`): asked of the shared features it is measured to trade detection away
-for discrimination, so the term can instead be given a projection head of its own to shape.
+for discrimination, so the term can instead be given a projection head of its own to shape. The hard-negative
+term is the other one that is off by default: it mines the same near-decoys the refuted `edge_finetune` probe
+did, but scores them by MARGIN (`HardNegativeMargin`) and — the difference that makes it a new experiment —
+with the backbone unfrozen, since every association retrain that failed here trained against frozen features.
 
 The loop mirrors the detector trainer — eval-sized windows, EarlyStop + save-best + resume, the bf16 /
 channels_last / optional torch.compile speed setup — and selects on the same LB-aligned number: the
@@ -48,6 +52,7 @@ from celltrack.detectors.tunet import DetectorRecipe
 from celltrack.eval.model_evaluator import EvalResult, ModelEvaluator
 from celltrack.eval.proxy import TEST_MOVIES, VALIDATION_MOVIES, TestMovieProxy
 from celltrack.losses.balanced_bce import BalancedBCE
+from celltrack.losses.hard_negative_margin import HardNegativeMargin
 from celltrack.losses.softmax_focal_bce import SoftmaxFocalBCE
 from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeTransformerScorer
 from celltrack.models.joint_model import JointModel
@@ -109,6 +114,7 @@ class _PairOutcome:
     edge: Tensor
     detection: Tensor
     contrastive: Tensor
+    hard_negative: Tensor
     edge_logits: Tensor
     edge_matrix: Tensor
     ignored_fraction: float | None = None
@@ -126,6 +132,7 @@ class _PairOutcome:
             "edge_loss": float(self.edge.detach()),
             "det_loss": float(self.detection.detach()),
             "contrastive_loss": float(self.contrastive.detach()),
+            "hard_negative_loss": float(self.hard_negative.detach()),
             **ambiguous,
         }
 
@@ -219,7 +226,8 @@ class JointTrainer:
             rate = losses["it_per_s"]
             eta_hours = (schedule.steps - done) / rate / _SECONDS_PER_HOUR if rate else 0.0
             logger.info(
-                "epoch %g/%g | step %5d/%d | train loss %.4f (edge %.4f det %.4f nce %.4f) | proxy %.4f (sel %.4f) | "
+                "epoch %g/%g | step %5d/%d | train loss %.4f (edge %.4f det %.4f nce %.4f hn %.4f) | "
+                "proxy %.4f (sel %.4f) | "
                 "best %.4f%s | node R %.3f ratio %+.2f | mislinks %d inv %.2f P true %.3f vs chosen %.3f | "
                 "sanity AUC %.4f | %.1f it/s | elapsed %.2fh ETA %.2fh",
                 round(done / steps_per_epoch, 2),
@@ -230,6 +238,7 @@ class JointTrainer:
                 losses["edge_loss"],
                 losses["det_loss"],
                 losses["contrastive_loss"],
+                losses["hard_negative_loss"],
                 pipeline.score,
                 selected,
                 best,
@@ -441,9 +450,16 @@ class JointTrainer:
                 out.detection_t.unsqueeze(0), [centres_t_grid], loss_config.neg_weight, ignore
             ) + BalancedBCE.of(out.detection_t1.unsqueeze(0), [centres_t1_grid], loss_config.neg_weight, ignore)
             contrastive = self.contrastive.forward(out.source_features, out.target_features, edge_matrix)
-            loss = edge + loss_config.det_weight * det + loss_config.contrastive_weight * contrastive
+            decoys = HardNegativeMargin.mine(source_centres, target_centres, edge_matrix, loss_config.hard_negatives)
+            hard_negative = HardNegativeMargin.of(out.edge_logits, edge_matrix, decoys)
+            loss = (
+                edge
+                + loss_config.det_weight * det
+                + loss_config.contrastive_weight * contrastive
+                + loss_config.hard_negative_weight * hard_negative
+            )
         ignored = self._ignored((out.detection_t, centres_t_grid), (out.detection_t1, centres_t1_grid))
-        return _PairOutcome(loss, edge, det, contrastive, out.edge_logits, edge_matrix, ignored)
+        return _PairOutcome(loss, edge, det, contrastive, hard_negative, out.edge_logits, edge_matrix, ignored)
 
     def _autocast(self) -> torch.autocast:
         """The run's precision context — bf16 on CUDA, a no-op elsewhere; one definition for every forward here."""
@@ -577,6 +593,18 @@ def _parser() -> argparse.ArgumentParser:
         help="where the InfoNCE term acts: on the shared features, or through its own projection head",
     )
     parser.add_argument("--temperature", type=float, default=0.07, help="InfoNCE softmax temperature over targets")
+    # The zni probe's mining under a MARGIN objective and an UNFROZEN backbone — the one combination never run.
+    # Its absolute form (decoy probability -> 0, UNet frozen) flattened the head; a weight here is matched to the
+    # term's own logged magnitude against the edge term, so the arm measures the mechanism and not a rescaling.
+    parser.add_argument(
+        "--hard-negative-weight",
+        type=float,
+        default=0.0,
+        help="weight on the ranking term holding each source's true logit above its nearest wrong targets'",
+    )
+    parser.add_argument(
+        "--hard-negatives", type=int, default=4, help="nearest wrong targets mined per annotated source"
+    )
     # Fine-tuning a CONVERGED model at its original training rate is the classic way to walk off its optimum,
     # which is what 3000 warm-start steps at 1e-4 did (never beat the init). Exposed so the rate is a
     # variable of the experiment rather than an inherited constant.
@@ -629,6 +657,8 @@ def main() -> None:
             contrastive_weight=args.contrastive_weight,
             contrastive_site=args.contrastive_site,
             temperature=args.temperature,
+            hard_negative_weight=args.hard_negative_weight,
+            hard_negatives=args.hard_negatives,
             ignore_ambiguous_above=args.ignore_ambiguous_above,
         ),
         eval=EvalCfg(threshold=args.eval_threshold),

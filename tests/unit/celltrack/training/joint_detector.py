@@ -63,6 +63,7 @@ def _outcome(edge_logits: torch.Tensor, edge_matrix: torch.Tensor) -> _PairOutco
         edge=torch.tensor(1.0),
         detection=torch.tensor(2.0),
         contrastive=torch.tensor(0.5),
+        hard_negative=torch.tensor(0.25),
         edge_logits=edge_logits,
         edge_matrix=edge_matrix,
     )
@@ -71,7 +72,13 @@ def _outcome(edge_logits: torch.Tensor, edge_matrix: torch.Tensor) -> _PairOutco
 def test_logged():
     """Every term reaches the run's metric table under its own name, detached from the graph."""
     outcome = _outcome(torch.zeros(1, 1), torch.zeros(1, 1))
-    assert outcome.logged() == {"train_loss": 3.0, "edge_loss": 1.0, "det_loss": 2.0, "contrastive_loss": 0.5}
+    assert outcome.logged() == {
+        "train_loss": 3.0,
+        "edge_loss": 1.0,
+        "det_loss": 2.0,
+        "contrastive_loss": 0.5,
+        "hard_negative_loss": 0.25,
+    }
 
 
 def test_difficulty():
@@ -442,3 +449,33 @@ def test_train_records_sampler_health(
         PairSplit(targets, targets), _evaluator(video_store, in_bounds_tracks), RunSetup(tmp_path / "joint.pt")
     )
     assert {"coverage", "sampling_entropy"} <= mlflow_backend.metric_keys()
+
+
+def test_train_hard_negatives_off_is_byte_identical(
+    video_store: Path, in_bounds_tracks: AnnotatedTracks, tmp_path: Path
+):
+    """The ranking term at weight zero is the run of yesterday: mining is computed and logged, and changes nothing."""
+    default = _trained_bytes(_cpu_config(), video_store, in_bounds_tracks, tmp_path / "default")
+    explicit_off = _cpu_config().model_copy(update={"loss": LossCfg(hard_negative_weight=0.0, hard_negatives=4)})
+    assert _trained_bytes(explicit_off, video_store, in_bounds_tracks, tmp_path / "off") == default
+
+
+def test_losses_carries_the_hard_negative_term_into_the_total(video_store: Path):
+    """Weighted on, the mined ranking penalty is non-zero, enters the total, and its gradient reaches the BACKBONE.
+
+    Reaching the backbone is the whole experiment: every refuted association retrain here mined its negatives
+    against FROZEN features, so a term that only moved the head would repeat that arm rather than test it.
+    """
+    torch.manual_seed(0)
+    weighted = _cpu_config().model_copy(update={"loss": LossCfg(hard_negative_weight=1.0)})
+    trainer = JointTrainer(weighted)
+    model, _ = trainer._prepare(warm_start=False)
+    sample = PairDataset(_pairs(video_store), 1, (1, 1, 1), 0).pair(0)
+
+    outcome = trainer._losses(model, sample)
+
+    assert outcome.hard_negative.item() > 0.0
+    assert torch.isclose(outcome.total, outcome.edge + outcome.detection + outcome.hard_negative)
+    outcome.hard_negative.backward()
+    backbone = next(parameter for parameter in model.detector.unet.parameters() if parameter.requires_grad)
+    assert backbone.grad is not None and backbone.grad.abs().sum() > 0

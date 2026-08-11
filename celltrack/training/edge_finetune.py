@@ -27,10 +27,10 @@ from pathlib import Path
 import numpy as np
 import torch
 from jaxtyping import Float, Int
-from scipy.spatial.distance import cdist
 
 from celltrack.eval.dense_diagnosis import DenseDiagnosis, DenseFateDiagnosis, Fate, MislinkSignal
 from celltrack.eval.proxy import TestMovieProxy
+from celltrack.losses.hard_negative_margin import HardNegativeMargin
 from celltrack.losses.softmax_focal_bce import SoftmaxFocalBCE
 from celltrack.models.edge_transformer import EdgeGap, EdgeTransformerScorer
 from celltrack.models.temporal_unet_detector import TemporalUNetDetector, _VideoSource
@@ -114,14 +114,16 @@ class GapSupervision:
         target_positions: Float[np.ndarray, "t 3"],
         keep: int,
     ) -> Int[np.ndarray, "h 2"]:
-        """For each source with a true successor, its `keep` nearest *wrong* target detections — the hard negatives."""
-        distance = cdist(source_positions, target_positions)
-        pairs: list[tuple[int, int]] = []
-        for i in np.flatnonzero(gt_matrix.sum(axis=1) > 0):
-            wrong = np.flatnonzero(gt_matrix[i] == 0)
-            nearest = wrong[np.argsort(distance[i, wrong])[:keep]]
-            pairs.extend((int(i), int(j)) for j in nearest)
-        return np.array(pairs, dtype=np.int64) if pairs else np.empty((0, 2), dtype=np.int64)
+        """For each source with a true successor, its `keep` nearest *wrong* target detections — the hard negatives.
+
+        The mining itself lives with the term that consumes it (`HardNegativeMargin`), so this probe and the
+        joint trainer mine the SAME decoy set and differ only in the objective placed over it — which is the
+        whole comparison between the refuted absolute form and the margin form.
+        """
+        mined = HardNegativeMargin.mine(
+            torch.from_numpy(source_positions), torch.from_numpy(target_positions), torch.from_numpy(gt_matrix), keep
+        )
+        return mined.numpy().astype(np.int64)
 
 
 @dataclass(frozen=True)
