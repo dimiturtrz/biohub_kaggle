@@ -22,16 +22,15 @@ def test_softmax_focal_b_c_e_of():
 def test_softmax_focal_b_c_e_of_is_blind_to_a_lone_source_over_the_source_axis():
     """The defect the target axis exists to fix: one source makes the source-softmax a constant.
 
-    `softmax(dim=0)` of a single row is identically 1.0 whatever the logits, so the gradient vanishes and the
-    loss is a constant clamped BCE(1, 0) per rival. 28.8% of our real training pairs carry exactly one source.
+    `softmax(dim=0)` of a single row is identically 1.0 whatever the logits, so no logit can change the term.
+    28.8% of our real training pairs carry exactly one source, and each reported a loss of 66.67 while
+    learning nothing until that axis was dropped as the non-constraint it is.
     """
-    logits = torch.zeros(1, 3, requires_grad=True)
-    target = torch.tensor([[1.0, 0.0, 0.0]])
+    lone = SoftmaxFocalBCE.of(torch.zeros(1, 3), torch.tensor([[1.0, 0.0, 0.0]]))
+    contested = SoftmaxFocalBCE.of(torch.zeros(2, 3), torch.tensor([[1.0, 0.0, 0.0], [0.0, 0.0, 0.0]]))
 
-    SoftmaxFocalBCE.of(logits, target).backward()
-
-    assert logits.grad is not None
-    assert torch.count_nonzero(logits.grad) == 0
+    assert lone.item() == 0.0  # no constraint to state, and no constant left behind to swamp the live terms
+    assert contested.item() > 0.0  # two candidate parents IS a constraint, so the term returns
 
 
 def test_softmax_focal_b_c_e_of_ranks_a_lone_source_over_the_target_axis():
@@ -64,3 +63,17 @@ def test_softmax_focal_b_c_e_of_defaults_to_the_source_axis_alone():
     logits = torch.tensor([[2.0, -1.0], [-3.0, 0.5]])
 
     assert SoftmaxFocalBCE.of(logits, target).item() == SoftmaxFocalBCE.of(logits, target, axes=(SOURCE_AXIS,)).item()
+
+
+def test_softmax_focal_b_c_e_of_drops_an_axis_that_constrains_nothing():
+    """A lone source contributes no source-axis term at all — not a huge constant one.
+
+    Over that axis the softmax is 1.0 regardless of the logits, so the term is a clamped BCE(1, 0) on every
+    rival: a large number that carries no gradient and swamps the terms that do. Dropping it is what makes the
+    logged loss readable, and it is why the same pair over BOTH axes reports an ordinary value.
+    """
+    logits = torch.zeros(1, 3)
+    target = torch.tensor([[1.0, 0.0, 0.0]])
+
+    assert SoftmaxFocalBCE.of(logits, target).item() == 0.0  # nothing to say, so it says nothing
+    assert SoftmaxFocalBCE.of(logits, target, axes=_BOTH).item() < 1.0  # the target axis alone, undiluted

@@ -68,14 +68,20 @@ from celltrack.postproc.affinity_division_recovery import AffinityDivisionConfig
 #
 # The probability floors are OFF (0.0), which is what the sweep found actually blocked the recovery — not the
 # gates and not the cap. Under this pipeline the true divider's kept-child probability is below 0.5, so at the
-# shipped floor it was never even PROPOSED. Candidacy is carried by geometry; the absolute cap bounds the bet.
+# shipped floor it was never even PROPOSED. Candidacy is carried by geometry.
+#
+# THE CAP IS GONE, and the leaderboard is why. Caps of 300 and 100 — 1072 and ~400 forks — both scored 0.899,
+# so the budget axis is FLAT and the RANKING carries the whole gain. A hand-set ceiling that measurably does
+# not bind is a magic number, so `None` hands the budget to the measured division RATE instead (0.113% per
+# node-observation on our own corpus: 29/36/8/84 forks on the four movies, 157 in total). This submission asks
+# only whether the plateau reaches down to the phenomenon's own scale; if it does, the parameter never returns.
 _DIVISION = AffinityDivisionConfig(
     ranking="symmetry",
     min_second_prob=0.0,
     min_kept_prob=0.0,
     parent_gate_um=7.0,
     sister_gate_um=14.0,
-    max_added_forks=100,
+    max_added_forks=None,
 )
 # The base is MOUNTED, not restated: `TrackerConfig.shipped()` is the leaderboard-arbitrated 0.895 recipe
 # (thr 0.97, flow linker gate 10 / bonus 20 / boundary 3, bidirectional fusion, min6, smooth 0.8), and it lives

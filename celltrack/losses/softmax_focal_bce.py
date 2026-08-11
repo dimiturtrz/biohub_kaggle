@@ -27,6 +27,8 @@ from jaxtyping import Bool, Float
 from torch import Tensor
 
 _FOCAL_POWER = 2.0
+# A softmax over one element is 1.0 whatever the logits — an axis this short constrains nothing.
+_ONE_CANDIDATE = 1
 
 SOURCE_AXIS = 0
 """Normalise across sources: one parent per target — the frontier's form, and what the scorer reads."""
@@ -46,16 +48,24 @@ class SoftmaxFocalBCE:
     ) -> Float[Tensor, ""]:
         """Mean focal BCE across `axes`, over the rows and columns the annotation touches.
 
+        An axis of LENGTH ONE is dropped rather than normalised over. A softmax across a single element is
+        identically 1.0 whatever the logits, so that term asserts nothing, carries no gradient, and
+        contributes a large constant (a clamped BCE(1, 0) on every rival) that swamps the terms which do
+        carry one — which is how 28.8% of our pairs came to report a loss of 66.67 while learning nothing.
+        Dropping it is not a special case but the honest reading: "one parent per target" is not a constraint
+        when there is one candidate parent.
+
         Computed in fp32 with autocast disabled: `binary_cross_entropy` runs on probabilities (not logits) and
         is unsafe under a bf16 autocast, so a joint step's autocast must not reach it.
         """
         active = (target.sum(dim=1) > 0).unsqueeze(1) | (target.sum(dim=0) > 0).unsqueeze(0)
-        if not active.any():
+        constraining = [axis for axis in axes if logits.shape[axis] > _ONE_CANDIDATE]
+        if not active.any() or not constraining:
             return logits.new_zeros(())
         with torch.autocast(device_type=logits.device.type, enabled=False):
             scores = logits.float()
             truth = target.float()
-            terms = [SoftmaxFocalBCE._along(scores, truth, active, axis) for axis in axes]
+            terms = [SoftmaxFocalBCE._along(scores, truth, active, axis) for axis in constraining]
             return torch.stack(terms).mean()
 
     @staticmethod
