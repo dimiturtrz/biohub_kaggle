@@ -4915,12 +4915,6 @@
       "weight": 1
     },
     {
-      "kind": "calls",
-      "source": "celltrack.eval.mitotic_appearance.DivisionCandidates.of",
-      "target": "celltrack.operating_point.TrackerConfig.shipped",
-      "weight": 1
-    },
-    {
       "kind": "construct",
       "source": "celltrack.eval.mitotic_appearance.DivisionCandidates.of",
       "target": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig",
@@ -8257,6 +8251,18 @@
       "weight": 1
     },
     {
+      "kind": "calls",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig.build",
+      "target": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig.parent_gate",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig.build",
+      "target": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig.sister_gate",
+      "weight": 1
+    },
+    {
       "kind": "construct",
       "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig.build",
       "target": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery",
@@ -8266,6 +8272,12 @@
       "kind": "construct",
       "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig.build",
       "target": "celltrack.postproc.affinity_division_recovery.SurvivingDaughterRanking",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig.sister_gate",
+      "target": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig.parent_gate",
       "weight": 1
     },
     {
@@ -18614,6 +18626,22 @@
       "descendants": 0,
       "id": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig.build",
       "label": "build",
+      "level": "method",
+      "parent": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig.parent_gate",
+      "label": "parent_gate",
+      "level": "method",
+      "parent": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig.sister_gate",
+      "label": "sister_gate",
       "level": "method",
       "parent": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig",
       "role": null
