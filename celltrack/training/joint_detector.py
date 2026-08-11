@@ -37,7 +37,7 @@ import logging
 import math
 import time
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import torch
@@ -261,7 +261,10 @@ class JointTrainer:
         parser.add_argument("--device", type=str, default="cuda")
         parser.add_argument("--val-videos", type=int, default=2, help="validation movies the edge AUC is measured over")
         parser.add_argument(
-            "--eval-threshold", type=float, default=0.5, help="detection threshold of the selector eval"
+            "--eval-threshold",
+            type=float,
+            default=TrackerConfig.shipped().threshold,
+            help="detection threshold of the selector eval (defaults to the SHIPPED operating point's)",
         )
         parser.add_argument("--resume", action="store_true", help="continue from the .resume.pt snapshot")
         parser.add_argument("--weights", type=str, default="joint_tunet_ours.pt")
@@ -696,7 +699,7 @@ def main() -> None:
             hard_negatives=args.hard_negatives,
             ignore_ambiguous_above=args.ignore_ambiguous_above,
         ),
-        eval=EvalCfg(threshold=args.eval_threshold),
+        eval=EvalCfg(tracker=replace(TrackerConfig.shipped(), threshold=args.eval_threshold)),
         schedule=ScheduleCfg(
             steps=args.steps,
             eval_every=args.eval_every,
@@ -712,7 +715,7 @@ def main() -> None:
     save_to = proc / args.weights
     log = Obs.setup(save_to.with_suffix(".log"), truncate=not args.resume)  # tail-able while the run goes
     recipe = DetectorRecipe(downsample=config.data.downsample, tta=config.eval.tta)
-    tracker_config = TrackerConfig(threshold=config.eval.threshold)
+    tracker_config = config.eval.tracker
     with Obs.timed(log, "mounting the proxy evaluator"):
         validation = TestMovieProxy.load(root, VALIDATION_MOVIES)
         packs = (proc / WARM_PACKS["seed1"], proc / WARM_PACKS["seed2"])

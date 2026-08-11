@@ -5,6 +5,7 @@ shared tiny video fixture with a minimal (non-pilkwang-sized) backbone, so a rea
 cycle is covered without the GPU or the full model.
 """
 
+from dataclasses import replace
 from pathlib import Path
 from typing import cast
 
@@ -106,7 +107,7 @@ def _cpu_config() -> TUNetTrainConfig:
         prefetch=2,
         batch_size=2,
         eval_every=2,
-        eval_threshold=0.0,
+        eval_tracker=replace(TrackerConfig.shipped(), threshold=0.0),
         recipe=DetectorRecipe(downsample=(1, 1, 1), pool_kernel_um=1.0, tta=False),
     )
 

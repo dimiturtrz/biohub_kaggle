@@ -46,7 +46,10 @@ def test_defaults_are_the_measured_recipe():
     assert config.loss.ignore_ambiguous_above is None
     # The selector's threshold TRACKS the shipped tracker's rather than pinning a literal: selection must
     # rank candidates the way deployment does, and a copied constant would silently drift from it.
-    assert (config.eval.threshold, config.eval.tta) == (TrackerConfig().threshold, False)
+    # The selector runs the WHOLE shipped operating point, not a threshold on neutral defaults: ranking
+    # checkpoints under a linker we do not deploy can discard the better model (an affinity-side change flips
+    # sign between the per-frame and the global linker).
+    assert (config.eval.tracker, config.eval.tta) == (TrackerConfig.shipped(), False)
     assert (config.schedule.steps, config.schedule.eval_every, config.schedule.patience) == (1500, 500, 5)
     assert config.schedule.es_min_delta == 0.0
     assert (config.schedule.epochs, config.schedule.evals_per_epoch, config.schedule.patience_epochs) == (None,) * 3

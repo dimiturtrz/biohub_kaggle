@@ -88,7 +88,12 @@ class TUNetTrainConfig:
     grad_clip: float = 1.0
     eval_every: int = 500  # subset eval is a full-frame forward per video, serial with training — keep it sparse
     eval_subset: int = 2
-    eval_threshold: float = 0.5
+    # The selector's operating point is the SHIPPED one, carried whole. A bare threshold grafted onto
+    # TrackerConfig's neutral defaults ranks checkpoints under a linker we do not deploy, and the sign of an
+    # affinity-side change depends on its consumer — so a partially-specified operating point can silently
+    # discard the better model. `--eval-threshold` overrides this one field for a detector whose calibration
+    # differs (our from-scratch detector peaked at 0.999 where the published pack peaks at 0.97).
+    eval_tracker: TrackerConfig = field(default_factory=TrackerConfig.shipped)
     # The in-loop eval is a checkpoint SELECTOR, not the final number — 4x flip-TTA buys a faithful score the
     # selector doesn't need, at 4x the eval cost. Off by default; the final full-frame calibration re-enables it.
     eval_tta: bool = False
@@ -359,7 +364,12 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=8, help="frames forwarded per optimiser step (one shape)")
     parser.add_argument("--eval-every", type=int, default=500)
     parser.add_argument("--eval-subset", type=int, default=2)
-    parser.add_argument("--eval-threshold", type=float, default=0.5)
+    parser.add_argument(
+        "--eval-threshold",
+        type=float,
+        default=TrackerConfig.shipped().threshold,
+        help="detection threshold of the selector eval (defaults to the SHIPPED operating point's)",
+    )
     parser.add_argument("--eval-tta", action="store_true", help="flip-TTA in the eval (4x cost; off=selector)")
     parser.add_argument("--patience", type=int, default=8, help="stop after N non-improving evals (<1 disables)")
     parser.add_argument("--warm-start", action="store_true", help="initialise from the published pilkwang weights")
@@ -383,7 +393,7 @@ def main() -> None:
         batch_size=args.batch_size,
         eval_every=args.eval_every,
         eval_subset=args.eval_subset,
-        eval_threshold=args.eval_threshold,
+        eval_tracker=replace(TrackerConfig.shipped(), threshold=args.eval_threshold),
         eval_tta=args.eval_tta,
         patience=args.patience,
         augmentation=Augmentation(
@@ -401,7 +411,7 @@ def main() -> None:
     proc = root.processed(_DATASET)
     save_to = proc / args.weights
     log = Obs.setup(save_to.with_suffix(".log"), truncate=not args.resume)  # tail-able while the run goes
-    tracker_config = TrackerConfig(threshold=config.eval_threshold)
+    tracker_config = config.eval_tracker
     recipe = replace(config.recipe, tta=config.eval_tta)  # selector eval skips TTA by default (4x cheaper)
     with Obs.timed(log, "mounting the proxy evaluator"):
         validation = TestMovieProxy.load(root, VALIDATION_MOVIES)

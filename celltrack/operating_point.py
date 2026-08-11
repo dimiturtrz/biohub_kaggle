@@ -73,6 +73,27 @@ class TrackerConfig:
     # with `--set edge_options.align_seed_moments=true` / `--set edge_options.view_tta=true`.
     edge_options: EdgeBlendOptions = field(default_factory=EdgeBlendOptions)
 
+    @classmethod
+    def shipped(cls) -> "TrackerConfig":
+        """The operating point we actually SUBMIT — the recipe's one home, mounted rather than restated.
+
+        The field defaults above are a neutral baseline (per-frame assignment linker, no fusion); this is the
+        configuration the leaderboard scored 0.895. They differ, and that gap was a live measurement bias: both
+        trainers built their selector as `TrackerConfig(threshold=…)`, grafting the shipped THRESHOLD onto
+        otherwise-default everything, so every checkpoint this campaign selected was ranked under a linker we do
+        not deploy. That is not bookkeeping — the sign of an affinity-side change depends on its consumer
+        (bidirectional fusion: -0.0027 under the assignment linker, +0.004 on the leaderboard under flow), and
+        checkpoint selection IS an affinity-side judgement, so a head that is better under flow could lose
+        selection under assignment and simply never be saved.
+
+        Naming it here rather than in the kernel is the point: a caller MOUNTS the recipe instead of restating
+        four literals, so the selector cannot silently drift from deployment again.
+        """
+        return cls(
+            linker=LinkerConfig(name="flow", gate_um=10.0, affinity_bonus=20.0, disappearance_cost=3.0),
+            bidirectional_edges=True,
+        )
+
     def __post_init__(self) -> None:
         """Reject an operating point that cannot mean what it says — the one config level that had no checks.
 

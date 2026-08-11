@@ -162,14 +162,14 @@ class EvalCfg(BaseModel):
 
     model_config = _VALIDATED
 
-    # The SELECTOR's threshold, DERIVED from the shipped tracker's operating point rather than chosen.
-    # Selection exists to rank candidates the way deployment will: the fold-0 selector was removed because a
-    # metric that MISRANKS is worse than no metric, and every joint run to date passed 0.97 explicitly. A
-    # permissive default silently ranks by a pipeline we never ship. It READS the shipped operating point
-    # (leaderboard-arbitrated: 0.99/0.98/0.97 scored 0.887/0.891/0.892) rather than restating it — the literal
-    # that used to sit here existed only because importing `celltrack.tracker` would have tripped the
-    # god-module fan-in gate, and the config vocabulary now lives in its own module where it does not.
-    threshold: float = Field(TrackerConfig().threshold, ge=0, le=1)
+    # The SELECTOR runs the WHOLE shipped operating point, not a threshold grafted onto defaults.
+    # This field used to be `threshold: float`, derived from `TrackerConfig().threshold` — the right instinct
+    # applied to ONE field out of fourteen, while two of the other thirteen (`linker.name`,
+    # `bidirectional_edges`) are exactly what separates the 0.892 tier from the 0.895 one we submit. Selection
+    # exists to rank candidates the way deployment will, and a partially-specified operating point silently
+    # ranked them under a linker we never ship. Carrying the object makes that state INEXPRESSIBLE rather than
+    # merely discouraged.
+    tracker: TrackerConfig = Field(default_factory=TrackerConfig.shipped)
     # The selector eval skips flip-TTA: it buys a faithful score the checkpoint choice doesn't need, at 4x cost.
     tta: bool = False
 

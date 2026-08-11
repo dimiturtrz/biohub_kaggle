@@ -16,6 +16,7 @@ import glob
 import logging
 import os
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -38,28 +39,10 @@ test_videos = KernelRuntime.test_videos
 install_wheels(Path(_KIT_ROOT))
 sys.path.insert(0, str(pack_source()))
 
-from celltrack.linkers.linkers import LinkerConfig  # noqa: E402
 from celltrack.multi_gpu_submission import MultiGpuSubmission  # noqa: E402
 from celltrack.operating_point import TrackerConfig  # noqa: E402
 from celltrack.postproc.affinity_division_recovery import AffinityDivisionConfig  # noqa: E402
 
-# thr 0.97 is the measured LB best of the ladder probed so far (0.99/0.98/0.97 = 0.887/0.891/0.892).
-_THRESHOLD = 0.97
-_GATE_UM = 10.0
-_EDGE_BONUS = 20.0
-_EDGE_BLEND = (0.8, 0.2)
-# The flow solver's track-boundary charge. At 0 it provably reduces to the assignment linker edge-for-edge;
-# 3 is where it behaves globally and is its measured proxy peak.
-_BOUNDARY_COST = 3.0
-# CONSOLIDATES THE CONFIRMED WIN ONTO THE CONFIRMED BASE. v23 (global flow + bidirectional fusion) scored
-# LB 0.895 — our best — but it was anchored on the min7+rescue base, which separately measured 0.891, i.e.
-# 0.001 BELOW the min6 base. This is the same config with that handicap removed: min_track_length back to 6
-# and no rescue, so the only difference from v23 is the base it stands on.
-#
-# The fusion is kept because the LB, not the proxy, arbitrated it: alone under the per-frame assignment linker
-# it measured -0.0027, but a symmetric mutual-consistency affinity suits a GLOBAL solver that imposes
-# one-parent/one-child itself rather than through the probability's normalisation. Proxy showed the sign flip;
-# the leaderboard confirmed it at +0.004.
 # THE DIVISION TERM, CONTESTED FOR THE FIRST TIME. score = adjusted_edge_jaccard + 0.1 * division_jaccard and
 # we have banked exactly zero of the second term all campaign — the flow solver's capacity-1 node split emits no
 # forks at all, so division_jaccard is 0 BY CONSTRUCTION rather than by any measured limit.
@@ -87,13 +70,10 @@ _DIVISION = AffinityDivisionConfig(
     sister_gate_um=14.0,
     max_added_forks=300,
 )
-_CONFIG = TrackerConfig(
-    threshold=_THRESHOLD,
-    edge_blend=_EDGE_BLEND,
-    linker=LinkerConfig(name="flow", gate_um=_GATE_UM, affinity_bonus=_EDGE_BONUS, disappearance_cost=_BOUNDARY_COST),
-    bidirectional_edges=True,
-    division=_DIVISION,
-)
+# The base is MOUNTED, not restated: `TrackerConfig.shipped()` is the leaderboard-arbitrated 0.895 recipe
+# (thr 0.97, flow linker gate 10 / bonus 20 / boundary 3, bidirectional fusion, min6, smooth 0.8), and it lives
+# in the library so the selector and the submission cannot drift apart. This kernel adds exactly one variable.
+_CONFIG = replace(TrackerConfig.shipped(), division=_DIVISION)
 _SUBMISSION = Path("/kaggle/working/submission.csv")
 
 
