@@ -27,6 +27,7 @@ from celltrack.linkers.agreement_gating import AgreementGate
 from celltrack.linkers.assignment_linking import AssignmentLinker
 from celltrack.linkers.boundary_prior import BoundaryPrior
 from celltrack.linkers.division_linking import DivisionAwareLinker
+from celltrack.linkers.evidence_ramp import EvidenceRamp
 from celltrack.linkers.flow_linking import FlowLinker
 from celltrack.linkers.ilp_linking import ILPLinker
 from celltrack.linkers.linking import Linker, NearestNeighbourLinker
@@ -60,6 +61,7 @@ class LinkerParts:
     ranker: RankerBonus | None = None
     boundary: BoundaryPrior | None = None
     prediction: MotionPrediction | None = None
+    ramp: EvidenceRamp | None = None
 
 
 class LinkerConfig(BaseModel):
@@ -115,6 +117,14 @@ class LinkerConfig(BaseModel):
     # this is an on/off claim about which geometry the cost is written in, not a tuning surface. Setting it makes
     # `build` require the edge affinity the velocity is derived from.
     motion_distance: bool = False
+    # None = OFF, so the shipped cost is byte-identical; `0.0` is the same cost through the ramp's own arithmetic
+    # (`ramp ≡ 1`), which is what makes it the control arm of its own sweep. Set, the forward affinity's weight
+    # becomes `1 + evidence_ramp * (d / mean_gated_distance - 1)`, clamped at zero (`EvidenceRamp`): a
+    # dimensionless dose, normalised by the gate's own admitted pairs, that spends the SAME evidence budget more
+    # on far candidates — where the head's AUC holds at 0.95-0.97 while distance's collapses to 0.64-0.71 — and
+    # less on near ones, where 96% of in-gate candidates are already the true successor. No default is chosen
+    # here: how fast evidence should overtake proximity is a claim about our data, so a sweep decides it.
+    evidence_ramp: float | None = Field(None, ge=0)
 
     @property
     def effective_bonus(self) -> float:
@@ -256,6 +266,7 @@ class LinkerConfig(BaseModel):
             self._ranker(ranker),
             self._boundary(volume_shape),
             self._prediction(affinity),
+            self._ramp(),
         )
         return _BUILDERS[self.name](self, spacing, affinity, parts)
 
@@ -307,6 +318,15 @@ class LinkerConfig(BaseModel):
             )
             raise ValueError(message)
         return RankerBonus(ranker=ranker, bonus=self.ranker_bonus)
+
+    def _ramp(self) -> EvidenceRamp | None:
+        """The affinity term's distance-dependent weight — `None` when off, and needing nothing else to build.
+
+        Unlike the other parts this consumes no extra scored quantity: the ramp is normalised by the separations
+        the gate already computes, so there is no missing input to refuse. A strength of `0` still builds the
+        term, because a control arm that runs the ramp's own arithmetic is what proves the sweep is unconfounded.
+        """
+        return None if self.evidence_ramp is None else EvidenceRamp(strength=self.evidence_ramp)
 
     def _boundary(self, volume_shape: tuple[int, int, int] | None) -> BoundaryPrior | None:
         """The track-boundary prior this config asks for — `None` when off, an error when the shape is missing.
@@ -363,12 +383,19 @@ _RANKER_READERS = frozenset({"assignment", "flow", "motion"})
 _AGREEMENT_READERS = frozenset({"assignment", "flow"})
 _MUTUAL_READERS = frozenset({"assignment", "flow"})
 
+# Which linkers can weight their forward-affinity term by distance. `motion` is absent: it admits through a
+# tight/loose PAIR of gates and prices a predicted geometry, so there is no single admitted-candidate set whose
+# mean separation the ramp could normalise by — the dimensionless scale is the whole device, so a ramp there
+# would need a second, chosen constant. The two linkers with one gate and one raw distance carry it.
+_RAMP_READERS = frozenset({"assignment", "flow"})
+
 # The learned-evidence knobs, each against the readers of THAT knob — what `_affinity_knobs_are_readable` walks.
 _KNOB_READERS: dict[str, frozenset[str]] = {
     "affinity_bonus": _BONUS_READERS,
     "agreement_floor": _AGREEMENT_READERS,
     "mutual_bonus": _MUTUAL_READERS,
     "ranker_bonus": _RANKER_READERS,
+    "evidence_ramp": _RAMP_READERS,
 }
 
 # Which linkers price a track boundary per node. Only the flow linker charges appearance and disappearance at all,
@@ -390,6 +417,7 @@ _BUILDERS: dict[str, _Builder] = {
         agreement=parts.agreement,
         mutual=parts.mutual,
         ranker=parts.ranker,
+        ramp=parts.ramp,
     ),
     "nn": lambda config, spacing, affinity, parts: NearestNeighbourLinker(
         spacing=spacing, max_distance_um=config.gate_um
@@ -422,5 +450,6 @@ _BUILDERS: dict[str, _Builder] = {
         ranker=parts.ranker,
         boundary=parts.boundary,
         prediction=parts.prediction,
+        ramp=parts.ramp,
     ),
 }

@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from celltrack.eval.dense_diagnosis import AffinityIndex, DenseDiagnosis, DenseFateDiagnosis, Fate, MislinkSignal
+from celltrack.linkers.linkers import LinkerConfig
 from celltrack.tracker import CellTracker, TrackerConfig
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
@@ -71,6 +72,24 @@ def test_diagnose():
     assert fate.counts()[Fate.MISLINK_FREE] == 1
     assert signal.p_true.tolist() == [0.2]
     assert signal.p_chosen.tolist() == [0.7]
+
+
+def test_configured(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    """`configured` mounts the same reference packs at an ARBITRARY config — how a swept arm gets decomposed."""
+    mounted: dict[str, object] = {}
+    monkeypatch.setattr(
+        CellTracker,
+        "from_packs",
+        classmethod(
+            lambda cls, pack1, pack2, responses, device, config=None: mounted.update(pack1=pack1, config=config)
+        ),
+    )
+    arm = TrackerConfig(linker=LinkerConfig(name="flow", evidence_ramp=0.5))
+
+    DenseDiagnosis.configured(DataRoot(tmp_path), "cpu", arm)
+
+    assert cast(Path, mounted["pack1"]).match("*/reference/pilkwang/split_0")
+    assert cast(TrackerConfig, mounted["config"]) == arm
 
 
 def test_shipped(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):

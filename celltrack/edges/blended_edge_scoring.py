@@ -24,6 +24,7 @@ from pathlib import Path
 import numpy as np
 import torch
 from jaxtyping import Float
+from pydantic import BaseModel, ConfigDict
 from torch import Tensor
 
 from celltrack.edges.flip_view_edge_scoring import FlipViewEdgeScorer
@@ -35,14 +36,20 @@ from core.data.tracks import TrackGraph
 _DENOMINATOR_FLOOR = 1e-12
 
 
-@dataclass(frozen=True)
-class EdgeBlendOptions:
+class EdgeBlendOptions(BaseModel):
     """The two disclosed frontier transforms around the blend, both default OFF — one knob object, not three flags.
 
     They travel together because they are asked the same way (a candidate arm of a proxy sweep) and neither is
     part of the shipped path until one of them earns it. `bidirectional` stays a separate argument: it is a
     shipped setting the tracker re-points per run, not a candidate.
+
+    Pydantic (not a plain dataclass) for the reason `LinkerConfig` is: it is reached by a `--set
+    edge_options.view_tta=true` override, which is user input, and it is the nested-config shape
+    `celltrack.eval.proxy_eval.ConfigOverride` speaks — so the knobs are settable from the CLI without a
+    second override mechanism, and a misspelt one is rejected at construction rather than ignored.
     """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     align_seed_moments: bool = False
     view_tta: bool = False
@@ -103,6 +110,17 @@ class BlendedEdgeTransformerScorer:
         """The same mounted seeds under the other fusion setting — so a sweep re-points the knob, not the mount."""
         return BlendedEdgeTransformerScorer(
             self.scorers, self.weights, bidirectional=bidirectional, options=self.options
+        )
+
+    def with_options(self, options: EdgeBlendOptions) -> BlendedEdgeTransformerScorer:
+        """The same mounted seeds under a different transform set — the options half of re-pointing a sweep.
+
+        Separate from `with_bidirectional` because the two are re-pointed by different owners: fusion is a
+        per-pass direction question (`fused_affinities` flips it mid-run), the options are the config's
+        operating point. Chaining both is how `CellTracker.with_config` re-mounts nothing at all.
+        """
+        return BlendedEdgeTransformerScorer(
+            self.scorers, self.weights, bidirectional=self.bidirectional, options=options
         )
 
     @torch.no_grad()

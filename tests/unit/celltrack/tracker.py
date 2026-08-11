@@ -9,6 +9,7 @@ from celltrack import tracker as tracker_module
 from celltrack.detectors.pipeline import BlendDetectorScorer
 from celltrack.detectors.response_cache import EphemeralResponseStore
 from celltrack.detectors.tunet import DetectorRecipe
+from celltrack.edges.blended_edge_scoring import EdgeBlendOptions
 from celltrack.linkers.linkers import LinkerConfig
 from celltrack.linkers.linking import Linker
 from celltrack.postproc.topology_repair import TopologyConfig
@@ -49,13 +50,23 @@ class _StubBlend:
 
 
 class _StubEdgeScorer:
-    """A blended edge scorer supplying no learned affinity, leaving the linker on pure geometry."""
+    """A blended edge scorer supplying no learned affinity, leaving the linker on pure geometry.
+
+    It carries the blend `options` it was re-pointed with, so a config-path test can assert which transforms
+    the tracker asked its scorer for without mounting weights.
+    """
+
+    def __init__(self, options: EdgeBlendOptions | None = None) -> None:
+        self.options = options if options is not None else EdgeBlendOptions()
 
     def affinities(self, path: Path, nodes: TrackGraph, device: str) -> None:
         return None
 
     def with_bidirectional(self, *, bidirectional: bool) -> "_StubEdgeScorer":
         return self
+
+    def with_options(self, options: EdgeBlendOptions) -> "_StubEdgeScorer":
+        return _StubEdgeScorer(options)
 
 
 def _tracker(monkeypatch: pytest.MonkeyPatch, config: TrackerConfig) -> CellTracker:
@@ -117,6 +128,21 @@ def test_with_config(monkeypatch: pytest.MonkeyPatch):
     assert swapped.detector is tracker.detector
 
 
+def test_with_config_repoints_the_edge_blend_options(monkeypatch: pytest.MonkeyPatch):
+    """The blend's candidate transforms reach the mounted scorer THROUGH the config — the sweep's only path.
+
+    Both mechanisms (`align_seed_moments`, `view_tta`) were reachable only by constructing the scorer directly,
+    so no measurement path could turn them on. This asserts the config route: default OFF, and a config that
+    asks for them re-points the same mounted seeds rather than remounting.
+    """
+    tracker = _tracker(monkeypatch, TrackerConfig())
+    assert cast(_StubEdgeScorer, tracker.with_config(TrackerConfig()).edge_scorer).options == EdgeBlendOptions()
+
+    asked = TrackerConfig(edge_options=EdgeBlendOptions(align_seed_moments=True, view_tta=True))
+    scorer = cast(_StubEdgeScorer, tracker.with_config(asked).edge_scorer)
+    assert (scorer.options.align_seed_moments, scorer.options.view_tta) == (True, True)
+
+
 def test_from_packs(monkeypatch: pytest.MonkeyPatch):
     """`from_packs` mounts both detector packs (cache-backed) and the blended edge scorer, carrying the config."""
     monkeypatch.setattr(
@@ -127,12 +153,16 @@ def test_from_packs(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
         tracker_module.BlendedEdgeTransformerScorer,
         "from_packs",
-        staticmethod(lambda packs, weights, device, *, bidirectional: _StubEdgeScorer()),
+        staticmethod(lambda packs, weights, device, *, bidirectional, options: _StubEdgeScorer(options)),
     )
-    config = TrackerConfig(linker=LinkerConfig(disappearance_cost=3.0))
+    config = TrackerConfig(
+        linker=LinkerConfig(disappearance_cost=3.0), edge_options=EdgeBlendOptions(align_seed_moments=True)
+    )
     tracker = CellTracker.from_packs(Path("p1"), Path("p2"), Path("cache"), "cpu", config)
     assert tracker.config.linker.disappearance_cost == 3.0
     assert isinstance(tracker.detector, BlendDetectorScorer)
+    # The mount reads the config's blend options — the other half of the path a sweep drives them through.
+    assert cast(_StubEdgeScorer, tracker.edge_scorer).options.align_seed_moments
 
 
 def test_ephemeral(monkeypatch: pytest.MonkeyPatch):
@@ -145,7 +175,7 @@ def test_ephemeral(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
         tracker_module.BlendedEdgeTransformerScorer,
         "from_packs",
-        staticmethod(lambda packs, weights, device, *, bidirectional: _StubEdgeScorer()),
+        staticmethod(lambda packs, weights, device, *, bidirectional, options: _StubEdgeScorer(options)),
     )
     tracker = CellTracker.ephemeral(Path("p1"), Path("p2"), "cpu", TrackerConfig(threshold=0.97))
 
@@ -204,6 +234,9 @@ class _RecordingEdgeScorer:
 
     def with_bidirectional(self, *, bidirectional: bool) -> "_RecordingEdgeScorer":
         return _RecordingEdgeScorer(self.scored, bidirectional=bidirectional)
+
+    def with_options(self, options: EdgeBlendOptions) -> "_RecordingEdgeScorer":
+        return self
 
 
 def _recording_tracker(monkeypatch: pytest.MonkeyPatch, config: TrackerConfig) -> tuple[CellTracker, list[bool]]:
@@ -308,6 +341,9 @@ class _CountingEdgeScorer:
         return None
 
     def with_bidirectional(self, *, bidirectional: bool) -> "_CountingEdgeScorer":
+        return self
+
+    def with_options(self, options: EdgeBlendOptions) -> "_CountingEdgeScorer":
         return self
 
 

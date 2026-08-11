@@ -101,7 +101,7 @@ class ModelEvaluator:
         so selection pressure never lands on the test four.
         """
         edge_scorer = BlendedEdgeTransformerScorer.from_packs(
-            packs, config.edge_blend, device, bidirectional=config.bidirectional_edges
+            packs, config.edge_blend, device, bidirectional=config.bidirectional_edges, options=config.edge_options
         )
         return cls(proxy=proxy, edge_scorer=edge_scorer, recipe=recipe, device=device, config=config)
 
@@ -125,7 +125,9 @@ class ModelEvaluator:
         """
         detector = TemporalUNetDetector.of(model.detector)
         scorer = EdgeTransformerScorer.of(detector, model.transformer, self.recipe)
-        one_seed = BlendedEdgeTransformerScorer((scorer,), (1.0,), bidirectional=self.config.bidirectional_edges)
+        one_seed = BlendedEdgeTransformerScorer(
+            (scorer,), (1.0,), bidirectional=self.config.bidirectional_edges, options=self.config.edge_options
+        )
         return self._score(detector, one_seed)
 
     def _score(self, detector: TemporalUNetDetector, edge_scorer: BlendedEdgeTransformerScorer) -> EvalResult:

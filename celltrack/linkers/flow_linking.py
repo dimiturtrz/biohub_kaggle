@@ -29,6 +29,7 @@ from scipy.spatial.distance import cdist
 from celltrack.affinity import EdgeAffinity
 from celltrack.linkers.agreement_gating import AgreementGate
 from celltrack.linkers.boundary_prior import BoundaryPrior
+from celltrack.linkers.evidence_ramp import EvidenceRamp, evidence_weights
 from celltrack.linkers.motion_prediction import MotionPrediction
 from celltrack.linkers.mutual_bonus import MutualBonus
 from celltrack.linkers.ranker_bonus import RankerBonus
@@ -83,6 +84,12 @@ class FlowLinker:
     # statement about travel and a prediction is an estimate. The learned terms are untouched: this changes only
     # the geometry they are corrections to.
     prediction: MotionPrediction | None = None
+    # Off by default (`None` = one flat evidence weight at every separation, the shipped cost byte for byte).
+    # The same fourth option `AssignmentLinker` takes (`EvidenceRamp`): the forward affinity's weight becomes a
+    # function of the candidate's separation, normalised by the mean separation this gap's gate admitted, so the
+    # evidence budget is spent where the head out-separates proximity. The gate is READ for that normalisation
+    # (the mean is over admitted pairs), never changed by it.
+    ramp: EvidenceRamp | None = None
 
     def link(self, detections: TrackGraph) -> TrackGraph:
         """Select the min-cost set of 1-to-1 links over the whole video, coupled through the track-boundary cost."""
@@ -171,7 +178,7 @@ class FlowLinker:
         if self.affinity is not None and self.affinity_bonus != 0.0:
             probability = self.affinity.probabilities(timepoint)
             if probability is not None:
-                cost = cost - self.affinity_bonus * probability
+                cost = cost - self.affinity_bonus * evidence_weights(self.ramp, distance, within_gate) * probability
         if self.mutual is not None:
             cost = self.mutual.discount(timepoint, cost)
         if self.ranker is not None:

@@ -393,3 +393,64 @@ def test_the_default_cost_is_byte_identical_with_the_ranker_mounted():
         assert with_ranker.edges.tobytes() == without.edges.tobytes()
         moved = config.model_copy(update={"ranker_bonus": 40.0}).build(SPACING, scored, ranker=ranker).link(detections)
         assert moved.edges.tobytes() != without.edges.tobytes()  # the term is inert by default, not by inability
+
+
+def _one_source_two_targets() -> TrackGraph:
+    """One cell at the origin with a near and a far candidate successor — the ramp's whole tradeoff, minimal."""
+    return TrackGraph(
+        node_ids=np.array([1, 2, 3]),
+        coordinates=np.array([[0, 0, 0, 0], [1, 0, 0, 1], [1, 0, 0, 7]]),
+        edges=np.empty((0, 2), dtype=np.int64),
+    )
+
+
+def test_evidence_ramp_is_readable():
+    """The ramp is refused on a linker whose cost it cannot reweight — the same rule as every other knob.
+
+    `motion` is a refuser here even though it PRICES the forward affinity: it admits through a tight/loose gate
+    pair, so there is no single admitted-candidate set whose mean separation the ramp normalises by.
+    """
+    for name in ("nn", "motion"):
+        with pytest.raises(ValidationError, match="does not read evidence_ramp"):
+            LinkerConfig(name=name, evidence_ramp=1.0)
+
+    for name in ("assignment", "flow"):
+        assert LinkerConfig(name=name, evidence_ramp=1.0).build(SPACING).ramp is not None
+
+
+def test_build_leaves_the_evidence_ramp_off_by_default():
+    """Unset means absent, not a zero-strength term — the default cost carries no ramp object at all."""
+    for name in ("assignment", "flow"):
+        assert LinkerConfig(name=name).build(SPACING, cast(EdgeAffinity, object())).ramp is None
+
+
+def test_the_zero_strength_ramp_is_byte_identical_to_the_shipped_cost():
+    """The control arm runs the ramp's OWN arithmetic and lands on the shipped links, byte for byte.
+
+    This is the claim the whole sweep rests on: if `evidence_ramp=0` moved a single edge, every arm above it
+    would be confounded by whatever else the ramp changed. It goes through the CONFIG path — `--set
+    linker.evidence_ramp=…` is how the sweep reaches it, so that is what must be identity at zero.
+    """
+    detections = _one_source_two_targets()
+    scored = cast(EdgeAffinity, _Scored(np.array([[0.8, 0.55]])))  # the near target is preferred at a flat weight
+    for name in ("assignment", "flow"):
+        config = LinkerConfig(name=name, gate_um=10.0, affinity_bonus=20.0)
+        shipped = config.build(SPACING, scored).link(detections)
+        control = config.model_copy(update={"evidence_ramp": 0.0}).build(SPACING, scored).link(detections)
+        assert control.edges.tobytes() == shipped.edges.tobytes()
+
+
+def test_a_dosed_ramp_moves_the_bonus_onto_the_far_candidate():
+    """At a positive strength the far candidate's evidence outweighs the near one's — the mechanism, end to end.
+
+    Flat, the near target wins (`1 - 20*0.8` beats `7 - 20*0.55`). The ramp holds the same budget and
+    redistributes it by separation (mean 4um: weights 0.25 and 1.75), which flips the choice to the far one —
+    so the zero-strength equality above is a claim about the DOSE, not about a term that cannot act.
+    """
+    detections = _one_source_two_targets()
+    scored = cast(EdgeAffinity, _Scored(np.array([[0.8, 0.55]])))
+    for name in ("assignment", "flow"):
+        config = LinkerConfig(name=name, gate_um=10.0, affinity_bonus=20.0)
+        assert config.build(SPACING, scored).link(detections).edges.tolist() == [[1, 2]]
+        dosed = config.model_copy(update={"evidence_ramp": 1.0}).build(SPACING, scored).link(detections)
+        assert dosed.edges.tolist() == [[1, 3]]

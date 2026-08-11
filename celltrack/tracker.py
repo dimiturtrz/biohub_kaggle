@@ -23,7 +23,7 @@ from celltrack.detectors.pipeline import BlendDetectorScorer
 from celltrack.detectors.response_cache import EphemeralResponseStore, ResponseCache, ResponseStore
 from celltrack.detectors.tunet import TemporalUNetDetector
 from celltrack.edges.association_ranker import AssociationRanker
-from celltrack.edges.blended_edge_scoring import BlendedEdgeTransformerScorer
+from celltrack.edges.blended_edge_scoring import BlendedEdgeTransformerScorer, EdgeBlendOptions
 from celltrack.linkers.linkers import LinkerConfig
 from celltrack.linkers.linking import Linker
 from celltrack.postproc.affinity_division_recovery import AffinityDivisionConfig
@@ -110,6 +110,11 @@ class TrackerConfig:
     # forward and no retraining; it targets the affinity-inverted dense mislink, where a wrong near neighbour
     # wins forwards but loses backwards.
     bidirectional_edges: bool = False
+    # The edge blend's two candidate transforms (`EdgeBlendOptions`), both off by default: seed-moment alignment
+    # before the weighted sum, and four-view flip TTA on the edge head fused by a JS-reliability log pool. They
+    # live here rather than at the mount because they are operating-point knobs a sweep re-points — reach them
+    # with `--set edge_options.align_seed_moments=true` / `--set edge_options.view_tta=true`.
+    edge_options: EdgeBlendOptions = field(default_factory=EdgeBlendOptions)
 
     def __post_init__(self) -> None:
         """Reject an operating point that cannot mean what it says — the one config level that had no checks.
@@ -201,13 +206,19 @@ class CellTracker:
             device=device,
         )
         edge_scorer = BlendedEdgeTransformerScorer.from_packs(
-            (pack1, pack2), config.edge_blend, device, bidirectional=config.bidirectional_edges
+            (pack1, pack2),
+            config.edge_blend,
+            device,
+            bidirectional=config.bidirectional_edges,
+            options=config.edge_options,
         )
         return cls(detector=detector, edge_scorer=edge_scorer, device=device, config=config)
 
     def with_config(self, config: TrackerConfig) -> "CellTracker":
         """The same mounted models under a different operating point — reuses the cache across a sweep."""
-        edge_scorer = self.edge_scorer.with_bidirectional(bidirectional=config.bidirectional_edges)
+        edge_scorer = self.edge_scorer.with_options(config.edge_options).with_bidirectional(
+            bidirectional=config.bidirectional_edges
+        )
         return CellTracker(
             detector=self.detector,
             edge_scorer=edge_scorer,

@@ -289,6 +289,17 @@ def test_with_bidirectional_carries_the_opt_ins():
     assert switched.options.view_tta
 
 
+def test_with_options():
+    """Re-pointing the transforms keeps the mounted seeds AND the fusion setting — the config path's other half."""
+    a = _tiny_scorer(0)
+    scorer = BlendedEdgeTransformerScorer((a,), (1.0,), bidirectional=True)
+    switched = scorer.with_options(EdgeBlendOptions(align_seed_moments=True, view_tta=True))
+    assert switched.scorers == scorer.scorers
+    assert switched.bidirectional
+    assert (switched.options.align_seed_moments, switched.options.view_tta) == (True, True)
+    assert scorer.options == EdgeBlendOptions()  # the original is untouched — a sweep re-points, not mutates
+
+
 def test_seed_logit_moments(tmp_path: Path):
     """The reporter returns one entry per gap, per seed, holding those seeds' actual raw logit mean and std."""
     a, b = _tiny_scorer(0), _tiny_scorer(1)

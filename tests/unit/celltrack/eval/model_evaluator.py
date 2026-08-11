@@ -14,7 +14,7 @@ import pytest
 import torch
 
 from celltrack.detectors.tunet import DetectorRecipe, TemporalUNetDetector
-from celltrack.edges.blended_edge_scoring import BlendedEdgeTransformerScorer
+from celltrack.edges.blended_edge_scoring import BlendedEdgeTransformerScorer, EdgeBlendOptions
 from celltrack.eval.model_evaluator import EvalResult, ModelEvaluator
 from celltrack.eval.proxy import TestMovieProxy
 from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeTransformerScorer, PrecomputedEdgeAffinity
@@ -53,9 +53,15 @@ def test_mount(monkeypatch: pytest.MonkeyPatch):
     captured: dict[str, object] = {}
 
     def _fake_from_packs(
-        packs: tuple[Path, ...], weights: tuple[float, ...], device: str, *, bidirectional: bool
+        packs: tuple[Path, ...],
+        weights: tuple[float, ...],
+        device: str,
+        *,
+        bidirectional: bool,
+        options: EdgeBlendOptions,
     ) -> str:
         captured["packs"], captured["weights"], captured["device"] = packs, weights, device
+        captured["options"] = options
         return "edge"
 
     monkeypatch.setattr(BlendedEdgeTransformerScorer, "from_packs", staticmethod(_fake_from_packs))
@@ -65,13 +71,14 @@ def test_mount(monkeypatch: pytest.MonkeyPatch):
         (Path("p1"), Path("p2")),
         DetectorRecipe(),
         "cpu",
-        TrackerConfig(edge_blend=(0.8, 0.2)),
+        TrackerConfig(edge_blend=(0.8, 0.2), edge_options=EdgeBlendOptions(view_tta=True)),
     )
 
     assert evaluator.proxy == "proxy"
     assert evaluator.edge_scorer == "edge"
     assert captured["packs"] == (Path("p1"), Path("p2"))
     assert captured["weights"] == (0.8, 0.2)
+    assert captured["options"] == EdgeBlendOptions(view_tta=True)  # the config's transforms reach the mount
 
 
 def test_evaluate(video_store: Path, in_bounds_tracks: AnnotatedTracks):

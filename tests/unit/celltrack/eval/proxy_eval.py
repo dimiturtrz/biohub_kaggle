@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from celltrack.eval import proxy_eval
 from celltrack.eval.proxy import CV_MOVIES
-from celltrack.eval.proxy_eval import TrackerProxyEval, _Args, _ConfigOverride
+from celltrack.eval.proxy_eval import ConfigOverride, TrackerProxyEval, _Args
 from celltrack.eval.sweep_tracking import SweepTracking
 from celltrack.tracker import CellTracker, TrackerConfig
 from core.metrics.score import VideoMetrics
@@ -35,44 +35,50 @@ class _Metrics:
 def test_apply():
     """`--set` overrides keep each field's type, and a dotted key reaches the nested (pydantic) linker config."""
     base = TrackerConfig()
-    assert _ConfigOverride.apply(base, "smooth_strength=0.5").smooth_strength == 0.5
-    assert _ConfigOverride.apply(base, "min_track_length=5").min_track_length == 5  # cast to int, not float
-    assert _ConfigOverride.apply(base, "linker.name=flow").linker.name == "flow"  # dotted key updates nested config
+    assert ConfigOverride.apply(base, "smooth_strength=0.5").smooth_strength == 0.5
+    assert ConfigOverride.apply(base, "min_track_length=5").min_track_length == 5  # cast to int, not float
+    assert ConfigOverride.apply(base, "linker.name=flow").linker.name == "flow"  # dotted key updates nested config
     # A dotted key reaches an off-by-default nested config, instantiating it from its declared type first.
-    assert _ConfigOverride.apply(base, "reuse.gate_um=7.5").reuse.gate_um == 7.5
-    assert _ConfigOverride.apply(base, "detector_blend=0.6").detector_blend == 0.6  # None-default cast via annotation
+    assert ConfigOverride.apply(base, "reuse.gate_um=7.5").reuse.gate_um == 7.5
+    assert ConfigOverride.apply(base, "detector_blend=0.6").detector_blend == 0.6  # None-default cast via annotation
+    # The edge blend's two candidate transforms are CLI-reachable, which is what makes them measurable at all.
+    assert ConfigOverride.apply(base, "edge_options.view_tta=true").edge_options.view_tta is True
+    assert ConfigOverride.apply(base, "edge_options.align_seed_moments=true").edge_options.align_seed_moments is True
+    assert base.edge_options == type(base.edge_options)()  # and both stay off unless a `--set` asks
+    assert ConfigOverride.apply(base, "edge_blend=0.5,0.5").edge_blend == (0.5, 0.5)  # the blend is swept as a pair
     # Both weights of the learned-evidence split are reachable, so the sweep can test the public 85/15 RATIO
     # (17.0/3.0 at our derived P-budget of 20) rather than assuming their absolute, ~30x weaker, constants.
-    split = _ConfigOverride.apply(_ConfigOverride.apply(base, "linker.ranker_bonus=17.0"), "linker.affinity_bonus=3.0")
+    split = ConfigOverride.apply(ConfigOverride.apply(base, "linker.ranker_bonus=17.0"), "linker.affinity_bonus=3.0")
     assert (split.linker.ranker_bonus, split.linker.affinity_bonus) == (17.0, 3.0)
 
 
 def test_cast():
     """`cast` parses a raw string into the target type, treating bool as a flag rather than an int subclass."""
-    assert _ConfigOverride.cast(int, "5") == 5
-    assert _ConfigOverride.cast(float, "0.5") == 0.5
-    assert _ConfigOverride.cast(bool, "true") is True
-    assert _ConfigOverride.cast(bool, "false") is False  # not int("false"): bool is parsed as a flag
+    assert ConfigOverride.cast(int, "5") == 5
+    assert ConfigOverride.cast(float, "0.5") == 0.5
+    assert ConfigOverride.cast(bool, "true") is True
+    assert ConfigOverride.cast(bool, "false") is False  # not int("false"): bool is parsed as a flag
+    assert ConfigOverride.cast(tuple, "0.5,0.5") == (0.5, 0.5)  # not the string's characters
 
 
 def test_concrete_type():
     """`concrete_type` reads a set field's type from its value, and an unset optional's from its annotation."""
-    assert _ConfigOverride.concrete_type(TrackerConfig, "threshold", 0.99) is float
+    assert ConfigOverride.concrete_type(TrackerConfig, "threshold", 0.99) is float
     # detector_blend defaults to None, so its real type lives only in the `float | None` annotation.
-    assert _ConfigOverride.concrete_type(TrackerConfig, "detector_blend", None) is float
+    assert ConfigOverride.concrete_type(TrackerConfig, "detector_blend", None) is float
 
 
 def test_nested():
     """`nested` returns the live sub-config, instantiating an off-by-default one from its declared type."""
     base = TrackerConfig()
-    assert _ConfigOverride.nested(base, "linker") is base.linker  # the already-set linker config, unchanged
-    assert isinstance(_ConfigOverride.nested(base, "reuse"), BaseModel)  # reuse is None by default -> instantiated
+    assert ConfigOverride.nested(base, "linker") is base.linker  # the already-set linker config, unchanged
+    assert isinstance(ConfigOverride.nested(base, "reuse"), BaseModel)  # reuse is None by default -> instantiated
 
 
 def test_override_rejects_a_bare_key():
     """An override without `=` is a usage error, caught before it silently no-ops."""
     with pytest.raises(ValueError, match="key=value"):
-        _ConfigOverride.apply(TrackerConfig(), "smooth_strength")
+        ConfigOverride.apply(TrackerConfig(), "smooth_strength")
 
 
 @dataclass

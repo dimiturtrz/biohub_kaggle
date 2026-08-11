@@ -23,6 +23,7 @@ from scipy.spatial.distance import cdist
 
 from celltrack.affinity import EdgeAffinity
 from celltrack.linkers.agreement_gating import AgreementGate
+from celltrack.linkers.evidence_ramp import EvidenceRamp, evidence_weights
 from celltrack.linkers.mutual_bonus import MutualBonus
 from celltrack.linkers.ranker_bonus import RankerBonus
 from core.data.tracks import TrackGraph
@@ -67,6 +68,11 @@ class AssignmentLinker:
     # (`RankerBonus`), so the cost reads the linking-state evidence — crowding, the candidate list, the primary
     # graph's degrees, a motion residual — that a pairwise affinity has no access to.
     ranker: RankerBonus | None = None
+    # Off by default (`None` = one flat evidence weight at every separation, the shipped cost byte for byte).
+    # Set, the forward affinity's weight becomes distance-dependent (`EvidenceRamp`): the same budget, spent
+    # more on the far candidates where the head out-separates proximity and less on the near ones where
+    # proximity already decides. It reweights only the FORWARD term — the gate and the other terms are untouched.
+    ramp: EvidenceRamp | None = None
 
     def link(self, detections: TrackGraph) -> TrackGraph:
         """Assign each cell to at most one successor, frame pair by frame pair, minimising total edge cost."""
@@ -114,7 +120,7 @@ class AssignmentLinker:
         if self.affinity is not None and self.affinity_bonus != 0.0:
             probability = self.affinity.probabilities(timepoint)
             if probability is not None:
-                cost = cost - self.affinity_bonus * probability
+                cost = cost - self.affinity_bonus * evidence_weights(self.ramp, distance, within_gate) * probability
         if self.mutual is not None:
             cost = self.mutual.discount(timepoint, cost)
         if self.ranker is not None:

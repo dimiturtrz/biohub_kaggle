@@ -33,6 +33,7 @@ from jaxtyping import Bool, Float, Int
 
 from celltrack.affinity import EdgeAffinity
 from celltrack.eval.proxy import TestMovieProxy
+from celltrack.eval.proxy_eval import ConfigOverride
 from celltrack.tracker import CellTracker, TrackerConfig
 from core.data.tracks import Adjacency, TrackGraph
 from core.geometry import Spacing
@@ -253,15 +254,14 @@ class DenseDiagnosis:
         )
 
     @staticmethod
-    def shipped(root: DataRoot, device: str, threshold: float | None = None) -> CellTracker:
-        """The shipped dual-seed tracker mounted from the reference packs, cache-backed — what a diagnosis runs.
+    def configured(root: DataRoot, device: str, config: TrackerConfig) -> CellTracker:
+        """The same mount as `shipped`, at an ARBITRARY config — how a diagnosis reads a swept operating point.
 
-        The pack layout gets one home in `eval` rather than a copy per driver: a sibling diagnosis
-        (`shortcut_diagnosis`) mounts through this instead of repeating the paths. `threshold` overrides the
-        shipped detection threshold — the one operating point a diagnosis of the DETECTIONS has to be able to move.
+        A fate decomposition of the shipped default answers "what is the residual made of"; a decomposition of
+        the config a sweep arm ran answers "did the arm's score move for the reason claimed". The second needs
+        the arm's whole config, not just its threshold, so the mount takes one.
         """
         proc = root.processed("biohub_cell_tracking")
-        config = TrackerConfig() if threshold is None else TrackerConfig(threshold=threshold)
         return CellTracker.from_packs(
             proc / "reference/pilkwang/split_0",
             proc / "reference/pilkwang/seed2/weights/unet_transformer/split_0",
@@ -271,10 +271,23 @@ class DenseDiagnosis:
         )
 
     @staticmethod
-    def _mounted(root: DataRoot, device: str, movie: str) -> tuple[DenseFateDiagnosis, MislinkSignal]:
-        """Mount the shipped tracker, run it on `movie`, and decompose its annotated-edge fates and mislink signal."""
+    def shipped(root: DataRoot, device: str, threshold: float | None = None) -> CellTracker:
+        """The shipped dual-seed tracker mounted from the reference packs, cache-backed — what a diagnosis runs.
+
+        The pack layout gets one home in `eval` rather than a copy per driver: a sibling diagnosis
+        (`shortcut_diagnosis`) mounts through this instead of repeating the paths. `threshold` overrides the
+        shipped detection threshold — the one operating point a diagnosis of the DETECTIONS has to be able to move.
+        """
+        config = TrackerConfig() if threshold is None else TrackerConfig(threshold=threshold)
+        return DenseDiagnosis.configured(root, device, config)
+
+    @staticmethod
+    def _mounted(
+        root: DataRoot, device: str, movie: str, config: TrackerConfig | None = None
+    ) -> tuple[DenseFateDiagnosis, MislinkSignal]:
+        """Mount the tracker at `config` (the shipped default when unset), run it on `movie`, and decompose it."""
         proxy = TestMovieProxy.load(root, (movie,))
-        tracker = DenseDiagnosis.shipped(root, device)
+        tracker = DenseDiagnosis.configured(root, device, config if config is not None else TrackerConfig())
         return DenseDiagnosis.diagnose(tracker, proxy.paths[0], proxy.truths[0].graph, proxy.spacing, device)
 
 
@@ -285,9 +298,21 @@ def main() -> None:
     parser.add_argument("--config", type=Path, default=Path("paths.yaml"), help="paths.yaml locating the data root")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--movie", default=DENSE_MOVIE, help="the movie stem to decompose")
+    parser.add_argument(
+        "--set",
+        dest="overrides",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="override any tracker knob, exactly as `proxy_eval --set` does, so a sweep arm can be decomposed",
+    )
     args = parser.parse_args()
 
-    diagnosis, signal = DenseDiagnosis._mounted(DataRoot.from_config(args.config), args.device, args.movie)  # noqa: SLF001
+    config = TrackerConfig()
+    for assignment in args.overrides:
+        config = ConfigOverride.apply(config, assignment)
+    logger.info("set=%s", list(args.overrides))
+    diagnosis, signal = DenseDiagnosis._mounted(DataRoot.from_config(args.config), args.device, args.movie, config)  # noqa: SLF001
     counts = diagnosis.counts()
     total = sum(counts.values())
     logger.info("movie=%s  annotated edges=%d", args.movie, total)

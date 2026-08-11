@@ -40,8 +40,13 @@ _ACQUISITION_PREFIX = 4
 RANKER_ARTIFACT = "reference/association_ranker"
 
 
-class _ConfigOverride:
-    """Applying one `--set key=value` to a `TrackerConfig`, keeping each field's declared type across the parse."""
+class ConfigOverride:
+    """Applying one `--set key=value` to a `TrackerConfig`, keeping each field's declared type across the parse.
+
+    Public because a DIAGNOSIS has to be able to run the same config a sweep cell ran: `dense_diagnosis` takes
+    the identical `--set` strings through this, so the mechanism check and the score it explains are not two
+    spellings of one operating point.
+    """
 
     @staticmethod
     def concrete_type(owner: type, field: str, current: object) -> type:
@@ -59,6 +64,8 @@ class _ConfigOverride:
         """Parse a `--set` string into `target`, so an overridden config value keeps its declared type."""
         if target is bool:  # bool is an int subclass, so "false" must parse as a flag, not int("false")
             return raw.lower() in ("1", "true", "yes")
+        if target is tuple:  # `tuple("0.5,0.5")` is that string's CHARACTERS; a weight pair is comma-separated
+            return tuple(float(part) for part in raw.split(","))
         return target(raw)
 
     @staticmethod
@@ -69,7 +76,7 @@ class _ConfigOverride:
         is already set — the config's default for that field's type stands in, then the dotted key updates it.
         """
         current = getattr(config, head)
-        return current if current is not None else _ConfigOverride.concrete_type(type(config), head, None)()
+        return current if current is not None else ConfigOverride.concrete_type(type(config), head, None)()
 
     @staticmethod
     def apply(config: TrackerConfig, assignment: str) -> TrackerConfig:
@@ -81,11 +88,11 @@ class _ConfigOverride:
         # cannot match the specific field it lands in — an untyped boundary the checker can't see through.
         if "." in key:
             head, tail = key.split(".", 1)
-            nested = _ConfigOverride.nested(config, head)
-            value = _ConfigOverride.cast(_ConfigOverride.concrete_type(type(nested), tail, getattr(nested, tail)), raw)
+            nested = ConfigOverride.nested(config, head)
+            value = ConfigOverride.cast(ConfigOverride.concrete_type(type(nested), tail, getattr(nested, tail)), raw)
             updated = nested.model_copy(update={tail: value})
             return replace(config, **{head: updated})  # pyrefly: ignore[bad-argument-type]
-        base_value = _ConfigOverride.cast(_ConfigOverride.concrete_type(type(config), key, getattr(config, key)), raw)
+        base_value = ConfigOverride.cast(ConfigOverride.concrete_type(type(config), key, getattr(config, key)), raw)
         return replace(config, **{key: base_value})  # pyrefly: ignore[bad-argument-type]
 
 
@@ -138,7 +145,7 @@ class TrackerProxyEval:
         """The resolved config of one grid cell — the swept point with every `--set` override folded on top."""
         config = TrackerConfig(threshold=threshold, linker=LinkerConfig(disappearance_cost=cost))
         for assignment in self.overrides:
-            config = _ConfigOverride.apply(config, assignment)
+            config = ConfigOverride.apply(config, assignment)
         return config
 
     def breakdown(self, root: DataRoot) -> dict[str, VideoMetrics]:
