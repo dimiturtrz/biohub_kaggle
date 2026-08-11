@@ -70,18 +70,23 @@ from celltrack.postproc.affinity_division_recovery import AffinityDivisionConfig
 # gates and not the cap. Under this pipeline the true divider's kept-child probability is below 0.5, so at the
 # shipped floor it was never even PROPOSED. Candidacy is carried by geometry.
 #
-# THE CAP IS GONE, and the leaderboard is why. Caps of 300 and 100 — 1072 and ~400 forks — both scored 0.899,
-# so the budget axis is FLAT and the RANKING carries the whole gain. A hand-set ceiling that measurably does
-# not bind is a magic number, so `None` hands the budget to the measured division RATE instead (0.113% per
-# node-observation on our own corpus: 29/36/8/84 forks on the four movies, 157 in total). This submission asks
-# only whether the plateau reaches down to the phenomenon's own scale; if it does, the parameter never returns.
+# EVERY GATE IS DERIVED, and the two that were hand-set cost nothing to remove. A fork is a ONE-FRAME STEP,
+# and the linker gate is our statement of the furthest a cell travels between consecutive frames (10um, from a
+# maximum observed annotated displacement of 9.96um) — every longer step is already refused as a link, so a
+# wider fork gate would admit a daughter the linker itself calls impossible. The sister gate then follows with
+# no second choice: two daughters each within `parent` of the mother are at most `2 * parent` apart. Measured
+# byte-identical to the hand-set 7.0 / 14.0 this replaces — same score, same fork counts, while the PROPOSAL
+# counts doubled, which is what shows the gate arrived rather than the knob being dead.
+#
+# THE BUDGET STAYS AT THE MEASURED-GOOD CAP, and that is a correction. Caps of 300 and 100 — 1072 and ~400
+# forks — both scored 0.899, which I read as "the budget is flat, so the cap is removable". It is flat over
+# the range the
+# LEADERBOARD tested and the derived rate sits BELOW it: at 157 forks the proxy recovers no division at all
+# (div_jac 0.0000 against 0.0294 at cap 300). So this ships the budget that is known to pay and removes only
+# the numbers that are known to cost nothing.
 _DIVISION = AffinityDivisionConfig(
     ranking="symmetry",
-    min_second_prob=0.0,
-    min_kept_prob=0.0,
-    parent_gate_um=7.0,
-    sister_gate_um=14.0,
-    max_added_forks=None,
+    max_added_forks=100,
 )
 # The base is MOUNTED, not restated: `TrackerConfig.shipped()` is the leaderboard-arbitrated 0.895 recipe
 # (thr 0.97, flow linker gate 10 / bonus 20 / boundary 3, bidirectional fusion, min6, smooth 0.8), and it lives
