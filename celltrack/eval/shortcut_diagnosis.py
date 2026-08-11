@@ -15,9 +15,13 @@ carries appearance the geometry does not.
 *** WHY THIS IS A TOOL AND NOT A SCRATCH SCRIPT. *** Run against the GROUND-TRUTH graph instead of real
 detections the same question answers itself: rows and columns are annotated nodes only, the annotation is
 sparse, and within a 10 um gate 446 of 457 candidate pairs came back TRUE (base rate 0.976). Every AUC read
-~1.0 by construction and every distance band was all-positive. A separability number on a degenerate
-population is WORSE than no number, because it reads as a result — so this module prints the base rate FIRST
-and refuses to print any AUC outside `_MIN_BASE_RATE .. _MAX_BASE_RATE`, per population and per band.
+~1.0 by construction and every distance band was all-positive. Real detections alone do NOT fix it — a first
+pass here scored 74k detected nodes and still came back 1167/1190 true, because judging only pairs whose BOTH
+endpoints matched an annotated node rebuilds the annotated graph inside the detections. The negatives live in
+the neighbours the annotation never mentions, so judgedness follows the annotated endpoint (`MatchedAnnotation`).
+A separability number on a degenerate population is WORSE than no number, because it reads as a result — so
+this module prints the base rate FIRST and refuses to print any AUC outside
+`_MIN_BASE_RATE .. _MAX_BASE_RATE`, per population and per band.
 
 Reading the output later: on the dense movie the shipped model's mislinks are ~100% affinity-inverted, with
 mean P_true 0.134 against P_chosen 0.686 (`dense_diagnosis`) — the head is CONFIDENTLY wrong on real
@@ -84,10 +88,19 @@ class MatchedAnnotation:
     """The ground truth as seen from DETECTION rows: which pairs the annotation joins, and which it judges at all.
 
     Truth reaches a detection only through a `DistanceMatcher`, and the annotation is sparse, so "not an
-    annotated edge" is not the same as "false": a pair with an unmatched endpoint, or one whose source the
-    annotation gives no successor AND whose target it gives no parent, is unjudged, and counting it as a
-    negative would manufacture the base rate the measurement is about. Only rows the annotation speaks about
-    are judged — the same active-row/column convention `core.metrics.edge_auc` applies to the training matrices.
+    annotated edge" is not the same as "false": a pair whose source the annotation gives no successor AND whose
+    target it gives no parent is unjudged, and counting it as a negative would manufacture the base rate the
+    measurement is about. Only rows and columns the annotation speaks about are judged — the same
+    active-row/column convention `core.metrics.edge_auc` applies to the training matrices.
+
+    What is judged is decided by the ENDPOINT THE ANNOTATION REACHED, never by both. Requiring both endpoints
+    to be matched reproduces, on real detections, the exact GT-graph artefact this module exists to refuse:
+    annotated nodes are sparse, so within the gate a matched source sees essentially only its own matched
+    successor, and the population comes back 98% positive (measured: 1167/1190 on the dense movie) even though
+    it was built from 74k detections. But an in-gate target that matched nothing is not unknown truth — the
+    annotation already named this source's successor, and this is not it. Those unmatched neighbours are the
+    distractors the linker actually loses score to, so they are the negatives: a pair is FALSE unless the
+    annotation joins its endpoints, and only pairs the annotation is silent about at BOTH ends are dropped.
     """
 
     gt_rows: Int[np.ndarray, "n"]
@@ -115,11 +128,12 @@ class MatchedAnnotation:
         """`(judged, is_true)` for every pair of these detection rows — the truth a candidate block carries."""
         source = self.gt_rows[sources][:, None]
         target = self.gt_rows[targets][None, :]
+        source_speaks = (source != UNMATCHED) & self.has_successor[np.where(source != UNMATCHED, source, 0)]
+        target_speaks = (target != UNMATCHED) & self.has_parent[np.where(target != UNMATCHED, target, 0)]
+        judged = source_speaks | target_speaks
         matched = (source != UNMATCHED) & (target != UNMATCHED)
-        safe_source = np.where(matched, source, 0)
-        safe_target = np.where(matched, target, 0)
-        judged = matched & (self.has_successor[safe_source] | self.has_parent[safe_target])
-        return judged, judged & np.isin(safe_source * self.stride + safe_target, self.codes)
+        safe = np.where(matched, source, 0) * self.stride + np.where(matched, target, 0)
+        return judged, judged & matched & np.isin(safe, self.codes)
 
 
 @dataclass(frozen=True)
@@ -162,6 +176,22 @@ class CandidatePairs:
             distance_um=np.concatenate([population.distance_um for population in populations]),
             is_true=np.concatenate([population.is_true for population in populations]),
         )
+
+    @classmethod
+    def load(cls, path: Path) -> "CandidatePairs":
+        """A population read back from `save` — so re-banding costs no detector pass, only the arithmetic."""
+        with np.load(path) as stored:
+            return cls(probability=stored["probability"], distance_um=stored["distance_um"], is_true=stored["is_true"])
+
+    def save(self, path: Path) -> None:
+        """Write the population's three columns, so the same pass can be re-read at another band resolution.
+
+        The banding is a choice made AFTER the population is known — the positives concentrate at short range,
+        so the band count that leaves both classes in a band cannot be picked in advance. Re-running the
+        tracker to change it would spend a detector and affinity pass on a re-sort of numbers already computed.
+        """
+        path.parent.mkdir(parents=True, exist_ok=True)
+        np.savez(path, probability=self.probability, distance_um=self.distance_um, is_true=self.is_true)
 
     def size(self) -> int:
         """How many judged candidate pairs the population holds."""
@@ -271,6 +301,7 @@ class ShortcutReport:
 
     label: str
     candidates: CandidatePairs
+    bands: int = _DISTANCE_BANDS
 
     def lines(self) -> list[str]:
         """The report as log lines: population line first, then either the separability block or the refusal."""
@@ -288,13 +319,18 @@ class ShortcutReport:
         )
 
     def _band_lines(self) -> list[str]:
-        """`P`'s ranking quality inside each matched-distance band — the decisive read, or that band's refusal."""
+        """`P`'s ranking quality inside each matched-distance band — the decisive read, or that band's refusal.
+
+        Proximity's own AUC is repeated per band as the reference the band read needs: a band is narrow, not
+        constant, so distance still ranks a little inside it, and `P` only demonstrates appearance by beating
+        what the residual proximity within the band already achieves.
+        """
         lines = ["  within matched distance bands (P must rank with distance held near-constant):"]
-        for index, band in enumerate(self.candidates.bands()):
+        for index, band in enumerate(self.candidates.bands(self.bands)):
             low, high = band.span()
             head = f"    band {index} [{low:5.2f}, {high:5.2f}] um  " + self._population("n", band)
             lines.append(
-                f"{head}  AUC(P)={band.auc_probability():.3f}"
+                f"{head}  AUC(P)={band.auc_probability():.3f}  AUC(-distance)={band.auc_proximity():.3f}"
                 if band.is_reportable()
                 else f"{head}  REFUSED: {self._refusal(band)}"
             )
@@ -369,14 +405,22 @@ def main() -> None:
     parser.add_argument("--movie", action="append", dest="movies", help="movie stem (repeatable)")
     parser.add_argument("--threshold", type=float, help="detector threshold; default is the shipped one")
     parser.add_argument("--gate-um", type=float, default=LinkerConfig().gate_um, help="linker gate radius, um")
+    parser.add_argument("--bands", type=int, default=_DISTANCE_BANDS, help="equal-count distance bands to split into")
+    parser.add_argument("--save", type=Path, help="directory to write each movie's population to, for re-banding")
     args = parser.parse_args()
 
     diagnosis = ShortcutDiagnosis(device=args.device, gate_um=args.gate_um, threshold=args.threshold)
     by_movie = diagnosis.by_movie(DataRoot.from_config(args.config), tuple(args.movies or (DENSE_MOVIE,)))
     threshold = "shipped" if args.threshold is None else f"{args.threshold:g}"
     logger.info("threshold=%s  gate=%g um  movies=%s", threshold, args.gate_um, ", ".join(by_movie))
-    reports = [ShortcutReport(label=stem, candidates=candidates) for stem, candidates in by_movie.items()]
-    reports.append(ShortcutReport(label="POOLED", candidates=CandidatePairs.pooled(list(by_movie.values()))))
+    if args.save is not None:
+        for stem, candidates in by_movie.items():
+            candidates.save(args.save / f"{stem}.npz")
+    reports = [
+        ShortcutReport(label=stem, candidates=candidates, bands=args.bands) for stem, candidates in by_movie.items()
+    ]
+    pooled = CandidatePairs.pooled(list(by_movie.values()))
+    reports.append(ShortcutReport(label="POOLED", candidates=pooled, bands=args.bands))
     for line in [line for report in reports for line in report.lines()]:
         logger.info("%s", line)
 

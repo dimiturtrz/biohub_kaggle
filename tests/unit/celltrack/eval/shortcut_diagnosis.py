@@ -97,12 +97,13 @@ def test_matched_annotation_of():
 
 
 def test_judge():
-    """A pair is true only when both endpoints match ground-truth nodes an annotated edge joins.
+    """A pair is judged when the annotation speaks at EITHER endpoint, and true only when it joins them.
 
-    Detection rows 0 (-> gt 0) and 1 (-> gt 2, which the annotation never mentions) face t1 rows 2 (-> gt 1,
-    the annotated successor) and 3 (unmatched). 0->2 is judged and true. 1->2 is judged FALSE — its target has
-    an annotated parent, so the annotation does say this is not the pair. Every pair into the unmatched row 3
-    is unjudged: no ground truth reached that endpoint at all, so it is dropped rather than counted false.
+    Detection rows 0 (-> gt 0, whose successor the annotation names) and 1 (-> gt 2, which the annotation never
+    mentions) face t1 rows 2 (-> gt 1, the annotated successor) and 3 (unmatched). 0->2 is judged and true.
+    0->3 is judged FALSE though its target matched nothing: the annotation already named row 0's successor, and
+    this is not it — that unmatched neighbour is a real distractor, not unknown truth. 1->2 is judged FALSE from
+    the column side. Only 1->3, where the annotation is silent at both ends, is dropped.
     """
     truth = _graph([[0, 0, 0, 0], [1, 0, 0, 2], [0, 0, 0, 20]], [[0, 1]])
     matching = NodeMatching(gt_rows=np.array([0, 2, 1, UNMATCHED], dtype=np.int64))
@@ -111,7 +112,7 @@ def test_judge():
         np.array([0, 1], dtype=np.int64), np.array([2, 3], dtype=np.int64)
     )
 
-    assert judged.tolist() == [[True, False], [True, False]]
+    assert judged.tolist() == [[True, True], [True, False]]
     assert is_true.tolist() == [[True, False], [False, False]]
 
 
@@ -134,11 +135,14 @@ def test_candidate_pairs_of():
     assert candidates.is_true.tolist() == [True, False]
 
 
-def test_candidate_pairs_of_excludes_a_pair_whose_endpoints_do_not_both_match_ground_truth():
-    """An unmatched endpoint carries no truth, so its pair is dropped — not counted as a false candidate.
+def test_candidate_pairs_of_counts_an_unmatched_neighbour_of_an_annotated_source_as_a_negative():
+    """An unmatched TARGET of an annotated source is the population's negative; silence at both ends is dropped.
 
-    Both in-gate pairs would otherwise be false negatives of the annotation: detection 1 (x=20) matches a
-    ground-truth node, detection 4 (x=21) matches nothing. Counting that pair false would invent a negative.
+    Detection 0 (x=0) matches a ground-truth node whose successor the annotation names, so its in-gate
+    neighbour 3 (x=8, matching nothing) is a distractor the linker must reject — a real false candidate, and
+    the kind that keeping both endpoints matched would have thrown away, leaving a population that is nearly
+    all true. Detection 1 (x=20) is annotated no successor and its in-gate neighbour 4 (x=21) matched nothing,
+    so that pair carries no truth at either end and is dropped rather than invented as a negative.
     """
     detections = _detections()
     truth = _graph([[0, 0, 0, 0], [1, 0, 0, 2], [0, 0, 0, 20]], [[0, 1]])
@@ -147,8 +151,8 @@ def test_candidate_pairs_of_excludes_a_pair_whose_endpoints_do_not_both_match_gr
 
     candidates = CandidatePairs.of(detections, MatchedAnnotation.of(truth, unmatched), affinity, _UNIT, _GATE_UM)
 
-    assert candidates.distance_um.tolist() == [2.0]  # 0->3 and 1->4 both lost an endpoint's ground truth
-    assert candidates.is_true.tolist() == [True]
+    assert candidates.distance_um.tolist() == [2.0, 8.0]  # 1->4 (1 um) is dropped: no truth at either end
+    assert candidates.is_true.tolist() == [True, False]
 
 
 def test_candidate_pairs_of_rejects_an_affinity_block_that_does_not_align_with_the_gap():
@@ -173,6 +177,31 @@ def test_pooled():
     assert pooled.distance_um.tolist() == [1.0, 3.0, 5.0]
     assert pooled.is_true.tolist() == [True, False, True]
     assert CandidatePairs.pooled([]).size() == 0
+
+
+def test_save(tmp_path: Path):
+    """`save` writes the population's three columns, creating the directory the caller named."""
+    path = tmp_path / "nested" / "movie.npz"
+
+    _pairs([0.9, 0.2, 0.4], [1.0, 3.0, 5.0], [True, False, True]).save(path)
+
+    with np.load(path) as stored:
+        assert stored["probability"].tolist() == [0.9, 0.2, 0.4]
+        assert stored["distance_um"].tolist() == [1.0, 3.0, 5.0]
+        assert stored["is_true"].tolist() == [True, False, True]
+
+
+def test_load(tmp_path: Path):
+    """A saved population reads back identical, so re-banding it costs no detector pass."""
+    population = _pairs([0.9, 0.2, 0.4], [1.0, 3.0, 5.0], [True, False, True])
+    path = tmp_path / "movie.npz"
+    population.save(path)
+
+    restored = CandidatePairs.load(path)
+
+    assert restored.probability.tolist() == population.probability.tolist()
+    assert restored.distance_um.tolist() == population.distance_um.tolist()
+    assert restored.is_true.tolist() == population.is_true.tolist()
 
 
 def test_size():
@@ -260,6 +289,13 @@ def test_lines():
 
     empty = ShortcutReport(label="movie", candidates=CandidatePairs.pooled([])).lines()
     assert "nothing to rank" in empty[1]
+
+
+def test_lines_bands_at_the_requested_resolution():
+    """`bands` is a report parameter: positives concentrate at short range, so the split has to be re-choosable."""
+    lines = ShortcutReport(label="movie", candidates=_uniform(size=20, positives=4), bands=2).lines()
+
+    assert sum("band " in line for line in lines) == 2
 
 
 def test_candidates():
