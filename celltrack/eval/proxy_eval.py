@@ -200,8 +200,19 @@ class _Args:
         parser = argparse.ArgumentParser(description="Sweep the tracker's operating point on the local proxy.")
         parser.add_argument("--config", type=Path, default=Path("paths.yaml"), help="paths.yaml locating the data root")
         parser.add_argument("--device", default="cuda")
-        parser.add_argument("--threshold", default="0.99", help="comma-separated detection thresholds to sweep")
-        parser.add_argument("--disappearance", default="0.0", help="comma-separated disappearance costs to sweep")
+        # DERIVED from the shipped operating point, not restated: a literal here overrides the dataclass
+        # default silently, which is how an unswept run kept measuring threshold 0.99 at boundary 0 — the
+        # per-frame assignment linker — long after the shipped recipe became flow at boundary 3.
+        parser.add_argument(
+            "--threshold",
+            default=str(_SHIPPED.threshold),
+            help="comma-separated detection thresholds to sweep (default: the shipped operating point's)",
+        )
+        parser.add_argument(
+            "--disappearance",
+            default=str(_SHIPPED.linker.disappearance_cost),
+            help="comma-separated disappearance costs to sweep (default: the shipped operating point's)",
+        )
         parser.add_argument("--cv", action="store_true", help="score the fixed-8 CV instead of the four test movies")
         parser.add_argument("--per-movie", action="store_true", help="also log each movie's raw Jaccard and node ratio")
         parser.add_argument(

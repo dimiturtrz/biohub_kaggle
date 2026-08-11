@@ -49,6 +49,7 @@ from celltrack.eval.dense_diagnosis import DENSE_MOVIE, DenseDiagnosis
 from celltrack.eval.proxy import TestMovieProxy
 from celltrack.eval.proxy_eval import RANKER_ARTIFACT, TrackerProxyEval
 from celltrack.linkers.linkers import LinkerConfig
+from celltrack.operating_point import TrackerConfig
 from core.data.tracks import TrackGraph
 from core.data.video import CellVideo
 from core.geometry import Spacing
@@ -401,7 +402,10 @@ def main() -> None:
     # point is named at the call rather than inherited from a default that may not be the arm's.
     parser.add_argument("--threshold", type=float, required=True, help="the arm's detection threshold")
     parser.add_argument(
-        "--disappearance", type=float, default=0.0, help="linker disappearance cost (the flow linker's boundary cost)"
+        "--disappearance",
+        type=float,
+        default=TrackerConfig.shipped().linker.disappearance_cost,
+        help="linker disappearance cost (default: the shipped flow linker's boundary cost)",
     )
     parser.add_argument("--max-gaps", type=int, help="read only the first N frame gaps of each movie")
     parser.add_argument(
