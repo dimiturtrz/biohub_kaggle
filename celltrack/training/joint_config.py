@@ -18,6 +18,7 @@ what this file ships.
 from __future__ import annotations
 
 import logging
+from enum import StrEnum
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt
@@ -85,6 +86,30 @@ class OptimCfg(BaseModel):
     cosine_lr: bool = False
 
 
+class ContrastiveSite(StrEnum):
+    """WHERE the contrastive term acts — the measured failure was placement, so this is the knob that carries it.
+
+    On the shared FEATURES (what ran, and what degraded the model: proxy 0.8414 -> 0.7292, node recall
+    0.966 -> 0.867 while the term itself converged) the objective reshapes the very representation the detect
+    head reads. Through a PROJECTION it shapes an embedding of them instead, and DETACHED_PROJECTION is the
+    strict form of that — the contrastive gradient stops at the head and reaches no backbone weight at all.
+    """
+
+    FEATURES = "features"
+    PROJECTION = "projection"
+    DETACHED_PROJECTION = "detached_projection"
+
+    @property
+    def projects(self) -> bool:
+        """Whether the term reads a head of its own rather than the shared features directly."""
+        return self is not ContrastiveSite.FEATURES
+
+    @property
+    def stop_gradient(self) -> bool:
+        """Whether the trunk is detached below that head — the contrastive term shaping ONLY the embedding."""
+        return self is ContrastiveSite.DETACHED_PROJECTION
+
+
 class LossCfg(BaseModel):
     """The objective: how the three terms are weighted, and which voxels the detection term is allowed to see."""
 
@@ -98,6 +123,9 @@ class LossCfg(BaseModel):
     # backbone for discrimination rather than invariance. 0.0 by default: the term is still computed and
     # logged as a diagnostic, but contributes exactly nothing, so an unasked run is the run of yesterday.
     contrastive_weight: float = Field(0.0, ge=0)
+    # WHERE that one weight acts. `FEATURES` is what ran and what the measurement condemns; it stays the
+    # default so a run asking for nothing is still yesterday's run, and the term is off at weight 0 anyway.
+    contrastive_site: ContrastiveSite = ContrastiveSite.FEATURES
     temperature: float = Field(0.07, gt=0)  # the InfoNCE softmax temperature over candidate targets
     # Sigmoid response above which an UNANNOTATED voxel stops being supervised as background (see
     # `BalancedBCE`). Our labels cover ~1-2% of a frame's cells, so the zero target calls thousands of real

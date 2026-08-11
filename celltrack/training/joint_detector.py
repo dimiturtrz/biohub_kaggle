@@ -46,15 +46,16 @@ from celltrack.detectors.tunet import DetectorRecipe
 from celltrack.eval.model_evaluator import EvalResult, ModelEvaluator
 from celltrack.eval.proxy import TEST_MOVIES, VALIDATION_MOVIES, TestMovieProxy
 from celltrack.losses.balanced_bce import BalancedBCE
-from celltrack.losses.info_nce import InfoNCE
 from celltrack.losses.softmax_focal_bce import SoftmaxFocalBCE
 from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeTransformerScorer
 from celltrack.models.joint_model import JointModel
 from celltrack.models.temporal_unet_detector import TemporalUNetDetector
 from celltrack.tracker import TrackerConfig
+from celltrack.training.contrastive_term import ContrastiveTerm
 from celltrack.training.early_stop import EarlyStop
 from celltrack.training.joint_config import (
     WARM_PACKS,
+    ContrastiveSite,
     DataCfg,
     EvalCfg,
     JointTrainConfig,
@@ -160,6 +161,9 @@ class JointTrainer:
 
     def __init__(self, config: JointTrainConfig) -> None:
         self.config = config
+        # The contrastive term's placement is fixed for the whole run, and the projecting sites carry weights
+        # the optimiser must own — so it is built once, here, beside the config that chose it.
+        self.contrastive = ContrastiveTerm(config.loss, config.model.out_channels)
 
     def train(self, pairs: PairSplit, evaluator: ModelEvaluator, setup: RunSetup) -> float:
         """Train (or fine-tune) on the GT pairs, saving the best SELECTION score. Returns that best score.
@@ -310,8 +314,17 @@ class JointTrainer:
             # Compile the backbone (static shape); the temporal-attention SDPA is forced to MATH at forward
             # time (see `_step`) — its efficient backward has a broken compiled meta-kernel.
             model.detector.unet = torch.compile(model.detector.unet, dynamic=False)  # type: ignore[bad-assignment]
-        optimizer = torch.optim.AdamW(model.parameters(), lr=self.config.optim.lr)
+        self.contrastive.to(self.config.runtime.device)
+        optimizer = torch.optim.AdamW(self._trained(model), lr=self.config.optim.lr)
         return model, _Optimization(optimizer, self._schedule(optimizer))
+
+    def _trained(self, model: JointModel) -> list[nn.Parameter]:
+        """Every parameter the optimiser owns and the clip covers — both heads, plus the contrastive head.
+
+        At the `FEATURES` site the contrastive term holds none, so the list IS `model.parameters()` in the
+        same order: an unasked run's optimiser and gradient clip are the ones of yesterday, to the byte.
+        """
+        return [*model.parameters(), *self.contrastive.parameters()]
 
     @property
     def _velocity(self) -> PriorVelocitySource:
@@ -396,7 +409,7 @@ class JointTrainer:
         outcome = self._losses(model, pair)
         optimization.zero_grad()
         outcome.total.backward()
-        nn.utils.clip_grad_norm_(model.parameters(), self.config.optim.grad_clip)
+        nn.utils.clip_grad_norm_(self._trained(model), self.config.optim.grad_clip)
         optimization.step()
         return outcome
 
@@ -425,13 +438,7 @@ class JointTrainer:
             det = BalancedBCE.of(
                 out.detection_t.unsqueeze(0), [centres_t_grid], loss_config.neg_weight, ignore
             ) + BalancedBCE.of(out.detection_t1.unsqueeze(0), [centres_t1_grid], loss_config.neg_weight, ignore)
-            contrastive = InfoNCE.of(
-                out.source_features,
-                out.target_features,
-                edge_matrix,
-                loss_config.temperature,
-                self.config.model.out_channels,
-            )
+            contrastive = self.contrastive.forward(out.source_features, out.target_features, edge_matrix)
             loss = edge + loss_config.det_weight * det + loss_config.contrastive_weight * contrastive
         ignored = self._ignored((out.detection_t, centres_t_grid), (out.detection_t1, centres_t1_grid))
         return _PairOutcome(loss, edge, det, contrastive, out.edge_logits, edge_matrix, ignored)
@@ -492,6 +499,11 @@ class JointTrainer:
         state = torch.load(resume_path, map_location=self.config.runtime.device, weights_only=False)
         model.detector.load_state_dict(state["detector"])
         model.transformer.load_state_dict(state["transformer"])
+        # A snapshot written before the contrastive head existed carries no entry; its optimiser state has
+        # no slot for one either, so a run resuming such a file is by construction one that projects nothing.
+        projection = state.get("contrastive")
+        if projection is not None:
+            self.contrastive.load_state_dict(projection)
         optimization.load_state_dict(state["optimization"])
         logger.info("resumed from %s at step %d (best %.4f)", resume_path, state["done"], state["best"])
         return int(state["done"]), float(state["best"])
@@ -504,6 +516,7 @@ class JointTrainer:
             {
                 "detector": model.detector.state_dict(),
                 "transformer": model.transformer.state_dict(),
+                "contrastive": self.contrastive.state_dict(),
                 "optimization": optimization.state_dict(),
                 "done": done,
                 "best": best,
@@ -550,6 +563,16 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--det-weight", type=float, default=1.0, help="weight on the detection term vs the edge term")
     parser.add_argument(
         "--contrastive-weight", type=float, default=0.0, help="weight on the InfoNCE term over the node features"
+    )
+    # WHERE that weight acts. On the features it is measured to trade detection away for discrimination
+    # (proxy 0.8414 -> 0.7292, node recall 0.966 -> 0.867); the projecting sites give the term its own
+    # embedding to shape, `detached_projection` keeping the backbone out of its reach entirely.
+    parser.add_argument(
+        "--contrastive-site",
+        choices=tuple(ContrastiveSite),
+        default=ContrastiveSite.FEATURES,
+        type=ContrastiveSite,
+        help="where the InfoNCE term acts: on the shared features, or through its own projection head",
     )
     parser.add_argument("--temperature", type=float, default=0.07, help="InfoNCE softmax temperature over targets")
     # Fine-tuning a CONVERGED model at its original training rate is the classic way to walk off its optimum,
@@ -602,6 +625,7 @@ def main() -> None:
         loss=LossCfg(
             det_weight=args.det_weight,
             contrastive_weight=args.contrastive_weight,
+            contrastive_site=args.contrastive_site,
             temperature=args.temperature,
             ignore_ambiguous_above=args.ignore_ambiguous_above,
         ),

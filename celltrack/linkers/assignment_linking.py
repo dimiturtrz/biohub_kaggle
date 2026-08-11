@@ -23,6 +23,7 @@ from scipy.spatial.distance import cdist
 
 from celltrack.affinity import EdgeAffinity
 from celltrack.linkers.agreement_gating import AgreementGate
+from celltrack.linkers.mutual_bonus import MutualBonus
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
 
@@ -58,6 +59,9 @@ class AssignmentLinker:
     # Off by default: admit a candidate edge only where the forward and reverse normalisations agree
     # (`AgreementGate`). The cost still ranks what survives by the sharp forward probability.
     agreement: AgreementGate | None = None
+    # Off by default: a second cost term rewarding mutual agreement (`MutualBonus`), so the cost reads both the
+    # directional preference and the symmetric agreement instead of one replacing the other.
+    mutual: MutualBonus | None = None
 
     def link(self, detections: TrackGraph) -> TrackGraph:
         """Assign each cell to at most one successor, frame pair by frame pair, minimising total edge cost."""
@@ -94,7 +98,8 @@ class AssignmentLinker:
 
         Without an affinity the link reward makes every in-gate edge beat a skip (distance-only linking); with
         one the reward is zero so only a negative `distance - bonus*P` links — matching `ILPLinker` in both.
-        An agreement gate narrows WHICH pairs compete; it never touches the cost they compete on.
+        A `MutualBonus` adds the agreement term to that cost; an agreement gate instead narrows WHICH pairs
+        compete and never touches the cost they compete on.
         """
         within_gate = distance <= self.max_distance_um
         if self.agreement is not None:
@@ -105,6 +110,8 @@ class AssignmentLinker:
             probability = self.affinity.probabilities(timepoint)
             if probability is not None:
                 cost = cost - self.affinity_bonus * probability
+        if self.mutual is not None:
+            cost = self.mutual.discount(timepoint, cost)
         return np.where(within_gate, cost, _FORBIDDEN)
 
     def _augment_with_skips(self, cost: Float[np.ndarray, "s t"]) -> Float[np.ndarray, "s+t s+t"]:
