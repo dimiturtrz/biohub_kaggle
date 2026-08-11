@@ -1,5 +1,15 @@
 # The "better detection asset → recall" thesis, refuted three ways (epic xzf)
 
+> **SUPERSEDED IN ONE RESPECT (2026-08-10).** This document states that the detection threshold is
+> *proxy-blind / LB-only* — that no sparse local proxy can rank it. That was the right observation with the
+> wrong cause attributed. The proxy was not blind because our annotations are sparse; it was blind because
+> the **node-count bonus** rewards the trimming that sparse annotation hides. Clamping the bonus at 1.0
+> (`VideoMetrics.clamped_edge_jaccard`) makes the same sparse proxy reproduce the leaderboard's threshold
+> ordering on all four points it has ground truth for. Threshold is locally testable; see
+> `interpretations/celltrack/2026-08-10_three-instruments-all-biased-the-same-way.md`. Everything else here
+> stands, and the *position*-moving knobs (smooth, linefit) remain genuinely proxy-blind for a different
+> reason — a matching-radius effect, not a count effect.
+
 **Date:** 2026-08-04 · **Verdict:** detector-side recall is saturated on the four test movies; no detection
 asset adds true recall. The recall the leaderboard rewards is reachable only by the inference threshold.
 
