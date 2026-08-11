@@ -436,7 +436,12 @@ class AffinityDivisionConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     ranking: str = "probability"
-    min_second_prob: float = 0.5
+    # OFF. A probability floor is a SECOND bound on speculation, and the budget is already the first — derived
+    # from the measured division rate, so it admits exactly as many forks as there are divisions to find. The
+    # one measurement we have of the floor is that it EXCLUDED the true case: at 0.5 the one recoverable
+    # division is never even PROPOSED, because under this pipeline the true divider's kept-child probability
+    # sits below it. A bound that duplicates another and is measured to reject the positive is not a guard.
+    min_second_prob: float = 0.0
     # None DERIVES both gates from the linker's own, which is the only argued value in reach. A daughter is
     # one frame's travel from her mother, and the linker gate IS our statement of the furthest a cell travels
     # between consecutive frames (10um, the maximum observed annotated displacement of 9.96um) — every longer
@@ -457,7 +462,7 @@ class AffinityDivisionConfig(BaseModel):
     # None DERIVES the ceiling from the measured division rate (see `budget`); a number overrides it, which is
     # what an arm bracketing that derivation sets.
     max_added_forks: int | None = None
-    min_kept_prob: float = 0.5
+    min_kept_prob: float = 0.0
     # Whether the chosen ranking is penalised by a daughter that does not survive as a track. Off keeps today's
     # behaviour; it is a decorator rather than a fourth ranking because persistence is orthogonal to geometry —
     # any ranking can carry it, and none should have to restate another's terms to do so.
