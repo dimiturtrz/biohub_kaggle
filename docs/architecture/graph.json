@@ -1827,6 +1827,12 @@
     {
       "kind": "import",
       "source": "celltrack.training.pair_split",
+      "target": "celltrack.data.detection_pairs",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.pair_split",
       "target": "celltrack.data.frame_source",
       "weight": 1
     },
@@ -1846,6 +1852,18 @@
       "kind": "import",
       "source": "celltrack.training.pair_split",
       "target": "celltrack.eval.proxy",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.pair_split",
+      "target": "celltrack.operating_point",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.pair_split",
+      "target": "celltrack.tracker",
       "weight": 1
     },
     {
@@ -2271,6 +2289,12 @@
     {
       "kind": "calls",
       "source": "celltrack.data.detection_pairs.DetectionPairs.of",
+      "target": "celltrack.data.detection_pairs.DetectionPairs._gated",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.detection_pairs.DetectionPairs.of",
       "target": "celltrack.data.detection_pairs.DetectionPairs._one_hot",
       "weight": 1
     },
@@ -2302,6 +2326,12 @@
       "kind": "calls",
       "source": "celltrack.data.detection_pairs.DetectionPairs.of",
       "target": "core.data.tracks.TrackGraph.timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.detection_pairs.DetectionPairs.of",
+      "target": "core.geometry.Spacing.to_micrometres",
       "weight": 1
     },
     {
@@ -10112,6 +10142,66 @@
     },
     {
       "kind": "calls",
+      "source": "celltrack.training.pair_split.PairSplit.of_detected",
+      "target": "celltrack.data.detection_pairs.DetectionPairs.of",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.pair_split.PairSplit.of_detected",
+      "target": "celltrack.data.frame_source.ZarrFrames",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.pair_split.PairSplit.of_detected",
+      "target": "celltrack.operating_point.TrackerConfig.shipped",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.pair_split.PairSplit.of_detected",
+      "target": "celltrack.tracker.CellTracker.from_packs",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.pair_split.PairSplit.of_detected",
+      "target": "core.data.tracks.AnnotatedTracks.from_geff",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.pair_split.PairSplit.of_detected",
+      "target": "core.data.video.CellVideo.from_ome_zarr",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.pair_split.PairSplit.of_detected",
+      "target": "core.obs.Obs.progress",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.pair_split.PairSplit.of_detected",
+      "target": "core.obs.Obs.timed",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.pair_split.PairSplit.of_detected",
+      "target": "core.paths.DataRoot.processed",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.pair_split.PairSplit.of_detected",
+      "target": "core.paths.DataRoot.track_store",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
       "source": "celltrack.training.pair_split.PairSplit.of_synthetic",
       "target": "celltrack.data.synthetic_pairs.SyntheticPairs.enumerate",
       "weight": 1
@@ -14106,6 +14196,14 @@
       "descendants": 0,
       "id": "celltrack.data.detection_pairs.DetectionPairs._detection_of",
       "label": "_detection_of",
+      "level": "method",
+      "parent": "celltrack.data.detection_pairs.DetectionPairs",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.detection_pairs.DetectionPairs._gated",
+      "label": "_gated",
       "level": "method",
       "parent": "celltrack.data.detection_pairs.DetectionPairs",
       "role": null
@@ -19074,6 +19172,14 @@
       "descendants": 0,
       "id": "celltrack.training.pair_split.PairSplit.corpus",
       "label": "corpus",
+      "level": "method",
+      "parent": "celltrack.training.pair_split.PairSplit",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.pair_split.PairSplit.of_detected",
+      "label": "of_detected",
       "level": "method",
       "parent": "celltrack.training.pair_split.PairSplit",
       "role": null
