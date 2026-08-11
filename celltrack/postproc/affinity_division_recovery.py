@@ -24,6 +24,20 @@ speculation from both ends — a fraction of the graph's edges and an absolute c
 
 Run before `ShortTrackFilter`, whose division-preserving carve-out can only protect a fork that exists by
 the time it sees the graph.
+
+THAT ORDERING HAS A SECOND-ORDER EFFECT WORTH STATING, because it is not what the stage is FOR. A candidate
+daughter is an "orphan" by in-degree alone — nothing requires it to have no OUT edges — so it is typically the
+FIRST NODE OF A TRACK that begins mid-movie. Adding the fork edge merges that whole track into the parent's
+connected component, and `ShortTrackFilter` keeps a component containing a division ENTIRELY. So a short
+fragment hanging off the orphan is rescued past the length rule as a side effect of the fork, and its edges
+become countable.
+
+That may be a gain (a true short track the blunt length rule would have dropped, which is the same argument
+`keep_boundary_tracks` and `ShortTrackRescue` are built on) or a cost (a false fragment smuggled through), and
+the two are indistinguishable in the total score. It is UNMEASURED. The quantity that separates them is
+`nodes_kept(with) - nodes_kept(without) - forks_emitted`: a fork adds exactly one edge, so any surplus is
+rescue rather than division. `reuse` documents the same merge effect deliberately; this one arrives with the
+ordering rather than by design.
 """
 
 import logging
