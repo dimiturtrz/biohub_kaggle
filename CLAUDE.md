@@ -49,7 +49,7 @@ the repo's current state. The linter is a bug-finder, not cosmetics.
 - **arch-fitness** — `python -m devtools.graph --assert`: god-module (fan-in/out), god-file, import-cycle,
   and test-mirror (a logic module needs its `tests/unit/<pkg>/…/test_<name>.py`); thresholds in
   `[tool.structure]`. Advisory: line-floor (off) + chokepoint.
-- **archmap** (advisory / doc-gen) — `python -m devtools.archmap <packages>` emits
+- **archmap** (advisory / doc-gen) — `python -m devtools.graph.archmap <packages>` (or `nox -s archmap`) emits
   `docs/architecture/graph.json` (the committed, diffable architecture — nodes + weighted import edges) plus
   a self-contained interactive **cytoscape viewer** (`index.html`, regenerated + gitignored) that folds/expands
   packages to any depth and focuses a module's neighbourhood. Regenerate with `nox -s archmap` and **commit the
