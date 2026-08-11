@@ -116,6 +116,26 @@ class LinkerConfig(BaseModel):
         """
         return self.agreement_floor is not None or self.mutual_bonus is not None
 
+    @property
+    def needs_ranker(self) -> bool:
+        """Whether this config prices the re-ranker — i.e. whether the caller must score it before linking.
+
+        The ranker's features read a LINK GRAPH (degrees, the selected edge's probability, a motion residual
+        off the parent), so scoring it costs a whole extra linking pass over the video. The tracker pays that
+        only when the bonus below will actually consume the result.
+        """
+        return self.ranker_bonus is not None
+
+    def without_ranker(self) -> "LinkerConfig":
+        """This config with the re-ranker term dropped — the cost the CONTEXT pass links under.
+
+        The re-ranker cannot score until something has linked, so the first pass must run the same operating
+        point minus the term that does not exist yet. Everything else (gate, bonuses, floor) is held identical,
+        because the context graph is only a faithful description of "the current best link set" if it was
+        produced by the cost we are re-ranking.
+        """
+        return self.model_copy(update={"ranker_bonus": None})
+
     @model_validator(mode="after")
     def _affinity_knobs_are_readable(self) -> "LinkerConfig":
         """Refuse an affinity knob on a linker that cannot read an affinity — it could not move anything.

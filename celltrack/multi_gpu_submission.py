@@ -67,6 +67,10 @@ class MultiGpuSubmission:
     config: TrackerConfig
     # Declared after the detector it defaults to, so the factory is the method itself rather than a lambda.
     devices: tuple[str, ...] = field(default_factory=available_devices)
+    # The mounted local-association re-ranker artifact, or None to run without it. A PATH rather than a mounted
+    # model for the same reason the packs are paths: it has to survive the spawn boundary, and where the artifact
+    # lives is the caller's fact (a Kaggle dataset mount here, the local data root there).
+    ranker_pack: Path | None = None
 
     def shards(self, videos: list[Path]) -> tuple[VideoShard, ...]:
         """Deal the videos round-robin across the devices — interleaved, so no one worker gets every long movie.
@@ -91,6 +95,8 @@ class MultiGpuSubmission:
     def shard_graphs(self, shard: VideoShard) -> dict[str, TrackGraph]:
         """Mount the tracker on this shard's device and run the full pipeline over its videos, keyed by name."""
         tracker = CellTracker.ephemeral(self.packs[0], self.packs[1], shard.device, self.config)
+        if self.ranker_pack is not None:
+            tracker = tracker.with_ranker(self.ranker_pack)
         logger.info("%s: %d videos — %s", shard.device, len(shard.videos), [key for key, _ in shard.videos])
         return {key: tracker.run(key, path) for key, path in shard.videos}
 

@@ -21,11 +21,17 @@ _GRAPH = TrackGraph(
 class _StubTracker:
     """A mounted tracker whose `run` is a fixed graph, so the dispatcher runs without weights or a GPU."""
 
-    def __init__(self, device: str) -> None:
+    def __init__(self, device: str, ranker_pack: Path | None = None, mounted: list[Path] | None = None) -> None:
         self.device = device
+        self.ranker_pack = ranker_pack
+        self.mounted: list[Path] = [] if mounted is None else mounted
 
     def run(self, video_key: str, path: Path) -> TrackGraph:
         return _GRAPH
+
+    def with_ranker(self, artifact: Path) -> "_StubTracker":
+        self.mounted.append(artifact)
+        return _StubTracker(self.device, artifact, self.mounted)
 
 
 def _mount(monkeypatch: pytest.MonkeyPatch) -> list[str]:
@@ -71,6 +77,32 @@ def test_shard_graphs(monkeypatch: pytest.MonkeyPatch):
 
     assert mounted == ["cpu"]
     assert sorted(graphs) == ["a", "b"]
+
+
+def test_shard_graphs_mounts_the_ranker_on_each_worker(monkeypatch: pytest.MonkeyPatch):
+    """A submission given the re-ranker artifact mounts it per worker — a PATH is what survives the spawn.
+
+    The model itself cannot cross the process boundary (that is why the packs are paths too), so the artifact
+    location travels with the submission and each device mounts its own copy.
+    """
+    trackers: list[_StubTracker] = []
+
+    def ephemeral(pack1: Path, pack2: Path, device: str, config: TrackerConfig | None = None) -> _StubTracker:
+        trackers.append(_StubTracker(device))
+        return trackers[-1]
+
+    monkeypatch.setattr(dispatch.CellTracker, "ephemeral", staticmethod(ephemeral))
+    submission = MultiGpuSubmission(
+        packs=(Path("p1"), Path("p2")),
+        config=TrackerConfig(),
+        devices=("cpu",),
+        ranker_pack=Path("/mnt/assoc-ranker"),
+    )
+    shard = submission.shards([Path("/m/a.zarr")])[0]
+
+    assert sorted(submission.shard_graphs(shard)) == ["a"]
+    assert trackers[0].mounted == [Path("/mnt/assoc-ranker")]  # mounted from the submission's path, once
+    assert trackers[0].ranker_pack is None  # the mount is a copy, not a mutation of the ephemeral tracker
 
 
 class _FailedProcess:

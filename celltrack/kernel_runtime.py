@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 _INPUT_GLOB = "/kaggle/input/**"
 _PACK_CONFIG = "weights/unet_transformer/split_0/config.json"
+_RANKER_MANIFEST = "ASSOCIATION_RANKER_MANIFEST.json"
 _TEST_GLOB = "/kaggle/input/**/biohub-cell-tracking-during-development/test/*.zarr"
 _ZARR_SUFFIX = ".zarr"
 
@@ -59,6 +60,19 @@ class KernelRuntime:
         pack2 = next(Path(config).parent for config in configs if "seed314159" in config)
         logger.info("packs: %s | %s", pack1, pack2)
         return pack1, pack2
+
+    @staticmethod
+    def association_ranker() -> Path | None:
+        """The mounted local-association re-ranker artifact directory, found by its manifest — `None` if absent.
+
+        Discovered the way the packs are, so the kernel names a DATASET and not a directory layout: whichever
+        `/kaggle/input/<dataset>/…` Kaggle mounts the artifact under, the manifest beside the checkpoint is what
+        identifies it. A kernel that does not attach the dataset gets `None` and runs without the re-ranker
+        rather than failing on a path nobody wrote down.
+        """
+        found = glob.glob(f"{_INPUT_GLOB}/{_RANKER_MANIFEST}", recursive=True)
+        logger.info("association ranker: %s", found[:1])
+        return Path(found[0]).parent if found else None
 
     @staticmethod
     def pack_source() -> Path:

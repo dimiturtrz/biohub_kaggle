@@ -252,3 +252,162 @@ def test_run_without_a_floor_scores_once(monkeypatch: pytest.MonkeyPatch):
 
     tracker.run("m.zarr", Path("m.zarr"))
     assert scored == [False]
+
+
+# One source at the origin and two candidates 1 um and 4 um away, both inside the 10 um gate. Distance alone
+# picks the near one; a re-ranker confident about the far one is the only thing that can move the link.
+_FORK = TrackGraph(
+    node_ids=np.array([0, 1, 2], dtype=np.int64),
+    coordinates=np.array([[0, 0, 0, 0], [1, 0, 0, 1], [1, 0, 0, 4]], dtype=np.int64),
+    edges=np.empty((0, 2), dtype=np.int64),
+)
+
+
+class _CountingBlend:
+    """A blend detector returning the fork graph and counting its forwards — the two-pass reuse check."""
+
+    def __init__(self, graph: TrackGraph = _FORK) -> None:
+        self.graph = graph
+        self.calls = 0
+
+    def nodes(
+        self, video_key: str, path: Path, threshold: float, weights: tuple[float, ...] | None = None
+    ) -> TrackGraph:
+        self.calls += 1
+        return self.graph
+
+
+class _CountingEdgeScorer:
+    """An edge scorer supplying no affinity and counting its scoring passes."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def affinities(self, path: Path, nodes: TrackGraph, device: str) -> None:
+        self.calls += 1
+        return None
+
+    def with_bidirectional(self, *, bidirectional: bool) -> "_CountingEdgeScorer":
+        return self
+
+
+class _GapAffinity:
+    """One gap's fixed probability matrix, in the ascending node order the linker's cost is aligned to."""
+
+    def __init__(self, matrix: np.ndarray) -> None:
+        self.matrix = matrix
+
+    def probabilities(self, timepoint: int) -> np.ndarray | None:
+        return self.matrix if timepoint == 0 else None
+
+
+class _ContrarianRanker:
+    """A re-ranker that reads the CONTEXT graph and backs whichever candidate the first pass did NOT take.
+
+    Its probability is a function of the context links alone, so a run whose second pass changes is proof the
+    features were computed against pass 1's emitted edge list — the whole reason the path is two-pass.
+    """
+
+    def __init__(self) -> None:
+        self.contexts: list[list[list[int]]] = []
+
+    def affinities(
+        self,
+        spacing: Spacing,
+        detections: TrackGraph,
+        links: TrackGraph,
+        affinity: object,
+        gate_um: float,
+    ) -> _GapAffinity:
+        self.contexts.append(links.edges.tolist())
+        taken = {target for _, target in links.edges.tolist()}
+        spurned = next(node for node in detections.node_ids.tolist() if node not in taken and node != 0)
+        matrix = np.zeros((1, 2))
+        matrix[0, spurned - 1] = 1.0
+        return _GapAffinity(matrix)
+
+
+def _forked_tracker(
+    monkeypatch: pytest.MonkeyPatch, config: TrackerConfig, ranker: _ContrarianRanker | None
+) -> tuple[CellTracker, _CountingBlend, _CountingEdgeScorer]:
+    monkeypatch.setattr(
+        tracker_module.CellVideo, "from_ome_zarr", staticmethod(lambda path: _Video(Spacing(1.0, 1.0, 1.0)))
+    )
+    detector, scorer = _CountingBlend(), _CountingEdgeScorer()
+    tracker = CellTracker(
+        detector=cast(BlendDetectorScorer, detector),
+        edge_scorer=cast(tracker_module.BlendedEdgeTransformerScorer, scorer),
+        device="cpu",
+        config=config,
+        ranker=cast(tracker_module.AssociationRanker, ranker),
+    )
+    return tracker, detector, scorer
+
+
+def _fork_config(ranker_bonus: float | None) -> TrackerConfig:
+    return TrackerConfig(
+        min_track_length=1,
+        smooth_strength=0.0,
+        linker=LinkerConfig(gate_um=10.0, ranker_bonus=ranker_bonus),
+    )
+
+
+def test_run_without_a_ranker_is_unchanged(monkeypatch: pytest.MonkeyPatch):
+    """A mounted re-ranker that no bonus prices changes NOTHING — same edges, byte for byte, and never called.
+
+    The two-pass path is opt-in through `linker.ranker_bonus`, so the shipped operating point must be reachable
+    with the artifact mounted; a byte comparison is what makes "unchanged" a check rather than a claim.
+    """
+    plain, _, _ = _forked_tracker(monkeypatch, _fork_config(None), None)
+    ranker = _ContrarianRanker()
+    mounted, _, _ = _forked_tracker(monkeypatch, _fork_config(None), ranker)
+
+    shipped = plain.run("m.zarr", Path("m.zarr"))
+    with_artifact = mounted.run("m.zarr", Path("m.zarr"))
+
+    assert shipped.edges.tobytes() == with_artifact.edges.tobytes()
+    assert shipped.edges.tolist() == [[0, 1]]  # distance alone takes the near candidate
+    assert ranker.contexts == []  # an unpriced ranker is not scored at all
+
+
+def test_run_relinks_against_the_context_graph(monkeypatch: pytest.MonkeyPatch):
+    """Priced, the re-ranker re-links: pass 1's edge list is what it scores, and pass 2 follows the new cost."""
+    ranker = _ContrarianRanker()
+    tracker, _, _ = _forked_tracker(monkeypatch, _fork_config(10.0), ranker)
+
+    graph = tracker.run("m.zarr", Path("m.zarr"))
+
+    assert ranker.contexts == [[[0, 1]]]  # scored ONCE, against the raw links of the first pass
+    assert graph.edges.tolist() == [[0, 2]]  # 4 um - 10*1.0 beats 1 um - 0, so the far candidate wins
+
+
+def test_run_reuses_the_detections_and_affinity_across_both_passes(monkeypatch: pytest.MonkeyPatch):
+    """The second pass re-LINKS only: one detection forward and one affinity pass serve both.
+
+    That is what makes the path affordable (linking is ~11% of a video, detection plus affinity ~88%) and what
+    makes it correct: features computed against a different detection set would describe a different graph.
+    """
+    tracker, detector, scorer = _forked_tracker(monkeypatch, _fork_config(10.0), _ContrarianRanker())
+
+    tracker.run("m.zarr", Path("m.zarr"))
+
+    assert (detector.calls, scorer.calls) == (1, 1)
+
+
+def test_with_ranker(monkeypatch: pytest.MonkeyPatch):
+    """`with_ranker` mounts the artifact from the directory the CALLER names — no path is written into the code."""
+    mounted: list[Path] = []
+
+    def _from_artifact(cls: type, root: Path) -> _ContrarianRanker:
+        mounted.append(root)
+        return _ContrarianRanker()
+
+    monkeypatch.setattr(tracker_module.AssociationRanker, "from_artifact", classmethod(_from_artifact))
+    tracker = _tracker(monkeypatch, TrackerConfig())
+
+    elsewhere = tracker.with_ranker(Path("mounted/somewhere/else"))
+
+    assert mounted == [Path("mounted/somewhere/else")]
+    assert elsewhere.ranker is not None
+    assert tracker.ranker is None  # the original tracker is untouched
+    assert elsewhere.with_config(TrackerConfig(threshold=0.9)).ranker is elsewhere.ranker  # survives a sweep step

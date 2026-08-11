@@ -33,6 +33,10 @@ logger = logging.getLogger(__name__)
 # annotation density, and the node-count term of the score bites hardest where annotation is densest.
 _ACQUISITION_PREFIX = 4
 
+# Where the downloaded CC0 re-ranker artifact sits UNDER THE DATA ROOT — a relative reference resolved against
+# `paths.yaml`, so no machine's directory layout is written into the repo (the Kaggle kernel resolves its own).
+_RANKER_ARTIFACT = "reference/association_ranker"
+
 
 class _ConfigOverride:
     """Applying one `--set key=value` to a `TrackerConfig`, keeping each field's declared type across the parse."""
@@ -94,7 +98,12 @@ class TrackerProxyEval:
     overrides: tuple[str, ...] = ()
 
     def _mount(self, root: DataRoot) -> tuple[TestMovieProxy, CellTracker]:
-        """The loaded proxy and the tracker mounted once — models and per-seed caches shared across the sweep."""
+        """The loaded proxy and the tracker mounted once — models and per-seed caches shared across the sweep.
+
+        The local-association re-ranker is mounted only when the resolved sweep prices it (`--set
+        linker.ranker_bonus=…`), so a sweep that does not ask for it neither reads the artifact nor pays the
+        second linking pass it would trigger.
+        """
         proc = root.processed("biohub_cell_tracking")
         proxy = TestMovieProxy.load(root, self.stems)
         pipeline = CellTracker.from_packs(
@@ -103,6 +112,8 @@ class TrackerProxyEval:
             proc / "cache/responses",
             self.device,
         )
+        if self.config_at(self.thresholds[0], self.disappearance_costs[0]).linker.needs_ranker:
+            pipeline = pipeline.with_ranker(proc / _RANKER_ARTIFACT)
         return proxy, pipeline
 
     def scores(self, root: DataRoot) -> dict[tuple[float, float], SplitScore]:

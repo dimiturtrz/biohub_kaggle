@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 import math
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Protocol
 
@@ -22,6 +22,7 @@ from celltrack.affinity import EdgeAffinity
 from celltrack.detectors.pipeline import BlendDetectorScorer
 from celltrack.detectors.response_cache import EphemeralResponseStore, ResponseCache, ResponseStore
 from celltrack.detectors.tunet import TemporalUNetDetector
+from celltrack.edges.association_ranker import AssociationRanker
 from celltrack.edges.blended_edge_scoring import BlendedEdgeTransformerScorer
 from celltrack.linkers.linkers import LinkerConfig
 from celltrack.linkers.linking import Linker
@@ -147,12 +148,18 @@ class TrackedVideo:
 
 @dataclass(frozen=True)
 class CellTracker:
-    """The mounted dual-seed tracker: forward two seeds, score edges, fold the post-proc stages — `run` a video."""
+    """The mounted dual-seed tracker: forward two seeds, score edges, fold the post-proc stages — `run` a video.
+
+    `ranker` is the optional local-association re-ranker (`with_ranker`), mounted like the detector packs are:
+    the caller hands in the artifact directory it found, so the same object serves the local data root and the
+    Kaggle kernel's own mount point. It is what turns `run_scored` into the two-pass path documented there.
+    """
 
     detector: BlendDetectorScorer
     edge_scorer: BlendedEdgeTransformerScorer
     device: str
     config: TrackerConfig = field(default_factory=TrackerConfig)
+    ranker: AssociationRanker | None = None
 
     @classmethod
     def from_packs(
@@ -201,7 +208,23 @@ class CellTracker:
     def with_config(self, config: TrackerConfig) -> "CellTracker":
         """The same mounted models under a different operating point — reuses the cache across a sweep."""
         edge_scorer = self.edge_scorer.with_bidirectional(bidirectional=config.bidirectional_edges)
-        return CellTracker(detector=self.detector, edge_scorer=edge_scorer, device=self.device, config=config)
+        return CellTracker(
+            detector=self.detector,
+            edge_scorer=edge_scorer,
+            device=self.device,
+            config=config,
+            ranker=self.ranker,
+        )
+
+    def with_ranker(self, artifact: Path) -> "CellTracker":
+        """The same tracker with the local-association re-ranker mounted from the artifact directory given.
+
+        A path argument rather than a constant for the same reason the detector packs take one: the artifact
+        sits under the local data root here and wherever the Kaggle kernel's dataset mount lands it there, and
+        a tracker that knew one of those two could not run in the other. Mounting is separate from `from_packs`
+        so the re-ranker stays optional at every call site that does not price it.
+        """
+        return replace(self, ranker=AssociationRanker.from_artifact(artifact))
 
     def run(self, video_key: str, path: Path) -> TrackGraph:
         """Detect, score edges, and fold the post-proc stages over one video into a linked track graph."""
@@ -223,7 +246,8 @@ class CellTracker:
         stages_start = time.perf_counter()
         graph = nodes
         video = CellVideo.from_ome_zarr(path)
-        for stage in self._stages(video.spacing, affinity, mutual, video.volume_shape):
+        ranker = self._ranked(video.spacing, nodes, affinity, mutual, video.volume_shape)
+        for stage in self._stages(video.spacing, affinity, mutual, video.volume_shape, ranker):
             graph = stage.transform(graph)
         logger.info(
             "%s: detect %.1fs | affinity %.1fs | link+post %.1fs (%d nodes)",
@@ -249,12 +273,42 @@ class CellTracker:
             return affinity
         return self.edge_scorer.with_bidirectional(bidirectional=True).affinities(path, nodes, self.device)
 
+    def _ranked(
+        self,
+        spacing: Spacing,
+        nodes: TrackGraph,
+        affinity: EdgeAffinity | None,
+        mutual: EdgeAffinity | None,
+        volume_shape: tuple[int, int, int] | None,
+    ) -> EdgeAffinity | None:
+        """The re-ranker's per-gap probabilities, scored against a first linking pass — `None` when unused.
+
+        This is the tracker's only TWO-PASS path, and it is two-pass by necessity rather than by choice: seven
+        of the ranker's 22 features (`edge_prob`, `has_learned_edge`, the two degrees, the two `has_*` flags,
+        `target_best_next_prob`) are facts about an EMITTED EDGE LIST, so nothing can be scored until something
+        has linked. Pass 1 links under this exact operating point minus the term that does not exist yet
+        (`LinkerConfig.without_ranker`), pass 2 re-links the SAME detections and the SAME affinity with the
+        ranker's probability priced in — a second link is ~11% of the video's runtime, where a second detection
+        or affinity forward would be ~88%.
+
+        The context graph is the RAW output of pass 1's linker, taken before any post-processing. Two reasons,
+        one of them fatal: the gap bridge INSERTS synthetic nodes and the short-track filter removes real ones,
+        so a post-processed graph no longer shares the detections' row space the features and the affinity are
+        both indexed in; and the public pipeline this ports featurises its own relink's output, which is
+        likewise pre-post-processing. Post-proc runs once, over pass 2's links.
+        """
+        if self.ranker is None or not self.config.linker.needs_ranker:
+            return None
+        context = self.config.linker.without_ranker().build(spacing, affinity, mutual, volume_shape).link(nodes)
+        return self.ranker.affinities(spacing, nodes, context, affinity, self.config.linker.gate_um)
+
     def _stages(
         self,
         spacing: Spacing,
         affinity: EdgeAffinity | None,
         mutual: EdgeAffinity | None = None,
         volume_shape: tuple[int, int, int] | None = None,
+        ranker: EdgeAffinity | None = None,
     ) -> tuple[GraphStage, ...]:
         """The ordered post-detection passes at this video's spacing — link, drop short tracks, bridge gaps, smooth.
 
@@ -263,10 +317,12 @@ class CellTracker:
         splice fragments that the filter would have removed, and scores lower.
 
         `volume_shape` is the imaged `(z, y, x)` extent, which a detection graph does not carry: it is what lets a
-        linker tell a track leaving the field of view from one breaking mid-volume.
+        linker tell a track leaving the field of view from one breaking mid-volume. `ranker` carries the
+        re-ranker's probabilities from `_ranked`, which is why the list is folded once over pass 2's cost rather
+        than once per pass — post-processing sees only the final links.
         """
         config = self.config
-        link = LinkerStage(config.linker.build(spacing, affinity, mutual, volume_shape))
+        link = LinkerStage(config.linker.build(spacing, affinity, mutual, volume_shape, ranker))
         # Division recovery reads the edge affinity, so it needs a learned head and runs before the short-track
         # filter (whose division-preserving carve-out can only protect a fork that already exists).
         divide = (

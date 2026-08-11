@@ -207,6 +207,25 @@ def test_build_wires_the_ranker_bonus_into_both_affinity_readers():
         assert built.ranker == RankerBonus(ranker=ranker, bonus=17.0)
 
 
+def test_needs_ranker():
+    """The context linking pass is paid for exactly when the cost prices its result."""
+    assert not LinkerConfig().needs_ranker
+    assert LinkerConfig(ranker_bonus=17.0).needs_ranker
+
+
+def test_without_ranker():
+    """The context pass runs the SAME operating point minus the term that cannot exist yet.
+
+    Everything else is held: the graph the 22 features describe is only a description of "the current best link
+    set" if it was produced by the cost being re-ranked.
+    """
+    config = LinkerConfig(gate_um=12.0, mutual_bonus=4.0, ranker_bonus=17.0)
+    context = config.without_ranker()
+    assert context.ranker_bonus is None
+    assert (context.gate_um, context.mutual_bonus, context.name) == (12.0, 4.0, config.name)
+    assert config.ranker_bonus == 17.0  # the priced config itself is unchanged
+
+
 def test_build_without_the_scored_ranker_refuses_a_ranker_bonus():
     """A weight on a quantity nobody scored is refused, not silently dropped — as with the mutual bonus."""
     with pytest.raises(ValueError, match="needs the local-association re-ranker"):

@@ -41,6 +41,10 @@ def test_apply():
     # A dotted key reaches an off-by-default nested config, instantiating it from its declared type first.
     assert _ConfigOverride.apply(base, "reuse.gate_um=7.5").reuse.gate_um == 7.5
     assert _ConfigOverride.apply(base, "detector_blend=0.6").detector_blend == 0.6  # None-default cast via annotation
+    # Both weights of the learned-evidence split are reachable, so the sweep can test the public 85/15 RATIO
+    # (17.0/3.0 at our derived P-budget of 20) rather than assuming their absolute, ~30x weaker, constants.
+    split = _ConfigOverride.apply(_ConfigOverride.apply(base, "linker.ranker_bonus=17.0"), "linker.affinity_bonus=3.0")
+    assert (split.linker.ranker_bonus, split.linker.affinity_bonus) == (17.0, 3.0)
 
 
 def test_cast():
@@ -86,11 +90,15 @@ class _Score:
 class _FakePipeline:
     """A mounted tracker whose score depends on the config, so the grid produces distinct values."""
 
-    def __init__(self, config: TrackerConfig) -> None:
+    def __init__(self, config: TrackerConfig, ranker_pack: Path | None = None) -> None:
         self.config = config
+        self.ranker_pack = ranker_pack
 
     def with_config(self, config: TrackerConfig) -> "_FakePipeline":
-        return _FakePipeline(config)
+        return _FakePipeline(config, self.ranker_pack)
+
+    def with_ranker(self, artifact: Path) -> "_FakePipeline":
+        return _FakePipeline(self.config, artifact)
 
 
 class _FakeProxy:
@@ -127,6 +135,20 @@ def test_scores(monkeypatch: pytest.MonkeyPatch):
     # whose difference is the node-count bonus — the component measured to anti-transfer.
     assert {cell: split.score for cell, split in result.items()} == {(0.98, 0.0): 0.98, (0.99, 0.0): 0.99}
     assert all(split.selection_score < split.score for split in result.values())
+
+
+def test_mount(monkeypatch: pytest.MonkeyPatch):
+    """The re-ranker artifact is mounted from the DATA ROOT, and only when the resolved sweep prices it.
+
+    Its location is a path under the configured root rather than a constant in the code, so the same evaluator
+    runs on any machine; an unpriced sweep neither reads the artifact nor pays the context linking pass.
+    """
+    _patch(monkeypatch)
+    unpriced = TrackerProxyEval("cpu")._mount(cast(DataRoot, _Root()))[1]
+    priced = TrackerProxyEval("cpu", overrides=("linker.ranker_bonus=17.0",))._mount(cast(DataRoot, _Root()))[1]
+
+    assert unpriced.ranker_pack is None
+    assert priced.ranker_pack == Path("biohub_cell_tracking/reference/association_ranker")
 
 
 def test_breakdown(monkeypatch: pytest.MonkeyPatch):

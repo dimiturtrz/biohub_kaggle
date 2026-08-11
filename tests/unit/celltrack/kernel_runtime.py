@@ -28,6 +28,16 @@ def test_install_wheels(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     assert seen[0][-2:] == ["/kit/a.whl", "/kit/b.whl"]
 
 
+def test_association_ranker(monkeypatch: pytest.MonkeyPatch):
+    """The re-ranker artifact is found by its MANIFEST, so the kernel names a dataset and not a mount path."""
+    manifest = "/kaggle/input/assoc-ranker/ASSOCIATION_RANKER_MANIFEST.json"
+    monkeypatch.setattr(kernel_runtime.glob, "glob", lambda pattern, recursive: [manifest])
+    assert KernelRuntime.association_ranker() == Path("/kaggle/input/assoc-ranker")
+
+    monkeypatch.setattr(kernel_runtime.glob, "glob", lambda pattern, recursive: [])
+    assert KernelRuntime.association_ranker() is None  # dataset not attached: run without it, don't crash
+
+
 def test_pilkwang_packs(monkeypatch: pytest.MonkeyPatch):
     """`pilkwang_packs` picks the support-pack-50ep seed and the seed314159 seed out of the mounted configs."""
     configs = [
