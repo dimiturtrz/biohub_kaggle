@@ -16,36 +16,48 @@ way to size it is to re-rank a set that already exists.
 
 Same weights, same detections, identical everything except the linker and the fusion:
 
-| checkpoint | default (assignment, no fusion) | **shipped** (flow b=3 + bidirectional) |
-|---|---|---|
-| `joint_warm_cos3k` | **0.9175** ① | 0.9153 ③ |
-| `joint_short_masked` | 0.9147 ② | 0.9192 ② |
-| `joint_hn_control` | 0.9141 ③ | **0.9206** ① |
+| checkpoint | default (assignment, no fusion) | **shipped** (flow b=3 + bidirectional) | move |
+|---|---|---|---|
+| `joint_warm_cos3k` | **0.9175** ① | 0.9153 ③ | −0.0022 |
+| `joint_short_masked` | 0.9147 ② | 0.9192 ② | +0.0045 |
+| `joint_hn_control` | 0.9141 ③ | **0.9206** ① | +0.0065 |
+| `joint_velocity` | 0.9148 | 0.9133 ④ | −0.0015 |
+| `joint_masked` | 0.8710 | 0.8942 | +0.0232 |
 
-**The ranking is exactly inverted.** First becomes last, last becomes first. Under the pipeline we selected
-with, `cos3k` leads by +0.0034 over `hn_control`; under the pipeline we submit, `hn_control` leads by +0.0053.
+**The ranking is exactly inverted** across the three that the campaign actually compared. First becomes last,
+last becomes first. Under the pipeline we selected with, `cos3k` leads by +0.0034 over `hn_control`; under the
+pipeline we submit, `hn_control` leads by +0.0053. Note the arms move in *opposite directions* — that is what
+makes this a re-ranking rather than a level shift.
 
 ## Why the numbers can be trusted
 
-Every **default** figure reproduces its historical value to four decimals — 0.9175, 0.9147 and 0.9141 were all
-recorded on 2026-08-10, before any of this work existed. The sweep is measuring the same thing the campaign
+All five **default** figures reproduce their historical values to four decimals — 0.9175, 0.9147, 0.9141,
+0.9148 and 0.8710 were recorded on 2026-08-10, before any of this work existed. The sweep is measuring the same thing the campaign
 measured; the only new quantity is the shipped arm. Had the default column drifted, the right conclusion would
 have been "the harness changed", not "the ranking inverts".
 
 The margins (+0.0034, +0.0053) also clear the selector's repeatability floor, which was ~0.0017 when
 `cudnn.benchmark` autotuning was live and is ~0 now that the scoring pass disables it.
 
-## What was actually being rewarded
+## What was actually being rewarded — and the story that does not survive the fourth point
 
-The checkpoints differ most in how much graph they keep. Node ratios under the shipped pipeline: `cos3k`
-−0.026, `hn_control` −0.019, `short_masked` −0.016; under the default pipeline `cos3k` sits at −0.052, the most
-trimmed of the three.
+The tempting explanation is trimming. Under the default pipeline `cos3k` is the most trimmed of the compared
+three (ratio −0.052 against −0.039 and −0.043), it is the one the default instrument crowns, and the faithful
+metric pays a node-count bonus for undershooting. A global solver prices track *boundaries*, so an extra true
+detection can become a kept continuation, where a per-frame matcher decides each gap alone and the same
+detection is just another candidate to get wrong. Neat: the default instrument rewards the trimmed model twice,
+the shipped one rewards the fuller model.
 
-A global solver prices track *boundaries*, so an extra true detection can become a kept continuation. A
-per-frame matcher has no channel for "this track was continuing" — each gap is decided alone — so the same
-detection is just another candidate to get wrong. On top of that, the faithful metric pays a node-count bonus
-for undershooting. So the default instrument rewarded the trimmed model twice, and the pipeline we ship rewards
-the fuller one.
+**Two points refute that as a monotone rule.** `joint_velocity` keeps the *fullest* graph of all five under the
+shipped pipeline (ratio −0.000) and scores the *lowest* of the serious four (0.9133); if "fuller is better
+under flow" were the mechanism it should lead. And `joint_masked`, by far the most trimmed (ratio −0.149
+default, −0.072 shipped), gains the *most* from the shipped pipeline (+0.0232) rather than the least. Graph
+fullness is at best one term among several — model quality obviously still matters, and velocity was
+independently measured inert.
+
+What survives is narrower and is the part that matters: **the two pipelines disagree about which checkpoint is
+best, and they disagree by more than the instrument's noise.** The mechanism sketch above is a hypothesis that
+fits three of four points; it is not established, and I am recording it as a lead rather than a finding.
 
 That is the same coupling that has now appeared four times: an isolated threshold ladder picked 0.96 while the
 shipped config prefers 0.97 with the order reversed; the CC0 ranker measured positive in one linker and

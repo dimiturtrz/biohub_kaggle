@@ -119,7 +119,11 @@ class CellTracker:
         device: str,
         config: TrackerConfig | None,
     ) -> "CellTracker":
-        config = config or TrackerConfig()
+        # The SHIPPED recipe, not TrackerConfig's neutral field defaults: those are the per-frame assignment
+        # linker with no fusion (the 0.892 tier), so every caller that omitted a config silently mounted a
+        # pipeline we do not submit. Measured consequence, not a tidiness argument — re-ranking saved
+        # checkpoints under both pipelines INVERTS which one wins (0.9175/0.9141 becomes 0.9153/0.9206).
+        config = config or TrackerConfig.shipped()
         seed1, recipe = TemporalUNetDetector.from_pack(pack1, map_location=device)
         seed2, _ = TemporalUNetDetector.from_pack(pack2, map_location=device)
         detector = BlendDetectorScorer(
