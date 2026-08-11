@@ -40,6 +40,28 @@ def test_maxima():
     assert kept.tolist() == [[4, 4, 4]]
 
 
+def test_maxima_nest_in_the_floor():
+    """Raising the floor drops whole peaks and never splits one, so a threshold sweep masks instead of re-pooling.
+
+    Each connected component of `volume == max_pool(volume)` is CONSTANT-valued: two adjacent marked voxels lie
+    within each other's pooling kernel, so each is at least the other. A floor therefore keeps or removes a
+    component whole — the maxima above a high floor are exactly the low-floor maxima whose value clears it, which
+    is what lets one extraction serve a whole sweep. Holds while the suppression radius is at least one voxel on
+    every axis (the isotropic downsample the pipeline reads out on); a zero-radius axis would leave neighbours
+    uncompared, and a component could then straddle the floor.
+    """
+    response = np.zeros((16, 16, 16))
+    response[2:5, 2:5, 2:5] = 0.9  # a plateau that clears the high floor
+    response[10:13, 10:13, 10:13] = 0.5  # and one that does not
+    response[8, 2, 2] = 0.85
+
+    coordinates, values = EXTRACTOR.maxima(response, floor=0.2)
+    masked = coordinates[values > 0.8]
+    above, _ = EXTRACTOR.maxima(response, floor=0.8)
+
+    assert sorted(masked.tolist()) == sorted(above.tolist())
+
+
 def test_centres_suppresses_a_neighbour_within_a_cell():
     """Two maxima closer than the cell scale cannot both survive — the weaker is suppressed."""
     response = np.zeros((16, 16, 16))
