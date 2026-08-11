@@ -27,6 +27,7 @@ from jaxtyping import Float, Int
 from scipy.spatial.distance import cdist
 
 from celltrack.affinity import EdgeAffinity
+from celltrack.linkers.admissible_affinity import AdmissibleAffinity
 from celltrack.linkers.agreement_gating import AgreementGate
 from celltrack.linkers.boundary_prior import BoundaryPrior
 from celltrack.linkers.evidence_ramp import EvidenceRamp
@@ -95,6 +96,8 @@ class FlowLinker:
     # evidence budget is spent where the head out-separates proximity. The gate is READ for that normalisation
     # (the mean is over admitted pairs), never changed by it.
     ramp: EvidenceRamp | None = None
+    # Whether the priced probability is conditioned on the ADMISSIBLE parents (`AdmissibleAffinity`).
+    admissible: bool = False
 
     def link(self, detections: TrackGraph) -> TrackGraph:
         """Select the min-cost set of 1-to-1 links over the whole video, coupled through the track-boundary cost."""
@@ -184,7 +187,9 @@ class FlowLinker:
         if self.affinity is not None and self.affinity_bonus != 0.0:
             probability = self.affinity.probabilities(timepoint)
             if probability is not None:
-                cost = cost - self.affinity_bonus * EvidenceRamp.applied(self.ramp, distance, within_gate) * probability
+                priced_probability = AdmissibleAffinity.applied(self.admissible, probability, within_gate)
+                weight = EvidenceRamp.applied(self.ramp, distance, within_gate)
+                cost = cost - self.affinity_bonus * weight * priced_probability
         if self.mutual is not None:
             cost = self.mutual.discount(timepoint, cost)
         if self.ranker is not None:

@@ -94,3 +94,23 @@ Before optimising a composite objective, check each term is **reachable**. A ter
 express is not a hard problem; it is an unasked question, and it will read exactly like a solved one.
 
 Remaining headroom on the axis is `0.1 × 0.4468 ≈ 0.045` against roughly 0.004 banked.
+
+## Postscript: the budget was never the lever
+
+A second submission bracketed the fork budget at cap 100 against the first's 300 — about 400 forks against
+1072 — and scored **0.899, identically**. Of the three outcomes named in advance, the flat one fired: between
+those two counts the leaderboard cannot tell the difference, so **the ranking carries the whole gain and the
+budget carries none of it**.
+
+That is worth more than a tie usually is, because it turns a hand-set ceiling into a removable one. A cap that
+provably does not bind is a magic number, so the next submission sets it to `None` and lets the budget follow
+the **measured division rate** instead — 0.113% per node-observation on our own corpus, which is 29/36/8/84
+forks on the four movies rather than 1072. If the plateau reaches down to the phenomenon's own scale the
+parameter never comes back; if it does not, the floor sits somewhere between 157 and 400 and we have bracketed
+it from the other side.
+
+It also sharpens the honesty problem rather than dissolving it. I called the floors-off-plus-cap configuration
+"partly gaming" because the cap was what bounded the damage from forks the model does not believe in. The cap
+turns out not to matter — which means the damage was never being bounded by it, and the real reason the
+speculation is cheap is the metric's own asymmetry. The ranking is the principled half, and it is now measured
+to be the *only* half doing work.

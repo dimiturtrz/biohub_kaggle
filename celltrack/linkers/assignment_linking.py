@@ -22,6 +22,7 @@ from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
 
 from celltrack.affinity import EdgeAffinity
+from celltrack.linkers.admissible_affinity import AdmissibleAffinity
 from celltrack.linkers.agreement_gating import AgreementGate
 from celltrack.linkers.evidence_ramp import EvidenceRamp
 from celltrack.linkers.mutual_bonus import MutualBonus
@@ -73,6 +74,8 @@ class AssignmentLinker:
     # more on the far candidates where the head out-separates proximity and less on the near ones where
     # proximity already decides. It reweights only the FORWARD term — the gate and the other terms are untouched.
     ramp: EvidenceRamp | None = None
+    # Whether the priced probability is conditioned on the ADMISSIBLE parents (`AdmissibleAffinity`).
+    admissible: bool = False
 
     def link(self, detections: TrackGraph) -> TrackGraph:
         """Assign each cell to at most one successor, frame pair by frame pair, minimising total edge cost."""
@@ -120,7 +123,9 @@ class AssignmentLinker:
         if self.affinity is not None and self.affinity_bonus != 0.0:
             probability = self.affinity.probabilities(timepoint)
             if probability is not None:
-                cost = cost - self.affinity_bonus * EvidenceRamp.applied(self.ramp, distance, within_gate) * probability
+                priced_probability = AdmissibleAffinity.applied(self.admissible, probability, within_gate)
+                weight = EvidenceRamp.applied(self.ramp, distance, within_gate)
+                cost = cost - self.affinity_bonus * weight * priced_probability
         if self.mutual is not None:
             cost = self.mutual.discount(timepoint, cost)
         if self.ranker is not None:

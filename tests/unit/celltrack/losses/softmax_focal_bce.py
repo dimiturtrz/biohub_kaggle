@@ -76,4 +76,24 @@ def test_softmax_focal_b_c_e_of_drops_an_axis_that_constrains_nothing():
     target = torch.tensor([[1.0, 0.0, 0.0]])
 
     assert SoftmaxFocalBCE.of(logits, target).item() == 0.0  # nothing to say, so it says nothing
-    assert SoftmaxFocalBCE.of(logits, target, axes=_BOTH).item() < 1.0  # the target axis alone, undiluted
+    assert SoftmaxFocalBCE.of(logits, target, axes=_BOTH).item() < 1.0  # the target axis alone, at half weight
+
+
+def test_softmax_focal_b_c_e_of_weights_a_pair_by_the_constraints_it_can_state():
+    """A lone-source pair pushes HALF as hard as a contested one, because only one of two axes binds.
+
+    The divisor is the axes ASKED FOR, not the ones that happened to bind. A target with one candidate parent
+    carries less evidence about association than one with several competing for it, and this is where that
+    difference is expressed without inventing a weight. Measured, not assumed: the arm trained under this
+    weighting is the best own-weights checkpoint of the campaign, and renormalising onto the surviving axis
+    instead failed to beat its own initialisation.
+    """
+    logits = torch.zeros(1, 3, requires_grad=True)
+    target = torch.tensor([[1.0, 0.0, 0.0]])
+    SoftmaxFocalBCE.of(logits, target, axes=_BOTH).backward()
+
+    contested = torch.zeros(1, 3, requires_grad=True)
+    SoftmaxFocalBCE.of(contested, target, axes=(TARGET_AXIS,)).backward()
+
+    assert logits.grad is not None and contested.grad is not None
+    assert torch.allclose(logits.grad, contested.grad / 2)  # one binding axis of two asked for

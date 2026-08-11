@@ -130,6 +130,13 @@ class LinkerConfig(BaseModel):
     # less on near ones, where 96% of in-gate candidates are already the true successor. No default is chosen
     # here: how fast evidence should overtake proximity is a claim about our data, so a sweep decides it.
     evidence_ramp: float | None = Field(None, ge=0)
+    # Whether the priced probability is CONDITIONED on the admissible parents rather than on every source in the
+    # frame (`AdmissibleAffinity`). The scorer soft-maxes over all ~700 detections of frame t and the gate then
+    # forbids all but ~4, so on the dense movie a mean 22% of each target's mass sits on parents the solver may
+    # not pick — median leak 8%, but over 90% for the worst twentieth of targets. A uniform deflation would be
+    # absorbed by `affinity_bonus`, which scales the same term; the UNEVENNESS cannot be, and it is worst on the
+    # crowded targets where the mislinks live. Off ships the cost unchanged.
+    admissible_affinity: bool = False
 
     @property
     def effective_bonus(self) -> float:
@@ -194,7 +201,9 @@ class LinkerConfig(BaseModel):
         against its OWN reader set and the refusal names that set (`_KNOB_READERS`).
         """
         for knob, value, readers in self._knobs():
-            if value is not None and self.name not in readers:
+            # A knob at its OFF value asks for nothing, so it cannot be dropped silently and needs no reader.
+            # Off is `None` for a knob with a magnitude and `False` for one that is a claim on or off.
+            if value not in (None, False) and self.name not in readers:
                 message = (
                     f"linker {self.name!r} does not read {knob}, so {knob}={value} cannot affect it; "
                     f"choose one of {sorted(readers)} or drop the {knob}"
@@ -202,7 +211,7 @@ class LinkerConfig(BaseModel):
                 raise ValueError(message)
         return self
 
-    def _knobs(self) -> tuple[tuple[str, float | None, frozenset[str]], ...]:
+    def _knobs(self) -> tuple[tuple[str, float | bool | None, frozenset[str]], ...]:
         """Each learned-evidence knob beside its value and the linkers whose cost actually reads it."""
         return tuple((knob, getattr(self, knob), readers) for knob, readers in _KNOB_READERS.items())
 
@@ -407,6 +416,7 @@ _KNOB_READERS: dict[str, frozenset[str]] = {
     "mutual_bonus": _MUTUAL_READERS,
     "ranker_bonus": _RANKER_READERS,
     "evidence_ramp": _RAMP_READERS,
+    "admissible_affinity": _RAMP_READERS,
 }
 
 # Which linkers price a track boundary per node. Only the flow linker charges appearance and disappearance at all,
@@ -433,6 +443,7 @@ _BUILDERS: dict[str, _Builder] = {
         mutual=parts.mutual,
         ranker=parts.ranker,
         ramp=parts.ramp,
+        admissible=config.admissible_affinity,
     ),
     "nn": lambda config, spacing, affinity, parts: NearestNeighbourLinker(
         spacing=spacing, max_distance_um=config.gate_um
@@ -467,5 +478,6 @@ _BUILDERS: dict[str, _Builder] = {
         boundary=parts.boundary,
         prediction=parts.prediction,
         ramp=parts.ramp,
+        admissible=config.admissible_affinity,
     ),
 }

@@ -48,12 +48,22 @@ class SoftmaxFocalBCE:
     ) -> Float[Tensor, ""]:
         """Mean focal BCE across `axes`, over the rows and columns the annotation touches.
 
-        An axis of LENGTH ONE is dropped rather than normalised over. A softmax across a single element is
-        identically 1.0 whatever the logits, so that term asserts nothing, carries no gradient, and
-        contributes a large constant (a clamped BCE(1, 0) on every rival) that swamps the terms which do
-        carry one — which is how 28.8% of our pairs came to report a loss of 66.67 while learning nothing.
-        Dropping it is not a special case but the honest reading: "one parent per target" is not a constraint
-        when there is one candidate parent.
+        An axis of LENGTH ONE contributes NOTHING TO THE SUM AND STILL COUNTS IN THE DIVISOR. A softmax across
+        a single element is identically 1.0 whatever the logits, so that term asserts nothing and carries no
+        gradient — it only contributed a large constant (a clamped BCE(1, 0) on every rival), which is how
+        28.8% of our pairs came to report a loss of 66.67 while learning nothing.
+
+        Dividing by the axes ASKED FOR rather than by the ones that happened to bind is the part that is not
+        bookkeeping. A pair whose target has one candidate parent carries strictly less evidence about
+        association than one whose target has forty competing for it, so it should push proportionally less —
+        and this is the only place that difference can be expressed without inventing a weight.
+
+        It arrived by accident and is held on ONE arm: a version of this loss that averaged the live term with
+        the dead constant halved the same gradients, and its checkpoint is the best own-weights result of the
+        campaign (0.9278 held out against a 0.9060 init, mislinks 56 -> 43), while an arm that renormalised
+        onto the surviving axis instead failed to beat its own initialisation. One seed, one window — the
+        weighting is kept because it is also the form that needs no constant, not because a single run liked
+        it.
 
         Computed in fp32 with autocast disabled: `binary_cross_entropy` runs on probabilities (not logits) and
         is unsafe under a bf16 autocast, so a joint step's autocast must not reach it.
@@ -66,7 +76,7 @@ class SoftmaxFocalBCE:
             scores = logits.float()
             truth = target.float()
             terms = [SoftmaxFocalBCE._along(scores, truth, active, axis) for axis in constraining]
-            return torch.stack(terms).mean()
+            return torch.stack(terms).sum() / len(axes)
 
     @staticmethod
     def _along(
