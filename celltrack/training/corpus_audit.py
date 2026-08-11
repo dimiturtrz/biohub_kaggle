@@ -74,7 +74,7 @@ def main() -> None:
     # adjudicate, and a matched detection whose successor was also detected could plausibly be an EASIER cell.
     # If that selection re-introduced the uncontested population the corpus exists to escape, this row would
     # read like the annotated one and no training result from it would mean anything.
-    pairs = DetectionPairs.of(detected, truth, ZarrFrames(video_path, _Q_LOW, _Q_HIGH), spacing)
+    pairs = DetectionPairs.of(detected, truth, ZarrFrames(video_path, _Q_LOW, _Q_HIGH), spacing, gate)
     CandidateDensity.of_pairs(pairs, spacing, gate).report(f"detection pairs ({args.movie})")
     rows = sum(len(pair.source_centres) for pair in pairs)
     logger.info("detection pairs: %d gaps, %d supervised source rows", len(pairs), rows)

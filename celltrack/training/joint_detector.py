@@ -219,6 +219,15 @@ class JointTrainer:
             "--warm-pack", choices=tuple(WARM_PACKS), default="seed1", help="which published pack to continue"
         )
         parser.add_argument("--compile-backbone", action="store_true", help="torch.compile the U-Net (static shape)")
+        # The corpus whose candidate set is the one the tracker deploys against: 3.86 in-gate candidates per
+        # source with 97.1% contested, where the annotated pairs carry 0.99 and 1.9%. These REPLACE the
+        # annotated pairs — mixing re-introduces the uncontested rows the corpus exists to escape.
+        parser.add_argument(
+            "--detected-videos",
+            type=int,
+            default=0,
+            help="train videos to build the DETECTED-neighbourhood corpus over (0 = the annotated pairs)",
+        )
         parser.add_argument(
             "--difficulty-sampling",
             action="store_true",
@@ -683,6 +692,7 @@ def main() -> None:
     config = JointTrainConfig(
         model=ModelCfg(warm_pack=WARM_PACKS[args.warm_pack]),
         data=DataCfg(
+            detected_videos=args.detected_videos,
             difficulty_sampling=args.difficulty_sampling,
             prior_velocity=args.prior_velocity,
             synthetic_fraction=args.synthetic_fraction,

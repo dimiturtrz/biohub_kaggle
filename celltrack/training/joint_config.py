@@ -64,6 +64,12 @@ class DataCfg(BaseModel):
     # Draw each step's pair in proportion to its measured top-1 defect instead of uniformly with replacement
     # (see `DifficultySampler`). Off by default: with it off the loop is the uniform stream of yesterday.
     difficulty_sampling: bool = False
+    # How many train videos to build the DETECTED-neighbourhood corpus over (0 = off, use the annotated pairs).
+    # When set, those pairs REPLACE the annotated ones rather than mixing with them: the annotated corpus is
+    # what carries the defect (0.99 in-gate candidates per source, 1.9% of sources contested, against 3.80 and
+    # 95.4% at inference), so mixing it back in re-introduces exactly the uncontested rows this corpus exists
+    # to escape — and the synthetic arm already measured mixing as dilution rather than curriculum.
+    detected_videos: int = Field(0, ge=0)
     # Feed each source its PRIOR displacement (t-1 -> t) as three extra head-input columns, so the pair head can
     # ask whether a candidate continues the motion the cell was already on — the axis behind our documented
     # association failure (a fast mover's true successor lands FAR while a slower neighbour sits NEAR, and both

@@ -2,6 +2,7 @@
 
 import logging
 from pathlib import Path
+from typing import cast
 
 import numpy as np
 import pytest
@@ -71,3 +72,16 @@ def test_of_synthetic(tmp_path: Path):
     wrong_grid = JointTrainConfig(data=DataCfg(downsample=(1, 1, 1), synthetic_fraction=0.5))
     with pytest.raises(ValueError, match="pooled by"):
         PairSplit.of_synthetic(root, wrong_grid, log)
+
+
+def test_of_detected():
+    """The detected corpus is opt-in: at 0 videos it returns empty WITHOUT mounting a detector.
+
+    That is the whole reason the guard comes first — mounting the two packs to then discard them would make
+    every annotated-corpus run pay for a feature it did not ask for, and the mount is the expensive half.
+    A `None` data root is the assertion: touching it at all would raise.
+    """
+    config = JointTrainConfig()
+
+    assert config.data.detected_videos == 0  # off by default, so the corpus of yesterday is unchanged
+    assert PairSplit.of_detected(cast(DataRoot, None), config, [], logging.getLogger(__name__)) == []

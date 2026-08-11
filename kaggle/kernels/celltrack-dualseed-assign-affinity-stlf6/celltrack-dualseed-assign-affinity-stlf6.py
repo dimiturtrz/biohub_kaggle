@@ -59,6 +59,13 @@ from celltrack.postproc.affinity_division_recovery import AffinityDivisionConfig
 # gates and an identical 490 candidates: symmetry lifts the recoverable division into the kept set and costs
 # -0.0019; the frontier's geometry misses it and costs -0.0036.
 #
+# v27 BRACKETS v26 ON THE ONE AXIS THE PROXY CANNOT ARBITRATE. v26 shipped a 300-fork ceiling; this ships 100,
+# same ranking and same gates, so the pair measures whether the hidden set rewards MORE forks or FEWER. Our
+# proxy holds three annotated divisions and cannot answer that — div_jac there is dominated by a FP:TP ratio
+# 30-50x worse than the hidden set's, where a fully annotated dense movie would hold ~79-170 divisions rather
+# than 3. Two points on the budget axis is the cheapest way to learn the sign, and the edge-term cost of a
+# tighter cap is strictly smaller (the measured -0.0019 at 490 forks shrinks with the budget).
+#
 # The probability floors are OFF (0.0), which is what the sweep found actually blocked the recovery — not the
 # gates and not the cap. Under this pipeline the true divider's kept-child probability is below 0.5, so at the
 # shipped floor it was never even PROPOSED. Candidacy is carried by geometry; the absolute cap bounds the bet.
@@ -68,7 +75,7 @@ _DIVISION = AffinityDivisionConfig(
     min_kept_prob=0.0,
     parent_gate_um=7.0,
     sister_gate_um=14.0,
-    max_added_forks=300,
+    max_added_forks=100,
 )
 # The base is MOUNTED, not restated: `TrackerConfig.shipped()` is the leaderboard-arbitrated 0.895 recipe
 # (thr 0.97, flow linker gate 10 / bonus 20 / boundary 3, bidirectional fusion, min6, smooth 0.8), and it lives

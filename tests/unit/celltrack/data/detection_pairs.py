@@ -7,6 +7,8 @@ from core.data.tracks import TrackGraph
 from core.geometry import Spacing
 
 _ISOTROPIC = Spacing(z=1.0, y=1.0, x=1.0)
+# Wide enough that these tiny fixtures are ungated unless a test is ABOUT the gate.
+_GATE_UM = 100.0
 
 
 class _Frames:
@@ -32,7 +34,7 @@ def test_of():
     detections = _graph([(1, 0, 0, 0), (2, 1, 0, 2), (3, 1, 0, 30)], [])
     truth = _graph([(10, 0, 0, 0), (11, 1, 0, 2)], [(10, 11)])
 
-    pairs = DetectionPairs.of(detections, truth, _Frames(), _ISOTROPIC)
+    pairs = DetectionPairs.of(detections, truth, _Frames(), _ISOTROPIC, _GATE_UM)
 
     assert len(pairs) == 1
     assert pairs[0].timepoint == 0
@@ -50,7 +52,7 @@ def test_of_drops_a_source_whose_successor_was_not_detected():
     detections = _graph([(1, 0, 0, 0), (2, 1, 0, 30)], [])
     truth = _graph([(10, 0, 0, 0), (11, 1, 0, 2)], [(10, 11)])
 
-    assert DetectionPairs.of(detections, truth, _Frames(), _ISOTROPIC) == []
+    assert DetectionPairs.of(detections, truth, _Frames(), _ISOTROPIC, _GATE_UM) == []
 
 
 def test_of_drops_an_unmatched_source():
@@ -58,7 +60,7 @@ def test_of_drops_an_unmatched_source():
     detections = _graph([(1, 0, 0, 50), (2, 1, 0, 2)], [])
     truth = _graph([(10, 0, 0, 0), (11, 1, 0, 2)], [(10, 11)])
 
-    assert DetectionPairs.of(detections, truth, _Frames(), _ISOTROPIC) == []
+    assert DetectionPairs.of(detections, truth, _Frames(), _ISOTROPIC, _GATE_UM) == []
 
 
 def test_of_drops_a_dividing_parent():
@@ -70,7 +72,7 @@ def test_of_drops_a_dividing_parent():
     detections = _graph([(1, 0, 0, 0), (2, 1, 0, 2), (3, 1, 0, 4)], [])
     truth = _graph([(10, 0, 0, 0), (11, 1, 0, 2), (12, 1, 0, 4)], [(10, 11), (10, 12)])
 
-    assert DetectionPairs.of(detections, truth, _Frames(), _ISOTROPIC) == []
+    assert DetectionPairs.of(detections, truth, _Frames(), _ISOTROPIC, _GATE_UM) == []
 
 
 def test_of_carries_the_previous_frame_as_history():
@@ -78,9 +80,24 @@ def test_of_carries_the_previous_frame_as_history():
     detections = _graph([(1, 0, 0, 0), (2, 1, 0, 1), (3, 2, 0, 2)], [])
     truth = _graph([(10, 0, 0, 0), (11, 1, 0, 1), (12, 2, 0, 2)], [(10, 11), (11, 12)])
 
-    pairs = DetectionPairs.of(detections, truth, _Frames(), _ISOTROPIC)
+    pairs = DetectionPairs.of(detections, truth, _Frames(), _ISOTROPIC, _GATE_UM)
 
     assert [pair.timepoint for pair in pairs] == [0, 1]
     assert pairs[0].previous_centres is None  # the first frame has no history
     assert pairs[1].previous_centres is not None
     assert pairs[1].previous_centres.tolist() == [[0, 0, 0]]
+
+
+def test_of_gates_the_candidates_but_never_the_true_successor():
+    """Out-of-gate rivals are dropped; a true step LONGER than the gate is kept, because that is the hard case.
+
+    Dropping it would delete exactly the positives the linker gets wrong while keeping their near rivals — the
+    corpus would then teach that the near cell is always right, which is the failure it exists to correct.
+    """
+    detections = _graph([(1, 0, 0, 0), (2, 1, 0, 9), (3, 1, 0, 40)], [])
+    truth = _graph([(10, 0, 0, 0), (11, 1, 0, 9)], [(10, 11)])
+
+    pairs = DetectionPairs.of(detections, truth, _Frames(), _ISOTROPIC, 5.0)
+
+    assert pairs[0].target_centres.shape == (1, 3)  # the 40um rival is outside the gate and dropped
+    assert pairs[0].edge_matrix.tolist() == [[1.0]]  # the 9um TRUE successor survives its own gate

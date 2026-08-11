@@ -40,11 +40,20 @@ class DetectionPairs:
     """Pairs read off the detector's own output, supervised only where the annotation can adjudicate."""
 
     @staticmethod
-    def of(detections: TrackGraph, truth: TrackGraph, frames: FrameSource, spacing: Spacing) -> list[PairTarget]:
+    def of(
+        detections: TrackGraph, truth: TrackGraph, frames: FrameSource, spacing: Spacing, gate_um: float
+    ) -> list[PairTarget]:
         """Every consecutive-frame pair the detections support, with the decidable source rows supervised.
 
         Matching is the metric's own `DistanceMatcher`, so "this detection is that annotated cell" means here
         exactly what it means when the leaderboard scores us — one matching rule, not a training-only variant.
+
+        Candidates are GATED to `gate_um` of some supervised source. NOT because inference gates — the edge head
+        scores the full source x target matrix there and the linker gates afterwards, when it builds the cost —
+        but because an out-of-gate column can never change the score, so its gradient teaches the head to reject
+        cells it will never be asked about. Those are also the trivial negatives: every one of the 38 dense
+        mislinks is in-gate by construction, since the linker chose it. Ungated, a frame's ~743 detections make
+        an edge matrix ~60x the annotated one, which exhausts 32GB of VRAM and spills into system memory.
         """
         gt_rows = DistanceMatcher(spacing=spacing).match(detections, truth).gt_rows
         successor = DetectionPairs._successor_of(truth)
@@ -61,6 +70,9 @@ class DetectionPairs:
             )
             if not len(sources):
                 continue
+            target_rows, columns = DetectionPairs._gated(
+                sources, target_rows, columns, spacing.to_micrometres(positions), gate_um
+            )
             previous_rows = np.flatnonzero(timepoints == timepoint - 1)
             pairs.append(
                 PairTarget(
@@ -73,6 +85,27 @@ class DetectionPairs:
                 )
             )
         return pairs
+
+    @staticmethod
+    def _gated(
+        sources: Int[np.ndarray, "k"],
+        target_rows: Int[np.ndarray, "u"],
+        columns: Int[np.ndarray, "k"],
+        positions_um: Float[np.ndarray, "n 3"],
+        gate_um: float,
+    ) -> tuple[Int[np.ndarray, "g"], Int[np.ndarray, "k"]]:
+        """The targets within `gate_um` of some supervised source, and the true columns re-indexed onto them.
+
+        The true successor is kept whatever its distance: a supervised row must keep its positive, and a true
+        step longer than the gate is exactly the case the linker gets wrong — dropping it would delete the
+        hardest positives from the corpus while keeping their rivals.
+        """
+        distances = np.linalg.norm(positions_um[target_rows][None, :, :] - positions_um[sources][:, None, :], axis=2)
+        keep = (distances <= gate_um).any(axis=0)
+        keep[columns] = True
+        kept = np.flatnonzero(keep)
+        reindex = {int(column): index for index, column in enumerate(kept.tolist())}
+        return target_rows[kept], np.array([reindex[int(column)] for column in columns], dtype=np.int64)
 
     @staticmethod
     def _successor_of(truth: TrackGraph) -> dict[int, int]:
