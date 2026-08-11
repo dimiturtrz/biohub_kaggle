@@ -926,6 +926,48 @@
     },
     {
       "kind": "import",
+      "source": "celltrack.eval.softmax_population",
+      "target": "celltrack.affinity",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.softmax_population",
+      "target": "celltrack.eval.dense_diagnosis",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.softmax_population",
+      "target": "celltrack.eval.proxy",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.softmax_population",
+      "target": "celltrack.operating_point",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.softmax_population",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.softmax_population",
+      "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.softmax_population",
+      "target": "core.paths",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "celltrack.eval.sweep_tracking",
       "target": "celltrack.operating_point",
       "weight": 1
@@ -1678,6 +1720,12 @@
       "kind": "import",
       "source": "celltrack.training.edge_finetune",
       "target": "core.paths",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.joint_checkpoint",
+      "target": "celltrack.models.joint_model",
       "weight": 1
     },
     {
@@ -6560,6 +6608,48 @@
     },
     {
       "kind": "references",
+      "source": "celltrack.eval.softmax_population.SoftmaxPopulation",
+      "target": "celltrack.affinity.EdgeAffinity",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.softmax_population.SoftmaxPopulation",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.softmax_population.SoftmaxPopulation",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.softmax_population.SoftmaxPopulation.of",
+      "target": "celltrack.affinity.EdgeAffinity.probabilities",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.softmax_population.SoftmaxPopulation.of",
+      "target": "core.data.tracks.TrackGraph.positions",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.softmax_population.SoftmaxPopulation.of",
+      "target": "core.data.tracks.TrackGraph.timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.softmax_population.SoftmaxPopulation.of",
+      "target": "core.geometry.Spacing.to_micrometres",
+      "weight": 1
+    },
+    {
+      "kind": "references",
       "source": "celltrack.eval.sweep_tracking.SweepTracking",
       "target": "celltrack.operating_point.TrackerConfig",
       "weight": 1
@@ -6670,6 +6760,12 @@
       "kind": "calls",
       "source": "celltrack.linkers.assignment_linking.AssignmentLinker._gated_cost",
       "target": "celltrack.affinity.EdgeAffinity.probabilities",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.linkers.assignment_linking.AssignmentLinker._gated_cost",
+      "target": "celltrack.linkers.admissible_affinity.AdmissibleAffinity.applied",
       "weight": 1
     },
     {
@@ -6928,6 +7024,12 @@
       "kind": "calls",
       "source": "celltrack.linkers.flow_linking.FlowLinker._gated_cost",
       "target": "celltrack.affinity.EdgeAffinity.probabilities",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.linkers.flow_linking.FlowLinker._gated_cost",
+      "target": "celltrack.linkers.admissible_affinity.AdmissibleAffinity.applied",
       "weight": 1
     },
     {
@@ -9505,6 +9607,54 @@
       "weight": 1
     },
     {
+      "kind": "references",
+      "source": "celltrack.training.joint_checkpoint.JointCheckpoint",
+      "target": "celltrack.models.joint_model.JointModel",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.joint_checkpoint.JointCheckpoint",
+      "target": "celltrack.training.joint_checkpoint.OptimizationState",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.joint_checkpoint.JointCheckpoint",
+      "target": "celltrack.training.joint_checkpoint.RunProgress",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_checkpoint.JointCheckpoint.restore",
+      "target": "celltrack.training.joint_checkpoint.OptimizationState.load_state_dict",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.joint_checkpoint.JointCheckpoint.restore",
+      "target": "celltrack.training.joint_checkpoint.RunProgress",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_checkpoint.JointCheckpoint.save_best",
+      "target": "celltrack.training.joint_checkpoint.JointCheckpoint.payload",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_checkpoint.JointCheckpoint.save_snapshot",
+      "target": "celltrack.training.joint_checkpoint.JointCheckpoint.payload",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_checkpoint.JointCheckpoint.save_snapshot",
+      "target": "celltrack.training.joint_checkpoint.OptimizationState.state_dict",
+      "weight": 1
+    },
+    {
       "kind": "holds",
       "source": "celltrack.training.joint_config.EvalCfg",
       "target": "celltrack.operating_point.TrackerConfig",
@@ -9643,6 +9793,12 @@
       "weight": 1
     },
     {
+      "kind": "references",
+      "source": "celltrack.training.joint_detector.JointTrainer",
+      "target": "celltrack.training.joint_checkpoint.JointCheckpoint",
+      "weight": 1
+    },
+    {
       "kind": "holds",
       "source": "celltrack.training.joint_detector.JointTrainer",
       "target": "celltrack.training.joint_config.JointTrainConfig",
@@ -9694,6 +9850,12 @@
       "kind": "construct",
       "source": "celltrack.training.joint_detector.JointTrainer.__init__",
       "target": "celltrack.training.contrastive_term.ContrastiveTerm",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.joint_detector.JointTrainer._checkpoint",
+      "target": "celltrack.training.joint_checkpoint.JointCheckpoint",
       "weight": 1
     },
     {
@@ -9771,6 +9933,12 @@
     {
       "kind": "calls",
       "source": "celltrack.training.joint_detector.JointTrainer._initial_best",
+      "target": "celltrack.training.joint_detector.JointTrainer._checkpoint",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer._initial_best",
       "target": "celltrack.training.joint_detector.JointTrainer._evaluate",
       "weight": 1
     },
@@ -9778,12 +9946,6 @@
       "kind": "calls",
       "source": "celltrack.training.joint_detector.JointTrainer._initial_best",
       "target": "celltrack.training.joint_detector.JointTrainer._metrics",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.joint_detector.JointTrainer._initial_best",
-      "target": "celltrack.training.joint_detector.JointTrainer._save_checkpoint",
       "weight": 1
     },
     {
@@ -9951,7 +10113,7 @@
     {
       "kind": "calls",
       "source": "celltrack.training.joint_detector.JointTrainer._restore",
-      "target": "celltrack.training.tunet_detector._Optimization.load_state_dict",
+      "target": "celltrack.training.joint_detector.JointTrainer._checkpoint",
       "weight": 1
     },
     {
@@ -9976,12 +10138,6 @@
       "kind": "calls",
       "source": "celltrack.training.joint_detector.JointTrainer._run_window",
       "target": "celltrack.training.joint_detector.JointTrainer._step",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.joint_detector.JointTrainer._save_resume",
-      "target": "celltrack.training.tunet_detector._Optimization.state_dict",
       "weight": 1
     },
     {
@@ -10027,9 +10183,21 @@
       "weight": 1
     },
     {
+      "kind": "construct",
+      "source": "celltrack.training.joint_detector.JointTrainer.train",
+      "target": "celltrack.training.joint_checkpoint.RunProgress",
+      "weight": 1
+    },
+    {
       "kind": "calls",
       "source": "celltrack.training.joint_detector.JointTrainer.train",
       "target": "celltrack.training.joint_config.JointTrainConfig.resolved",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer.train",
+      "target": "celltrack.training.joint_detector.JointTrainer._checkpoint",
       "weight": 1
     },
     {
@@ -10072,18 +10240,6 @@
       "kind": "calls",
       "source": "celltrack.training.joint_detector.JointTrainer.train",
       "target": "celltrack.training.joint_detector.JointTrainer._run_window",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.joint_detector.JointTrainer.train",
-      "target": "celltrack.training.joint_detector.JointTrainer._save_checkpoint",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.joint_detector.JointTrainer.train",
-      "target": "celltrack.training.joint_detector.JointTrainer._save_resume",
       "weight": 1
     },
     {
@@ -11331,7 +11487,7 @@
   ],
   "nodes": [
     {
-      "descendants": 90,
+      "descendants": 93,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -11547,7 +11703,7 @@
       "role": null
     },
     {
-      "descendants": 12,
+      "descendants": 13,
       "id": "celltrack.eval",
       "label": "eval",
       "level": "module",
@@ -11644,6 +11800,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.eval.softmax_population",
+      "label": "softmax_population",
+      "level": "module",
+      "parent": "celltrack.eval",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.eval.sweep_tracking",
       "label": "sweep_tracking",
       "level": "module",
@@ -11659,11 +11823,19 @@
       "role": null
     },
     {
-      "descendants": 13,
+      "descendants": 14,
       "id": "celltrack.linkers",
       "label": "linkers",
       "level": "module",
       "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.linkers.admissible_affinity",
+      "label": "admissible_affinity",
+      "level": "module",
+      "parent": "celltrack.linkers",
       "role": null
     },
     {
@@ -11963,7 +12135,7 @@
       "role": null
     },
     {
-      "descendants": 11,
+      "descendants": 12,
       "id": "celltrack.training",
       "label": "training",
       "level": "module",
@@ -11998,6 +12170,14 @@
       "descendants": 0,
       "id": "celltrack.training.edge_finetune",
       "label": "edge_finetune",
+      "level": "module",
+      "parent": "celltrack.training",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.joint_checkpoint",
+      "label": "joint_checkpoint",
       "level": "module",
       "parent": "celltrack.training",
       "role": null
@@ -13044,6 +13224,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.eval.softmax_population.SoftmaxPopulation",
+      "label": "SoftmaxPopulation",
+      "level": "class",
+      "parent": "celltrack.eval.softmax_population",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.eval.sweep_tracking.SweepTracking",
       "label": "SweepTracking",
       "level": "class",
@@ -13057,6 +13245,14 @@
       "level": "class",
       "parent": "celltrack.kernel_runtime",
       "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.linkers.admissible_affinity.AdmissibleAffinity",
+      "label": "AdmissibleAffinity",
+      "level": "class",
+      "parent": "celltrack.linkers.admissible_affinity",
+      "role": "satellite"
     },
     {
       "descendants": 0,
@@ -13672,6 +13868,30 @@
       "label": "GapSupervision",
       "level": "class",
       "parent": "celltrack.training.edge_finetune",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.joint_checkpoint.JointCheckpoint",
+      "label": "JointCheckpoint",
+      "level": "class",
+      "parent": "celltrack.training.joint_checkpoint",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.joint_checkpoint.OptimizationState",
+      "label": "OptimizationState",
+      "level": "class",
+      "parent": "celltrack.training.joint_checkpoint",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.joint_checkpoint.RunProgress",
+      "label": "RunProgress",
+      "level": "class",
+      "parent": "celltrack.training.joint_checkpoint",
       "role": "satellite"
     },
     {
@@ -17068,6 +17288,30 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.eval.softmax_population.SoftmaxPopulation._in_gate",
+      "label": "_in_gate",
+      "level": "method",
+      "parent": "celltrack.eval.softmax_population.SoftmaxPopulation",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.softmax_population.SoftmaxPopulation.of",
+      "label": "of",
+      "level": "method",
+      "parent": "celltrack.eval.softmax_population.SoftmaxPopulation",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.softmax_population.SoftmaxPopulation.report",
+      "label": "report",
+      "level": "method",
+      "parent": "celltrack.eval.softmax_population.SoftmaxPopulation",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.eval.sweep_tracking.SweepTracking.__init__",
       "label": "__init__",
       "level": "method",
@@ -17144,6 +17388,22 @@
       "label": "test_videos",
       "level": "method",
       "parent": "celltrack.kernel_runtime.KernelRuntime",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.linkers.admissible_affinity.AdmissibleAffinity.applied",
+      "label": "applied",
+      "level": "method",
+      "parent": "celltrack.linkers.admissible_affinity.AdmissibleAffinity",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.linkers.admissible_affinity.AdmissibleAffinity.conditioned",
+      "label": "conditioned",
+      "level": "method",
+      "parent": "celltrack.linkers.admissible_affinity.AdmissibleAffinity",
       "role": null
     },
     {
@@ -18988,6 +19248,54 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.training.joint_checkpoint.JointCheckpoint.payload",
+      "label": "payload",
+      "level": "method",
+      "parent": "celltrack.training.joint_checkpoint.JointCheckpoint",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.joint_checkpoint.JointCheckpoint.restore",
+      "label": "restore",
+      "level": "method",
+      "parent": "celltrack.training.joint_checkpoint.JointCheckpoint",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.joint_checkpoint.JointCheckpoint.save_best",
+      "label": "save_best",
+      "level": "method",
+      "parent": "celltrack.training.joint_checkpoint.JointCheckpoint",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.joint_checkpoint.JointCheckpoint.save_snapshot",
+      "label": "save_snapshot",
+      "level": "method",
+      "parent": "celltrack.training.joint_checkpoint.JointCheckpoint",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.joint_checkpoint.OptimizationState.load_state_dict",
+      "label": "load_state_dict",
+      "level": "method",
+      "parent": "celltrack.training.joint_checkpoint.OptimizationState",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.joint_checkpoint.OptimizationState.state_dict",
+      "label": "state_dict",
+      "level": "method",
+      "parent": "celltrack.training.joint_checkpoint.OptimizationState",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.training.joint_config.ContrastiveSite.projects",
       "label": "projects",
       "level": "method",
@@ -19062,6 +19370,14 @@
       "descendants": 0,
       "id": "celltrack.training.joint_detector.JointTrainer._autocast",
       "label": "_autocast",
+      "level": "method",
+      "parent": "celltrack.training.joint_detector.JointTrainer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.joint_detector.JointTrainer._checkpoint",
+      "label": "_checkpoint",
       "level": "method",
       "parent": "celltrack.training.joint_detector.JointTrainer",
       "role": null
@@ -19174,22 +19490,6 @@
       "descendants": 0,
       "id": "celltrack.training.joint_detector.JointTrainer._run_window",
       "label": "_run_window",
-      "level": "method",
-      "parent": "celltrack.training.joint_detector.JointTrainer",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.joint_detector.JointTrainer._save_checkpoint",
-      "label": "_save_checkpoint",
-      "level": "method",
-      "parent": "celltrack.training.joint_detector.JointTrainer",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.joint_detector.JointTrainer._save_resume",
-      "label": "_save_resume",
       "level": "method",
       "parent": "celltrack.training.joint_detector.JointTrainer",
       "role": null
