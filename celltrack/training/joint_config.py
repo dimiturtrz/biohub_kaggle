@@ -23,6 +23,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt
 
+from celltrack.operating_point import TrackerConfig
+
 logger = logging.getLogger(__name__)
 
 # Immutable + closed: a typo is a construction error, and a config cannot drift under a running loop.
@@ -143,11 +145,11 @@ class EvalCfg(BaseModel):
     # The SELECTOR's threshold, DERIVED from the shipped tracker's operating point rather than chosen.
     # Selection exists to rank candidates the way deployment will: the fold-0 selector was removed because a
     # metric that MISRANKS is worse than no metric, and every joint run to date passed 0.97 explicitly. A
-    # permissive default silently ranks by a pipeline we never ship. The value is the shipped tracker's
-    # (leaderboard-arbitrated: 0.99/0.98/0.97 scored 0.887/0.891/0.892); it is a literal rather than an
-    # import because importing `celltrack.tracker` here tips it over the god-module fan-in gate, and a TEST
-    # pins the two together so the duplication cannot silently drift.
-    threshold: float = Field(0.97, ge=0, le=1)
+    # permissive default silently ranks by a pipeline we never ship. It READS the shipped operating point
+    # (leaderboard-arbitrated: 0.99/0.98/0.97 scored 0.887/0.891/0.892) rather than restating it — the literal
+    # that used to sit here existed only because importing `celltrack.tracker` would have tripped the
+    # god-module fan-in gate, and the config vocabulary now lives in its own module where it does not.
+    threshold: float = Field(TrackerConfig().threshold, ge=0, le=1)
     # The selector eval skips flip-TTA: it buys a faithful score the checkpoint choice doesn't need, at 4x cost.
     tta: bool = False
 
