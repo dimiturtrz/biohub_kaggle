@@ -29,41 +29,43 @@ _MATCHED_SOURCE, _MATCHED_TARGET = "matched_source", "matched_target"
 
 
 @dataclass(frozen=True)
-class EdgeCounts:
-    """The confusion counts the edge Jaccard is built from."""
+class ChargedLinks:
+    """The predicted links the metric actually prices — the repaired, countable rows the TP and FP terms sum over.
 
-    tp: int
-    fp: int
-    fn: int
+    `EdgeCounts` reduces these to three integers, which is all a score needs and nothing a DIAGNOSIS can use.
+    A false positive is a link with no annotated edge beneath it, so there is no ground-truth edge whose fate
+    could name it, and any ground-truth-edge-centric decomposition is structurally blind to the whole term.
+    Keeping the repaired table lets a caller ask the mirror-image question — what did we INVENT — against
+    exactly the rows the metric charged, rather than a re-derivation of the four repairs that could drift.
+    """
+
+    source: Int[np.ndarray, "c"]
+    target: Int[np.ndarray, "c"]
+    matched_source: Int[np.ndarray, "c"]
+    matched_target: Int[np.ndarray, "c"]
+    on_annotated_edge: Bool[np.ndarray, "c"]
 
     @classmethod
-    def of(cls, prediction: TrackGraph, truth: TrackGraph, matching: NodeMatching) -> "EdgeCounts":
-        """Tally predicted links against the annotated ones under an established node matching."""
-        annotated_links = len(truth.edge_rows())
+    def of(cls, prediction: TrackGraph, truth: TrackGraph, matching: NodeMatching) -> "ChargedLinks":
+        """The repaired predicted links the annotation is in a position to judge, in prediction row space."""
         if len(prediction.edges) == 0:
-            return cls(tp=0, fp=0, fn=annotated_links)
-
+            empty = np.empty(0, dtype=np.int64)
+            return cls(
+                source=empty,
+                target=empty,
+                matched_source=empty,
+                matched_target=empty,
+                on_annotated_edge=np.empty(0, dtype=bool),
+            )
         links = cls._repaired(prediction, truth, matching)
-        recovered = int(links[_MATCHED].sum())
-        countable = int(cls._countable(links, truth).sum())
-        return cls(tp=recovered, fp=countable - recovered, fn=annotated_links - recovered)
-
-    @classmethod
-    def pooled(cls, counts: Iterable["EdgeCounts"]) -> "EdgeCounts":
-        """Sum counts across videos, so their Jaccard micro-averages the way the leaderboard does."""
-        summed = cls(tp=0, fp=0, fn=0)
-        for count in counts:
-            summed = cls(tp=summed.tp + count.tp, fp=summed.fp + count.fp, fn=summed.fn + count.fn)
-        return summed
-
-    def jaccard(self) -> float:
-        """`TP / (TP + FP + FN)`, or NaN when the ground truth and the prediction are both empty."""
-        total = self.tp + self.fp + self.fn
-        return self.tp / total if total > 0 else float("nan")
-
-    def weight(self) -> int:
-        """How much this sample counts for when adjusted Jaccards are averaged across videos."""
-        return self.tp + self.fp + self.fn
+        charged = links.filter(pl.Series(cls._countable(links, truth)))
+        return cls(
+            source=charged[_SOURCE].to_numpy(),
+            target=charged[_TARGET].to_numpy(),
+            matched_source=charged[_MATCHED_SOURCE].to_numpy(),
+            matched_target=charged[_MATCHED_TARGET].to_numpy(),
+            on_annotated_edge=charged[_MATCHED].to_numpy(),
+        )
 
     @classmethod
     def _repaired(cls, prediction: TrackGraph, truth: TrackGraph, matching: NodeMatching) -> pl.DataFrame:
@@ -132,7 +134,7 @@ class EdgeCounts:
             _MATCHED_TARGET: np.bincount(annotated[:, 1], minlength=count) > 0,
         }
         source, target = (
-            EdgeCounts._through_an_annotated_node(links[endpoint].to_numpy(), carries_on)
+            ChargedLinks._through_an_annotated_node(links[endpoint].to_numpy(), carries_on)
             for endpoint, carries_on in continues.items()
         )
         return source | target
@@ -145,3 +147,40 @@ class EdgeCounts:
         """Whether each endpoint matched an annotated node the ground truth carries on through."""
         matched = matched_rows != UNMATCHED
         return matched & carries_on[np.where(matched, matched_rows, 0)]
+
+
+@dataclass(frozen=True)
+class EdgeCounts:
+    """The confusion counts the edge Jaccard is built from."""
+
+    tp: int
+    fp: int
+    fn: int
+
+    @classmethod
+    def of(cls, prediction: TrackGraph, truth: TrackGraph, matching: NodeMatching) -> "EdgeCounts":
+        """Tally predicted links against the annotated ones under an established node matching."""
+        charged = ChargedLinks.of(prediction, truth, matching)
+        recovered = int(charged.on_annotated_edge.sum())
+        return cls(
+            tp=recovered,
+            fp=len(charged.source) - recovered,
+            fn=len(truth.edge_rows()) - recovered,
+        )
+
+    @classmethod
+    def pooled(cls, counts: Iterable["EdgeCounts"]) -> "EdgeCounts":
+        """Sum counts across videos, so their Jaccard micro-averages the way the leaderboard does."""
+        summed = cls(tp=0, fp=0, fn=0)
+        for count in counts:
+            summed = cls(tp=summed.tp + count.tp, fp=summed.fp + count.fp, fn=summed.fn + count.fn)
+        return summed
+
+    def jaccard(self) -> float:
+        """`TP / (TP + FP + FN)`, or NaN when the ground truth and the prediction are both empty."""
+        total = self.tp + self.fp + self.fn
+        return self.tp / total if total > 0 else float("nan")
+
+    def weight(self) -> int:
+        """How much this sample counts for when adjusted Jaccards are averaged across videos."""
+        return self.tp + self.fp + self.fn

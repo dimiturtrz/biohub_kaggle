@@ -5,11 +5,20 @@ from typing import cast
 import numpy as np
 import pytest
 
-from celltrack.eval.dense_diagnosis import AffinityIndex, DenseDiagnosis, DenseFateDiagnosis, Fate, MislinkSignal
+from celltrack.eval.dense_diagnosis import (
+    AffinityIndex,
+    Charge,
+    ChargeDiagnosis,
+    DenseDiagnosis,
+    DenseFateDiagnosis,
+    Fate,
+    MislinkSignal,
+)
 from celltrack.linkers.linkers import LinkerConfig
-from celltrack.tracker import CellTracker, TrackerConfig
+from celltrack.tracker import CellTracker, TrackedVideo, TrackerConfig
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
+from core.metrics.edges import EdgeCounts
 from core.metrics.matching import NodeMatching
 from core.paths import DataRoot
 
@@ -48,10 +57,14 @@ class _FakeTracker:
 
     def __init__(self, prediction: TrackGraph, affinity: _Affinity) -> None:
         self._prediction = prediction
+        self._affinity = affinity
         self.edge_scorer = _FakeScorer(affinity)
 
     def run(self, name: str, path: Path) -> TrackGraph:
         return self._prediction
+
+    def run_scored(self, name: str, path: Path) -> TrackedVideo:
+        return TrackedVideo(graph=self._prediction, detections=self._prediction, affinity=self._affinity)
 
 
 def test_diagnose():
@@ -158,7 +171,7 @@ def test_of_endpoint_missing_when_a_detection_is_absent():
     assert counts[Fate.ENDPOINT_MISSING] == 1
 
 
-def test_counts():
+def test_dense_fate_diagnosis_counts():
     """`counts` reports every fate, defaulting absent ones to zero so the decomposition is total over the family."""
     diagnosis = DenseFateDiagnosis(fates=np.array([Fate.CORRECT, Fate.CORRECT, Fate.SKIP], dtype=np.int64))
     counts = diagnosis.counts()
@@ -276,3 +289,124 @@ def test_means():
     assert signal.means() == (0.30000000000000004, 0.7)
     empty = MislinkSignal(p_true=np.array([]), p_chosen=np.array([]))
     assert all(math.isnan(value) for value in empty.means())  # both NaN on empty input
+
+
+def _charge_fixture() -> tuple[TrackGraph, TrackGraph, TrackGraph, NodeMatching]:
+    """Truth, prediction, detections and matching carrying exactly one link of every `Charge` class.
+
+    Truth: six t0 cells (rows 0-5) and six t1 cells (rows 6-11), annotated 0->6, 1->7, 2->8, 4->10, 5->11 —
+    so t0 row 3 is a track the annotation ENDS at, and t1 row 9 is annotated but linked to nothing. The
+    prediction adds two nodes truth has no counterpart for: row 12, a t1 node the detector never emitted
+    (a bridge insertion), and row 13, a t0 detection matched to no annotated cell.
+    """
+    coordinates = [[0, 0, 0, 20 * i] for i in range(6)] + [[1, 0, 0, 20 * i] for i in range(6)]
+    truth = _graph(coordinates, [[0, 6], [1, 7], [2, 8], [4, 10], [5, 11]])
+    prediction = _graph(
+        [*coordinates, [1, 0, 50, 0], [0, 0, 50, 0]],
+        [[0, 6], [1, 9], [2, 8], [2, 9], [3, 10], [13, 10], [5, 12]],
+    )
+    detections = TrackGraph(
+        node_ids=np.array([*range(12), 13], dtype=np.int64),
+        coordinates=prediction.coordinates[[*range(12), 13]],
+        edges=prediction.edges[:0],
+    )
+    matching = NodeMatching(gt_rows=np.array([*range(12), -1, -1], dtype=np.int64))
+    return truth, prediction, detections, matching
+
+
+def test_charge_diagnosis_of():
+    """Every charged link lands in the class that names why the metric priced it — one link per class.
+
+    - 0->6 and 2->8 land on annotated edges                                      -> TRUE
+    - 5->12 runs into a node the detector never emitted                          -> SYNTHETIC
+    - 2->9 is a second link off a source whose annotated successor we DID get    -> EXTRA_CHILD
+    - 1->9 leaves a source whose annotated successor (7) we did not link         -> MISLINK
+    - 3->10 links on past a source the annotation ends at                        -> SOURCE_ENDS
+    - 13->10 invents a parent for a cell the annotation already gives one        -> TARGET_ORPHAN
+    """
+    truth, prediction, detections, matching = _charge_fixture()
+
+    counts = ChargeDiagnosis.of(prediction, truth, matching, detections).counts()
+
+    assert counts == {
+        Charge.TRUE: 2,
+        Charge.SYNTHETIC: 1,
+        Charge.EXTRA_CHILD: 1,
+        Charge.MISLINK: 1,
+        Charge.SOURCE_ENDS: 1,
+        Charge.TARGET_ORPHAN: 1,
+    }
+
+
+def test_charge_diagnosis_of_reconciles_with_the_metric():
+    """The classes partition exactly the links the metric charged: they sum to `TP + FP`, and TRUE is the TP."""
+    truth, prediction, detections, matching = _charge_fixture()
+
+    counts = ChargeDiagnosis.of(prediction, truth, matching, detections).counts()
+    edges = EdgeCounts.of(prediction, truth, matching)
+
+    assert sum(counts.values()) == edges.tp + edges.fp
+    assert counts[Charge.TRUE] == edges.tp
+
+
+def test_charge_diagnosis_of_reads_the_annotation_horizon():
+    """A wrong link is cross-lineage when its ends sit on different annotated tracks, and carries whether the
+    annotation runs on past its source — the split that separates a real track ending from a stopped label."""
+    truth, prediction, detections, matching = _charge_fixture()
+
+    diagnosis = ChargeDiagnosis.of(prediction, truth, matching, detections)
+
+    assert diagnosis.split(Charge.SOURCE_ENDS, diagnosis.cross_lineage) == (1, 0)
+    assert diagnosis.split(Charge.TARGET_ORPHAN, diagnosis.cross_lineage) == (0, 1)
+    assert diagnosis.split(Charge.SOURCE_ENDS, diagnosis.annotated_after) == (1, 0)
+    assert diagnosis.split(Charge.SOURCE_ENDS, diagnosis.steals_a_lost_target) == (1, 0)
+    assert diagnosis.split(Charge.MISLINK, diagnosis.target_matched) == (1, 0)
+
+
+def test_charge_diagnosis_counts():
+    """`counts` reports every class, defaulting absent ones to zero so the decomposition is total over the family."""
+    diagnosis = ChargeDiagnosis(
+        charges=np.array([Charge.TRUE, Charge.MISLINK, Charge.MISLINK], dtype=np.int64),
+        cross_lineage=np.zeros(3, dtype=bool),
+        annotated_after=np.zeros(3, dtype=bool),
+        target_matched=np.zeros(3, dtype=bool),
+        steals_a_lost_target=np.zeros(3, dtype=bool),
+    )
+
+    assert diagnosis.counts() == {
+        Charge.TRUE: 1,
+        Charge.SYNTHETIC: 0,
+        Charge.EXTRA_CHILD: 0,
+        Charge.MISLINK: 2,
+        Charge.SOURCE_ENDS: 0,
+        Charge.TARGET_ORPHAN: 0,
+    }
+
+
+def test_split():
+    """`split` reports one class's links as (mask holds, mask does not) — a sub-class read without re-labelling."""
+    diagnosis = ChargeDiagnosis(
+        charges=np.array([Charge.MISLINK, Charge.MISLINK, Charge.MISLINK, Charge.TRUE], dtype=np.int64),
+        cross_lineage=np.array([True, False, True, True]),
+        annotated_after=np.zeros(4, dtype=bool),
+        target_matched=np.zeros(4, dtype=bool),
+        steals_a_lost_target=np.zeros(4, dtype=bool),
+    )
+
+    assert diagnosis.split(Charge.MISLINK, diagnosis.cross_lineage) == (2, 1)
+    assert diagnosis.split(Charge.SOURCE_ENDS, diagnosis.cross_lineage) == (0, 0)
+
+
+def test_charged():
+    """`charged` runs the tracker once and returns the metric counts beside both decompositions of that run."""
+    truth = _graph([[0, 0, 0, 0], [1, 0, 0, 3], [1, 0, 0, 9]], [[0, 2]])
+    prediction = _graph(truth.coordinates.tolist(), [[0, 1]])
+    tracker = _FakeTracker(prediction, _Affinity({0: np.array([[0.7, 0.2]], dtype=np.float64)}))
+
+    counts, fates, charges = DenseDiagnosis.charged(
+        cast(CellTracker, tracker), Path("v.zarr"), truth, Spacing(1.0, 1.0, 1.0)
+    )
+
+    assert (counts.tp, counts.fp, counts.fn) == (0, 1, 1)
+    assert fates.counts()[Fate.MISLINK_FREE] == 1
+    assert charges.counts()[Charge.MISLINK] == 1

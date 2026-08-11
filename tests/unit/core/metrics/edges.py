@@ -4,7 +4,7 @@ import numpy as np
 
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
-from core.metrics.edges import EdgeCounts
+from core.metrics.edges import ChargedLinks, EdgeCounts
 from core.metrics.matching import DistanceMatcher
 
 UNIT = Spacing(z=1.0, y=1.0, x=1.0)
@@ -91,3 +91,31 @@ def test_edge_counts_of_caps_a_node_at_two_children():
     truth = graph_of([[0, 0, 0, 0], [1, 0, 0, 0], [1, 0, 3, 0], [1, 0, 6, 0]], [[0, 1]])
     prediction = graph_of([[0, 0, 0, 0], [1, 0, 0, 0], [1, 0, 3, 0], [1, 0, 6, 0]], [[0, 2], [0, 3], [0, 1]])
     assert counted(prediction, truth) == EdgeCounts(tp=0, fp=2, fn=1)
+
+
+def test_charged_links_of():
+    """`of` keeps exactly the repaired links the annotation can judge, with the TP flag and both matched ends.
+
+    Truth is a two-step track plus an unrelated cell far away; the prediction reproduces the first step, wrongly
+    links the second one's source to the far cell, and adds a link in unannotated tissue the metric ignores.
+    """
+    truth = graph_of([[0, 0, 0, 0], [1, 0, 0, 0], [2, 0, 0, 0], [2, 0, 9, 0]], [[0, 1], [1, 2]])
+    prediction = graph_of(
+        [[0, 0, 0, 0], [1, 0, 0, 0], [2, 0, 0, 0], [2, 0, 9, 0], [0, 0, 500, 0], [1, 0, 500, 0]],
+        [[0, 1], [1, 3], [4, 5]],
+    )
+
+    charged = ChargedLinks.of(prediction, truth, MATCHER.match(prediction, truth))
+
+    assert charged.source.tolist() == [0, 1]
+    assert charged.target.tolist() == [1, 3]
+    assert charged.matched_source.tolist() == [0, 1]
+    assert charged.matched_target.tolist() == [1, 3]
+    assert charged.on_annotated_edge.tolist() == [True, False]
+
+
+def test_charged_links_of_without_a_prediction():
+    truth = graph_of(TRACK, LINKS)
+    charged = ChargedLinks.of(graph_of([], []), truth, MATCHER.match(graph_of([], []), truth))
+    assert charged.source.tolist() == []
+    assert charged.on_annotated_edge.tolist() == []

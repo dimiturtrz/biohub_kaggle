@@ -454,3 +454,48 @@ def test_a_dosed_ramp_moves_the_bonus_onto_the_far_candidate():
         assert config.build(SPACING, scored).link(detections).edges.tolist() == [[1, 2]]
         dosed = config.model_copy(update={"evidence_ramp": 1.0}).build(SPACING, scored).link(detections)
         assert dosed.edges.tolist() == [[1, 3]]
+
+
+def test_appearance_cost_defaults_to_the_boundary_charge():
+    """Unset, a track's start costs exactly what its end costs — the shipped symmetric behaviour, byte-identical.
+
+    Asserted on the LINKED GRAPH rather than the config, because the claim is about what the solver decides:
+    an asymmetry that changed no edge would pass a config comparison and still be wrong.
+    """
+    detections = TrackGraph(
+        node_ids=np.array([1, 2, 3, 4]),
+        coordinates=np.array([[0, 0, 0, 0], [0, 0, 0, 6], [1, 0, 0, 1], [1, 0, 0, 5]]),
+        edges=np.empty((0, 2), dtype=np.int64),
+    )
+    symmetric = LinkerConfig(name="flow", gate_um=10.0, disappearance_cost=3.0).build(SPACING)
+    spelled = LinkerConfig(
+        name="flow", gate_um=10.0, disappearance_cost=3.0, appearance_cost=3.0
+    ).build(SPACING)
+    assert np.array_equal(symmetric.link(detections).edge_rows(), spelled.link(detections).edge_rows())
+
+
+def test_pricing_the_two_boundaries_apart_reaches_the_network():
+    """A cheap start against an expensive end really is charged on the two arcs — the knob is not inert.
+
+    Asserted on the charges the graph builder receives rather than on linked edges, because a flow whose arc
+    weights are all POSITIVE has zero flow as its cheapest circulation: without an affinity to push a transition
+    below zero this linker emits no edges at all, so an edge-level assertion here would test nothing. Without
+    this test the identity test above would also pass for an `appearance_cost` the network never reads, which is
+    exactly how three other mechanisms in this repo stayed unreachable while their tests were green.
+    """
+    positions = np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 6.0], [0.0, 0.0, 1.0], [0.0, 0.0, 5.0]])
+    timepoints = np.array([0, 0, 1, 1])
+    symmetric = LinkerConfig(name="flow", gate_um=4.0, disappearance_cost=0.4).build(SPACING)
+    asymmetric = LinkerConfig(
+        name="flow", gate_um=4.0, disappearance_cost=0.4, appearance_cost=8.0
+    ).build(SPACING)
+    assert symmetric._boundary_costs(positions, timepoints) == ([400] * 4, [400] * 4)
+    assert asymmetric._boundary_costs(positions, timepoints) == ([8000] * 4, [400] * 4)
+
+
+def test_appearance_cost_is_readable():
+    """Only the flow network charges the two boundaries on separate arcs, so only it may take the knob."""
+    for name in ("assignment", "motion", "nn"):
+        with pytest.raises(ValidationError, match="one price for a track boundary"):
+            LinkerConfig(name=name, gate_um=10.0, appearance_cost=1.0)
+    assert LinkerConfig(name="flow", gate_um=10.0, appearance_cost=1.0).appearance_cost == 1.0

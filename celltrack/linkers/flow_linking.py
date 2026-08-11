@@ -64,6 +64,11 @@ class FlowLinker:
     affinity: EdgeAffinity | None = None
     affinity_bonus: float = 0.0
     boundary_cost: float = 0.0
+    # `None` charges a track's START the same as its END, which is the shipped behaviour. Set it to price them
+    # apart: a track can begin mid-movie for ordinary reasons — a cell enters the volume, a division makes a
+    # daughter, the annotation starts — whereas a track ENDING mid-movie is the rarer event, so one price forces
+    # the solver to treat "a cell appeared" and "a cell vanished" as equally implausible.
+    appearance_cost: float | None = None
     # Off by default: the same mutual-agreement admission filter `AssignmentLinker` takes. A transition the gate
     # excludes is simply absent from the network, so the flow must route the track through an admitted edge.
     agreement: AgreementGate | None = None
@@ -124,13 +129,14 @@ class FlowLinker:
         the flat charge is scaled by that detection's factor; the prior's margin is this linker's own gate, so the
         band of cheap births is exactly the region a cell could have entered from outside within one frame gap.
         """
-        flat = round(_COST_SCALE * self.boundary_cost)
+        leaving = round(_COST_SCALE * self.boundary_cost)
+        entering = leaving if self.appearance_cost is None else round(_COST_SCALE * self.appearance_cost)
         if self.boundary is None or len(timepoints) == 0:
-            return [flat] * len(timepoints), [flat] * len(timepoints)
+            return [entering] * len(timepoints), [leaving] * len(timepoints)
         factors = self.boundary.factors(self.spacing, self.max_distance_um, positions_um, timepoints)
         return (
-            [round(flat * factor) for factor in factors.appearance.tolist()],
-            [round(flat * factor) for factor in factors.disappearance.tolist()],
+            [round(entering * factor) for factor in factors.appearance.tolist()],
+            [round(leaving * factor) for factor in factors.disappearance.tolist()],
         )
 
     def _transitions(

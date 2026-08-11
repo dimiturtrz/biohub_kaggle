@@ -77,6 +77,11 @@ class LinkerConfig(BaseModel):
     # None self-balances to `_BONUS_GATE_RATIO · gate_um` (see the ratio's note); pin a float to override.
     affinity_bonus: float | None = Field(None, ge=0)
     disappearance_cost: float = Field(0.0, ge=0)
+    # None charges a track's START the same as its END — the shipped, symmetric behaviour. Set it to price the
+    # two directions apart: beginning mid-movie has ordinary causes (a cell enters the volume, a division makes a
+    # daughter, the annotation starts) where ending mid-movie is rarer, so one price calls both equally
+    # implausible. Flow-only: it is the sole linker whose network charges the two boundaries on separate arcs.
+    appearance_cost: float | None = Field(None, ge=0)
     # None = OFF. A floor admits a candidate edge only where the bidirectionally fused probability clears it
     # (`AgreementGate`, which documents what a principled value would be derived from); the cost keeps ranking
     # whatever survives by the sharp forward probability. Setting it makes `build` require a fused affinity.
@@ -228,6 +233,12 @@ class LinkerConfig(BaseModel):
             message = (
                 f"linker {self.name!r} does not price a motion-predicted distance, so motion_distance cannot "
                 f"affect it; choose one of {sorted(_MOTION_DISTANCE_READERS)} or drop the flag"
+            )
+            raise ValueError(message)
+        if self.appearance_cost is not None and self.name not in _APPEARANCE_READERS:
+            message = (
+                f"linker {self.name!r} charges one price for a track boundary, so appearance_cost cannot affect "
+                f"it; choose one of {sorted(_APPEARANCE_READERS)} or drop the appearance_cost"
             )
             raise ValueError(message)
         return self
@@ -407,6 +418,10 @@ _BOUNDARY_PRIOR_READERS = frozenset({"flow"})
 # cost this can rewrite.
 _MOTION_DISTANCE_READERS = frozenset({"flow"})
 
+# Only the flow network charges a track's start and end on SEPARATE arcs (source->in, out->sink), so it is the
+# only linker that can price them apart. `assignment` has a `disappearance_cost` but spends it on one skip arc.
+_APPEARANCE_READERS = frozenset({"flow"})
+
 _BUILDERS: dict[str, _Builder] = {
     "assignment": lambda config, spacing, affinity, parts: AssignmentLinker(
         spacing=spacing,
@@ -445,6 +460,7 @@ _BUILDERS: dict[str, _Builder] = {
         affinity=affinity,
         affinity_bonus=config.effective_bonus,
         boundary_cost=config.disappearance_cost,
+        appearance_cost=config.appearance_cost,
         agreement=parts.agreement,
         mutual=parts.mutual,
         ranker=parts.ranker,
