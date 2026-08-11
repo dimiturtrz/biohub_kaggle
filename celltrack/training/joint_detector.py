@@ -6,8 +6,10 @@ detection head on each frame and the edge transformer on the node features (see 
 kept SEPARATE (a detection BalancedBCE per frame, a SoftmaxFocalBCE over the links, and an optional InfoNCE
 over the node features themselves) so a window logs each term on its own: that decoupling is the whole point,
 since the curves move on different scales and a summed number hides which one is learning. The contrastive
-term is the only one that asks the BACKBONE for discrimination — the edge loss only asks the head to rank
-pairs given whatever features it is handed — and it is off (weight 0) unless a run asks for it.
+term is the only one that asks for discrimination at all — the edge loss only asks the head to rank pairs
+given whatever features it is handed — and it is off (weight 0) unless a run asks for it. WHERE it acts is
+its own decision (`ContrastiveSite`): asked of the shared features it is measured to trade detection away
+for discrimination, so the term can instead be given a projection head of its own to shape.
 
 The loop mirrors the detector trainer — eval-sized windows, EarlyStop + save-best + resume, the bf16 /
 channels_last / optional torch.compile speed setup — and selects on the same LB-aligned number: the

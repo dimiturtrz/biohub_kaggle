@@ -24,8 +24,10 @@ from celltrack.models.joint_model import JointModel
 from celltrack.models.prior_velocity import PriorVelocity
 from celltrack.tracker import TrackerConfig
 from celltrack.training.joint_config import (
+    ContrastiveSite,
     DataCfg,
     JointTrainConfig,
+    LossCfg,
     ModelCfg,
     OptimCfg,
     RuntimeCfg,
@@ -344,6 +346,90 @@ def test_train_prior_velocity_off_is_byte_identical(
     default = _trained_bytes(_cpu_config(), video_store, in_bounds_tracks, tmp_path / "default")
     explicit_off = _cpu_config().model_copy(update={"data": DataCfg(downsample=(1, 1, 1), prior_velocity=False)})
     assert _trained_bytes(explicit_off, video_store, in_bounds_tracks, tmp_path / "off") == default
+
+
+def _contrastive_config(site: ContrastiveSite) -> JointTrainConfig:
+    """The tiny CPU config with the contrastive term ON at one placement — the only difference from the default."""
+    return _cpu_config().model_copy(update={"loss": LossCfg(contrastive_weight=0.1, contrastive_site=site)})
+
+
+def test_train_contrastive_off_is_byte_identical(video_store: Path, in_bounds_tracks: AnnotatedTracks, tmp_path: Path):
+    """The term off is the run of yesterday: same weights, same bytes — the placement work costs an unasked run nothing.
+
+    Off is the DEFAULT site at weight zero; the projecting sites build a head, and building one draws from
+    the RNG, so byte-identity is claimed for exactly the configuration that ships.
+    """
+    default = _trained_bytes(_cpu_config(), video_store, in_bounds_tracks, tmp_path / "default")
+    explicit_off = _cpu_config().model_copy(
+        update={"loss": LossCfg(contrastive_weight=0.0, contrastive_site=ContrastiveSite.FEATURES)}
+    )
+    assert _trained_bytes(explicit_off, video_store, in_bounds_tracks, tmp_path / "off") == default
+
+
+def _contrastive_gradients(config: JointTrainConfig, video_store: Path) -> tuple[torch.Tensor, list[torch.Tensor]]:
+    """Backward the CONTRASTIVE term alone through a real pair; returns a backbone gradient and the head's.
+
+    Alone is the point: the detection and edge terms reach the backbone by design, so a total-loss backward
+    could not tell whether the contrastive gradient was among them.
+    """
+    torch.manual_seed(0)
+    trainer = JointTrainer(config)
+    model, _ = trainer._prepare(warm_start=False)
+    sample = PairDataset(_pairs(video_store), 1, (1, 1, 1), 0).pair(0)
+
+    trainer._losses(model, sample).contrastive.backward()
+
+    backbone = next(parameter for parameter in model.detector.unet.parameters() if parameter.requires_grad)
+    head = [parameter.grad for parameter in trainer.contrastive.parameters() if parameter.grad is not None]
+    return backbone, head
+
+
+def test_losses_detached_leaves_the_backbone_out_of_the_contrastive_term(video_store: Path):
+    """The diagnosed fix in its strict form: through a detached head the term trains the embedding only."""
+    backbone, head = _contrastive_gradients(_contrastive_config(ContrastiveSite.DETACHED_PROJECTION), video_store)
+
+    assert backbone.grad is None or backbone.grad.abs().sum() == 0
+    assert head and any(gradient.abs().sum() > 0 for gradient in head)
+
+
+def test_losses_projected_still_reaches_the_backbone(video_store: Path):
+    """The comparison arm, one field away: the head is interposed but the trunk is still shaped through it."""
+    backbone, _ = _contrastive_gradients(_contrastive_config(ContrastiveSite.PROJECTION), video_store)
+
+    assert backbone.grad is not None
+    assert backbone.grad.abs().sum() > 0
+
+
+def test_train_carries_the_projection_head_through_the_resume_snapshot(
+    video_store: Path, in_bounds_tracks: AnnotatedTracks, tmp_path: Path
+):
+    """A projecting run trains end to end, and its head is IN the snapshot — the optimiser has slots for it.
+
+    Without this the resumed run rebuilds a random head under an optimiser state that expects the trained
+    one, which no error reports: the contrastive term would silently restart from noise mid-run.
+    """
+    torch.manual_seed(0)
+    targets = _pairs(video_store)
+    save_to = tmp_path / "joint.pt"
+    trainer = JointTrainer(_contrastive_config(ContrastiveSite.DETACHED_PROJECTION))
+
+    trainer.train(PairSplit(targets, targets), _evaluator(video_store, in_bounds_tracks), RunSetup(save_to))
+
+    snapshot = torch.load(save_to.with_suffix(".resume.pt"), weights_only=False)["contrastive"]
+    assert set(snapshot) == set(trainer.contrastive.state_dict())
+    assert all(torch.equal(snapshot[name], value) for name, value in trainer.contrastive.state_dict().items())
+
+
+def test_prepare_hands_the_projection_head_to_the_optimizer(video_store: Path):
+    """A head nobody optimises is a head that never learns: its parameters ride the optimiser and the clip."""
+    trainer = JointTrainer(_contrastive_config(ContrastiveSite.DETACHED_PROJECTION))
+    model, optimization = trainer._prepare(warm_start=False)
+
+    optimised = {id(parameter) for group in optimization.optimizer.param_groups for parameter in group["params"]}
+    head = list(trainer.contrastive.parameters())
+
+    assert head and {id(parameter) for parameter in head} <= optimised
+    assert len(trainer._trained(model)) == len(list(model.parameters())) + len(head)
 
 
 def test_train_records_sampler_health(

@@ -3,12 +3,14 @@ from pathlib import Path
 from typing import cast
 
 import numpy as np
+import pytest
 
 from celltrack.eval.dense_diagnosis import AffinityIndex, DenseDiagnosis, DenseFateDiagnosis, Fate, MislinkSignal
-from celltrack.tracker import CellTracker
+from celltrack.tracker import CellTracker, TrackerConfig
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
 from core.metrics.matching import NodeMatching
+from core.paths import DataRoot
 
 
 class _Affinity:
@@ -69,6 +71,25 @@ def test_diagnose():
     assert fate.counts()[Fate.MISLINK_FREE] == 1
     assert signal.p_true.tolist() == [0.2]
     assert signal.p_chosen.tolist() == [0.7]
+
+
+def test_shipped(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    """`shipped` mounts the reference packs off the data root, at the shipped threshold unless one is given."""
+    mounted: dict[str, object] = {}
+    monkeypatch.setattr(
+        CellTracker,
+        "from_packs",
+        classmethod(
+            lambda cls, pack1, pack2, responses, device, config=None: mounted.update(pack1=pack1, config=config)
+        ),
+    )
+
+    DenseDiagnosis.shipped(DataRoot(tmp_path), "cpu", threshold=0.5)
+
+    assert cast(Path, mounted["pack1"]).match("*/reference/pilkwang/split_0")
+    assert cast(TrackerConfig, mounted["config"]).threshold == 0.5
+    DenseDiagnosis.shipped(DataRoot(tmp_path), "cpu")
+    assert cast(TrackerConfig, mounted["config"]).threshold == TrackerConfig().threshold
 
 
 def test_dense_fate_diagnosis_of():

@@ -33,7 +33,7 @@ from jaxtyping import Bool, Float, Int
 
 from celltrack.affinity import EdgeAffinity
 from celltrack.eval.proxy import TestMovieProxy
-from celltrack.tracker import CellTracker
+from celltrack.tracker import CellTracker, TrackerConfig
 from core.data.tracks import Adjacency, TrackGraph
 from core.geometry import Spacing
 from core.metrics.matching import UNMATCHED, DistanceMatcher, NodeMatching
@@ -253,16 +253,28 @@ class DenseDiagnosis:
         )
 
     @staticmethod
-    def _mounted(root: DataRoot, device: str, movie: str) -> tuple[DenseFateDiagnosis, MislinkSignal]:
-        """Mount the shipped tracker, run it on `movie`, and decompose its annotated-edge fates and mislink signal."""
+    def shipped(root: DataRoot, device: str, threshold: float | None = None) -> CellTracker:
+        """The shipped dual-seed tracker mounted from the reference packs, cache-backed — what a diagnosis runs.
+
+        The pack layout gets one home in `eval` rather than a copy per driver: a sibling diagnosis
+        (`shortcut_diagnosis`) mounts through this instead of repeating the paths. `threshold` overrides the
+        shipped detection threshold — the one operating point a diagnosis of the DETECTIONS has to be able to move.
+        """
         proc = root.processed("biohub_cell_tracking")
-        proxy = TestMovieProxy.load(root, (movie,))
-        tracker = CellTracker.from_packs(
+        config = TrackerConfig() if threshold is None else TrackerConfig(threshold=threshold)
+        return CellTracker.from_packs(
             proc / "reference/pilkwang/split_0",
             proc / "reference/pilkwang/seed2/weights/unet_transformer/split_0",
             proc / "cache/responses",
             device,
+            config,
         )
+
+    @staticmethod
+    def _mounted(root: DataRoot, device: str, movie: str) -> tuple[DenseFateDiagnosis, MislinkSignal]:
+        """Mount the shipped tracker, run it on `movie`, and decompose its annotated-edge fates and mislink signal."""
+        proxy = TestMovieProxy.load(root, (movie,))
+        tracker = DenseDiagnosis.shipped(root, device)
         return DenseDiagnosis.diagnose(tracker, proxy.paths[0], proxy.truths[0].graph, proxy.spacing, device)
 
 

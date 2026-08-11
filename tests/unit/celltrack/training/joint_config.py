@@ -12,6 +12,7 @@ from pydantic import ValidationError
 from celltrack.tracker import TrackerConfig
 from celltrack.training.joint_config import (
     WARM_PACKS,
+    ContrastiveSite,
     DataCfg,
     EvalCfg,
     JointTrainConfig,
@@ -40,6 +41,8 @@ def test_defaults_are_the_measured_recipe():
     assert (config.optim.lr, config.optim.grad_clip, config.optim.cosine_lr) == (1e-4, 1.0, False)
     assert (config.loss.det_weight, config.loss.neg_weight) == (1.0, 1e-2)
     assert (config.loss.contrastive_weight, config.loss.temperature) == (0.0, 0.07)
+    # The measured-bad placement stays the default BECAUSE the weight is zero: an unasked run is yesterday's.
+    assert config.loss.contrastive_site is ContrastiveSite.FEATURES
     assert config.loss.ignore_ambiguous_above is None
     # The selector's threshold TRACKS the shipped tracker's rather than pinning a literal: selection must
     # rank candidates the way deployment does, and a copied constant would silently drift from it.
@@ -48,6 +51,19 @@ def test_defaults_are_the_measured_recipe():
     assert config.schedule.es_min_delta == 0.0
     assert (config.schedule.epochs, config.schedule.evals_per_epoch, config.schedule.patience_epochs) == (None,) * 3
     assert (config.runtime.device, config.runtime.seed, config.runtime.compile_backbone) == ("cuda", 0, False)
+
+
+def test_projects():
+    """Only the measured-bad site reads the features directly; both fixed placements interpose a head."""
+    assert not ContrastiveSite.FEATURES.projects
+    assert ContrastiveSite.PROJECTION.projects and ContrastiveSite.DETACHED_PROJECTION.projects
+
+
+def test_stop_gradient():
+    """The trunk is spared at exactly one site — the strict form of the fix, one field from the other two."""
+    assert ContrastiveSite.DETACHED_PROJECTION.stop_gradient
+    assert not ContrastiveSite.PROJECTION.stop_gradient
+    assert not ContrastiveSite.FEATURES.stop_gradient
 
 
 def test_bounds_reject_a_value_that_cannot_mean_what_it_says():
@@ -75,7 +91,9 @@ def test_unknown_field_is_rejected():
 def test_json_round_trip():
     """The whole run is one JSON document, and reading it back gives the same config — provenance, validated."""
     config = JointTrainConfig(
-        optim=OptimCfg(lr=1e-5), loss=LossCfg(ignore_ambiguous_above=0.97), runtime=RuntimeCfg(device="cpu")
+        optim=OptimCfg(lr=1e-5),
+        loss=LossCfg(ignore_ambiguous_above=0.97, contrastive_site=ContrastiveSite.DETACHED_PROJECTION),
+        runtime=RuntimeCfg(device="cpu"),
     )
     assert JointTrainConfig.model_validate_json(config.model_dump_json()) == config
 
