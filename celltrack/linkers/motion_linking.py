@@ -21,6 +21,7 @@ from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
 
 from celltrack.affinity import EdgeAffinity
+from celltrack.linkers.ranker_bonus import RankerBonus
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
 
@@ -49,6 +50,11 @@ class MotionHungarianLinker:
     loose_gate_um: float
     affinity: EdgeAffinity | None = None
     affinity_bonus: float = 0.0
+    # Off by default: a further cost term carrying the CC0 local-association re-ranker's probability
+    # (`RankerBonus`), subtracted after the forward affinity's discount exactly as on `AssignmentLinker`. This
+    # is the pairing the re-ranker was trained under — its features read a motion-predicted distance and gain,
+    # which are in-distribution only where the cost is itself motion-predicted.
+    ranker: RankerBonus | None = None
 
     def link(self, detections: TrackGraph) -> TrackGraph:
         """Join each cell to its motion-predicted successor, committing tight links before loose ones."""
@@ -84,13 +90,15 @@ class MotionHungarianLinker:
         return [(int(sources[s]), int(targets[t])) for s, t in tight + loose]
 
     def _blended_cost(self, timepoint: int, distance: Float[np.ndarray, "s t"]) -> Float[np.ndarray, "s t"]:
-        """The distance cost minus a learned-association bonus, when an affinity is wired for this gap."""
-        if self.affinity is None or self.affinity_bonus == 0.0:
-            return distance
-        probability = self.affinity.probabilities(timepoint)
-        if probability is None:
-            return distance
-        return distance - self.affinity_bonus * probability
+        """The distance cost minus each learned-association term wired for this gap — forward, then re-ranker."""
+        cost = distance
+        if self.affinity is not None and self.affinity_bonus != 0.0:
+            probability = self.affinity.probabilities(timepoint)
+            if probability is not None:
+                cost = cost - self.affinity_bonus * probability
+        if self.ranker is not None:
+            cost = self.ranker.discount(timepoint, cost)
+        return cost
 
     def _assign(
         self,

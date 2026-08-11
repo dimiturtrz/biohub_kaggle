@@ -7,7 +7,11 @@ speaks, and `build` dispatches the name to the concrete linker, passing only the
 a linker means adding one row to the table, not another `if` at every call site.
 
 `build` takes the per-video edge `affinity` because the shipped `assignment` linker scores each candidate edge
-by a learned `P(s->t)`; the geometry-only linkers ignore it. The config is pydantic (not a plain dataclass)
+by a learned `P(s->t)`; the purely geometric linkers ignore it. Which linker reads WHICH learned knob is a
+per-knob fact, not a per-linker one (`_KNOB_READERS`): `motion` prices the forward affinity and the re-ranker
+inside a geometric gate, yet has no admission gate and no mutual term for the fused probability to enter.
+
+The config is pydantic (not a plain dataclass)
 because it crosses a trust boundary — a `--set linker.name=` override or a loaded config.json is user input;
 an unknown name or a non-positive radius is rejected AT construction with a clear error, not deep inside `build`.
 """
@@ -156,28 +160,26 @@ class LinkerConfig(BaseModel):
 
     @model_validator(mode="after")
     def _affinity_knobs_are_readable(self) -> "LinkerConfig":
-        """Refuse an affinity knob on a linker that cannot read an affinity — it could not move anything.
+        """Refuse each learned-evidence knob on a linker whose cost has no term for THAT knob.
 
-        Pairing a bonus or an agreement floor with `motion` or `ilp` is not a harmless default: it is an
-        instruction the pipeline would accept and silently drop, and a sweep over it would report a flat
-        curve that means nothing.
+        Pairing a bonus or an agreement floor with a linker that cannot price it is not a harmless default: it
+        is an instruction the pipeline would accept and silently drop, and a sweep over it would report a flat
+        curve that means nothing. Support is per-knob, not per-linker — `motion` prices a forward affinity and
+        the re-ranker's term but has neither an admission gate nor a mutual term — so each knob is checked
+        against its OWN reader set and the refusal names that set (`_KNOB_READERS`).
         """
-        if self.name in _AFFINITY_READERS:
-            return self
-        knobs = (
-            ("affinity_bonus", self.affinity_bonus),
-            ("agreement_floor", self.agreement_floor),
-            ("mutual_bonus", self.mutual_bonus),
-            ("ranker_bonus", self.ranker_bonus),
-        )
-        for knob, value in knobs:
-            if value is not None:
+        for knob, value, readers in self._knobs():
+            if value is not None and self.name not in readers:
                 message = (
-                    f"linker {self.name!r} does not read an edge affinity, so {knob}={value} cannot affect it; "
-                    f"choose one of {sorted(_AFFINITY_READERS)} or drop the {knob}"
+                    f"linker {self.name!r} does not read {knob}, so {knob}={value} cannot affect it; "
+                    f"choose one of {sorted(readers)} or drop the {knob}"
                 )
                 raise ValueError(message)
         return self
+
+    def _knobs(self) -> tuple[tuple[str, float | None, frozenset[str]], ...]:
+        """Each learned-evidence knob beside its value and the linkers whose cost actually reads it."""
+        return tuple((knob, getattr(self, knob), readers) for knob, readers in _KNOB_READERS.items())
 
     @model_validator(mode="after")
     def _boundary_prior_is_readable(self) -> "LinkerConfig":
@@ -220,7 +222,7 @@ class LinkerConfig(BaseModel):
         re-ranker's per-gap probabilities (`AssociationRanker.affinities`), read by the ranker bonus as the
         cost's third term; like `mutual` it is needed only when its knob is set.
         """
-        if affinity is not None and self.name not in _AFFINITY_READERS:
+        if affinity is not None and self.name not in _BONUS_READERS:
             logger.warning("linker %r ignores the mounted edge affinity — it was computed and discarded", self.name)
         parts = LinkerParts(self._gate(mutual), self._bonus(mutual), self._ranker(ranker), self._boundary(volume_shape))
         return _BUILDERS[self.name](self, spacing, affinity, parts)
@@ -294,10 +296,31 @@ class LinkerConfig(BaseModel):
 
 _Builder = Callable[[LinkerConfig, Spacing, EdgeAffinity | None, LinkerParts], Linker]
 
-# Which linkers actually READ a learned affinity. The rest take the argument and drop it, so a mounted
-# affinity paired with them is computed (~a third of inference) and thrown away, and an affinity_bonus set
-# on them is a knob that cannot move anything. Both were silent until this set made the coupling checkable.
-_AFFINITY_READERS = frozenset({"assignment", "flow"})
+# Which linkers actually READ a learned affinity — the ones whose cost carries a `- affinity_bonus * P` term.
+# The rest take the argument and drop it, so a mounted affinity paired with them is computed (~a third of
+# inference) and thrown away, and an affinity_bonus set on them is a knob that cannot move anything. Both were
+# silent until this set made the coupling checkable. `motion` belongs here: it has carried `affinity` and
+# `affinity_bonus` since it was written (its gate stays pure geometry, the cost inside the gate is blended).
+_BONUS_READERS = frozenset({"assignment", "flow", "motion"})
+
+# Which linkers price the re-ranker's term. The same three, and for the same reason: `RankerBonus.discount`
+# subtracts from whatever pair cost the linker already formed, so any linker with a per-pair cost can carry it.
+_RANKER_READERS = frozenset({"assignment", "flow", "motion"})
+
+# Which linkers can ADMIT candidates by the fused probability, and which price it as a cost term. Narrower than
+# the two above: `motion` admits purely by its geometric tight/loose gates and its cost has no mutual term, so
+# a floor or a mutual bonus on it would be accepted and silently dropped — the failure this validator exists
+# to prevent. Support differs per knob, so the sets do too.
+_AGREEMENT_READERS = frozenset({"assignment", "flow"})
+_MUTUAL_READERS = frozenset({"assignment", "flow"})
+
+# The learned-evidence knobs, each against the readers of THAT knob — what `_affinity_knobs_are_readable` walks.
+_KNOB_READERS: dict[str, frozenset[str]] = {
+    "affinity_bonus": _BONUS_READERS,
+    "agreement_floor": _AGREEMENT_READERS,
+    "mutual_bonus": _MUTUAL_READERS,
+    "ranker_bonus": _RANKER_READERS,
+}
 
 # Which linkers price a track boundary per node. Only the flow linker charges appearance and disappearance at all,
 # so it is the only one with a price the boundary prior can modulate.
@@ -317,8 +340,15 @@ _BUILDERS: dict[str, _Builder] = {
     "nn": lambda config, spacing, affinity, parts: NearestNeighbourLinker(
         spacing=spacing, max_distance_um=config.gate_um
     ),
+    # The motion linker gates on raw geometry but competes pairs on a blended cost, so it reads the same
+    # affinity, bonus and re-ranker term as `assignment` — it just has no agreement gate and no mutual term.
     "motion": lambda config, spacing, affinity, parts: MotionHungarianLinker(
-        spacing=spacing, tight_gate_um=config.tight_um, loose_gate_um=config.gate_um
+        spacing=spacing,
+        tight_gate_um=config.tight_um,
+        loose_gate_um=config.gate_um,
+        affinity=affinity,
+        affinity_bonus=config.effective_bonus,
+        ranker=parts.ranker,
     ),
     "ilp": lambda config, spacing, affinity, parts: ILPLinker(spacing=spacing, max_distance_um=config.gate_um),
     "division": lambda config, spacing, affinity, parts: DivisionAwareLinker(

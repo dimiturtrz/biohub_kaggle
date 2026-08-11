@@ -27,7 +27,9 @@ def test_build():
     motion = LinkerConfig(name="motion", gate_um=9.0, tight_um=5.0)
 
     assert NearestNeighbourLinker(spacing=SPACING, max_distance_um=9.0) == nn.build(SPACING)
-    assert MotionHungarianLinker(spacing=SPACING, tight_gate_um=5.0, loose_gate_um=9.0) == motion.build(SPACING)
+    assert MotionHungarianLinker(
+        spacing=SPACING, tight_gate_um=5.0, loose_gate_um=9.0, affinity_bonus=18.0
+    ) == motion.build(SPACING)
 
 
 def test_build_names_the_whole_family():
@@ -77,11 +79,17 @@ def test_build_wires_ilp_and_division_gates():
 
 
 def test_bonus_is_readable():
-    """A bonus on a linker that cannot read an affinity is refused — the knob could not have moved anything."""
-    with pytest.raises(ValidationError, match="does not read an edge affinity"):
-        LinkerConfig(name="motion", affinity_bonus=20.0)
+    """A bonus on a linker with no affinity term is refused — the knob could not have moved anything.
 
-    assert LinkerConfig(name="assignment", affinity_bonus=20.0).effective_bonus == 20.0  # readers still accept it
+    `nn` is the exemplar because it is pure geometry: no affinity argument at all, so no wiring change could
+    make the bonus mean something there. `motion` is NOT such a linker — its cost blends the affinity inside a
+    geometric gate — which is why it appears below as an acceptor.
+    """
+    with pytest.raises(ValidationError, match="does not read affinity_bonus"):
+        LinkerConfig(name="nn", affinity_bonus=20.0)
+
+    for name in ("assignment", "flow", "motion"):  # every linker whose cost prices the forward probability
+        assert LinkerConfig(name=name, affinity_bonus=20.0).effective_bonus == 20.0
 
 
 class _Mutual:
@@ -102,9 +110,15 @@ class _Scored:
 
 
 def test_agreement_floor_is_readable():
-    """An agreement floor on a linker that cannot read an affinity is refused, exactly as a bonus is."""
-    with pytest.raises(ValidationError, match="does not read an edge affinity"):
-        LinkerConfig(name="motion", agreement_floor=0.5)
+    """An agreement floor on a linker with no admission gate is refused, exactly as an unreadable bonus is.
+
+    The floor's readers are NARROWER than the bonus's: `motion` admits candidates by its raw tight/loose
+    geometric gates alone, so a floor there would be accepted and silently dropped even though the same linker
+    does price the bonus. One reader set for both knobs could only be wrong in one direction or the other.
+    """
+    for name in ("nn", "motion"):
+        with pytest.raises(ValidationError, match="does not read agreement_floor"):
+            LinkerConfig(name=name, agreement_floor=0.5)
 
     assert LinkerConfig(name="flow", agreement_floor=0.5).agreement_floor == 0.5  # readers still accept it
 
@@ -130,9 +144,14 @@ def test_build_leaves_the_gate_off_by_default():
 
 
 def test_mutual_bonus_is_readable():
-    """A mutual bonus on a linker that cannot read an affinity is refused, exactly as a bonus and a floor are."""
-    with pytest.raises(ValidationError, match="does not read an edge affinity"):
-        LinkerConfig(name="motion", mutual_bonus=10.0)
+    """A mutual bonus on a linker whose cost has no mutual term is refused, as an unreadable bonus and floor are.
+
+    Same narrower set as the floor, for the same reason: `motion`'s cost is the forward probability (and, when
+    set, the re-ranker) — there is no second term for the fused probability to enter, so it refuses.
+    """
+    for name in ("nn", "motion"):
+        with pytest.raises(ValidationError, match="does not read mutual_bonus"):
+            LinkerConfig(name=name, mutual_bonus=10.0)
 
     assert LinkerConfig(name="flow", mutual_bonus=10.0).mutual_bonus == 10.0  # readers still accept it
 
@@ -192,19 +211,63 @@ def test_build_leaves_the_boundary_prior_off_by_default():
 
 
 def test_ranker_bonus_is_readable():
-    """A ranker bonus on a linker that cannot read an affinity is refused, exactly as the other weights are."""
-    with pytest.raises(ValidationError, match="does not read an edge affinity"):
-        LinkerConfig(name="motion", ranker_bonus=17.0)
+    """A ranker bonus on a linker with no per-pair cost to discount is refused, exactly as the other weights are.
 
-    assert LinkerConfig(name="flow", ranker_bonus=17.0).ranker_bonus == 17.0  # readers still accept it
+    Its readers match the bonus's, not the floor's: the term subtracts from whatever cost the linker already
+    formed, so `motion` carries it — which is the whole point, since the re-ranker's features are computed off
+    a motion-predicted distance.
+    """
+    with pytest.raises(ValidationError, match="does not read ranker_bonus"):
+        LinkerConfig(name="nn", ranker_bonus=17.0)
+
+    for name in ("assignment", "flow", "motion"):
+        assert LinkerConfig(name=name, ranker_bonus=17.0).ranker_bonus == 17.0
 
 
-def test_build_wires_the_ranker_bonus_into_both_affinity_readers():
+def test_build_wires_the_ranker_bonus_into_every_ranker_reader():
     """Set, the re-ranker term reaches every linker whose cost can price it, carrying the scored affinity."""
     ranker = cast(EdgeAffinity, _Mutual())
-    for name in ("assignment", "flow"):
+    for name in ("assignment", "flow", "motion"):
         built = LinkerConfig(name=name, ranker_bonus=17.0).build(SPACING, cast(EdgeAffinity, object()), ranker=ranker)
         assert built.ranker == RankerBonus(ranker=ranker, bonus=17.0)
+
+
+def test_build_wires_the_motion_linker_with_the_affinity_it_prices():
+    """The motion row threads the affinity, its bonus and the re-ranker through — the path that was unreachable.
+
+    `MotionHungarianLinker` has always accepted `affinity`/`affinity_bonus` and had a unit test exercising them,
+    but its builder row dropped both, so no config could reach the blended cost. This is that wiring.
+    """
+    affinity = cast(EdgeAffinity, object())
+    ranker = cast(EdgeAffinity, _Mutual())
+    built = LinkerConfig(name="motion", gate_um=9.0, tight_um=5.0, affinity_bonus=3.0, ranker_bonus=17.0).build(
+        SPACING, affinity, ranker=ranker
+    )
+
+    assert isinstance(built, MotionHungarianLinker)
+    assert built.affinity is affinity
+    assert (built.tight_gate_um, built.loose_gate_um, built.affinity_bonus) == (5.0, 9.0, 3.0)
+    assert built.ranker == RankerBonus(ranker=ranker, bonus=17.0)
+
+
+def test_the_motion_cost_reads_the_affinity_the_config_hands_it():
+    """A strong affinity on the farther in-gate target overrides the geometric pick — THROUGH the config.
+
+    The linker's own unit test proves the blended cost works when constructed by hand; this proves the config
+    path reaches it, which is exactly what the dropped builder arguments broke.
+    """
+    detections = TrackGraph(
+        node_ids=np.array([1, 2, 3, 4]),
+        coordinates=np.array([[0, 0, 0, 0], [0, 0, 0, 6], [1, 0, 0, 1], [1, 0, 0, 5]]),
+        edges=np.empty((0, 2), dtype=np.int64),
+    )
+    crossing = cast(EdgeAffinity, _Scored(np.array([[0.0, 1.0], [1.0, 0.0]])))
+    config = LinkerConfig(name="motion", gate_um=10.0, tight_um=10.0)
+
+    geometry = config.model_copy(update={"affinity_bonus": 0.0}).build(SPACING, crossing).link(detections)
+    blended = config.model_copy(update={"affinity_bonus": 40.0}).build(SPACING, crossing).link(detections)
+    assert geometry.edges.tolist() == [[1, 3], [2, 4]]  # the near pairing, on distance alone
+    assert blended.edges.tolist() == [[1, 4], [2, 3]]  # the affinity flips it — the knob is live
 
 
 def test_needs_ranker():
@@ -250,7 +313,7 @@ def test_the_context_pass_is_invariant_to_the_split_of_one_budget():
     )
     scored = cast(EdgeAffinity, _Scored(np.array([[0.9, 0.1], [0.1, 0.9]])))
     splits = ((20.0, 0.0), (17.0, 3.0), (3.0, 17.0), (0.0, 20.0))
-    for name in ("assignment", "flow"):
+    for name in ("assignment", "flow", "motion"):
         contexts = [
             LinkerConfig(
                 name=name, gate_um=10.0, disappearance_cost=3.0, affinity_bonus=a, ranker_bonus=b
@@ -270,7 +333,7 @@ def test_build_without_the_scored_ranker_refuses_a_ranker_bonus():
 
 def test_build_leaves_the_ranker_bonus_off_by_default():
     """Unset, the term is absent even when the ranker's probabilities are mounted — the shipped cost is untouched."""
-    for name in ("assignment", "flow"):
+    for name in ("assignment", "flow", "motion"):
         built = LinkerConfig(name=name).build(
             SPACING, cast(EdgeAffinity, object()), ranker=cast(EdgeAffinity, _Mutual())
         )
@@ -290,7 +353,7 @@ def test_the_default_cost_is_byte_identical_with_the_ranker_mounted():
     )
     scored = cast(EdgeAffinity, _Scored(np.array([[0.9, 0.1], [0.1, 0.9]])))  # the affinity prefers the near pairing
     ranker = cast(EdgeAffinity, _Scored(np.array([[0.0, 1.0], [1.0, 0.0]])))  # the ranker prefers the crossing one
-    for name in ("assignment", "flow"):
+    for name in ("assignment", "flow", "motion"):
         config = LinkerConfig(name=name, gate_um=10.0)
         without = config.build(SPACING, scored).link(detections)
         with_ranker = config.build(SPACING, scored, ranker=ranker).link(detections)
