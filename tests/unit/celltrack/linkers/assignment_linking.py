@@ -5,6 +5,7 @@ from jaxtyping import Float
 
 from celltrack.linkers.agreement_gating import AgreementGate
 from celltrack.linkers.assignment_linking import AssignmentLinker
+from celltrack.linkers.mutual_bonus import MutualBonus
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
 
@@ -128,3 +129,48 @@ def test_link_agreement_gate_off_is_byte_identical():
 
     assert gates[0].agreement is None  # the shipped default is OFF
     assert gates[0].link(graph).edges.tobytes() == gates[1].link(graph).edges.tobytes()
+
+
+# Source at y=0 facing a near candidate (row 1, y=1) and a far one (row 2, y=4). Forward probability prefers the
+# near pair (0.9 vs 0.5), mutual agreement prefers the far one (0.1 vs 0.9) — preference and agreement disagree.
+_SPLIT_SCENE = [[0, 0, 0, 0], [1, 0, 1, 0], [1, 0, 4, 0]]
+_FORWARD = _StubAffinity(np.array([[0.9, 0.5]], dtype=np.float64))
+_MUTUAL = _StubAffinity(np.array([[0.1, 0.9]], dtype=np.float64))
+_SPLIT_BONUS = 10.0  # a + b = 20, the derived total P-weight at gate 10, split evenly between the two terms
+
+
+def _split_linker(mutual: MutualBonus | None) -> AssignmentLinker:
+    return AssignmentLinker(
+        spacing=Spacing(z=1.0, y=1.0, x=1.0),
+        max_distance_um=10.0,
+        affinity=_FORWARD,
+        affinity_bonus=_SPLIT_BONUS,
+        mutual=mutual,
+    )
+
+
+def test_link_mutual_bonus_wins_a_pair_the_forward_term_ranks_second():
+    """A lower-preference, higher-agreement pair takes the link — the arithmetic of the two-term cost.
+
+    Forward only (`a=10`): near = 1 - 10*0.9 = -8, far = 4 - 10*0.5 = -1, so the near pair links. Adding the
+    agreement term at `b=10`: near = -8 - 10*0.1 = -9, far = -1 - 10*0.9 = -10, so the far pair now links. The
+    fused probability moved the answer as EVIDENCE the objective weighed, without filtering anything out.
+    """
+    graph = detections(_SPLIT_SCENE)
+
+    assert _split_linker(None).link(graph).edges.tolist() == [[0, 10]]
+    assert _split_linker(MutualBonus(mutual=_MUTUAL, bonus=_SPLIT_BONUS)).link(graph).edges.tolist() == [[0, 20]]
+
+
+def test_link_mutual_bonus_off_is_byte_identical():
+    """Unset, the second term is inert: the default linker's edges are byte-for-byte the explicit-None linker's.
+
+    Asserted on the scene where the term CHANGES the answer, so a bonus leaking on by default fails here.
+    """
+    graph = detections(_SPLIT_SCENE)
+    default = AssignmentLinker(
+        spacing=Spacing(z=1.0, y=1.0, x=1.0), max_distance_um=10.0, affinity=_FORWARD, affinity_bonus=_SPLIT_BONUS
+    )
+
+    assert default.mutual is None  # the shipped default is OFF
+    assert default.link(graph).edges.tobytes() == _split_linker(None).link(graph).edges.tobytes()

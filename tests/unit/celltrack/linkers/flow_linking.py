@@ -4,6 +4,7 @@ from celltrack.linkers.agreement_gating import AgreementGate
 from celltrack.linkers.assignment_linking import AssignmentLinker
 from celltrack.linkers.boundary_prior import BoundaryPrior
 from celltrack.linkers.flow_linking import FlowLinker
+from celltrack.linkers.mutual_bonus import MutualBonus
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
 
@@ -96,6 +97,41 @@ def test_link_agreement_gate_off_is_byte_identical():
 
     assert default.agreement is None  # the shipped default is OFF
     assert default.link(detections).edges.tobytes() == explicit.link(detections).edges.tobytes()
+
+
+# The assignment linker's split scene: forward probability prefers the near candidate (row 1), mutual agreement
+# the far one (row 2), and the two terms each carry half of the derived total P-weight at gate 10.
+_SPLIT_SCENE = [[0, 0, 0, 0], [1, 0, 1, 0], [1, 0, 4, 0]]
+_SPLIT_FORWARD = _Affinity({0: np.array([[0.9, 0.5]], dtype=np.float64)})
+_SPLIT_MUTUAL = _Affinity({0: np.array([[0.1, 0.9]], dtype=np.float64)})
+_SPLIT_BONUS = 10.0
+
+
+def _split_flow(mutual: MutualBonus | None) -> FlowLinker:
+    return FlowLinker(
+        ISOTROPIC, max_distance_um=10.0, affinity=_SPLIT_FORWARD, affinity_bonus=_SPLIT_BONUS, mutual=mutual
+    )
+
+
+def test_link_mutual_bonus_composes_with_the_flow():
+    """The second cost term prices the flow's transitions too — near = -8 vs far = -1 flips to -9 vs -10.
+
+    Same arithmetic as the assignment linker's, so the global optimiser and the per-frame one weigh preference
+    and agreement by one objective rather than two.
+    """
+    graph = _graph(_SPLIT_SCENE)
+
+    assert _sorted_edges(_split_flow(None).link(graph)) == [(0, 1)]
+    assert _sorted_edges(_split_flow(MutualBonus(mutual=_SPLIT_MUTUAL, bonus=_SPLIT_BONUS)).link(graph)) == [(0, 2)]
+
+
+def test_link_mutual_bonus_off_is_byte_identical():
+    """Unset, the second term is inert on the scene where it CHANGES the answer — the shipped flow is untouched."""
+    graph = _graph(_SPLIT_SCENE)
+    default = FlowLinker(ISOTROPIC, max_distance_um=10.0, affinity=_SPLIT_FORWARD, affinity_bonus=_SPLIT_BONUS)
+
+    assert default.mutual is None  # the shipped default is OFF
+    assert default.link(graph).edges.tobytes() == _split_flow(None).link(graph).edges.tobytes()
 
 
 # An 81-voxel cube at 1 um: with a 10 um gate the boundary band is voxels 0..10 and 70..80, so the centre (40)

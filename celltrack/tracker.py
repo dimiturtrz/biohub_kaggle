@@ -236,13 +236,14 @@ class CellTracker:
         return TrackedVideo(graph=graph, detections=nodes, affinity=affinity)
 
     def _mutual(self, path: Path, nodes: TrackGraph, affinity: EdgeAffinity | None) -> EdgeAffinity | None:
-        """The bidirectionally fused probabilities the linker's agreement floor gates on — `None` when unused.
+        """The bidirectionally fused probabilities the linker's agreement knobs read — `None` when unused.
 
-        Scored only when a floor is set, because it costs a second reversed pass over every gap. When the
-        tracker already runs `bidirectional_edges` the mounted affinity IS the fused one, so the gate reads it
-        directly and the extra pass is skipped — that pairing gates and scores on the same quantity.
+        Scored only when a knob consumes it (`LinkerConfig.needs_mutual`: the admission floor, the cost's
+        mutual-agreement term, or both), because it costs a second reversed pass over every gap. When the
+        tracker already runs `bidirectional_edges` the mounted affinity IS the fused one, so those knobs read it
+        directly and the extra pass is skipped — that pairing then reads one quantity for both roles.
         """
-        if self.config.linker.agreement_floor is None:
+        if not self.config.linker.needs_mutual:
             return None
         if self.config.bidirectional_edges:
             return affinity

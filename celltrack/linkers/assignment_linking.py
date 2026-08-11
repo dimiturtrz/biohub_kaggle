@@ -24,6 +24,7 @@ from scipy.spatial.distance import cdist
 from celltrack.affinity import EdgeAffinity
 from celltrack.linkers.agreement_gating import AgreementGate
 from celltrack.linkers.mutual_bonus import MutualBonus
+from celltrack.linkers.ranker_bonus import RankerBonus
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
 
@@ -62,6 +63,10 @@ class AssignmentLinker:
     # Off by default: a second cost term rewarding mutual agreement (`MutualBonus`), so the cost reads both the
     # directional preference and the symmetric agreement instead of one replacing the other.
     mutual: MutualBonus | None = None
+    # Off by default: a third cost term carrying the CC0 local-association re-ranker's probability
+    # (`RankerBonus`), so the cost reads the linking-state evidence — crowding, the candidate list, the primary
+    # graph's degrees, a motion residual — that a pairwise affinity has no access to.
+    ranker: RankerBonus | None = None
 
     def link(self, detections: TrackGraph) -> TrackGraph:
         """Assign each cell to at most one successor, frame pair by frame pair, minimising total edge cost."""
@@ -112,6 +117,8 @@ class AssignmentLinker:
                 cost = cost - self.affinity_bonus * probability
         if self.mutual is not None:
             cost = self.mutual.discount(timepoint, cost)
+        if self.ranker is not None:
+            cost = self.ranker.discount(timepoint, cost)
         return np.where(within_gate, cost, _FORBIDDEN)
 
     def _augment_with_skips(self, cost: Float[np.ndarray, "s t"]) -> Float[np.ndarray, "s+t s+t"]:

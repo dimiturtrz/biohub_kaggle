@@ -29,6 +29,8 @@ from scipy.spatial.distance import cdist
 from celltrack.affinity import EdgeAffinity
 from celltrack.linkers.agreement_gating import AgreementGate
 from celltrack.linkers.boundary_prior import BoundaryPrior
+from celltrack.linkers.mutual_bonus import MutualBonus
+from celltrack.linkers.ranker_bonus import RankerBonus
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
 
@@ -61,6 +63,13 @@ class FlowLinker:
     # Off by default: the same mutual-agreement admission filter `AssignmentLinker` takes. A transition the gate
     # excludes is simply absent from the network, so the flow must route the track through an admitted edge.
     agreement: AgreementGate | None = None
+    # Off by default: the same second cost term `AssignmentLinker` takes (`MutualBonus`) — the fused probability
+    # added to the transition cost as evidence, so preference and agreement both price an arc.
+    mutual: MutualBonus | None = None
+    # Off by default: the same third cost term `AssignmentLinker` takes (`RankerBonus`) — the CC0
+    # local-association re-ranker's probability, subtracted like the other two so the transition price reads
+    # the linking-state evidence the pairwise affinity cannot see.
+    ranker: RankerBonus | None = None
     # Off by default (`None` = one flat price everywhere, wherever and whenever a track ends). Set, it discounts
     # the boundary arcs of detections whose appearance or disappearance the observation window already explains —
     # see `BoundaryPrior`. It is purely a per-arc PRICE: the arcs, the gate and the transition costs are untouched.
@@ -140,6 +149,10 @@ class FlowLinker:
             probability = self.affinity.probabilities(timepoint)
             if probability is not None:
                 cost = cost - self.affinity_bonus * probability
+        if self.mutual is not None:
+            cost = self.mutual.discount(timepoint, cost)
+        if self.ranker is not None:
+            cost = self.ranker.discount(timepoint, cost)
         return np.where(within_gate, cost, np.inf)
 
     @staticmethod
