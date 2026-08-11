@@ -25,8 +25,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from celltrack.affinity import EdgeAffinity
 from celltrack.linkers.agreement_gating import AgreementGate
 from celltrack.linkers.assignment_linking import AssignmentLinker
-from celltrack.linkers.boundary_prior import BoundaryPrior
+from celltrack.linkers.boundary_prior import BoundaryFactorSource, BoundaryPrior
 from celltrack.linkers.division_linking import DivisionAwareLinker
+from celltrack.linkers.evidence_prior import EvidencePrior
 from celltrack.linkers.evidence_ramp import EvidenceRamp
 from celltrack.linkers.flow_linking import FlowLinker
 from celltrack.linkers.ilp_linking import ILPLinker
@@ -59,7 +60,7 @@ class LinkerParts:
     agreement: AgreementGate | None = None
     mutual: MutualBonus | None = None
     ranker: RankerBonus | None = None
-    boundary: BoundaryPrior | None = None
+    boundary: BoundaryFactorSource | None = None
     prediction: MotionPrediction | None = None
     ramp: EvidenceRamp | None = None
 
@@ -114,6 +115,12 @@ class LinkerConfig(BaseModel):
     # (see `_EXPLAINED_FACTOR`), so this is an on/off claim about the observation window, not a tuning surface.
     # Setting it makes `build` require the video's volume shape.
     boundary_prior: bool = False
+    # Price a birth by the EDGE HEAD's own verdict instead of by geometry: the share of a detection's parent
+    # probability held by admissible sources. Measured on the dense movie that share is mean 0.78, median 0.92
+    # and p5 0.09, so a twentieth of detections carry almost no evidence of any admissible parent — which is
+    # what an appearance IS. Budget-preserving (factors mean 1 within a frame), so it moves WHERE the appearance
+    # charge falls and never how much of it there is; the flat cost is its own control. Off ships unchanged.
+    appearance_evidence: bool = False
     # OFF = the shipped raw-distance cost, byte for byte. ON prices each candidate by the MOTION-PREDICTED
     # distance instead (`MotionPrediction`): how far the target is from where the source was already heading,
     # with the step taken from the previous gap's affinity and damped by the motion linker's argued half step.
@@ -222,9 +229,15 @@ class LinkerConfig(BaseModel):
         Only the flow linker prices appearance and disappearance, so only it has a price for the prior to modulate;
         anywhere else the flag would be accepted, silently dropped, and sweep as a flat curve.
         """
-        if self.boundary_prior and self.name not in _BOUNDARY_PRIOR_READERS:
+        if self.appearance_evidence and self.boundary_prior:
             message = (
-                f"linker {self.name!r} charges no track-boundary cost, so boundary_prior cannot affect it; "
+                "boundary_prior and appearance_evidence both price the SAME track-boundary charge, so enabling "
+                "both would silently drop one; choose the geometric prior or the head's evidence"
+            )
+            raise ValueError(message)
+        if (self.boundary_prior or self.appearance_evidence) and self.name not in _BOUNDARY_PRIOR_READERS:
+            message = (
+                f"linker {self.name!r} charges no track-boundary cost, so a boundary prior cannot affect it; "
                 f"choose one of {sorted(_BOUNDARY_PRIOR_READERS)} or drop the flag"
             )
             raise ValueError(message)
@@ -284,7 +297,7 @@ class LinkerConfig(BaseModel):
             self._gate(mutual),
             self._bonus(mutual),
             self._ranker(ranker),
-            self._boundary(volume_shape),
+            self._boundary(volume_shape, affinity),
             self._prediction(affinity),
             self._ramp(),
         )
@@ -348,13 +361,22 @@ class LinkerConfig(BaseModel):
         """
         return None if self.evidence_ramp is None else EvidenceRamp(strength=self.evidence_ramp)
 
-    def _boundary(self, volume_shape: tuple[int, int, int] | None) -> BoundaryPrior | None:
-        """The track-boundary prior this config asks for — `None` when off, an error when the shape is missing.
+    def _boundary(
+        self, volume_shape: tuple[int, int, int] | None, affinity: EdgeAffinity | None
+    ) -> BoundaryFactorSource | None:
+        """What prices this config's track boundaries — geometry, the head's evidence, or the flat charge.
 
-        The prior's whole content is where the imaged volume ENDS, so a caller that enables it without passing the
-        video's shape is refused rather than quietly served a flat cost: the alternative is a knob that reports a
-        flat sweep curve because it never actually ran.
+        The two sources are alternatives because there is ONE price to modulate, and a config asking for both is
+        refused up front rather than served whichever the code happens to check first.
         """
+        if self.appearance_evidence:
+            if affinity is None:
+                message = (
+                    "appearance_evidence prices a birth by the edge head's in-gate probability mass, so it "
+                    "needs the mounted affinity; mount one, or drop the flag"
+                )
+                raise ValueError(message)
+            return EvidencePrior(affinity=affinity)
         if not self.boundary_prior:
             return None
         if volume_shape is None:

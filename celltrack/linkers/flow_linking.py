@@ -29,7 +29,7 @@ from scipy.spatial.distance import cdist
 from celltrack.affinity import EdgeAffinity
 from celltrack.linkers.admissible_affinity import AdmissibleAffinity
 from celltrack.linkers.agreement_gating import AgreementGate
-from celltrack.linkers.boundary_prior import BoundaryPrior
+from celltrack.linkers.boundary_prior import BoundaryFactorSource
 from celltrack.linkers.evidence_ramp import EvidenceRamp
 from celltrack.linkers.motion_prediction import MotionPrediction
 from celltrack.linkers.mutual_bonus import MutualBonus
@@ -83,7 +83,7 @@ class FlowLinker:
     # Off by default (`None` = one flat price everywhere, wherever and whenever a track ends). Set, it discounts
     # the boundary arcs of detections whose appearance or disappearance the observation window already explains —
     # see `BoundaryPrior`. It is purely a per-arc PRICE: the arcs, the gate and the transition costs are untouched.
-    boundary: BoundaryPrior | None = None
+    boundary: BoundaryFactorSource | None = None
     # Off by default (`None` = the shipped raw-distance cost, byte for byte). Set, the `distance` term of the
     # transition cost becomes the MOTION-PREDICTED distance — how far the target is from where the source was
     # heading (`MotionPrediction`) — while the gate keeps reading the raw one, since admissibility is a physical

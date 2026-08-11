@@ -19,6 +19,7 @@ transition instead of patched afterwards.
 """
 
 from dataclasses import dataclass
+from typing import Protocol
 
 import numpy as np
 from jaxtyping import Bool, Float, Int
@@ -48,6 +49,26 @@ class BoundaryFactors:
 
     appearance: Float[np.ndarray, "n"]
     disappearance: Float[np.ndarray, "n"]
+
+
+class BoundaryFactorSource(Protocol):
+    """Anything that can say, per detection, what fraction of the flat boundary charge its arcs should pay.
+
+    Two things do, and they read entirely different evidence: the imaged volume's geometry (`BoundaryPrior`)
+    and the edge head's own belief that a detection already has an admissible parent (`EvidencePrior`). The
+    linker holds one of these and does not care which, so the price stays one concept with several arguments
+    for it rather than a branch per source.
+    """
+
+    def factors(
+        self,
+        spacing: Spacing,
+        margin_um: float,
+        positions_um: Float[np.ndarray, "n 3"],
+        timepoints: Int[np.ndarray, "n"],
+    ) -> BoundaryFactors:
+        """The per-detection appearance and disappearance multipliers."""
+        ...
 
 
 @dataclass(frozen=True)
