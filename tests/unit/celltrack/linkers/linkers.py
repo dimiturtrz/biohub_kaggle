@@ -461,17 +461,25 @@ def test_appearance_cost_defaults_to_the_boundary_charge():
 
     Asserted on the LINKED GRAPH rather than the config, because the claim is about what the solver decides:
     an asymmetry that changed no edge would pass a config comparison and still be wrong.
+
+    An AFFINITY is mandatory here and the assertion is worthless without one: every arc weight in the flow
+    network is positive unless `affinity_bonus * P` drives a transition below zero, and the cheapest
+    circulation over all-positive weights is NO FLOW. Built without one this linker emits an empty graph, so
+    both sides of the comparison would be empty and the test would pass while checking nothing.
     """
     detections = TrackGraph(
         node_ids=np.array([1, 2, 3, 4]),
         coordinates=np.array([[0, 0, 0, 0], [0, 0, 0, 6], [1, 0, 0, 1], [1, 0, 0, 5]]),
         edges=np.empty((0, 2), dtype=np.int64),
     )
-    symmetric = LinkerConfig(name="flow", gate_um=10.0, disappearance_cost=3.0).build(SPACING)
+    scored = cast(EdgeAffinity, _Scored(np.array([[0.9, 0.1], [0.1, 0.9]])))
+    symmetric = LinkerConfig(name="flow", gate_um=10.0, disappearance_cost=3.0).build(SPACING, scored)
     spelled = LinkerConfig(
         name="flow", gate_um=10.0, disappearance_cost=3.0, appearance_cost=3.0
-    ).build(SPACING)
-    assert np.array_equal(symmetric.link(detections).edge_rows(), spelled.link(detections).edge_rows())
+    ).build(SPACING, scored)
+    linked = symmetric.link(detections).edge_rows()
+    assert len(linked) > 0  # the comparison below is vacuous on an empty graph — see the docstring
+    assert np.array_equal(linked, spelled.link(detections).edge_rows())
 
 
 def test_pricing_the_two_boundaries_apart_reaches_the_network():
