@@ -40,8 +40,12 @@ class PairTarget:
 
     frames: FrameSource
     timepoint: int  # the source frame; the target frame is timepoint + 1
-    source_centres: Int[np.ndarray, "s 3"]  # downsampled (z, y', x') at t
-    target_centres: Int[np.ndarray, "u 3"]  # downsampled (z, y', x') at t + 1
+    # FULL-RESOLUTION voxels (z, y, x), not downsampled: `JointModel.forward` divides them by the downsample
+    # for the feature grid, exactly as the inference scorer's `_gap_logits` does. These comments used to say
+    # "downsampled", which is the one mistake a new corpus producer would make silently — the centres would be
+    # right by a factor of the downsample and every distance read off them wrong.
+    source_centres: Int[np.ndarray, "s 3"]  # at t
+    target_centres: Int[np.ndarray, "u 3"]  # at t + 1
     edge_matrix: Float[np.ndarray, "s u"]  # 1 where an annotated link joins a source to a target
     # The annotated centres at `t - 1`, or None when this is the video's first annotated frame — the prior
     # gap the sources' velocity is read off. `None` is the explicit "no history" case, not an empty array.

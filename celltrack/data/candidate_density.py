@@ -20,6 +20,7 @@ the synthetic corpus reproduces it.
 """
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -27,6 +28,7 @@ import numpy as np
 from jaxtyping import Float, Int
 from scipy.spatial import KDTree
 
+from celltrack.data.joint_dataset import PairTarget
 from celltrack.data.synthetic_pairs import POOLED_BY
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
@@ -53,6 +55,29 @@ class CandidateDensity:
     counts: Int[np.ndarray, "s"]
     sources_per_frame: float
     candidates_per_frame: float
+
+    @classmethod
+    def of_pairs(cls, pairs: Sequence[PairTarget], spacing: Spacing, gate_um: float) -> "CandidateDensity":
+        """The same crowding measure over an assembled CORPUS rather than a graph — what a TRAINING STEP sees.
+
+        `of` reads graphs, which answers "how crowded is this population". A corpus can differ from its
+        population: `DetectionPairs` supervises only the source rows the annotation can adjudicate, and a
+        matched detection whose successor was also detected is plausibly an EASIER cell than average. If that
+        selection quietly re-introduces the uncontested population this corpus exists to escape, the arm is
+        dead before it runs and the number here is the only thing that would say so.
+        """
+        counts: list[Int[np.ndarray, "s"]] = []
+        sources, candidates = 0, 0
+        for pair in pairs:
+            source = spacing.to_micrometres(pair.source_centres)
+            target = spacing.to_micrometres(pair.target_centres)
+            if not (len(source) and len(target)):
+                continue
+            counts.append(cls._in_gate(source, target, gate_um))
+            sources, candidates = sources + len(source), candidates + len(target)
+        pooled = np.concatenate(counts) if counts else np.zeros(0, dtype=np.int64)
+        divisor = max(len(pairs), 1)
+        return cls(counts=pooled, sources_per_frame=sources / divisor, candidates_per_frame=candidates / divisor)
 
     @classmethod
     def of(cls, graphs: list[TrackGraph], spacing: Spacing, gate_um: float) -> "CandidateDensity":

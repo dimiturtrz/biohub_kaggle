@@ -19,6 +19,8 @@ import logging
 from pathlib import Path
 
 from celltrack.data.candidate_density import CandidateDensity
+from celltrack.data.detection_pairs import DetectionPairs
+from celltrack.data.frame_source import ZarrFrames
 from celltrack.data.synthetic_pairs import SyntheticPairs
 from celltrack.eval.dense_diagnosis import DENSE_MOVIE
 from celltrack.eval.proxy import TestMovieProxy
@@ -34,6 +36,8 @@ logger = logging.getLogger(__name__)
 _DATASET = "biohub_cell_tracking"
 _SYNTHETIC_DATASET = "biohub_synthetic"
 _SYNTHETIC_SEQUENCES = "sequences"
+# The intensity window a competition video is read through — the same quantiles the trainer's own reader uses.
+_Q_LOW, _Q_HIGH = 0.001, 0.999
 
 
 def main() -> None:
@@ -65,6 +69,15 @@ def main() -> None:
     tracker = CellTracker.ephemeral(proc / WARM_PACKS["seed1"], proc / WARM_PACKS["seed2"], args.device, config)
     detected = tracker.detector.nodes(args.movie, video_path, config.threshold, None)
     CandidateDensity.of([detected], spacing, gate).report(f"real detected ({args.movie})")
+
+    # The assembled CORPUS, not a population: DetectionPairs supervises only the rows the annotation can
+    # adjudicate, and a matched detection whose successor was also detected could plausibly be an EASIER cell.
+    # If that selection re-introduced the uncontested population the corpus exists to escape, this row would
+    # read like the annotated one and no training result from it would mean anything.
+    pairs = DetectionPairs.of(detected, truth, ZarrFrames(video_path, _Q_LOW, _Q_HIGH), spacing)
+    CandidateDensity.of_pairs(pairs, spacing, gate).report(f"detection pairs ({args.movie})")
+    rows = sum(len(pair.source_centres) for pair in pairs)
+    logger.info("detection pairs: %d gaps, %d supervised source rows", len(pairs), rows)
 
 
 if __name__ == "__main__":

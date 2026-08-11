@@ -2,11 +2,14 @@
 
 import logging
 from pathlib import Path
+from typing import cast
 
 import numpy as np
 import pytest
 
 from celltrack.data.candidate_density import CandidateDensity
+from celltrack.data.frame_source import FrameSource
+from celltrack.data.joint_dataset import PairTarget
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
 
@@ -81,3 +84,24 @@ def test_synthetic_spacing(tmp_path: Path):
     assert spacing.z == pytest.approx(1.6)  # z is never pooled, so it passes through
     assert spacing.y == pytest.approx(0.4)  # 1.6 / 4, the in-plane pooling undone
     assert spacing.x == pytest.approx(0.4)
+
+
+def test_of_pairs():
+    """The corpus form measures the rows a STEP sees, which need not be the population they came from.
+
+    Two pairs, each with one source and two targets one of which is inside the 5um gate: the mean in-gate
+    count is 1 even though the frames hold two candidates, because crowding is per SOURCE, not per frame.
+    """
+    pair = PairTarget(
+        frames=cast(FrameSource, None),
+        timepoint=0,
+        source_centres=np.array([[0, 0, 0]], dtype=np.int64),
+        target_centres=np.array([[0, 0, 2], [0, 0, 40]], dtype=np.int64),
+        edge_matrix=np.array([[1.0, 0.0]], dtype=np.float32),
+    )
+
+    density = CandidateDensity.of_pairs([pair, pair], _ISOTROPIC, gate_um=5.0)
+
+    assert density.summary()["mean_in_gate"] == 1.0  # the far target is outside the gate
+    assert density.summary()["sources_per_frame"] == 1.0
+    assert density.summary()["candidates_per_frame"] == 2.0
