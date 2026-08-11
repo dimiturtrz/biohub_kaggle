@@ -55,6 +55,9 @@ from core.paths import DataRoot
 
 logger = logging.getLogger(__name__)
 
+# A ceiling no candidate set reaches — this diagnosis describes the population, it does not budget it.
+_UNBOUNDED = 10**9
+
 FEATURE_NAMES: tuple[str, ...] = (
     "intensity_mean",
     "intensity_sd",
@@ -376,7 +379,12 @@ class DivisionCandidates:
     @classmethod
     def of(cls, prediction: TrackGraph, spacing: Spacing, affinity: EdgeAffinity, floor: float) -> Self:
         """Every parent of a fork the recovery proposes with its probability floors set to `floor`, uncapped."""
-        config = AffinityDivisionConfig(min_second_prob=floor, min_kept_prob=floor, max_added_fraction=1.0)
+        # UNBOUNDED on purpose: this diagnosis measures the appearance of every candidate mother, so a
+        # per-video fork BUDGET (which the shipped stage derives from the division rate) would silently
+        # truncate the population being described. A budget belongs to shipping forks, not to describing them.
+        config = AffinityDivisionConfig(
+            min_second_prob=floor, min_kept_prob=floor, max_added_fraction=1.0, max_added_forks=_UNBOUNDED
+        )
         forked = config.build(spacing, affinity).transform(prediction)
         added = forked.edges[len(prediction.edges) :]
         if not len(added):

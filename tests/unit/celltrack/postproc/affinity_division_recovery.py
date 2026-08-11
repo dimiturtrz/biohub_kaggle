@@ -194,8 +194,8 @@ def test_budget():
     """The edge fraction and the absolute ceiling, whichever binds first."""
     stage = recovery(_KEPT_TOP, max_added_fraction=0.004, max_added_forks=100)
 
-    assert stage.budget(74_347) == 100  # the fraction would allow 297
-    assert stage.budget(1_000) == 4  # the fraction binds below the ceiling
+    assert stage.budget(74_347, 73_697) == 100  # the explicit ceiling binds; the fraction would allow 297
+    assert stage.budget(1_000, 73_697) == 4  # the fraction binds below the ceiling
 
 
 def test_geometry_ranking_survives_the_cap_a_probability_ranking_evicts():
@@ -247,3 +247,18 @@ def test_rejects_an_unknown_ranking():
     affinity = cast(EdgeAffinity, FakeAffinity({}))
     with pytest.raises(ValueError, match="nearest"):
         AffinityDivisionConfig(ranking="nearest").build(Spacing(z=1.0, y=1.0, x=1.0), affinity)
+
+
+def test_budget_derives_the_ceiling_from_the_measured_division_rate():
+    """With no explicit ceiling the budget IS the expected number of true divisions, per movie.
+
+    0.113% per node-observation is our own corpus's rate (151 over 133,318 annotated nodes), not a published
+    one — 2D nuclei report ~0.33% and developmental 3D ~1.1%, three to ten times higher, because a division
+    rate is a property of the observation window as much as the biology. Importing one would over-budget
+    every movie by that factor, which is exactly the scale error that made the frontier's evidence bonus a
+    no-op when we ported it.
+    """
+    derived = recovery(_KEPT_TOP, max_added_fraction=1.0, max_added_forks=None)
+
+    assert derived.budget(10**9, 73_697) == 83  # the dense movie's detections -> ~83 expected divisions
+    assert derived.budget(10**9, 10_703) == 12  # a sparse movie budgets proportionally less

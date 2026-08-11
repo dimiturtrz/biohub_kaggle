@@ -48,6 +48,12 @@ _DEGENERATE = 0.0
 
 logger = logging.getLogger(__name__)
 
+# Divisions per node-observation, measured on OUR corpus: 151 divisions over 133,318 annotated nodes across
+# 199 videos. Deliberately not a published figure — 2D nuclei report ~0.33% and developmental 3D ~1.1%, three
+# to ten times higher, because a division rate is a property of the OBSERVATION WINDOW as much as the biology
+# and ours is ~100 frames against a longer cell cycle. Importing one would over-budget every movie.
+_DIVISION_RATE = 0.00113
+
 
 @dataclass(frozen=True)
 class _Gap:
@@ -178,7 +184,7 @@ class AffinityDivisionRecovery:
     sister_gate_um: float
     existing_child_gate_um: float
     max_added_fraction: float
-    max_added_forks: int
+    max_added_forks: int | None
     # The parent's kept child must be its top target at this probability or above, so a fork is only proposed
     # off a link the head itself is confident in — a speculative primary link does not get a second daughter.
     min_kept_prob: float = 0.0
@@ -194,21 +200,31 @@ class AffinityDivisionRecovery:
             edges=np.concatenate([graph.edges, recovered]),
         )
 
-    def budget(self, edge_count: int) -> int:
-        """How many forks this video may gain: the edge fraction and the absolute ceiling, whichever is smaller.
+    def budget(self, edge_count: int, node_count: int) -> int:
+        """How many forks this video may gain — DERIVED from the measured division rate unless one is set.
 
-        A fraction alone scales with the movie, not with biology — 0.004 of 74,347 detections permits ~297
-        forks where the frontier emits 311 over a five-times-larger edge set. The absolute ceiling is what
-        keeps a dense movie from buying speculation by being dense.
+        The fraction scales with the movie's SIZE and the old absolute ceiling was a bare constant; neither is
+        a statement about biology. What the phenomenon actually says is a RATE: 151 divisions over 133,318
+        annotated nodes across 199 videos = 0.113% per node-observation, measured on our own corpus rather
+        than imported (published anchors run 0.33-1.1%, three to ten times higher, because their observation
+        windows are long relative to a cell cycle and ours is ~100 frames — a literature prior would
+        over-budget us by that factor).
+
+        So the expected number of TRUE divisions in a movie is its node count times that rate — ~83 for the
+        dense movie's 73,697 detections, ~12 for a sparse one's 10,703 — and the budget is set to it. Matching
+        the budget to the phenomenon needs no tuned multiplier: emitting far more forks than there are
+        divisions to find can only trade edge jaccard for speculation, and emitting far fewer leaves the term
+        unclaimed. `max_added_forks` remains an explicit override so an ARM can bracket that derivation.
         """
-        return min(int(self.max_added_fraction * edge_count), self.max_added_forks)
+        ceiling = self.max_added_forks if self.max_added_forks is not None else round(node_count * _DIVISION_RATE)
+        return min(int(self.max_added_fraction * edge_count), ceiling)
 
     def _division_edges(self, graph: TrackGraph) -> Int[np.ndarray, "d 2"]:
         """Every accepted fork as node-id pairs, ordered by the ranking's cost and cut at the budget."""
         adjacency = Adjacency.of(graph)
         positions_um = self.spacing.to_micrometres(graph.positions())
         timepoints = graph.timepoints()
-        cap = self.budget(len(graph.edges))
+        cap = self.budget(len(graph.edges), len(graph.node_ids))
         proposals: list[ForkCandidate] = []
         for timepoint in np.unique(timepoints)[:-1].tolist():
             probability = self.affinity.probabilities(timepoint)
@@ -342,7 +358,9 @@ class AffinityDivisionConfig(BaseModel):
     max_added_fraction: float = 0.004
     # An absolute ceiling beside the fraction (`budget` takes the smaller). Larger than any video's edge count,
     # so the default leaves the fraction alone; a bet on divisions sets it to the number of forks it will pay for.
-    max_added_forks: int = 1_000_000
+    # None DERIVES the ceiling from the measured division rate (see `budget`); a number overrides it, which is
+    # what an arm bracketing that derivation sets.
+    max_added_forks: int | None = None
     min_kept_prob: float = 0.5
 
     def build(self, spacing: Spacing, affinity: EdgeAffinity) -> AffinityDivisionRecovery:
