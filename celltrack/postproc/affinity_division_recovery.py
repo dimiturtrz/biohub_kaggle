@@ -183,7 +183,6 @@ class AffinityDivisionRecovery:
     parent_gate_um: float
     sister_gate_um: float
     existing_child_gate_um: float
-    max_added_fraction: float
     max_added_forks: int | None
     # The parent's kept child must be its top target at this probability or above, so a fork is only proposed
     # off a link the head itself is confident in — a speculative primary link does not get a second daughter.
@@ -200,7 +199,7 @@ class AffinityDivisionRecovery:
             edges=np.concatenate([graph.edges, recovered]),
         )
 
-    def budget(self, edge_count: int, node_count: int) -> int:
+    def budget(self, node_count: int) -> int:
         """How many forks this video may gain — DERIVED from the measured division rate unless one is set.
 
         The fraction scales with the movie's SIZE and the old absolute ceiling was a bare constant; neither is
@@ -216,15 +215,14 @@ class AffinityDivisionRecovery:
         divisions to find can only trade edge jaccard for speculation, and emitting far fewer leaves the term
         unclaimed. `max_added_forks` remains an explicit override so an ARM can bracket that derivation.
         """
-        ceiling = self.max_added_forks if self.max_added_forks is not None else round(node_count * _DIVISION_RATE)
-        return min(int(self.max_added_fraction * edge_count), ceiling)
+        return self.max_added_forks if self.max_added_forks is not None else round(node_count * _DIVISION_RATE)
 
     def _division_edges(self, graph: TrackGraph) -> Int[np.ndarray, "d 2"]:
         """Every accepted fork as node-id pairs, ordered by the ranking's cost and cut at the budget."""
         adjacency = Adjacency.of(graph)
         positions_um = self.spacing.to_micrometres(graph.positions())
         timepoints = graph.timepoints()
-        cap = self.budget(len(graph.edges), len(graph.node_ids))
+        cap = self.budget(len(graph.node_ids))
         proposals: list[ForkCandidate] = []
         for timepoint in np.unique(timepoints)[:-1].tolist():
             probability = self.affinity.probabilities(timepoint)
@@ -355,7 +353,6 @@ class AffinityDivisionConfig(BaseModel):
     existing_child_gate_um: float = math.inf
     # The frontier's sister weight, read from seven byte-identical forks at public 0.915. Only `geometry` reads it.
     sister_weight: float = 0.15
-    max_added_fraction: float = 0.004
     # An absolute ceiling beside the fraction (`budget` takes the smaller). Larger than any video's edge count,
     # so the default leaves the fraction alone; a bet on divisions sets it to the number of forks it will pay for.
     # None DERIVES the ceiling from the measured division rate (see `budget`); a number overrides it, which is
@@ -375,7 +372,6 @@ class AffinityDivisionConfig(BaseModel):
             parent_gate_um=self.parent_gate_um,
             sister_gate_um=self.sister_gate_um,
             existing_child_gate_um=self.existing_child_gate_um,
-            max_added_fraction=self.max_added_fraction,
             max_added_forks=self.max_added_forks,
             min_kept_prob=self.min_kept_prob,
         )

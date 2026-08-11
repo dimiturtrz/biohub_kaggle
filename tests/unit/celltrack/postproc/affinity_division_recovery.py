@@ -43,7 +43,6 @@ def recovery(matrix: list[list[float]], **overrides: object) -> AffinityDivision
         "parent_gate_um": 5.0,
         "sister_gate_um": 5.0,
         "existing_child_gate_um": math.inf,
-        "max_added_fraction": 1.0,
         "max_added_forks": 1000,
         "min_kept_prob": 0.5,
     }
@@ -128,8 +127,12 @@ def test_rejects_a_runner_up_beyond_the_parent_gate():
 
 
 def test_honours_the_global_cap():
-    """A zero budget adds nothing however confident the head is — the cap bounds speculation."""
-    assert recovery(_KEPT_TOP, max_added_fraction=0.0).transform(graph(_MITOSIS, [[0, 1]])).edges.tolist() == [[0, 10]]
+    """A zero budget adds nothing however confident the head is — the cap bounds speculation.
+
+    A three-node fixture reaches this state on the DERIVED budget too (0.113% of three nodes rounds to zero),
+    which is the shipped behaviour for a tiny movie: too few cells to expect a division is too few to buy one.
+    """
+    assert recovery(_KEPT_TOP, max_added_forks=0).transform(graph(_MITOSIS, [[0, 1]])).edges.tolist() == [[0, 10]]
 
 
 def test_rejects_a_parent_whose_existing_child_is_far():
@@ -192,10 +195,9 @@ def test_split_symmetry_ranking_cost():
 
 def test_budget():
     """The edge fraction and the absolute ceiling, whichever binds first."""
-    stage = recovery(_KEPT_TOP, max_added_fraction=0.004, max_added_forks=100)
+    stage = recovery(_KEPT_TOP, max_added_forks=100)
 
-    assert stage.budget(74_347, 73_697) == 100  # the explicit ceiling binds; the fraction would allow 297
-    assert stage.budget(1_000, 73_697) == 4  # the fraction binds below the ceiling
+    assert stage.budget(73_697) == 100  # an explicit ceiling overrides the derivation, which is what an arm sets
 
 
 def test_geometry_ranking_survives_the_cap_a_probability_ranking_evicts():
@@ -258,7 +260,7 @@ def test_budget_derives_the_ceiling_from_the_measured_division_rate():
     every movie by that factor, which is exactly the scale error that made the frontier's evidence bonus a
     no-op when we ported it.
     """
-    derived = recovery(_KEPT_TOP, max_added_fraction=1.0, max_added_forks=None)
+    derived = recovery(_KEPT_TOP, max_added_forks=None)
 
-    assert derived.budget(10**9, 73_697) == 83  # the dense movie's detections -> ~83 expected divisions
-    assert derived.budget(10**9, 10_703) == 12  # a sparse movie budgets proportionally less
+    assert derived.budget(73_697) == 83  # the dense movie's detections -> ~83 expected divisions
+    assert derived.budget(10_703) == 12  # a sparse movie budgets proportionally less

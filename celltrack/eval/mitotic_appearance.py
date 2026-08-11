@@ -382,9 +382,7 @@ class DivisionCandidates:
         # UNBOUNDED on purpose: this diagnosis measures the appearance of every candidate mother, so a
         # per-video fork BUDGET (which the shipped stage derives from the division rate) would silently
         # truncate the population being described. A budget belongs to shipping forks, not to describing them.
-        config = AffinityDivisionConfig(
-            min_second_prob=floor, min_kept_prob=floor, max_added_fraction=1.0, max_added_forks=_UNBOUNDED
-        )
+        config = AffinityDivisionConfig(min_second_prob=floor, min_kept_prob=floor, max_added_forks=_UNBOUNDED)
         forked = config.build(spacing, affinity).transform(prediction)
         added = forked.edges[len(prediction.edges) :]
         if not len(added):
