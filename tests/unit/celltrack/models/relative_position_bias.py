@@ -22,7 +22,9 @@ def _config() -> RelativePositionConfig:
 def test_forward():
     """Untrained, the bias is the exact zero matrix whatever geometry it is handed — the warm start's guarantee."""
     bias = DistanceAttentionBias(_HEADS, _config())
-    coords_q, coords_kv = torch.rand(2, 3, 3) * 20.0, torch.rand(2, 5, 3) * 20.0
+    geometry = torch.Generator().manual_seed(0)
+    coords_q = torch.rand(2, 3, 3, generator=geometry) * 20.0
+    coords_kv = torch.rand(2, 5, 3, generator=geometry) * 20.0
 
     scores = bias.forward(coords_q, coords_kv)
 

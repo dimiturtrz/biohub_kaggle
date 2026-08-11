@@ -14,7 +14,6 @@ from celltrack.eval.shortcut_diagnosis import (
     MatchedAnnotation,
     ShortcutDiagnosis,
     ShortcutReport,
-    rank_auc,
 )
 from core.data.tracks import AnnotatedTracks, TrackGraph
 from core.geometry import Spacing
@@ -247,14 +246,6 @@ def test_refusal():
     assert "0.9750" in message
     assert "nearly every candidate is true" in message
     assert "almost none is" in BaseRateGuard.refusal(0.001)
-
-
-def test_rank_auc():
-    """The Mann-Whitney statistic: positives at ranks 2 and 4 give (6 - 3) / (2*2) = 0.75, ties scored 0.5."""
-    labels = np.array([False, True, False, True])
-    assert rank_auc(np.array([0.1, 0.2, 0.3, 0.4]), labels) == 0.75
-    assert rank_auc(np.array([1.0, 1.0, 1.0, 1.0]), labels) == 0.5
-    assert math.isnan(rank_auc(np.array([0.1, 0.2]), np.array([True, True])))  # one class only
 
 
 def test_auc_probability():

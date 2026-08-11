@@ -28,11 +28,13 @@ def test_install_wheels(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     assert seen[0][-2:] == ["/kit/a.whl", "/kit/b.whl"]
 
 
-def test_association_ranker(monkeypatch: pytest.MonkeyPatch):
+def test_association_ranker(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """The re-ranker artifact is found by its MANIFEST, so the kernel names a dataset and not a mount path."""
-    manifest = "/kaggle/input/assoc-ranker/ASSOCIATION_RANKER_MANIFEST.json"
-    monkeypatch.setattr(kernel_runtime.glob, "glob", lambda pattern, recursive: [manifest])
-    assert KernelRuntime.association_ranker() == Path("/kaggle/input/assoc-ranker")
+    mount = tmp_path / "assoc-ranker"
+    monkeypatch.setattr(
+        kernel_runtime.glob, "glob", lambda pattern, recursive: [str(mount / "ASSOCIATION_RANKER_MANIFEST.json")]
+    )
+    assert KernelRuntime.association_ranker() == mount
 
     monkeypatch.setattr(kernel_runtime.glob, "glob", lambda pattern, recursive: [])
     assert KernelRuntime.association_ranker() is None  # dataset not attached: run without it, don't crash

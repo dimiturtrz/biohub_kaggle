@@ -13,8 +13,9 @@ import numpy as np
 import torch
 import zarr
 
+from celltrack.data.frame_source import ZarrFrames
 from celltrack.data.joint_dataset import PairDataset, PairSample, PairTarget
-from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeTransformerScorer, video_gaps
+from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeGap, EdgeTransformerScorer
 from celltrack.models.joint_model import JointModel
 from celltrack.models.prior_velocity import GapHistory, PriorVelocity
 from celltrack.models.temporal_unet_detector import DetectorRecipe, TemporalUNetDetector
@@ -41,10 +42,8 @@ def _sample(video_store: Path, *, previous: bool) -> PairSample:
     statistics = cast(ImageStatistics, zarr.open_group(video_store, mode="r").attrs["image_statistics"])
     quantiles = statistics["quantiles"]
     target = PairTarget(
-        zarr_path=video_store,
+        frames=ZarrFrames(video_store, float(quantiles["0.001"]), float(quantiles["0.999"])),
         timepoint=1 if previous else 0,
-        q_low=float(quantiles["0.001"]),
-        q_high=float(quantiles["0.999"]),
         source_centres=np.array([[0, 0, 0], [1, 3, 3]], dtype=np.int64),
         target_centres=np.array([[1, 3, 3]], dtype=np.int64),
         edge_matrix=np.array([[0.0], [1.0]], dtype=np.float32),
@@ -134,7 +133,7 @@ def test_training_and_inference_velocity_agree(video_store: Path):
     """
     model = _model(feat_dim=_WIDENED)
     scorer = EdgeTransformerScorer.of(model.detector, model.transformer, _RECIPE).eval()
-    previous_gap, scored_gap = video_gaps(video_store, _same_nodes(), "cpu")
+    previous_gap, scored_gap = EdgeGap.over(video_store, _same_nodes(), "cpu")
 
     training = PriorVelocitySource(enabled=True).of(model, _sample(video_store, previous=True), nullcontext())
     with torch.no_grad():

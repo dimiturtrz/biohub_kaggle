@@ -12,9 +12,12 @@ import numpy as np
 import pytest
 import torch
 import zarr
+from torch import nn
 
 from celltrack.data.difficulty_sampler import DifficultySampler
+from celltrack.data.frame_source import ZarrFrames
 from celltrack.data.joint_dataset import PairDataset, PairTarget
+from celltrack.data.pair_curriculum import FixedMixture, PacedMixture
 from celltrack.detectors.tunet import DetectorRecipe
 from celltrack.edges.blended_edge_scoring import BlendedEdgeTransformerScorer
 from celltrack.eval.model_evaluator import ModelEvaluator
@@ -33,7 +36,8 @@ from celltrack.training.joint_config import (
     RuntimeCfg,
     ScheduleCfg,
 )
-from celltrack.training.joint_detector import JointTrainer, PairSplit, _PairOutcome
+from celltrack.training.joint_detector import JointTrainer, _PairOutcome
+from celltrack.training.pair_split import PairSplit
 from celltrack.training.run_tracking import RunSetup, TrainingSplit
 from core.data.tracks import AnnotatedTracks
 from core.data.video import ImageStatistics
@@ -110,19 +114,15 @@ def _pairs(video_store: Path) -> list[PairTarget]:
     q_low, q_high = float(quantiles["0.001"]), float(quantiles["0.999"])
     return [
         PairTarget(
-            zarr_path=video_store,
+            frames=ZarrFrames(video_store, q_low, q_high),
             timepoint=0,
-            q_low=q_low,
-            q_high=q_high,
             source_centres=np.array([[1, 2, 2]], dtype=np.int64),
             target_centres=np.array([[1, 2, 2], [0, 1, 1]], dtype=np.int64),
             edge_matrix=np.array([[1.0, 0.0]], dtype=np.float32),
         ),
         PairTarget(
-            zarr_path=video_store,
+            frames=ZarrFrames(video_store, q_low, q_high),
             timepoint=1,
-            q_low=q_low,
-            q_high=q_high,
             source_centres=np.array([[0, 0, 0], [1, 3, 3]], dtype=np.int64),
             target_centres=np.array([[1, 3, 3]], dtype=np.int64),
             edge_matrix=np.array([[0.0], [1.0]], dtype=np.float32),
@@ -142,16 +142,29 @@ def _evaluator(video_store: Path, in_bounds_tracks: AnnotatedTracks) -> ModelEva
     )
 
 
-def test_sampler(video_store: Path):
-    """A sampler exists only when asked for, and is sized to the pair corpus rather than to the step budget."""
-    targets = _pairs(video_store)
-    assert JointTrainer(_cpu_config())._sampler(targets) is None
+def test_curriculum(video_store: Path):
+    """A policy exists only when asked for, and is sized to the pair corpus rather than to the step budget."""
+    split = PairSplit(_pairs(video_store), [])
+    assert JointTrainer(_cpu_config())._curriculum(split) is None
 
-    sampler = JointTrainer(_sampling_config())._sampler(targets)
+    sampler = JointTrainer(_sampling_config())._curriculum(split)
 
-    assert sampler is not None
+    assert isinstance(sampler, DifficultySampler)
     sampler.observe(0, 0.5)
     assert sampler.coverage() == 0.5  # one of the corpus's two pairs, not one of the run's two steps
+
+
+def test_curriculum_mixes_when_a_synthetic_population_is_present(video_store: Path):
+    """A synthetic share picks the fixed mixture; asking for pacing picks the controller instead."""
+    targets = _pairs(video_store)
+    split = PairSplit(targets, [], targets)
+    mixed = _cpu_config().model_copy(update={"data": DataCfg(downsample=(1, 1, 1), synthetic_fraction=0.5)})
+    paced = _cpu_config().model_copy(update={"data": DataCfg(downsample=(1, 1, 1), paced_curriculum=True)})
+
+    assert isinstance(JointTrainer(mixed)._curriculum(split), FixedMixture)
+    assert isinstance(JointTrainer(paced)._curriculum(split), PacedMixture)
+    # ...and with no synthetic pairs to draw, neither can be built, however the flags read.
+    assert JointTrainer(mixed)._curriculum(PairSplit(targets, [])) is None
 
 
 def test_pairs_leaves_the_uniform_stream_untouched(video_store: Path):
@@ -159,7 +172,8 @@ def test_pairs_leaves_the_uniform_stream_untouched(video_store: Path):
     dataset = PairDataset(_pairs(video_store), steps=3, downsample=(1, 1, 1), seed=0)
     walked = list(JointTrainer(_cpu_config())._pairs(dataset, None))
 
-    assert [index for index, _ in walked] == [None, None, None]
+    assert [draw.index for draw, _ in walked] == [-1, -1, -1]
+    assert {draw.weight for draw, _ in walked} == {1.0}
     for (_, pair), expected in zip(walked, dataset.stream(), strict=True):
         assert torch.equal(pair.frame_t, expected.frame_t)
         assert torch.equal(pair.edge_matrix, expected.edge_matrix)
@@ -175,9 +189,9 @@ def test_pairs_draws_through_the_sampler(video_store: Path):
 
     walked = list(JointTrainer(_cpu_config())._pairs(dataset, sampler))
 
-    assert [index for index, _ in walked] == [reference.draw() for _ in range(4)]
-    for index, pair in walked:
-        assert torch.equal(pair.edge_matrix, dataset.pair(index).edge_matrix)
+    assert [draw.index for draw, _ in walked] == [reference.draw() for _ in range(4)]
+    for draw, pair in walked:
+        assert torch.equal(pair.edge_matrix, dataset.pair(draw.index).edge_matrix)
 
 
 def test_observe(video_store: Path):
@@ -186,18 +200,20 @@ def test_observe(video_store: Path):
     outcome = _outcome(torch.tensor([[0.0, 9.0]]), torch.tensor([[1.0, 0.0]]))  # the one annotated source is missed
     trainer = JointTrainer(_cpu_config())
 
-    trainer._observe(None, None, outcome)
+    trainer._observe(None, -1, outcome)
+    trainer._observe(sampler, -1, outcome)  # the uniform stream draws no index; the sampler must not be touched
+    assert sampler.coverage() == 0.0
     trainer._observe(sampler, 0, outcome)
 
     assert sampler.coverage() == 0.5
     assert outcome.difficulty() == 1.0
 
 
-def test_sampling():
-    """The health numbers ride the window's metric dict only when the sampler is on — an unasked run logs as before."""
-    trainer = JointTrainer(_cpu_config())
-    assert trainer._sampling(None) == {}
-    assert trainer._sampling(DifficultySampler(count=4, seed=0)) == {"coverage": 0.0, "sampling_entropy": 1.0}
+def test_health():
+    """Each policy names its own diagnostics, and an unasked run contributes none — the rows of yesterday."""
+    assert DifficultySampler(count=4, seed=0).health() == {"coverage": 0.0, "sampling_entropy": 1.0}
+    assert set(FixedMixture(2, 2, 0.5, seed=0).health()) == {"synthetic_share"}
+    assert set(PacedMixture(2, 2, 4, seed=0).health()) == {"difficulty", "synthetic_weight", "real_weight"}
 
 
 def test_train(video_store: Path, in_bounds_tracks: AnnotatedTracks, tmp_path: Path):
@@ -315,7 +331,7 @@ def test_prepare_widens_the_head_before_building_the_optimizer(video_store: Path
     start at exactly zero so the (pretrained) head's output is unchanged at step 0.
     """
     model, optimization = JointTrainer(_velocity_config())._prepare(warm_start=False)
-    projection = model.transformer.proj
+    projection = cast(nn.Linear, model.transformer.proj)
 
     assert projection.in_features == _cpu_config().model.out_channels + 4 * _POS_EMBED_DIM + PriorVelocity.DIM
     optimised = {id(parameter) for group in optimization.optimizer.param_groups for parameter in group["params"]}

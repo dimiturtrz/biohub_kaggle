@@ -65,6 +65,24 @@ class PrecomputedEdgeAffinity:
 class EdgeGap:
     """One `t -> t+1` gap's scoring inputs — the video, the timepoint, and both frames' node positions."""
 
+    @staticmethod
+    def over(path: Path, detections: TrackGraph, device: str) -> Iterator[EdgeGap]:
+        """Every scorable `t -> t+1` gap of a video, in ASCENDING time — one enumeration, every scorer.
+
+        Ascending order is load-bearing, not incidental: a gap's prior velocity is read from the gap before it, so
+        a scorer can only carry that state forward if it meets the gaps in time order. Rows follow the linker's own
+        `np.flatnonzero(timepoints == t)` order, so each matrix drops straight onto the assignment cost.
+        """
+        source = TemporalUNetDetector._open_source(path)  # noqa: SLF001
+        timepoints = detections.timepoints()
+        positions = detections.positions().astype(np.float32)
+        for timepoint in np.unique(timepoints)[:-1].tolist():
+            src_rows = np.flatnonzero(timepoints == timepoint)
+            tgt_rows = np.flatnonzero(timepoints == timepoint + 1)
+            if len(src_rows) == 0 or len(tgt_rows) == 0:
+                continue
+            yield EdgeGap(source, int(timepoint), positions[src_rows], positions[tgt_rows], device)
+
     source: _VideoSource
     timepoint: int
     src_positions: Float[np.ndarray, "s 3"]
@@ -87,24 +105,6 @@ class _GapWindow:
     spatial: Float[Tensor, "3"]
     downsample: Float[Tensor, "3"]
     device: str
-
-
-def video_gaps(path: Path, detections: TrackGraph, device: str) -> Iterator[EdgeGap]:
-    """Every scorable `t -> t+1` gap of a video, in ASCENDING time — one enumeration, every scorer.
-
-    Ascending order is load-bearing, not incidental: a gap's prior velocity is read from the gap before it, so
-    a scorer can only carry that state forward if it meets the gaps in time order. Rows follow the linker's own
-    `np.flatnonzero(timepoints == t)` order, so each matrix drops straight onto the assignment cost.
-    """
-    source = TemporalUNetDetector._open_source(path)  # noqa: SLF001
-    timepoints = detections.timepoints()
-    positions = detections.positions().astype(np.float32)
-    for timepoint in np.unique(timepoints)[:-1].tolist():
-        src_rows = np.flatnonzero(timepoints == timepoint)
-        tgt_rows = np.flatnonzero(timepoints == timepoint + 1)
-        if len(src_rows) == 0 or len(tgt_rows) == 0:
-            continue
-        yield EdgeGap(source, int(timepoint), positions[src_rows], positions[tgt_rows], device)
 
 
 class EdgeTransformerScorer(nn.Module):
@@ -164,7 +164,7 @@ class EdgeTransformerScorer(nn.Module):
         """
         history = GapHistory()
         by_timepoint: dict[int, Float[np.ndarray, "s t"]] = {}
-        for gap in video_gaps(path, detections, device):
+        for gap in EdgeGap.over(path, detections, device):
             logits, history = self._seed_logits(gap, history)
             by_timepoint[gap.timepoint] = torch.softmax(logits, dim=0).cpu().numpy()
         return PrecomputedEdgeAffinity(by_timepoint)

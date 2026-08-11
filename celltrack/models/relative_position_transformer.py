@@ -38,11 +38,6 @@ _UNBATCHED_NDIM = 2
 _MASKED_SCORE = float("-inf")
 
 
-def _part(module: nn.Module, name: str) -> nn.Module:
-    """A named child of a module, typed — `nn.Module.__getattr__` returns `Tensor | Module`, which is uncallable."""
-    return cast(nn.Module, getattr(module, name))
-
-
 class RelativePositionEdgeTransformer(nn.Module):
     """The pack's `SimpleNodeTransformer` with relative spatial position added to its cross-attention scores.
 
@@ -53,6 +48,11 @@ class RelativePositionEdgeTransformer(nn.Module):
     can take the additive geometry term, and the pair head that follows is the pack's own `norm_out` and
     `pair_mlp` under the pack's own chunking, so the only difference from the original forward is the bias.
     """
+
+    @staticmethod
+    def _part(module: nn.Module, name: str) -> nn.Module:
+        """A named child of a module, typed — `nn.Module.__getattr__` returns `Tensor | Module`, which is uncallable."""
+        return cast(nn.Module, getattr(module, name))
 
     def __init__(self, transformer: nn.Module, config: RelativePositionConfig) -> None:
         super().__init__()
@@ -114,14 +114,15 @@ class RelativePositionEdgeTransformer(nn.Module):
         """
         bias = cast(DistanceAttentionBias, self.bias)
         mask_t, mask_t1 = masks
-        project, norm_in = _part(self.transformer, "proj"), _part(self.transformer, "norm_in")
+        part = RelativePositionEdgeTransformer._part
+        project, norm_in = part(self.transformer, "proj"), part(self.transformer, "norm_in")
         source, target = (norm_in(project(feature)) for feature in features)
         forward_bias = bias(*coords)
         reverse_bias = forward_bias.transpose(1, 2)
         for block in cast(nn.ModuleList, self.transformer.blocks):
             source = self._block(block, source, target, mask_t1, forward_bias)
             target = self._block(block, target, source, mask_t, reverse_bias)
-        norm_out = _part(self.transformer, "norm_out")
+        norm_out = RelativePositionEdgeTransformer._part(self.transformer, "norm_out")
         return norm_out(source), norm_out(target)
 
     @staticmethod
@@ -140,7 +141,8 @@ class RelativePositionEdgeTransformer(nn.Module):
         """
         attn_mask = RelativePositionEdgeTransformer._merge_padding(bias, kv_mask)
 
-        norm1, attention = _part(block, "norm1"), _part(block, "cross_attn")
+        part = RelativePositionEdgeTransformer._part
+        norm1, attention = part(block, "norm1"), part(block, "cross_attn")
 
         def _attend(q: Tensor, kv: Tensor, attn_mask: Tensor) -> Tensor:
             normed_q, normed_kv = norm1(q), norm1(kv)
@@ -151,7 +153,7 @@ class RelativePositionEdgeTransformer(nn.Module):
             q = cast(Tensor, grad_ckpt(_attend, q, kv, attn_mask, use_reentrant=False))
         else:
             q = _attend(q, kv, attn_mask)
-        return q + _part(block, "mlp")(_part(block, "norm2")(q))
+        return q + part(block, "mlp")(part(block, "norm2")(q))
 
     @staticmethod
     def _merge_padding(
@@ -176,7 +178,7 @@ class RelativePositionEdgeTransformer(nn.Module):
         of gigabytes at this problem's node counts, and the wrapper changing that would trade a memory
         property of the published head for nothing.
         """
-        pair_mlp = _part(self.transformer, "pair_mlp")
+        pair_mlp = RelativePositionEdgeTransformer._part(self.transformer, "pair_mlp")
         chunk = cast(int | None, self.transformer.pair_chunk_size) or source.shape[1]
         chunks: list[Tensor] = []
         for start in range(0, source.shape[1], chunk):

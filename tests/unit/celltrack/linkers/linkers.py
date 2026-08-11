@@ -474,9 +474,9 @@ def test_appearance_cost_defaults_to_the_boundary_charge():
     )
     scored = cast(EdgeAffinity, _Scored(np.array([[0.9, 0.1], [0.1, 0.9]])))
     symmetric = LinkerConfig(name="flow", gate_um=10.0, disappearance_cost=3.0).build(SPACING, scored)
-    spelled = LinkerConfig(
-        name="flow", gate_um=10.0, disappearance_cost=3.0, appearance_cost=3.0
-    ).build(SPACING, scored)
+    spelled = LinkerConfig(name="flow", gate_um=10.0, disappearance_cost=3.0, appearance_cost=3.0).build(
+        SPACING, scored
+    )
     linked = symmetric.link(detections).edge_rows()
     assert len(linked) > 0  # the comparison below is vacuous on an empty graph — see the docstring
     assert np.array_equal(linked, spelled.link(detections).edge_rows())
@@ -494,9 +494,7 @@ def test_pricing_the_two_boundaries_apart_reaches_the_network():
     positions = np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 6.0], [0.0, 0.0, 1.0], [0.0, 0.0, 5.0]])
     timepoints = np.array([0, 0, 1, 1])
     symmetric = LinkerConfig(name="flow", gate_um=4.0, disappearance_cost=0.4).build(SPACING)
-    asymmetric = LinkerConfig(
-        name="flow", gate_um=4.0, disappearance_cost=0.4, appearance_cost=8.0
-    ).build(SPACING)
+    asymmetric = LinkerConfig(name="flow", gate_um=4.0, disappearance_cost=0.4, appearance_cost=8.0).build(SPACING)
     assert symmetric._boundary_costs(positions, timepoints) == ([400] * 4, [400] * 4)
     assert asymmetric._boundary_costs(positions, timepoints) == ([8000] * 4, [400] * 4)
 

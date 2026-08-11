@@ -102,3 +102,23 @@ def test_entropy():
     sampler.observe(1, 1.0)
     assert sampler.entropy() > collapsed  # two live pairs instead of one is strictly less collapsed
     assert DifficultySampler(count=1, seed=0).entropy() == 1.0  # a one-pair corpus has nowhere to collapse to
+
+
+def test_step():
+    """The policy seam yields the same draw the sampler's own rule would, at unit weight — difficulty is a DRAW here."""
+    sampler, reference = DifficultySampler(count=4, seed=0), DifficultySampler(count=4, seed=0)
+
+    draw = sampler.step()
+
+    assert draw.index == reference.draw()
+    assert draw.weight == 1.0
+
+
+def test_selection_weight():
+    """The corpus never changes under this policy, so save-best reads the raw validation metric."""
+    assert DifficultySampler(count=4, seed=0).selection_weight() == 1.0
+
+
+def test_health():
+    """The window row carries the two numbers this sampler's known collapse mode shows up in."""
+    assert DifficultySampler(count=4, seed=0).health() == {"coverage": 0.0, "sampling_entropy": 1.0}

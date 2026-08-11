@@ -264,11 +264,13 @@ def test_affinities(tmp_path: Path):
 
     affinity = ranker.affinities(SPACING, _detections(), _links(), _affinity(), 5.0)
 
-    assert affinity.probabilities(0).shape == (2, 2)
-    assert affinity.probabilities(1).shape == (2, 1)
+    first, second = affinity.probabilities(0), affinity.probabilities(1)
+    assert first is not None and second is not None
+    assert first.shape == (2, 2)
+    assert second.shape == (2, 1)
     assert affinity.probabilities(2) is None  # the last frame opens no gap
     # A pair outside the gate is never in a candidate list, so it is scored 0 rather than guessed at.
-    scored = affinity.probabilities(0)
+    scored = first
     assert scored[0, 1] == 0.0
     assert scored[1, 0] == 0.0
     assert ((scored >= 0.0) & (scored <= 1.0)).all()
@@ -316,4 +318,5 @@ def test_affinities_skip_a_gap_with_no_gated_candidate(tmp_path: Path):
 
     affinity = ranker.affinities(SPACING, _detections(), _links(), _affinity(), 0.5)
 
-    assert not affinity.probabilities(0).any()
+    scored = affinity.probabilities(0)
+    assert scored is not None and not scored.any()

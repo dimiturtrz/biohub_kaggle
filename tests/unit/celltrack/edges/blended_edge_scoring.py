@@ -13,7 +13,7 @@ import zarr
 
 from celltrack.edges.blended_edge_scoring import BlendedEdgeTransformerScorer, EdgeBlendOptions
 from celltrack.edges.seed_moment_alignment import SeedMomentAlignment
-from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeGap, EdgeTransformerScorer, video_gaps
+from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeGap, EdgeTransformerScorer
 from celltrack.models.prior_velocity import GapHistory, PriorVelocity
 from celltrack.models.temporal_unet_detector import DetectorRecipe, TemporalUNetDetector
 from core.data.tracks import TrackGraph
@@ -171,7 +171,7 @@ def test_bidirectional_reverse_carries_no_history(tmp_path: Path):
     a = _widened_scorer(0)
     scorer = BlendedEdgeTransformerScorer((a,), (1.0,), bidirectional=True)
     detections, video = _moving_detections(), _video(tmp_path, frames=3)
-    first, second = video_gaps(video, detections, "cpu")
+    first, second = EdgeGap.over(video, detections, "cpu")
 
     fused = scorer.affinities(video, detections, "cpu").probabilities(1)
 

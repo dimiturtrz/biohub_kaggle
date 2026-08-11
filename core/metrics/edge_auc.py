@@ -16,7 +16,8 @@ undefined and returns NaN, as `EdgeCounts.jaccard` does on an empty tally.
 """
 
 import numpy as np
-from jaxtyping import Float
+from jaxtyping import Bool, Float
+from scipy.stats import rankdata
 
 
 class EdgeAUC:
@@ -33,6 +34,22 @@ class EdgeAUC:
         labels = gt_matrix > 0
         active = labels.any(axis=1, keepdims=True) | labels.any(axis=0, keepdims=True)
         return EdgeAUC._average_precision(scores[active], labels[active])
+
+    @staticmethod
+    def ranked(scores: Float[np.ndarray, "n"], labels: Bool[np.ndarray, "n"]) -> float:
+        """Rank (ROC) AUC of `scores` against binary `labels` — the Mann-Whitney statistic, ties scored 0.5.
+
+        ROC rather than the average precision `of` reports above, because these numbers are compared
+        ACROSS populations (whole movie vs distance band; correct edges vs mislinks) whose base rates differ by
+        design, and average precision moves with the base rate while the rank AUC does not. NaN when either class
+        is empty — undefined, not 0.5, so a degenerate split cannot read as chance.
+        """
+        positives = int(labels.sum())
+        negatives = int(labels.size) - positives
+        if positives == 0 or negatives == 0:
+            return float("nan")
+        ranks = rankdata(scores)
+        return float((ranks[labels].sum() - positives * (positives + 1) / 2) / (positives * negatives))
 
     @staticmethod
     def _average_precision(

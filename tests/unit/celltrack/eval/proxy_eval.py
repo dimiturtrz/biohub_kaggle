@@ -151,8 +151,13 @@ def test_mount(monkeypatch: pytest.MonkeyPatch):
     runs on any machine; an unpriced sweep neither reads the artifact nor pays the context linking pass.
     """
     _patch(monkeypatch)
-    unpriced = TrackerProxyEval("cpu")._mount(cast(DataRoot, _Root()))[1]
-    priced = TrackerProxyEval("cpu", overrides=("linker.ranker_bonus=17.0",))._mount(cast(DataRoot, _Root()))[1]
+    # `_mount` is typed to return a real CellTracker; under `_patch` it returns the double, whose `ranker_pack`
+    # RECORDS the artifact `with_ranker` was called with — that call is what this test is about.
+    unpriced = cast(_FakePipeline, TrackerProxyEval("cpu")._mount(cast(DataRoot, _Root()))[1])
+    priced = cast(
+        _FakePipeline,
+        TrackerProxyEval("cpu", overrides=("linker.ranker_bonus=17.0",))._mount(cast(DataRoot, _Root()))[1],
+    )
 
     assert unpriced.ranker_pack is None
     assert priced.ranker_pack == Path("biohub_cell_tracking/reference/association_ranker")

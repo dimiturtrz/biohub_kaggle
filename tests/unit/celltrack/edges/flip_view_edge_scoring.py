@@ -8,7 +8,7 @@ import torch
 import zarr
 
 from celltrack.edges.flip_view_edge_scoring import FlipViewEdgeScorer
-from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeGap, EdgeTransformerScorer, video_gaps
+from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeGap, EdgeTransformerScorer
 from celltrack.models.prior_velocity import GapHistory, PriorVelocity
 from celltrack.models.temporal_unet_detector import DetectorRecipe, FlipView, TemporalUNetDetector
 from core.data.tracks import TrackGraph
@@ -51,7 +51,7 @@ def _detections() -> TrackGraph:
 
 def _gap(tmp_path: Path, detections: TrackGraph) -> EdgeGap:
     """The single scorable gap of the synthetic two-frame video."""
-    return next(iter(video_gaps(_video(tmp_path), detections, "cpu")))
+    return next(iter(EdgeGap.over(_video(tmp_path), detections, "cpu")))
 
 
 def test_gap_logits_pools_the_four_detector_views(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -103,7 +103,7 @@ def test_carried_history_is_the_identity_views(tmp_path: Path):
     """The history handed to the next gap comes from the unflipped view — a velocity is an input, not a score."""
     scorer = _widened_scorer(0)
     detections = _moving_detections()
-    gap = next(iter(video_gaps(_video(tmp_path, frames=3), detections, "cpu")))
+    gap = next(iter(EdgeGap.over(_video(tmp_path, frames=3), detections, "cpu")))
     with torch.no_grad():
         _, carried = FlipViewEdgeScorer(scorer).gap_logits(gap, GapHistory())
         expected = scorer._history_after(scorer._gap_window(gap, reverse=False))

@@ -41,6 +41,7 @@ sys.path.insert(0, str(pack_source()))
 from celltrack.linkers.linkers import LinkerConfig  # noqa: E402
 from celltrack.multi_gpu_submission import MultiGpuSubmission  # noqa: E402
 from celltrack.operating_point import TrackerConfig  # noqa: E402
+from celltrack.postproc.affinity_division_recovery import AffinityDivisionConfig  # noqa: E402
 
 # thr 0.97 is the measured LB best of the ladder probed so far (0.99/0.98/0.97 = 0.887/0.891/0.892).
 _THRESHOLD = 0.97
@@ -59,13 +60,39 @@ _BOUNDARY_COST = 3.0
 # it measured -0.0027, but a symmetric mutual-consistency affinity suits a GLOBAL solver that imposes
 # one-parent/one-child itself rather than through the probability's normalisation. Proxy showed the sign flip;
 # the leaderboard confirmed it at +0.004.
+# THE DIVISION TERM, CONTESTED FOR THE FIRST TIME. score = adjusted_edge_jaccard + 0.1 * division_jaccard and
+# we have banked exactly zero of the second term all campaign — the flow solver's capacity-1 node split emits no
+# forks at all, so division_jaccard is 0 BY CONSTRUCTION rather than by any measured limit.
+#
+# The proxy cannot arbitrate this axis: it holds THREE annotated divisions, so any fork budget faces a hostile
+# FP:TP ratio the hidden set does not (our corpus rate is 0.113% of annotated nodes, and a fully annotated dense
+# movie would hold ~79-170 divisions rather than 3). What the proxy CAN read is the fork count, whether the one
+# recoverable division survives, and the cost to the edge term — measured at -0.0019, inside the noise floor.
+#
+# Arm J of the sweep: rank by SPLIT SYMMETRY. |u+v| / (|u|+|v|) over the two daughter displacements is the
+# half-angle form, 0 for a clean opposite split and 1 for two cells leaving together; the cost adds it to
+# parent_dist / parent_gate so both terms are normalised by the constraint that decides their own admissibility
+# and equal weighting is the only unfitted choice. A/B against the frontier's parent + 0.15*sister at IDENTICAL
+# gates and an identical 490 candidates: symmetry lifts the recoverable division into the kept set and costs
+# -0.0019; the frontier's geometry misses it and costs -0.0036.
+#
+# The probability floors are OFF (0.0), which is what the sweep found actually blocked the recovery — not the
+# gates and not the cap. Under this pipeline the true divider's kept-child probability is below 0.5, so at the
+# shipped floor it was never even PROPOSED. Candidacy is carried by geometry; the absolute cap bounds the bet.
+_DIVISION = AffinityDivisionConfig(
+    ranking="symmetry",
+    min_second_prob=0.0,
+    min_kept_prob=0.0,
+    parent_gate_um=7.0,
+    sister_gate_um=14.0,
+    max_added_forks=300,
+)
 _CONFIG = TrackerConfig(
     threshold=_THRESHOLD,
     edge_blend=_EDGE_BLEND,
-    linker=LinkerConfig(
-        name="flow", gate_um=_GATE_UM, affinity_bonus=_EDGE_BONUS, disappearance_cost=_BOUNDARY_COST
-    ),
+    linker=LinkerConfig(name="flow", gate_um=_GATE_UM, affinity_bonus=_EDGE_BONUS, disappearance_cost=_BOUNDARY_COST),
     bidirectional_edges=True,
+    division=_DIVISION,
 )
 _SUBMISSION = Path("/kaggle/working/submission.csv")
 

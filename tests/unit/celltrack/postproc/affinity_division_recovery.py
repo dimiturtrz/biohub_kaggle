@@ -1,10 +1,19 @@
+import math
 from typing import cast
 
 import numpy as np
+import pytest
 from jaxtyping import Float
 
 from celltrack.affinity import EdgeAffinity
-from celltrack.postproc.affinity_division_recovery import AffinityDivisionConfig, AffinityDivisionRecovery
+from celltrack.postproc.affinity_division_recovery import (
+    AffinityDivisionConfig,
+    AffinityDivisionRecovery,
+    ForkCandidate,
+    GeometryRanking,
+    ProbabilityRanking,
+    SplitSymmetryRanking,
+)
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
 
@@ -27,18 +36,32 @@ def graph(coordinates: list[list[int]], edges: list[list[int]]) -> TrackGraph:
     )
 
 
-def recovery(matrix: list[list[float]], **overrides: float) -> AffinityDivisionRecovery:
-    settings: dict[str, float] = {
+def recovery(matrix: list[list[float]], **overrides: object) -> AffinityDivisionRecovery:
+    settings: dict[str, object] = {
+        "ranking": ProbabilityRanking(),
         "min_second_prob": 0.1,
         "parent_gate_um": 5.0,
         "sister_gate_um": 5.0,
+        "existing_child_gate_um": math.inf,
         "max_added_fraction": 1.0,
+        "max_added_forks": 1000,
         "min_kept_prob": 0.5,
     }
     return AffinityDivisionRecovery(
         spacing=Spacing(z=1.0, y=1.0, x=1.0),
         affinity=FakeAffinity({0: np.array(matrix, dtype=np.float32)}),
-        **(settings | overrides),
+        **(settings | overrides),  # pyrefly: ignore[bad-argument-type]
+    )
+
+
+def candidate(kept: list[float], child: list[float], probability: float = 0.5) -> ForkCandidate:
+    """A fork whose mother sits at the origin, with both daughters placed in micrometres around her."""
+    return ForkCandidate(
+        parent=0,
+        kept=1,
+        child=2,
+        probability=probability,
+        positions_um=np.array([[0.0, 0.0, 0.0], kept, child]),
     )
 
 
@@ -107,3 +130,120 @@ def test_rejects_a_runner_up_beyond_the_parent_gate():
 def test_honours_the_global_cap():
     """A zero budget adds nothing however confident the head is — the cap bounds speculation."""
     assert recovery(_KEPT_TOP, max_added_fraction=0.0).transform(graph(_MITOSIS, [[0, 1]])).edges.tolist() == [[0, 10]]
+
+
+def test_rejects_a_parent_whose_existing_child_is_far():
+    """A mother already reaching a long way to her kept child is not a divider — the existing-child gate."""
+    gated = recovery(_KEPT_TOP, existing_child_gate_um=0.5)
+    assert gated.transform(graph(_MITOSIS, [[0, 1]])).edges.tolist() == [[0, 10]]
+
+
+def test_parent_distance_um():
+    """Mother to the proposed new daughter, in micrometres."""
+    assert candidate([1.0, 0.0, 0.0], [0.0, 3.0, 4.0]).parent_distance_um() == 5.0
+
+
+def test_sister_distance_um():
+    """The separation between the kept child and the candidate."""
+    assert candidate([2.0, 0.0, 0.0], [-2.0, 0.0, 0.0]).sister_distance_um() == 4.0
+
+
+def test_existing_child_distance_um():
+    """Mother to the child she already keeps."""
+    assert candidate([0.0, 0.0, 3.0], [1.0, 0.0, 0.0]).existing_child_distance_um() == 3.0
+
+
+def test_daughter_angle_cosine():
+    """-1 when the daughters leave on opposite sides, 0 at a right angle, 1 when they leave together."""
+    assert candidate([1.0, 0.0, 0.0], [-2.0, 0.0, 0.0]).daughter_angle_cosine() == -1.0
+    assert candidate([1.0, 0.0, 0.0], [0.0, 2.0, 0.0]).daughter_angle_cosine() == 0.0
+    assert candidate([1.0, 0.0, 0.0], [3.0, 0.0, 0.0]).daughter_angle_cosine() == 1.0
+
+
+def test_split_imbalance():
+    """Zero when the daughters balance about the mother, one when they leave in the same direction."""
+    assert candidate([1.0, 0.0, 0.0], [-1.0, 0.0, 0.0]).split_imbalance() == 0.0
+    assert candidate([1.0, 0.0, 0.0], [3.0, 0.0, 0.0]).split_imbalance() == 1.0
+    # Equal displacements at a right angle: the half-angle form, cos(45 degrees).
+    assert math.isclose(candidate([1.0, 0.0, 0.0], [0.0, 1.0, 0.0]).split_imbalance(), 0.5 * math.sqrt(2))
+
+
+def test_probability_ranking_cost():
+    """The head's most confident second daughter sorts first, so its cost is the negated probability."""
+    assert ProbabilityRanking().cost(candidate([1.0, 0.0, 0.0], [-1.0, 0.0, 0.0], probability=0.3)) == -0.3
+
+
+def test_geometry_ranking_cost():
+    """The frontier's `parent_dist + w * sister_dist`, so a tight pair close to the mother sorts first."""
+    fork = candidate([1.0, 0.0, 0.0], [-1.0, 0.0, 0.0])
+    assert GeometryRanking(sister_weight=0.15).cost(fork) == 1.0 + 0.15 * 2.0
+
+
+def test_split_symmetry_ranking_cost():
+    """Relative reach from the mother plus centroid imbalance — an opposite, balanced split scores lowest."""
+    ranking = SplitSymmetryRanking(parent_gate_um=4.0)
+    opposite = ranking.cost(candidate([2.0, 0.0, 0.0], [-2.0, 0.0, 0.0]))
+    aligned = ranking.cost(candidate([2.0, 0.0, 0.0], [2.0, 0.0, 0.0]))
+
+    assert opposite == 0.5  # imbalance 0: the daughters' centre of mass is the mother
+    assert aligned == 1.5  # same reach, but both daughters left together
+    assert opposite < aligned
+
+
+def test_budget():
+    """The edge fraction and the absolute ceiling, whichever binds first."""
+    stage = recovery(_KEPT_TOP, max_added_fraction=0.004, max_added_forks=100)
+
+    assert stage.budget(74_347) == 100  # the fraction would allow 297
+    assert stage.budget(1_000) == 4  # the fraction binds below the ceiling
+
+
+def test_geometry_ranking_survives_the_cap_a_probability_ranking_evicts():
+    """The whole fix: under a budget of one, geometry keeps the clean split the head scores lowest.
+
+    Parent 0 forks to an orphan on the OPPOSITE side of its kept child at low probability; parent 3 forks to
+    a same-side orphan the head likes far more. Probability admits the crowd's favourite, geometry the split.
+    """
+    coordinates = [
+        [0, 0, 0, 0],
+        [1, 0, 0, 1],
+        [1, 0, 0, -1],  # parent 0's low-probability, opposite-side candidate
+        [0, 0, 0, 10],
+        [1, 0, 0, 11],
+        [1, 0, 0, 12],  # parent 3's confident, same-side candidate
+    ]
+    edges = [[0, 1], [3, 4]]
+    matrix = [[0.9, 0.2, 0.0, 0.0], [0.0, 0.0, 0.8, 0.7]]
+    one_fork = {"max_added_forks": 1, "min_second_prob": 0.1}
+
+    by_probability = recovery(matrix, **one_fork).transform(graph(coordinates, edges))
+    by_geometry = recovery(matrix, ranking=GeometryRanking(sister_weight=0.15), **one_fork)
+    by_symmetry = recovery(matrix, ranking=SplitSymmetryRanking(parent_gate_um=5.0), **one_fork)
+
+    assert by_probability.division_parents().tolist() == [30]
+    assert by_geometry.transform(graph(coordinates, edges)).division_parents().tolist() == [0]
+    assert by_symmetry.transform(graph(coordinates, edges)).division_parents().tolist() == [0]
+
+
+def test_admits_a_contested_daughter_only_once():
+    """Two mothers naming the same orphan is not two divisions — the better-ranked one claims it."""
+    coordinates = [
+        [0, 0, 0, 0],
+        [0, 0, 0, 4],  # the second mother, further from the contested cell
+        [1, 0, 0, 1],
+        [1, 0, 0, 5],
+        [1, 0, 0, -1],  # contested: the runner-up of both mothers
+    ]
+    edges = [[0, 2], [1, 3]]
+    matrix = [[0.9, 0.0, 0.4], [0.0, 0.9, 0.4]]
+
+    forked = recovery(matrix, ranking=GeometryRanking(sister_weight=0.15), parent_gate_um=6.0, sister_gate_um=7.0)
+
+    assert forked.transform(graph(coordinates, edges)).division_parents().tolist() == [0]
+
+
+def test_rejects_an_unknown_ranking():
+    """A misspelled `--set division.ranking=…` is a typo, not a silent fallback to the default."""
+    affinity = cast(EdgeAffinity, FakeAffinity({}))
+    with pytest.raises(ValueError, match="nearest"):
+        AffinityDivisionConfig(ranking="nearest").build(Spacing(z=1.0, y=1.0, x=1.0), affinity)

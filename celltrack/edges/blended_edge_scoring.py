@@ -30,7 +30,7 @@ from torch import Tensor
 
 from celltrack.edges.flip_view_edge_scoring import FlipViewEdgeScorer
 from celltrack.edges.seed_moment_alignment import LogitMoments, SeedMomentAlignment
-from celltrack.models.edge_transformer import EdgeGap, EdgeTransformerScorer, PrecomputedEdgeAffinity, video_gaps
+from celltrack.models.edge_transformer import EdgeGap, EdgeTransformerScorer, PrecomputedEdgeAffinity
 from celltrack.models.prior_velocity import GapHistory
 from core.data.tracks import TrackGraph
 
@@ -156,7 +156,7 @@ class BlendedEdgeTransformerScorer:
         """
         histories = tuple(GapHistory() for _ in self.scorers)
         by_timepoint: dict[int, Float[np.ndarray, "s t"]] = {}
-        for gap in video_gaps(path, detections, device):
+        for gap in EdgeGap.over(path, detections, device):
             probabilities, histories = self._gap_probabilities(gap, histories)
             by_timepoint[gap.timepoint] = probabilities.cpu().numpy()
         return PrecomputedEdgeAffinity(by_timepoint)
@@ -183,7 +183,7 @@ class BlendedEdgeTransformerScorer:
         histories = tuple(GapHistory() for _ in self.scorers)
         reported: list[GapSeedMoments] = []
         with torch.no_grad():
-            for gap in video_gaps(path, detections, device):
+            for gap in EdgeGap.over(path, detections, device):
                 scored = self._seed_scored(gap, histories)
                 histories = tuple(history for _, history in scored)
                 moments = tuple(SeedMomentAlignment.moments(logits) for logits, _ in scored)
@@ -200,7 +200,7 @@ class BlendedEdgeTransformerScorer:
         """
         histories = tuple(GapHistory() for _ in self.scorers)
         reported: list[GapSeedScores] = []
-        for gap in video_gaps(path, detections, device):
+        for gap in EdgeGap.over(path, detections, device):
             scored = self._seed_scored(gap, histories)
             histories = tuple(history for _, history in scored)
             logits = [seed_logits for seed_logits, _ in scored]

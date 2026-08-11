@@ -70,6 +70,17 @@ class DataCfg(BaseModel):
     # distance and the learned probability pick the near-wrong cell). Off by default and byte-identical off.
     # COSTS ~50% more wall-clock per step: an extra frame decode plus one extra no-grad backbone forward.
     prior_velocity: bool = False
+    # Share of steps drawn from the FULLY-LABELLED synthetic corpus (`celltrack.data.synthetic_pairs`), whose
+    # candidate set is complete by construction — the property our own annotation cannot have, and the one the
+    # measured association failure turns on (all 38 dense mislinks chose an UNANNOTATED partner). 0.0 keeps the
+    # corpus of yesterday; the synthetic pairs are not even enumerated unless this or `paced_curriculum` asks.
+    synthetic_fraction: float = Field(0.0, ge=0.0, lt=1.0)
+    # How many synthetic sequences to enumerate (each is 6 frames = 5 pairs); None takes all 2174 of them.
+    synthetic_sequences: PositiveInt | None = None
+    # Replace the FIXED share above with the feedback controller (`PacedMixture`): the two populations
+    # alternate structurally and an EMA'd difficulty moves a per-sample LOSS WEIGHT instead of a draw
+    # probability, with save-best corrected for the difficulty the window trained at. Off by default.
+    paced_curriculum: bool = False
 
 
 class OptimCfg(BaseModel):

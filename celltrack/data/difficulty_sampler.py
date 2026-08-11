@@ -35,6 +35,8 @@ future change here.
 import numpy as np
 from jaxtyping import Float
 
+from celltrack.data.pair_curriculum import PairDraw
+
 _DIFFICULTY_SHARE = 0.5
 """How much of the draw mass follows difficulty rather than uniform — the even mixture, argued not swept.
 
@@ -64,12 +66,32 @@ geometric mean of collapse and uniform.
 
 
 class DifficultySampler:
-    """Draws pair indices from a difficulty-proportional distribution evenly mixed with the uniform one."""
+    """Draws pair indices from a difficulty-proportional distribution evenly mixed with the uniform one.
+
+    It is one of the loop's `PairCurriculum` policies (`celltrack.data.pair_curriculum`) — the one whose
+    feedback is per-PAIR rather than per-window, and whose knob is the draw probability rather than a loss
+    weight. Sharing that seam is what lets the trainer hold one policy object instead of branching per family.
+    """
 
     def __init__(self, count: int, seed: int) -> None:
         self._difficulty = np.ones(count, dtype=np.float64)
         self._observed = np.zeros(count, dtype=bool)
         self._rng = np.random.default_rng(seed)
+
+    def step(self) -> PairDraw:
+        """One drawn pair at unit weight — this policy expresses difficulty as a draw, never as a weight."""
+        return PairDraw(index=self.draw())
+
+    def update(self, score: float) -> None:
+        """No window-level channel: this sampler's feedback arrives per pair, through `observe`."""
+
+    def selection_weight(self) -> float:
+        """1.0 — the corpus never changes here, so save-best reads the raw validation metric."""
+        return 1.0
+
+    def health(self) -> dict[str, float]:
+        """The two numbers a run watches for the collapse this sampler is known to be able to reach."""
+        return {"coverage": self.coverage(), "sampling_entropy": self.entropy()}
 
     def draw(self) -> int:
         """One pair index, sampled from the mixed distribution; every pair keeps a probability of at least 1/(2n)."""

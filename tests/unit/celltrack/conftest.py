@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import types
 from pathlib import Path
-from typing import override
+from typing import cast, override
 
 import pytest
 from torch import Tensor, nn
@@ -118,7 +118,7 @@ class RecordingMlflow:
         merged: dict[str, object] = {}
         for call in self.calls:
             if call[0] == "params":
-                merged.update(dict(call[1]))  # pyrefly: ignore[bad-argument-type]
+                merged.update(cast(dict[str, object], call[1]))
         return merged
 
 

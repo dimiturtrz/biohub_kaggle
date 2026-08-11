@@ -1,26 +1,36 @@
-"""Recovering a division from the edge transformer's second-choice target, not geometry alone.
+"""Recovering a division from the edge transformer's second-choice target, ranked by the split's geometry.
 
-`DivisionRecovery` gates a candidate fork on distance: an unparented cell joins a nearby single-child
-parent. On real detections that misses the divisions that matter — at a true mitosis the second daughter
-often sits just past the tight parent gate the frontier needs to keep its precision, so the gate that
-rejects the false forks rejects the real one too. The learned edge head breaks that deadlock: a dividing
-parent is one whose *two* highest-probability targets are both real children, so the association score
-separates the true second daughter from the crowd the distance gate cannot.
+`DivisionRecovery` gates a candidate fork on distance alone; this stage keeps that geometry as a guard but
+reads the learned edge head for CANDIDACY: a dividing parent is one whose kept child is the head's top target
+and whose runner-up is an unparented cell. That candidacy is the frontier's (orphan-only, gated), and it is
+sound. What the head cannot do is RANK. On dense tissue the softmax-over-sources normalisation inflates every
+second choice, so >1200 parents carry an orphan target at P >= 0.25 while the one genuinely recoverable
+division's second daughter sits at P = 0.124: a probability ranking sorts the true fork to the bottom and the
+cap then evicts it (measured: 1 TP / 807 FP uncapped, division Jaccard 0 capped).
 
-This stage reads a source→target probability matrix per frame gap (`EdgeAffinity`, the same head the linker
-blends into its cost) and proposes a fork only when a single-child parent's kept child is its top target
-(the linker and the head agree the primary link is real) and its *second* target is an orphan the head
-still scores above a floor. Distance stays a guard, not the selector: a parent gate and a sister gate reject
-a high-probability pairing that is physically impossible, but within them the head chooses. A per-gap and a
-global cap bound the budget, tightest-probability pairs first, so a floor set for recall cannot flood the
-dense frames with speculative forks.
+The ranking is therefore a strategy (`ForkRanking`), not a hard-coded sort key, and probability is only one of
+its implementations — kept as the default so no configured pipeline shifts silently:
+
+* `ProbabilityRanking` — the head's second-daughter probability, descending. Today's behaviour.
+* `GeometryRanking` — the public frontier's `parent_dist + 0.15 * sister_dist`, ascending, which ships at
+  public 0.915 with no probability floor and no learned verifier at all.
+* `SplitSymmetryRanking` — the cue the frontier does not use: true daughters separate onto OPPOSITE sides of
+  the mother (our division 232 has its two daughters 13.5 um apart), where a false sister in crowded tissue
+  sits at a random angle. Ranking a fork by how far the candidate is from the mother, penalised by how badly
+  the two daughters fail to balance around her.
+
+`min_second_prob` survives as an admission FLOOR, never as the sort key. A per-video budget bounds the
+speculation from both ends — a fraction of the graph's edges and an absolute ceiling, whichever is smaller.
 
 Run before `ShortTrackFilter`, whose division-preserving carve-out can only protect a fork that exists by
 the time it sees the graph.
 """
 
 import logging
+import math
+from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Protocol
 
 import numpy as np
 from jaxtyping import Bool, Float, Int
@@ -34,6 +44,7 @@ _SINGLE_CHILD = 1
 _UNPARENTED = 0
 _TOP_TARGET = 0
 _RUNNER_UP = 1
+_DEGENERATE = 0.0
 
 logger = logging.getLogger(__name__)
 
@@ -48,21 +59,132 @@ class _Gap:
 
 
 @dataclass(frozen=True)
+class ForkCandidate:
+    """One proposed fork and every quantity a ranking may read: the head's score and the split's geometry.
+
+    The three nodes are graph ROWS; the micrometre positions are the whole video's, so a candidate carries no
+    copied coordinates. Public because a `ForkRanking` is written against this vocabulary.
+    """
+
+    parent: int
+    kept: int
+    child: int
+    probability: float
+    positions_um: Float[np.ndarray, "n 3"]
+
+    def parent_distance_um(self) -> float:
+        """Mother to the proposed new daughter."""
+        return self._distance(self.parent, self.child)
+
+    def sister_distance_um(self) -> float:
+        """The two daughters' separation — large at a real division, which is why it is a gate, not a score."""
+        return self._distance(self.kept, self.child)
+
+    def existing_child_distance_um(self) -> float:
+        """Mother to the child she already keeps — a parent whose current link is long is a poor divider."""
+        return self._distance(self.parent, self.kept)
+
+    def daughter_angle_cosine(self) -> float:
+        """Cosine between the two daughter displacements from the mother: -1 opposite, 0 a random neighbour."""
+        kept, child = self._displacements()
+        scale = float(np.linalg.norm(kept) * np.linalg.norm(child))
+        if scale == _DEGENERATE:
+            return _DEGENERATE
+        return float(kept @ child) / scale
+
+    def split_imbalance(self) -> float:
+        """How far the daughters' centre of mass sits from the mother, as a fraction of how far they travelled.
+
+        `|u + v| / (|u| + |v|)` for the two displacements. It is `daughter_angle_cosine` in half-angle form —
+        for equal-length displacements it is exactly `cos(theta / 2)` — generalised to daughters that moved
+        unequally, and it is dimensionless: a division that splits twice as far scores the same. 0 is a clean
+        split about the mother, 1 is two cells leaving in the same direction.
+        """
+        kept, child = self._displacements()
+        travelled = float(np.linalg.norm(kept) + np.linalg.norm(child))
+        if travelled == _DEGENERATE:
+            return _DEGENERATE
+        return float(np.linalg.norm(kept + child)) / travelled
+
+    def _displacements(self) -> tuple[Float[np.ndarray, "3"], Float[np.ndarray, "3"]]:
+        """Both daughters' displacement from the mother."""
+        origin = self.positions_um[self.parent]
+        return self.positions_um[self.kept] - origin, self.positions_um[self.child] - origin
+
+    def _distance(self, a: int, b: int) -> float:
+        """Euclidean distance in micrometres between two node rows."""
+        return float(np.linalg.norm(self.positions_um[a] - self.positions_um[b]))
+
+
+class ForkRanking(Protocol):
+    """Orders competing forks under the budget. Lower cost wins, so every ranking speaks one direction."""
+
+    def cost(self, candidate: ForkCandidate) -> float:
+        """This fork's rank key — the smaller, the sooner it is admitted."""
+        ...
+
+
+@dataclass(frozen=True)
+class ProbabilityRanking:
+    """The edge head's second-daughter probability, highest first.
+
+    Measured NOT to discriminate on dense tissue (the true fork's P = 0.124 sits below >1200 false ones), so
+    it is the default only because it is what configured pipelines already ran.
+    """
+
+    def cost(self, candidate: ForkCandidate) -> float:
+        """Negated probability, so the head's most confident second daughter sorts first."""
+        return -candidate.probability
+
+
+@dataclass(frozen=True)
+class GeometryRanking:
+    """The public frontier's ranking: `parent_dist + w * sister_dist`, ascending — no probability at all."""
+
+    sister_weight: float
+
+    def cost(self, candidate: ForkCandidate) -> float:
+        """The frontier's score: tight to the mother first, tie-broken towards a tight sister pair."""
+        return candidate.parent_distance_um() + self.sister_weight * candidate.sister_distance_um()
+
+
+@dataclass(frozen=True)
+class SplitSymmetryRanking:
+    """Distance from the mother plus the daughters' failure to balance around her, both dimensionless.
+
+    Two terms, no fitted weight. Each is normalised by the constraint that already decides its own
+    admissibility — the parent distance by its gate, the imbalance by the distance the daughters travelled —
+    so both land in [0, 1] over the admitted set and an equal weighting is the only choice that is not tuned.
+    The sister distance appears in neither: it is a physical bound (a gate), and as a SCORE it has the wrong
+    sign, because a true mitosis pushes its daughters apart while a false sister sits close by in the crowd.
+    """
+
+    parent_gate_um: float
+
+    def cost(self, candidate: ForkCandidate) -> float:
+        """Relative reach from the mother plus centroid imbalance — most opposite and closest sorts first."""
+        return candidate.parent_distance_um() / self.parent_gate_um + candidate.split_imbalance()
+
+
+@dataclass(frozen=True)
 class AffinityDivisionRecovery:
-    """Add the second daughter the edge head scores highest among a confident parent's orphans."""
+    """Add the second daughter the edge head proposes and the chosen ranking prefers, under gates and a budget."""
 
     spacing: Spacing
     affinity: EdgeAffinity
+    ranking: ForkRanking
     min_second_prob: float
     parent_gate_um: float
     sister_gate_um: float
+    existing_child_gate_um: float
     max_added_fraction: float
+    max_added_forks: int
     # The parent's kept child must be its top target at this probability or above, so a fork is only proposed
     # off a link the head itself is confident in — a speculative primary link does not get a second daughter.
     min_kept_prob: float = 0.0
 
     def transform(self, graph: TrackGraph) -> TrackGraph:
-        """Return the graph with edge-head-confirmed division edges added."""
+        """Return the graph with edge-head-proposed, geometry-ranked division edges added."""
         recovered = self._division_edges(graph)
         if not len(recovered):
             return graph
@@ -72,13 +194,22 @@ class AffinityDivisionRecovery:
             edges=np.concatenate([graph.edges, recovered]),
         )
 
+    def budget(self, edge_count: int) -> int:
+        """How many forks this video may gain: the edge fraction and the absolute ceiling, whichever is smaller.
+
+        A fraction alone scales with the movie, not with biology — 0.004 of 74,347 detections permits ~297
+        forks where the frontier emits 311 over a five-times-larger edge set. The absolute ceiling is what
+        keeps a dense movie from buying speculation by being dense.
+        """
+        return min(int(self.max_added_fraction * edge_count), self.max_added_forks)
+
     def _division_edges(self, graph: TrackGraph) -> Int[np.ndarray, "d 2"]:
-        """Every accepted fork as node-id pairs, ranked by second-daughter probability, globally capped."""
+        """Every accepted fork as node-id pairs, ordered by the ranking's cost and cut at the budget."""
         adjacency = Adjacency.of(graph)
         positions_um = self.spacing.to_micrometres(graph.positions())
         timepoints = graph.timepoints()
-        global_cap = int(self.max_added_fraction * len(graph.edges))
-        proposals: list[tuple[float, int, int]] = []
+        cap = self.budget(len(graph.edges))
+        proposals: list[ForkCandidate] = []
         for timepoint in np.unique(timepoints)[:-1].tolist():
             probability = self.affinity.probabilities(timepoint)
             if probability is None:
@@ -86,10 +217,32 @@ class AffinityDivisionRecovery:
             sources = np.flatnonzero(timepoints == timepoint)
             targets = np.flatnonzero(timepoints == timepoint + 1)
             proposals.extend(self._gap_proposals(sources, targets, probability, adjacency, positions_um))
-        accepted = [(parent, child) for _, parent, child in sorted(proposals, reverse=True)[:global_cap]]
+        accepted = self._admitted(proposals, cap)
+        logger.info("division recovery: %d proposals, %d forks emitted (budget %d)", len(proposals), len(accepted), cap)
         if not accepted:
             return np.empty((0, 2), dtype=np.int64)
-        return np.array([(int(graph.node_ids[p]), int(graph.node_ids[c])) for p, c in accepted], dtype=np.int64)
+        pairs = [(int(graph.node_ids[fork.parent]), int(graph.node_ids[fork.child])) for fork in accepted]
+        return np.array(pairs, dtype=np.int64)
+
+    def _admitted(self, proposals: list[ForkCandidate], cap: int) -> list[ForkCandidate]:
+        """The cheapest forks the budget allows, each proposed daughter claimed by at most one mother.
+
+        Two neighbouring parents can name the same orphan as their runner-up; admitting both would give that
+        cell two parents, which is not a division but a broken graph. The ranking decides who claims it.
+        """
+        claimed: set[int] = set()
+        admitted: list[ForkCandidate] = []
+        for candidate in sorted(proposals, key=self._rank_key):
+            if len(admitted) == cap:
+                break
+            if candidate.child not in claimed:
+                claimed.add(candidate.child)
+                admitted.append(candidate)
+        return admitted
+
+    def _rank_key(self, candidate: ForkCandidate) -> tuple[float, int, int]:
+        """The ranking's cost, with the node rows breaking ties so the accepted set never depends on gap order."""
+        return (self.ranking.cost(candidate), candidate.parent, candidate.child)
 
     def _gap_proposals(
         self,
@@ -98,14 +251,14 @@ class AffinityDivisionRecovery:
         probability: Float[np.ndarray, "s t"],
         adjacency: Adjacency,
         positions_um: Float[np.ndarray, "n 3"],
-    ) -> list[tuple[float, int, int]]:
-        """Candidate forks across one gap: a confident single-child parent's best orphan second daughter."""
+    ) -> list[ForkCandidate]:
+        """Candidate forks across one gap: a confident single-child parent's orphan runner-up target."""
         gap = _Gap(
             targets=targets,
             orphan=np.array([adjacency.in_degrees[row] == _UNPARENTED for row in targets], dtype=bool),
             positions_um=positions_um,
         )
-        found: list[tuple[float, int, int]] = []
+        found: list[ForkCandidate] = []
         for source_index, parent in enumerate(sources.tolist()):
             if adjacency.out_degrees[parent] != _SINGLE_CHILD:
                 continue
@@ -126,56 +279,85 @@ class AffinityDivisionRecovery:
         parent: int,
         kept: int,
         gap: _Gap,
-    ) -> tuple[float, int, int] | None:
-        """The parent's second-choice target, if it is an unparented cell clearing the floor and both gates.
+    ) -> ForkCandidate | None:
+        """The parent's second-choice target, if it is an unparented cell clearing the floor and every gate.
 
         The literal "a division is a parent whose two top targets are both children" reading: the kept child
         is the top target (checked by the caller) and this is the runner-up, so a fork is proposed only when
-        the head's first *two* choices agree — not any target that merely clears a probability floor.
+        the head's first *two* choices agree — not any target that merely clears a probability floor. The
+        floor is admission only; which of the admitted forks survives the budget is the ranking's decision.
         """
         if len(order) <= _RUNNER_UP:
             return None
         runner_up = order[_RUNNER_UP]
-        probability = float(probabilities[runner_up])
         child = int(gap.targets[runner_up])
-        if probability < self.min_second_prob or not gap.orphan[runner_up] or child == kept:
+        if float(probabilities[runner_up]) < self.min_second_prob or not gap.orphan[runner_up] or child == kept:
             return None
-        if self._distance(gap.positions_um, parent, child) > self.parent_gate_um:
-            return None
-        if self._distance(gap.positions_um, kept, child) > self.sister_gate_um:
-            return None
-        return (probability, parent, child)
+        candidate = ForkCandidate(
+            parent=parent,
+            kept=kept,
+            child=child,
+            probability=float(probabilities[runner_up]),
+            positions_um=gap.positions_um,
+        )
+        return candidate if self._within_gates(candidate) else None
 
-    @staticmethod
-    def _distance(positions_um: Float[np.ndarray, "n 3"], a: int, b: int) -> float:
-        """Euclidean distance in micrometres between two node rows."""
-        return float(np.linalg.norm(positions_um[a] - positions_um[b]))
+    def _within_gates(self, candidate: ForkCandidate) -> bool:
+        """Whether the proposed triangle is physically a division: the mother, her new daughter, her old one."""
+        return (
+            candidate.parent_distance_um() <= self.parent_gate_um
+            and candidate.sister_distance_um() <= self.sister_gate_um
+            and candidate.existing_child_distance_um() <= self.existing_child_gate_um
+        )
+
+
+FORK_RANKINGS: dict[str, Callable[["AffinityDivisionConfig"], ForkRanking]] = {
+    "probability": lambda _: ProbabilityRanking(),
+    "geometry": lambda config: GeometryRanking(sister_weight=config.sister_weight),
+    "symmetry": lambda config: SplitSymmetryRanking(parent_gate_um=config.parent_gate_um),
+}
 
 
 class AffinityDivisionConfig(BaseModel):
-    """The gates for `AffinityDivisionRecovery`, resolved to the stage once a video's affinity is in hand.
+    """The ranking, the gates and the budget for `AffinityDivisionRecovery`, resolved once a video's affinity is in.
 
-    Distances follow the frontier's safe-division bracket (parent 4.7um, sister 7.2um); the probability floors
-    and the budget are what a caller sweeps. `build` binds the per-video edge affinity the recovery reads.
+    Defaults are TODAY'S behaviour, deliberately: the probability ranking, our own gate bracket (parent 4.7um,
+    sister 7.2um — the frontier's measured 4.66/8.5 within our noise floor), no existing-child gate, and no
+    absolute fork ceiling beyond the fraction. An arm that wants the frontier's or the symmetry ranking asks
+    for it (`--set division.ranking=symmetry`), so nothing about a configured pipeline moves under it.
     Pydantic (like the other nested stage configs) so a `--set division.x=v` override reaches it.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
+    ranking: str = "probability"
     min_second_prob: float = 0.5
     parent_gate_um: float = 4.7
     sister_gate_um: float = 7.2
+    # The frontier disqualifies a parent whose existing link is already long (7.65um) before looking at any
+    # candidate; infinity is that gate OFF, which is what this stage has always run.
+    existing_child_gate_um: float = math.inf
+    # The frontier's sister weight, read from seven byte-identical forks at public 0.915. Only `geometry` reads it.
+    sister_weight: float = 0.15
     max_added_fraction: float = 0.004
+    # An absolute ceiling beside the fraction (`budget` takes the smaller). Larger than any video's edge count,
+    # so the default leaves the fraction alone; a bet on divisions sets it to the number of forks it will pay for.
+    max_added_forks: int = 1_000_000
     min_kept_prob: float = 0.5
 
     def build(self, spacing: Spacing, affinity: EdgeAffinity) -> AffinityDivisionRecovery:
-        """The recovery stage wired with these gates and the video's edge-head probabilities."""
+        """The recovery stage wired with this ranking, these gates and the video's edge-head probabilities."""
+        if self.ranking not in FORK_RANKINGS:
+            raise ValueError(f"unknown division ranking {self.ranking!r}, expected one of {sorted(FORK_RANKINGS)}")
         return AffinityDivisionRecovery(
             spacing=spacing,
             affinity=affinity,
+            ranking=FORK_RANKINGS[self.ranking](self),
             min_second_prob=self.min_second_prob,
             parent_gate_um=self.parent_gate_um,
             sister_gate_um=self.sister_gate_um,
+            existing_child_gate_um=self.existing_child_gate_um,
             max_added_fraction=self.max_added_fraction,
+            max_added_forks=self.max_added_forks,
             min_kept_prob=self.min_kept_prob,
         )

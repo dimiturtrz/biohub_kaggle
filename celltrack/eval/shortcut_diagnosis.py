@@ -41,7 +41,6 @@ from pathlib import Path
 import numpy as np
 from jaxtyping import Bool, Float, Int
 from scipy.spatial.distance import cdist
-from scipy.stats import rankdata
 
 from celltrack.affinity import EdgeAffinity
 from celltrack.eval.dense_diagnosis import DENSE_MOVIE, DenseDiagnosis
@@ -49,6 +48,7 @@ from celltrack.eval.proxy import TestMovieProxy
 from celltrack.linkers.linkers import LinkerConfig
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
+from core.metrics.edge_auc import EdgeAUC
 from core.metrics.matching import UNMATCHED, DistanceMatcher, NodeMatching
 from core.paths import DataRoot
 
@@ -107,22 +107,6 @@ class BaseRateGuard:
             f"base rate {rate:.4f} is outside [{_MIN_BASE_RATE}, {_MAX_BASE_RATE}], {side}; an AUC here "
             "measures how the population was built, not what the model knows (see the module docstring)"
         )
-
-
-def rank_auc(scores: Float[np.ndarray, "n"], labels: Bool[np.ndarray, "n"]) -> float:
-    """Rank (ROC) AUC of `scores` against binary `labels` — the Mann-Whitney statistic, ties scored 0.5.
-
-    ROC rather than the average precision `core.metrics.edge_auc` reports, because these numbers are compared
-    ACROSS populations (whole movie vs distance band; correct edges vs mislinks) whose base rates differ by
-    design, and average precision moves with the base rate while the rank AUC does not. NaN when either class
-    is empty — undefined, not 0.5, so a degenerate split cannot read as chance.
-    """
-    positives = int(labels.sum())
-    negatives = int(labels.size) - positives
-    if positives == 0 or negatives == 0:
-        return float("nan")
-    ranks = rankdata(scores)
-    return float((ranks[labels].sum() - positives * (positives + 1) / 2) / (positives * negatives))
 
 
 @dataclass(frozen=True)
@@ -283,8 +267,8 @@ class CandidatePairs:
         )
 
     def _ranking(self, scores: Float[np.ndarray, "c"]) -> float:
-        """This population's rank AUC for `scores` — the shared `rank_auc` against its own truth labels."""
-        return rank_auc(scores, self.is_true)
+        """This population's rank AUC for `scores` — `EdgeAUC.ranked` against its own truth labels."""
+        return EdgeAUC.ranked(scores, self.is_true)
 
     @staticmethod
     def _scored_gaps(

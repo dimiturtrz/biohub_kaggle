@@ -1,6 +1,6 @@
 import numpy as np
 
-from celltrack.linkers.evidence_ramp import EvidenceRamp, evidence_weights
+from celltrack.linkers.evidence_ramp import EvidenceRamp
 
 ADMITTED = np.array([[True, True], [True, True]])
 
@@ -58,14 +58,14 @@ def test_weights_fall_back_to_one_when_the_gate_admits_no_scale():
     assert EvidenceRamp(strength=1.0).weights(distance, np.array([[True, True]])).tolist() == [[1.0, 1.0]]
 
 
-def test_evidence_weights_without_a_ramp_is_the_scalar_one():
+def test_applied():
     """Off is an exact float multiply, not an array of ones — one seam, so the off state cannot drift per linker."""
-    assert evidence_weights(None, np.array([[1.0, 9.0]]), ADMITTED[:1]) == 1.0
+    assert EvidenceRamp.applied(None, np.array([[1.0, 9.0]]), ADMITTED[:1]) == 1.0
 
 
-def test_evidence_weights_with_a_ramp_delegates():
+def test_applied_with_a_ramp_delegates():
     """Wired, the seam is the ramp itself — nothing between the option and the weight it computes."""
     distance = np.array([[1.0, 9.0]])
     ramp = EvidenceRamp(strength=1.0)
 
-    assert evidence_weights(ramp, distance, ADMITTED[:1]).tolist() == ramp.weights(distance, ADMITTED[:1]).tolist()
+    assert EvidenceRamp.applied(ramp, distance, ADMITTED[:1]).tolist() == ramp.weights(distance, ADMITTED[:1]).tolist()

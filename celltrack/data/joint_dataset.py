@@ -14,20 +14,23 @@ A pair can also carry its PREDECESSOR — frame `t - 1` and that frame's annotat
 prior-velocity feature needs to ask where each source was already heading (see `celltrack.models.prior_velocity`).
 It is served only when asked for (`with_previous`), because it costs a third frame read per item; the first
 annotated pair of a video has no predecessor at all, and says so with `None` rather than with an empty array.
+
+WHERE the two frames come from is a strategy (`celltrack.data.frame_source.FrameSource`), not a zarr path
+baked into the target: the pair shape the trainer consumes says nothing about storage, so a fully-labelled
+corpus stored some other way reaches the same loop unchanged.
 """
 
 from collections.abc import Iterator
 from dataclasses import dataclass, replace
-from pathlib import Path
 from typing import override
 
 import numpy as np
 import torch
-import zarr
 from jaxtyping import Float, Int
 from torch import Tensor
 from torch.utils.data import Dataset
 
+from celltrack.data.frame_source import FrameSource
 from core.data.tracks import TrackGraph
 
 
@@ -35,10 +38,8 @@ from core.data.tracks import TrackGraph
 class PairTarget:
     """One training pair: where to read frames `t` and `t + 1`, their GT centres, and the edge matrix between."""
 
-    zarr_path: Path
+    frames: FrameSource
     timepoint: int  # the source frame; the target frame is timepoint + 1
-    q_low: float
-    q_high: float
     source_centres: Int[np.ndarray, "s 3"]  # downsampled (z, y', x') at t
     target_centres: Int[np.ndarray, "u 3"]  # downsampled (z, y', x') at t + 1
     edge_matrix: Float[np.ndarray, "s u"]  # 1 where an annotated link joins a source to a target
@@ -47,7 +48,7 @@ class PairTarget:
     previous_centres: Int[np.ndarray, "p 3"] | None = None
 
     @classmethod
-    def enumerate(cls, graph: TrackGraph, zarr_path: Path, q_low: float, q_high: float) -> list["PairTarget"]:
+    def enumerate(cls, graph: TrackGraph, frames: FrameSource) -> list["PairTarget"]:
         """Every consecutive-frame pair a video's GT graph supports, with centres and the edge matrix precomputed.
 
         Nodes are grouped by timepoint; a pair exists for each `t` that has annotated nodes at both `t` and
@@ -70,10 +71,8 @@ class PairTarget:
             previous_rows = np.flatnonzero(timepoints == timepoint - 1)
             targets.append(
                 cls(
-                    zarr_path=zarr_path,
+                    frames=frames,
                     timepoint=int(timepoint),
-                    q_low=q_low,
-                    q_high=q_high,
                     source_centres=positions[source_rows].astype(np.int64),
                     target_centres=positions[target_rows].astype(np.int64),
                     edge_matrix=cls._edge_matrix(edge_rows, source_rows, target_rows),
@@ -149,11 +148,6 @@ class PairDataset(Dataset[PairSample]):
     def __len__(self) -> int:
         return self._steps
 
-    @property
-    def target_count(self) -> int:
-        """How many GT pairs the corpus holds — the population a non-uniform sampler draws indices over."""
-        return len(self._targets)
-
     @override
     def __getitem__(self, index: int) -> PairSample:
         """Sample one pair (seeded by index): both normalised frames, both centre sets, and the edge matrix."""
@@ -165,8 +159,8 @@ class PairDataset(Dataset[PairSample]):
         target = self._targets[target_index]
         previous_frame, previous_centres = self._previous(target)
         return PairSample(
-            frame_t=self._frame(target, target.timepoint),
-            frame_t1=self._frame(target, target.timepoint + 1),
+            frame_t=target.frames.frame(target.timepoint, self._downsample),
+            frame_t1=target.frames.frame(target.timepoint + 1, self._downsample),
             source_centres=torch.from_numpy(target.source_centres),
             target_centres=torch.from_numpy(target.target_centres),
             edge_matrix=torch.from_numpy(target.edge_matrix),
@@ -183,15 +177,7 @@ class PairDataset(Dataset[PairSample]):
         """
         if not self._with_previous or target.previous_centres is None:
             return None, None
-        return self._frame(target, target.timepoint - 1), torch.from_numpy(target.previous_centres)
-
-    def _frame(self, target: PairTarget, timepoint: int) -> Float[Tensor, "z y x"]:
-        """One quantile-normalised, downsampled, non-negative frame of the pair."""
-        dz, dy, dx = self._downsample
-        array = zarr.open_array(target.zarr_path / "0")
-        raw = np.asarray(array[timepoint, ::dz, ::dy, ::dx], dtype=np.float32)
-        normed = (torch.from_numpy(raw) - target.q_low) / (target.q_high - target.q_low + 1e-6)
-        return normed.clamp(0.0)
+        return target.frames.frame(target.timepoint - 1, self._downsample), torch.from_numpy(target.previous_centres)
 
     def stream(self) -> Iterator[PairSample]:
         """Yield every pair once, in index order — reproducible; batching is the trainer's job (ragged matrices)."""

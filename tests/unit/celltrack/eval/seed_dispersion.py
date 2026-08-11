@@ -131,11 +131,11 @@ def test_dispersion_sample_size():
 def _separation(mislinked: list[float], correct: list[float]) -> Separation:
     """A separation whose three statistics all carry the same values, so each AUC is checkable by hand."""
 
-    def sample(values: list[float]) -> DispersionSample:
+    def column_of(values: list[float]) -> DispersionSample:
         column = np.array(values, dtype=np.float64)
         return DispersionSample(probability_spread=column, logit_spread=column, blended_probability=-column, unscored=0)
 
-    return Separation(label="test", correct=sample(correct), mislinked=sample(mislinked))
+    return Separation(label="test", correct=column_of(correct), mislinked=column_of(mislinked))
 
 
 def test_positives():
@@ -199,7 +199,24 @@ def test_auc_softmax_headroom():
     assert separation.auc_probability_spread() == pytest.approx(0.5)  # the spreads themselves are identical
 
 
-def test_lines():
+def test_dispersion_sample_lines():
+    """A population's own row: its size and drop count first, then a median and IQR for each statistic."""
+    sample = DispersionSample(
+        probability_spread=np.array([0.1, 0.3]),
+        logit_spread=np.array([1.0, 3.0]),
+        blended_probability=np.array([0.5, 0.9]),
+        unscored=2,
+    )
+
+    reported = sample.lines("CORRECT edges")
+
+    assert reported[0] == "CORRECT edges: n=2 (unscored pairs dropped: 2)"
+    assert "|p1-p2|  median 0.2000" in reported[1]
+    assert "|l1-l2|  median 2.0000" in reported[2]
+    assert "blended P  median 0.7000" in reported[3]
+
+
+def test_separation_lines():
     """The population line comes first, and a failed guard REPLACES the numbers rather than annotating them."""
     reported = _separation([1.0] * 3, [0.0] * 97).lines()
     assert reported[0].startswith("test: base rate 0.0300 (3/100 ranked pairs mislinked)")

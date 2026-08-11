@@ -46,3 +46,8 @@ def test_videos_of_a_missing_split_is_empty(tmp_path: Path):
 
 def test_track_store(tmp_path: Path):
     assert DataRoot(tmp_path).track_store(Path("x/aaaa_1.zarr")).name == "aaaa_1.geff"
+
+
+def test_synthetic(tmp_path: Path):
+    """A GENERATED corpus is neither downloaded nor derived, so it gets its own top-level area under the root."""
+    assert DataRoot(tmp_path).synthetic("biohub_synthetic") == tmp_path / "synthetic" / "biohub_synthetic"

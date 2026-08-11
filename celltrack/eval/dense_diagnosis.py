@@ -186,6 +186,43 @@ class ChargeDiagnosis:
     repairing it wins two points, and the FP and FN terms must not be added up as separate levers.
     """
 
+    @staticmethod
+    def report(counts: EdgeCounts, fates: DenseFateDiagnosis, charges: ChargeDiagnosis, movie: str) -> None:
+        """Log the false-positive decomposition beside the counts it has to reconcile with — the FP-term report."""
+        tally = charges.counts()
+        logger.info(
+            "movie=%s  TP=%d FP=%d FN=%d  jaccard=%.4f", movie, counts.tp, counts.fp, counts.fn, counts.jaccard()
+        )
+        logger.info("charged links=%d  (TP + FP = %d)", sum(tally.values()), counts.tp + counts.fp)
+        logger.info("  %-14s %5d  (the TP term)", Charge.TRUE.name, tally[Charge.TRUE])
+        for charge, count in tally.items():
+            if charge is not Charge.TRUE:
+                logger.info("  %-14s %5d  %5.1f%% of FP", charge.name, count, 100.0 * count / max(counts.fp, 1))
+        by_fate = fates.counts()
+        fate_mislinks = by_fate[Fate.MISLINK_CONFLICT] + by_fate[Fate.MISLINK_FREE]
+        logger.info(
+            "reconcile: Charge.MISLINK=%d vs Fate.MISLINK_CONFLICT+FREE=%d  %s",
+            tally[Charge.MISLINK],
+            fate_mislinks,
+            "AGREE" if tally[Charge.MISLINK] == fate_mislinks else "DISAGREE",
+        )
+        for charge in (Charge.SYNTHETIC, Charge.EXTRA_CHILD, Charge.MISLINK, Charge.SOURCE_ENDS, Charge.TARGET_ORPHAN):
+            annotated_target, unannotated_target = charges.split(charge, charges.target_matched)
+            cross, _ = charges.split(charge, charges.cross_lineage)
+            stolen, _ = charges.split(charge, charges.steals_a_lost_target)
+            later, stopped = charges.split(charge, charges.annotated_after)
+            logger.info(
+                "  %-14s target annotated %d (cross-lineage %d, stole a lost target %d) / unannotated %d"
+                "  | annotation runs on past source %d / stops %d",
+                charge.name,
+                annotated_target,
+                cross,
+                stolen,
+                unannotated_target,
+                later,
+                stopped,
+            )
+
     charges: Int[np.ndarray, "c"]
     cross_lineage: Bool[np.ndarray, "c"]
     annotated_after: Bool[np.ndarray, "c"]
@@ -494,41 +531,6 @@ class DenseDiagnosis:
         return DenseDiagnosis.charged(tracker, proxy.paths[0], proxy.truths[0].graph, proxy.spacing)
 
 
-def _report_charges(counts: EdgeCounts, fates: DenseFateDiagnosis, charges: ChargeDiagnosis, movie: str) -> None:
-    """Log the false-positive decomposition beside the counts it has to reconcile with — the FP-term report."""
-    tally = charges.counts()
-    logger.info("movie=%s  TP=%d FP=%d FN=%d  jaccard=%.4f", movie, counts.tp, counts.fp, counts.fn, counts.jaccard())
-    logger.info("charged links=%d  (TP + FP = %d)", sum(tally.values()), counts.tp + counts.fp)
-    logger.info("  %-14s %5d  (the TP term)", Charge.TRUE.name, tally[Charge.TRUE])
-    for charge, count in tally.items():
-        if charge is not Charge.TRUE:
-            logger.info("  %-14s %5d  %5.1f%% of FP", charge.name, count, 100.0 * count / max(counts.fp, 1))
-    by_fate = fates.counts()
-    fate_mislinks = by_fate[Fate.MISLINK_CONFLICT] + by_fate[Fate.MISLINK_FREE]
-    logger.info(
-        "reconcile: Charge.MISLINK=%d vs Fate.MISLINK_CONFLICT+FREE=%d  %s",
-        tally[Charge.MISLINK],
-        fate_mislinks,
-        "AGREE" if tally[Charge.MISLINK] == fate_mislinks else "DISAGREE",
-    )
-    for charge in (Charge.SYNTHETIC, Charge.EXTRA_CHILD, Charge.MISLINK, Charge.SOURCE_ENDS, Charge.TARGET_ORPHAN):
-        annotated_target, unannotated_target = charges.split(charge, charges.target_matched)
-        cross, _ = charges.split(charge, charges.cross_lineage)
-        stolen, _ = charges.split(charge, charges.steals_a_lost_target)
-        later, stopped = charges.split(charge, charges.annotated_after)
-        logger.info(
-            "  %-14s target annotated %d (cross-lineage %d, stole a lost target %d) / unannotated %d"
-            "  | annotation runs on past source %d / stops %d",
-            charge.name,
-            annotated_target,
-            cross,
-            stolen,
-            unannotated_target,
-            later,
-            stopped,
-        )
-
-
 def main() -> None:
     """Decompose the dense movie's annotated-edge fates and log each fraction — the tf5/zni gating number."""
     logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -557,7 +559,7 @@ def main() -> None:
     logger.info("set=%s", list(args.overrides))
     root = DataRoot.from_config(args.config)
     if args.charges:
-        _report_charges(*DenseDiagnosis._charged(root, args.device, args.movie, config), movie=args.movie)  # noqa: SLF001
+        ChargeDiagnosis.report(*DenseDiagnosis._charged(root, args.device, args.movie, config), movie=args.movie)  # noqa: SLF001
         return
     diagnosis, signal = DenseDiagnosis._mounted(root, args.device, args.movie, config)  # noqa: SLF001
     counts = diagnosis.counts()

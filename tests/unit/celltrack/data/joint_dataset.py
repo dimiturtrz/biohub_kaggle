@@ -7,6 +7,7 @@ import numpy as np
 import torch
 import zarr
 
+from celltrack.data.frame_source import ZarrFrames
 from celltrack.data.joint_dataset import PairDataset, PairTarget
 from core.data.tracks import TrackGraph
 from core.data.video import ImageStatistics
@@ -22,7 +23,7 @@ def _graph() -> TrackGraph:
 
 def test_enumerate():
     """One pair at t=0 with the two-source, two-target edge matrix marking only the annotated link 0->2."""
-    targets = PairTarget.enumerate(_graph(), Path("v.zarr"), q_low=0.0, q_high=1.0)
+    targets = PairTarget.enumerate(_graph(), ZarrFrames(Path("v.zarr"), q_low=0.0, q_high=1.0))
     assert len(targets) == 1  # only t=0 has nodes at both t and t+1
     target = targets[0]
     assert target.timepoint == 0
@@ -41,7 +42,7 @@ def _three_frame_graph() -> TrackGraph:
 
 def test_enumerate_carries_the_predecessors_centres():
     """The pair at t=1 knows t=0's annotated centres; the video's FIRST pair has no predecessor and says so."""
-    first, second = PairTarget.enumerate(_three_frame_graph(), Path("v.zarr"), q_low=0.0, q_high=1.0)
+    first, second = PairTarget.enumerate(_three_frame_graph(), ZarrFrames(Path("v.zarr"), q_low=0.0, q_high=1.0))
 
     assert first.previous_centres is None
     assert second.previous_centres is not None
@@ -53,10 +54,8 @@ def _target(video_store: Path, timepoint: int = 0, previous: np.ndarray | None =
     statistics = cast(ImageStatistics, zarr.open_group(video_store, mode="r").attrs["image_statistics"])
     quantiles = statistics["quantiles"]
     return PairTarget(
-        zarr_path=video_store,
+        frames=ZarrFrames(video_store, float(quantiles["0.001"]), float(quantiles["0.999"])),
         timepoint=timepoint,
-        q_low=float(quantiles["0.001"]),
-        q_high=float(quantiles["0.999"]),
         source_centres=np.array([[1, 2, 2]], dtype=np.int64),
         target_centres=np.array([[1, 2, 2], [0, 1, 1]], dtype=np.int64),
         edge_matrix=np.array([[1.0, 0.0]], dtype=np.float32),
@@ -113,11 +112,6 @@ def test_to(video_store: Path):
     moved = _dataset(video_store)[0].to("cpu")
     assert moved.previous_frame is None
     assert moved.edge_matrix.device.type == "cpu"
-
-
-def test_target_count(video_store: Path):
-    """The corpus size is the number of GT pairs, independent of how many steps the stream serves."""
-    assert _dataset(video_store).target_count == 1
 
 
 def test_pair(video_store: Path):

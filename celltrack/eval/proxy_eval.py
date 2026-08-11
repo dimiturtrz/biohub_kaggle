@@ -223,12 +223,15 @@ def main() -> None:
     breakdown: dict[str, VideoMetrics] = evaluator.breakdown(root) if args.per_movie else {}
     for stem, metric in breakdown.items():
         logger.info(
-            "  %-16s raw_jac=%.4f adj_jac=%.4f nodes=%-6d ratio=%+.3f",
+            "  %-16s raw_jac=%.4f adj_jac=%.4f nodes=%-6d ratio=%+.3f div=%d/%d/%d",
             stem,
             metric.edges.jaccard(),
             metric.adjusted_edge_jaccard(),
             metric.predicted_nodes,
             metric.total_node_ratio(),
+            metric.divisions.tp,
+            metric.divisions.fp,
+            metric.divisions.fn,
         )
     for prefix, split in evaluator.by_acquisition(breakdown).items():
         logger.info("  acquisition %-6s score=%.4f", prefix, split.score)

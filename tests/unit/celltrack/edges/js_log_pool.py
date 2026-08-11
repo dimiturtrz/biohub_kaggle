@@ -64,6 +64,6 @@ def test_pool_refuses_an_edge_the_arithmetic_mean_admits():
 
 def test_pool_output_is_a_valid_distribution_after_softmax():
     """The pooled logits still normalise over the sources of each target — the head's own normalisation."""
-    views = torch.randn(4, 5, 3)
+    views = torch.randn(4, 5, 3, generator=torch.Generator().manual_seed(0))
     pooled = torch.softmax(JensenShannonLogPool.pool(views), dim=0)
     assert torch.allclose(pooled.sum(dim=0), torch.ones(3), atol=1e-5)

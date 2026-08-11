@@ -5,8 +5,11 @@ rather than reaching a backend: the resolved config flattens to params, and per-
 stem so a sweep stays comparable months later.
 """
 
+from typing import cast
+
 from celltrack.eval.sweep_tracking import SweepTracking
 from celltrack.operating_point import TrackerConfig
+from tests.unit.celltrack.conftest import RecordingMlflow
 
 
 def test_params():
@@ -18,7 +21,7 @@ def test_params():
     assert "gate_um" in params["linker"]
 
 
-def test_cell(mlflow_backend):
+def test_cell(mlflow_backend: RecordingMlflow):
     """One grid cell lands as its resolved config in params and its score in metrics — that is the record.
 
     A sweep whose cells are not recorded is a sweep that has to be re-run to be compared, which is the whole
@@ -27,6 +30,6 @@ def test_cell(mlflow_backend):
     SweepTracking("test-proxy").cell(TrackerConfig(threshold=0.97), score=0.9334, breakdown={})
 
     assert ("metric", "proxy_score", 0.9334, None) in mlflow_backend.calls
-    params = next(call[1] for call in mlflow_backend.calls if call[0] == "params")
+    params = cast(dict[str, object], next(call[1] for call in mlflow_backend.calls if call[0] == "params"))
     assert params["threshold"] == 0.97  # the RESOLVED config, so a cell is comparable months later
     assert params["linker.gate_um"] == 10.0  # nested sub-configs flattened to dotted keys, not dropped

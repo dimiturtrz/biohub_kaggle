@@ -67,11 +67,11 @@ def test_shards():
     assert [[key for key, _ in shard.videos] for shard in shards] == [["a"], ["b"], ["c"]]
 
 
-def test_shard_graphs(monkeypatch: pytest.MonkeyPatch):
+def test_shard_graphs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """A shard mounts the tracker on its own device and returns one graph per video it owns."""
     mounted = _mount(monkeypatch)
     submission = _submission(("cpu",))
-    shard = submission.shards([Path("/m/a.zarr"), Path("/m/b.zarr")])[0]
+    shard = submission.shards([tmp_path / "a.zarr", tmp_path / "b.zarr"])[0]
 
     graphs = submission.shard_graphs(shard)
 
@@ -79,7 +79,7 @@ def test_shard_graphs(monkeypatch: pytest.MonkeyPatch):
     assert sorted(graphs) == ["a", "b"]
 
 
-def test_shard_graphs_mounts_the_ranker_on_each_worker(monkeypatch: pytest.MonkeyPatch):
+def test_shard_graphs_mounts_the_ranker_on_each_worker(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """A submission given the re-ranker artifact mounts it per worker — a PATH is what survives the spawn.
 
     The model itself cannot cross the process boundary (that is why the packs are paths too), so the artifact
@@ -96,12 +96,12 @@ def test_shard_graphs_mounts_the_ranker_on_each_worker(monkeypatch: pytest.Monke
         packs=(Path("p1"), Path("p2")),
         config=TrackerConfig(),
         devices=("cpu",),
-        ranker_pack=Path("/mnt/assoc-ranker"),
+        ranker_pack=tmp_path / "assoc-ranker",
     )
-    shard = submission.shards([Path("/m/a.zarr")])[0]
+    shard = submission.shards([tmp_path / "a.zarr"])[0]
 
     assert sorted(submission.shard_graphs(shard)) == ["a"]
-    assert trackers[0].mounted == [Path("/mnt/assoc-ranker")]  # mounted from the submission's path, once
+    assert trackers[0].mounted == [tmp_path / "assoc-ranker"]  # mounted from the submission's path, once
     assert trackers[0].ranker_pack is None  # the mount is a copy, not a mutation of the ephemeral tracker
 
 
@@ -127,7 +127,7 @@ def test_run_raises_on_worker_failure(monkeypatch: pytest.MonkeyPatch, tmp_path:
     out = tmp_path / "submission.csv"
 
     with pytest.raises(RuntimeError, match="worker failed"):
-        _submission(("cuda:0", "cuda:1")).run([Path("/m/a.zarr"), Path("/m/b.zarr")], out)
+        _submission(("cuda:0", "cuda:1")).run([tmp_path / "a.zarr", tmp_path / "b.zarr"], out)
 
     assert not out.exists()
 
@@ -135,7 +135,7 @@ def test_run_raises_on_worker_failure(monkeypatch: pytest.MonkeyPatch, tmp_path:
 def test_run(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """A single device runs in-process (no spawn) and writes every video into one merged submission CSV."""
     _mount(monkeypatch)
-    videos = [Path("/m/b.zarr"), Path("/m/a.zarr")]
+    videos = [tmp_path / "b.zarr", tmp_path / "a.zarr"]
     out = tmp_path / "submission.csv"
 
     _submission(("cpu",)).run(videos, out)

@@ -1,3 +1,4 @@
+import logging
 import math
 from pathlib import Path
 from typing import cast
@@ -440,3 +441,22 @@ def test_charged():
     assert (counts.tp, counts.fp, counts.fn) == (0, 1, 1)
     assert fates.counts()[Fate.MISLINK_FREE] == 1
     assert charges.counts()[Charge.MISLINK] == 1
+
+
+def test_report(caplog: pytest.LogCaptureFixture):
+    """The FP decomposition is logged beside the counts it must reconcile with — including the AGREE verdict."""
+    charges = ChargeDiagnosis(
+        charges=np.array([Charge.TRUE, Charge.MISLINK], dtype=np.int64),
+        cross_lineage=np.zeros(2, dtype=bool),
+        annotated_after=np.zeros(2, dtype=bool),
+        target_matched=np.zeros(2, dtype=bool),
+        steals_a_lost_target=np.zeros(2, dtype=bool),
+    )
+    fates = DenseFateDiagnosis(fates=np.array([Fate.MISLINK_CONFLICT], dtype=np.int64))
+    counts = EdgeCounts(tp=1, fp=1, fn=0)
+
+    with caplog.at_level(logging.INFO, logger="celltrack.eval.dense_diagnosis"):
+        ChargeDiagnosis.report(counts, fates, charges, movie="dense")
+
+    assert "movie=dense" in caplog.text
+    assert "AGREE" in caplog.text  # one Charge.MISLINK against one Fate.MISLINK_CONFLICT

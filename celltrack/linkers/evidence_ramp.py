@@ -59,13 +59,13 @@ class EvidenceRamp:
             return np.ones_like(distance)
         return np.maximum(0.0, 1.0 + self.strength * (distance / mean_gated - 1.0))
 
+    @classmethod
+    def applied(
+        cls, ramp: "EvidenceRamp | None", distance: Float[np.ndarray, "s t"], within_gate: Bool[np.ndarray, "s t"]
+    ) -> Float[np.ndarray, "s t"] | float:
+        """The affinity term's per-pair weight, or the scalar `1.0` when no ramp is wired — the linkers' one seam.
 
-def evidence_weights(
-    ramp: EvidenceRamp | None, distance: Float[np.ndarray, "s t"], within_gate: Bool[np.ndarray, "s t"]
-) -> Float[np.ndarray, "s t"] | float:
-    """The affinity term's per-pair weight, or the scalar `1.0` when no ramp is wired — the linkers' one seam.
-
-    Every linker that prices `- affinity_bonus * P` multiplies by this instead of branching on the option itself,
-    so the off state is a scalar `1.0` (an exact float multiply, hence byte-identical) in one place, not two.
-    """
-    return 1.0 if ramp is None else ramp.weights(distance, within_gate)
+        Every linker that prices `- affinity_bonus * P` multiplies by this instead of branching on the option itself,
+        so the off state is a scalar `1.0` (an exact float multiply, hence byte-identical) in one place, not two.
+        """
+        return 1.0 if ramp is None else ramp.weights(distance, within_gate)

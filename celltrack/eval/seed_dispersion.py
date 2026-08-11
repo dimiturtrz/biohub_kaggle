@@ -48,9 +48,10 @@ from celltrack.edges.blended_edge_scoring import GapSeedScores
 from celltrack.eval.dense_diagnosis import DENSE_MOVIE, DenseDiagnosis, DenseFateDiagnosis, Fate, GapSlots
 from celltrack.eval.proxy import TestMovieProxy
 from celltrack.eval.proxy_eval import ConfigOverride
-from celltrack.eval.shortcut_diagnosis import BaseRateGuard, rank_auc
+from celltrack.eval.shortcut_diagnosis import BaseRateGuard
 from celltrack.operating_point import TrackerConfig
 from core.data.tracks import Adjacency, TrackGraph
+from core.metrics.edge_auc import EdgeAUC
 from core.metrics.matching import DistanceMatcher, NodeMatching
 from core.paths import DataRoot
 
@@ -171,6 +172,19 @@ class DispersionSample:
             unscored=unscored,
         )
 
+    def lines(self, label: str) -> list[str]:
+        """One population's distributions — median and IQR for both statistics, with its drop count beside them."""
+        probability, logit = Quartiles.of(self.probability_spread), Quartiles.of(self.logit_spread)
+        blended = Quartiles.of(self.blended_probability)
+        return [
+            f"{label}: n={self.size()} (unscored pairs dropped: {self.unscored})",
+            f"  |p1-p2|  median {probability.median:.4f}  IQR [{probability.lower:.4f}, {probability.upper:.4f}]"
+            f"  width {probability.spread():.4f}",
+            f"  |l1-l2|  median {logit.median:.4f}  IQR [{logit.lower:.4f}, {logit.upper:.4f}]"
+            f"  width {logit.spread():.4f}",
+            f"  blended P  median {blended.median:.4f}  IQR [{blended.lower:.4f}, {blended.upper:.4f}]",
+        ]
+
     def size(self) -> int:
         """How many pairs of this fate carried a dispersion at all."""
         return int(self.probability_spread.size)
@@ -245,7 +259,7 @@ class Separation:
     def _auc(self, mislinked: Float[np.ndarray, "m"], correct: Float[np.ndarray, "c"]) -> float:
         """One statistic's rank AUC over the pooled population, mislinked labelled positive."""
         labels = np.concatenate([np.ones(mislinked.size, dtype=bool), np.zeros(correct.size, dtype=bool)])
-        return rank_auc(np.concatenate([mislinked, correct]), labels)
+        return EdgeAUC.ranked(np.concatenate([mislinked, correct]), labels)
 
     def lines(self) -> list[str]:
         """The population line first, then either the three AUCs or the refusal that replaces them."""
@@ -359,19 +373,6 @@ class SeedDispersionDiagnosis:
         return SeedDispersion.of(tracked.graph, truth, matching, index)
 
 
-def _sample_lines(label: str, sample: DispersionSample) -> list[str]:
-    """One population's distributions — median and IQR for both statistics, with its drop count beside them."""
-    probability, logit = Quartiles.of(sample.probability_spread), Quartiles.of(sample.logit_spread)
-    blended = Quartiles.of(sample.blended_probability)
-    return [
-        f"{label}: n={sample.size()} (unscored pairs dropped: {sample.unscored})",
-        f"  |p1-p2|  median {probability.median:.4f}  IQR [{probability.lower:.4f}, {probability.upper:.4f}]"
-        f"  width {probability.spread():.4f}",
-        f"  |l1-l2|  median {logit.median:.4f}  IQR [{logit.lower:.4f}, {logit.upper:.4f}]  width {logit.spread():.4f}",
-        f"  blended P  median {blended.median:.4f}  IQR [{blended.lower:.4f}, {blended.upper:.4f}]",
-    ]
-
-
 def main() -> None:
     """Report, per fate, how far the two independently-trained edge seeds disagree — and whether that separates."""
     logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -398,9 +399,9 @@ def main() -> None:
         DataRoot.from_config(args.config), args.movie, config
     )
     lines = [
-        *_sample_lines("CORRECT edges", dispersion.correct),
-        *_sample_lines("MISLINK: the wrong edge we chose", dispersion.chosen),
-        *_sample_lines("MISLINK: the true edge we missed", dispersion.missed),
+        *dispersion.correct.lines("CORRECT edges"),
+        *dispersion.chosen.lines("MISLINK: the wrong edge we chose"),
+        *dispersion.missed.lines("MISLINK: the true edge we missed"),
         *[line for separation in dispersion.separations() for line in separation.lines()],
     ]
     for line in lines:

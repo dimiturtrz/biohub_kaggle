@@ -29,7 +29,7 @@ from scipy.spatial.distance import cdist
 from celltrack.affinity import EdgeAffinity
 from celltrack.linkers.agreement_gating import AgreementGate
 from celltrack.linkers.boundary_prior import BoundaryPrior
-from celltrack.linkers.evidence_ramp import EvidenceRamp, evidence_weights
+from celltrack.linkers.evidence_ramp import EvidenceRamp
 from celltrack.linkers.motion_prediction import MotionPrediction
 from celltrack.linkers.mutual_bonus import MutualBonus
 from celltrack.linkers.ranker_bonus import RankerBonus
@@ -184,7 +184,7 @@ class FlowLinker:
         if self.affinity is not None and self.affinity_bonus != 0.0:
             probability = self.affinity.probabilities(timepoint)
             if probability is not None:
-                cost = cost - self.affinity_bonus * evidence_weights(self.ramp, distance, within_gate) * probability
+                cost = cost - self.affinity_bonus * EvidenceRamp.applied(self.ramp, distance, within_gate) * probability
         if self.mutual is not None:
             cost = self.mutual.discount(timepoint, cost)
         if self.ranker is not None:

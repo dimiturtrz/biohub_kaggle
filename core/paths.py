@@ -33,6 +33,11 @@ class DataRoot:
         """Where an as-downloaded dataset lives. Never written to."""
         return self._root / "raw" / dataset
 
+    def synthetic(self, dataset: str) -> Path:
+        """Where a GENERATED corpus lives — not downloaded, so not `raw/`, and not derived from one, so not
+        `processed/`. Its own top-level area, named here so no consumer spells the machine-local layout."""
+        return self._root / "synthetic" / dataset
+
     def processed(self, dataset: str) -> Path:
         """Where derived artefacts for a dataset go. Created on demand."""
         destination = self._root / "processed" / dataset

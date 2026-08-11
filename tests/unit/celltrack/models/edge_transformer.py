@@ -18,7 +18,6 @@ from celltrack.models.edge_transformer import (
     EdgeTransformerScorer,
     NodeWindowSlot,
     PrecomputedEdgeAffinity,
-    video_gaps,
 )
 from celltrack.models.prior_velocity import GapHistory, PriorVelocity
 from celltrack.models.temporal_unet_detector import DetectorRecipe, TemporalUNetDetector
@@ -134,6 +133,17 @@ def test_from_pack(tmp_path: Path):
     assert torch.equal(scorer.transformer.state_dict()["proj.weight"], loaded.transformer.state_dict()["proj.weight"])
 
 
+def test_over(tmp_path: Path):
+    """Every scorable `t -> t+1` gap of a video, in ascending time — the enumeration every scorer shares."""
+    detections = _detections()
+    video = _video(tmp_path, frames=3)
+
+    gaps = list(EdgeGap.over(video, detections, "cpu"))
+
+    assert [gap.timepoint for gap in gaps] == sorted(gap.timepoint for gap in gaps)
+    assert len(gaps) >= 1
+
+
 def test_gap_logits_reverse(tmp_path: Path):
     """The reversed pass scores the swapped pair: a `(t, s)` matrix that is not the forward one transposed."""
     scorer = _tiny_scorer()
@@ -173,9 +183,10 @@ def test_affinities_without_prior_velocity_is_unchanged(tmp_path: Path):
     matrices = scorer.affinities(video, detections, "cpu")
 
     with torch.no_grad():
-        for gap in video_gaps(video, detections, "cpu"):
+        for gap in EdgeGap.over(video, detections, "cpu"):
             expected = torch.softmax(scorer._gap_logits(gap), dim=0).numpy()
-            assert np.array_equal(matrices.probabilities(gap.timepoint), expected)
+            scored = matrices.probabilities(gap.timepoint)
+            assert scored is not None and np.array_equal(scored, expected)
 
 
 def test_affinities_prior_velocity_carries_history_across_gaps(tmp_path: Path):
@@ -186,7 +197,7 @@ def test_affinities_prior_velocity_carries_history_across_gaps(tmp_path: Path):
     """
     scorer = _tiny_scorer(prior_velocity=True)
     video, detections = _video(tmp_path, frames=3), _moving_detections()
-    first, second = video_gaps(video, detections, "cpu")
+    first, second = EdgeGap.over(video, detections, "cpu")
 
     matrices = scorer.affinities(video, detections, "cpu")
 
@@ -197,7 +208,9 @@ def test_affinities_prior_velocity_carries_history_across_gaps(tmp_path: Path):
     assert scored_second is not None
     assert np.isfinite(scored_second).all()
     assert np.allclose(scored_second.sum(axis=0), 1.0, atol=1e-5)
-    assert np.array_equal(matrices.probabilities(first.timepoint), stateless_first)  # no predecessor == zeros
+    scored_first = matrices.probabilities(first.timepoint)
+    assert scored_first is not None
+    assert np.array_equal(scored_first, stateless_first)  # no predecessor == zeros
     assert not np.allclose(scored_second, stateless_second)
 
 
@@ -205,7 +218,7 @@ def test_reverse_pass_takes_no_history(tmp_path: Path):
     """The reversed direction of a widened head reads zeros — its sources' only prior gap is the one under test."""
     scorer = _tiny_scorer(prior_velocity=True)
     video, detections = _video(tmp_path, frames=3), _moving_detections()
-    first, second = video_gaps(video, detections, "cpu")
+    first, second = EdgeGap.over(video, detections, "cpu")
 
     with torch.no_grad():
         history = scorer._seed_logits(first, GapHistory())[1]
@@ -215,6 +228,6 @@ def test_reverse_pass_takes_no_history(tmp_path: Path):
 
     assert history.logits is not None  # the forward direction DID carry state into the second gap
     assert torch.equal(reverse, scorer._head_logits(window, GapHistory()))
-    assert not zeroed.any()
+    assert zeroed is not None and not zeroed.any()
     assert reverse.shape == (2, 2)
     assert torch.isfinite(reverse).all()

@@ -39,18 +39,17 @@ import time
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
 
 import torch
-import zarr
 from torch import Tensor, nn
 from torch.nn.attention import SDPBackend, sdpa_kernel
 
 from celltrack.data.difficulty_sampler import DifficultySampler
 from celltrack.data.joint_dataset import PairDataset, PairSample, PairTarget
+from celltrack.data.pair_curriculum import FixedMixture, PacedMixture, PairCurriculum, PairDraw
 from celltrack.detectors.tunet import DetectorRecipe
 from celltrack.eval.model_evaluator import EvalResult, ModelEvaluator
-from celltrack.eval.proxy import TEST_MOVIES, VALIDATION_MOVIES, TestMovieProxy
+from celltrack.eval.proxy import VALIDATION_MOVIES, TestMovieProxy
 from celltrack.losses.balanced_bce import BalancedBCE
 from celltrack.losses.hard_negative_margin import HardNegativeMargin
 from celltrack.losses.softmax_focal_bce import SoftmaxFocalBCE
@@ -72,11 +71,10 @@ from celltrack.training.joint_config import (
     RuntimeCfg,
     ScheduleCfg,
 )
+from celltrack.training.pair_split import PairSplit
 from celltrack.training.prior_velocity_source import PriorVelocitySource
-from celltrack.training.run_tracking import RunSetup, TrainingRun, TrainingSplit
+from celltrack.training.run_tracking import RunSetup, TrainingRun
 from celltrack.training.tunet_detector import _Optimization
-from core.data.tracks import AnnotatedTracks
-from core.data.video import ImageStatistics
 from core.metrics.edge_auc import EdgeAUC
 from core.obs import Obs
 from core.paths import DataRoot
@@ -92,14 +90,8 @@ _SECONDS_PER_HOUR = 3600.0
 # The fresh transformer's shape, matching the pilkwang head the warm-start path loads.
 _HIDDEN_DIM, _N_HEADS, _N_BLOCKS = 128, 4, 4
 _POS_FEATURE_DIM = 4 * _POS_EMBED_DIM  # sinusoidal embed of (t, z, y, x)
-
-
-@dataclass(frozen=True)
-class PairSplit:
-    """The two pair sets a joint run reads — what it optimises on, and what its edge AUC is measured over."""
-
-    train: list[PairTarget]
-    val: list[PairTarget]
+# The uniform stream draws no index at all; -1 says so without a `int | None` that every reader must unwrap.
+_UNTRACKED_INDEX = -1
 
 
 @dataclass(frozen=True)
@@ -168,6 +160,113 @@ class _EvalResult:
 class JointTrainer:
     """Runs the joint detector+edge training loop under one configuration, checkpointing the best proxy score."""
 
+    @staticmethod
+    def _parser() -> argparse.ArgumentParser:
+        """Every flag a joint run takes — kept apart from `main` so the run's WIRING reads as its own short function."""
+        parser = argparse.ArgumentParser(description="Train the joint detector+edge model on the non-held-out videos.")
+        parser.add_argument("--steps", type=int, default=1500)
+        parser.add_argument("--eval-every", type=int, default=500, help="steps per eval window")
+        # The step scale above is a probe-run unit: one pair per step means the ~18000-pair corpus makes an epoch,
+        # so `--steps 3000` is 17% of ONE pass against the published pack's 50 epochs, and `--patience` counts
+        # EVAL WINDOWS — five of them is 14% of an epoch at eval-every 500 and five whole epochs at 9000. The
+        # flags below say the same things in passes over the corpus, and win over their raw twin when given.
+        parser.add_argument("--epochs", type=float, default=None, help="passes over the GT pairs; overrides --steps")
+        parser.add_argument(
+            "--evals-per-epoch", type=int, default=None, help="eval windows per epoch; overrides --eval-every"
+        )
+        parser.add_argument(
+            "--patience-epochs",
+            type=float,
+            default=None,
+            help="epochs without a gain before stopping; overrides --patience",
+        )
+        parser.add_argument("--warm-start", action="store_true", help="initialise from the published pilkwang weights")
+        parser.add_argument(
+            "--det-weight", type=float, default=1.0, help="weight on the detection term vs the edge term"
+        )
+        parser.add_argument(
+            "--contrastive-weight", type=float, default=0.0, help="weight on the InfoNCE term over the node features"
+        )
+        # WHERE that weight acts. On the features it is measured to trade detection away for discrimination
+        # (proxy 0.8414 -> 0.7292, node recall 0.966 -> 0.867); the projecting sites give the term its own
+        # embedding to shape, `detached_projection` keeping the backbone out of its reach entirely.
+        parser.add_argument(
+            "--contrastive-site",
+            choices=tuple(ContrastiveSite),
+            default=ContrastiveSite.FEATURES,
+            type=ContrastiveSite,
+            help="where the InfoNCE term acts: on the shared features, or through its own projection head",
+        )
+        parser.add_argument("--temperature", type=float, default=0.07, help="InfoNCE softmax temperature over targets")
+        # The zni probe's mining under a MARGIN objective and an UNFROZEN backbone — the one combination never run.
+        # Its absolute form (decoy probability -> 0, UNet frozen) flattened the head; a weight here is matched to the
+        # term's own logged magnitude against the edge term, so the arm measures the mechanism and not a rescaling.
+        parser.add_argument(
+            "--hard-negative-weight",
+            type=float,
+            default=0.0,
+            help="weight on the ranking term holding each source's true logit above its nearest wrong targets'",
+        )
+        parser.add_argument(
+            "--hard-negatives", type=int, default=4, help="nearest wrong targets mined per annotated source"
+        )
+        # Fine-tuning a CONVERGED model at its original training rate is the classic way to walk off its optimum,
+        # which is what 3000 warm-start steps at 1e-4 did (never beat the init). Exposed so the rate is a
+        # variable of the experiment rather than an inherited constant.
+        parser.add_argument("--lr", type=float, default=1e-4, help="learning rate; lower it when warm-starting")
+        parser.add_argument("--cosine-lr", action="store_true", help="decay the rate to zero over the run")
+        parser.add_argument(
+            "--warm-pack", choices=tuple(WARM_PACKS), default="seed1", help="which published pack to continue"
+        )
+        parser.add_argument("--compile-backbone", action="store_true", help="torch.compile the U-Net (static shape)")
+        parser.add_argument(
+            "--difficulty-sampling",
+            action="store_true",
+            help="draw pairs in proportion to their measured top-1 defect instead of uniformly with replacement",
+        )
+        # The one property our own corpus cannot have: every cell of a synthetic frame is labelled, so the crowded
+        # near-neighbours enter the edge matrix as TRUE NEGATIVES instead of sitting outside it as unannotated
+        # detections — which is what all 38 of the dense movie's mislinked partners are.
+        parser.add_argument(
+            "--synthetic-fraction",
+            type=float,
+            default=0.0,
+            help="share of steps drawn from the fully-labelled synthetic corpus (0 = the real corpus alone)",
+        )
+        parser.add_argument(
+            "--synthetic-sequences", type=int, default=None, help="synthetic sequences to enumerate (default: all)"
+        )
+        parser.add_argument(
+            "--paced-curriculum",
+            action="store_true",
+            help="replace the fixed synthetic share with the EMA'd, loss-weighting, hard-early feedback controller",
+        )
+        parser.add_argument(
+            "--prior-velocity",
+            action="store_true",
+            help="feed each source its t-1 -> t displacement as head input (~50%% slower per step)",
+        )
+        # The threshold is DERIVED, not swept: given bare, the flag takes the pipeline's own inference operating
+        # point — the response at which the shipped tracker would already have called the voxel a cell, so every
+        # voxel the mask spares is one the deployed model detects and our sparse annotation cannot adjudicate.
+        parser.add_argument(
+            "--ignore-ambiguous-above",
+            type=float,
+            nargs="?",
+            const=TrackerConfig().threshold,
+            default=None,
+            help="leave unannotated voxels above this sigmoid response unsupervised (bare = the tracker threshold)",
+        )
+        parser.add_argument("--patience", type=int, default=5, help="stop after N non-improving evals (<1 disables)")
+        parser.add_argument("--device", type=str, default="cuda")
+        parser.add_argument("--val-videos", type=int, default=2, help="validation movies the edge AUC is measured over")
+        parser.add_argument(
+            "--eval-threshold", type=float, default=0.5, help="detection threshold of the selector eval"
+        )
+        parser.add_argument("--resume", action="store_true", help="continue from the .resume.pt snapshot")
+        parser.add_argument("--weights", type=str, default="joint_tunet_ours.pt")
+        return parser
+
     def __init__(self, config: JointTrainConfig) -> None:
         self.config = config
         # The contrastive term's placement is fixed for the whole run, and the projecting sites carry weights
@@ -201,21 +300,26 @@ class JointTrainer:
         if stop is not None:
             stop.update(best)  # seed with the init score so a first worse window doesn't read as an improvement
         run_start = time.perf_counter()
-        sampler = self._sampler(pairs.train)
+        curriculum = self._curriculum(pairs)
+        corpus = pairs.corpus()
         while done < schedule.steps:
             window = min(schedule.eval_every, schedule.steps - done)
             dataset = PairDataset(
-                pairs.train,
+                corpus,
                 window,
                 self.config.data.downsample,
                 self.config.runtime.seed + done,
                 with_previous=self.config.data.prior_velocity,
             )
-            losses = self._run_window(model, optimization, dataset, sampler)
+            losses = self._run_window(model, optimization, dataset, curriculum)
             done += window
             result = self._evaluate(model, evaluator, pairs.val)
             pipeline = result.pipeline
-            selected = pipeline.selection_score
+            # Weighted by the difficulty the window was TRAINED at, then the controller is told the raw score:
+            # a policy that moves the diet must not be judged by a metric that forgot the diet moved.
+            selected = pipeline.selection_score * (curriculum.selection_weight() if curriculum else 1.0)
+            if curriculum is not None:
+                curriculum.update(pipeline.selection_score)
             improved = stop.update(selected) if stop is not None else selected >= best
             marker = ""
             if improved:
@@ -254,8 +358,9 @@ class JointTrainer:
                 (time.perf_counter() - run_start) / _SECONDS_PER_HOUR,
                 eta_hours,
             )
-            if sampler is not None:
-                logger.info("  sampler | coverage %.3f | entropy %.3f", losses["coverage"], losses["sampling_entropy"])
+            if curriculum is not None:
+                health = curriculum.health()
+                logger.info("  curriculum | %s", " | ".join(f"{name} {value:.3f}" for name, value in health.items()))
             if stop is not None and stop.should_stop:
                 logger.info("early stop: %d evals no gain (step %d, best %.4f)", schedule.patience, done, best)
                 break
@@ -359,67 +464,77 @@ class JointTrainer:
         )
         return JointModel(detector, transformer, downsample)
 
-    def _sampler(self, targets: list[PairTarget]) -> DifficultySampler | None:
-        """One sampler for the WHOLE run (difficulty has to survive across windows), or None for the uniform stream."""
-        if not self.config.data.difficulty_sampling:
-            return None
-        seed = self.config.runtime.seed
-        corpus = PairDataset(targets, self.config.schedule.steps, self.config.data.downsample, seed)
-        return DifficultySampler(corpus.target_count, seed)
+    def _curriculum(self, pairs: PairSplit) -> PairCurriculum | None:
+        """The run's ONE policy over (which pair, how much it counts), or None for the uniform stream.
+
+        Built once for the whole run because every policy here carries state across windows — a difficulty
+        estimate, an EMA, a realised share. The three are mutually exclusive by construction: a paced mix
+        needs a synthetic population, a fixed mix needs a share of one, and the per-pair difficulty sampler
+        needs neither.
+        """
+        data, seed = self.config.data, self.config.runtime.seed
+        counts = (len(pairs.train), len(pairs.synthetic))
+        if pairs.synthetic and data.paced_curriculum:
+            windows = math.ceil(self.config.schedule.steps / self.config.schedule.eval_every)
+            return PacedMixture(*counts, windows, seed)
+        if pairs.synthetic and data.synthetic_fraction:
+            return FixedMixture(*counts, data.synthetic_fraction, seed)
+        if data.difficulty_sampling:
+            return DifficultySampler(len(pairs.train), seed)
+        return None
 
     def _run_window(
         self,
         model: JointModel,
         optimization: _Optimization,
         dataset: PairDataset,
-        sampler: DifficultySampler | None = None,
+        curriculum: PairCurriculum | None = None,
     ) -> dict[str, float]:
         """Train one optimiser step per pair of `dataset`; returns each term's window mean plus `it_per_s`."""
         model.train()
         steps = len(dataset)
         sums: dict[str, float] = {}
         done, t0 = 0, time.perf_counter()
-        for target_index, pair in self._pairs(dataset, sampler):
-            outcome = self._step(model, optimization, pair)
+        for draw, pair in self._pairs(dataset, curriculum):
+            outcome = self._step(model, optimization, pair, draw.weight)
             for name, value in outcome.logged().items():
                 sums[name] = sums.get(name, 0.0) + value
-            self._observe(sampler, target_index, outcome)
+            self._observe(curriculum, draw.index, outcome)
             done += 1
             if done % _HEARTBEAT_UPDATES == 0:
                 rate = done / (time.perf_counter() - t0)
                 logger.info("  ..%d/%d in window | loss %.4f | %.1f it/s", done, steps, sums["train_loss"] / done, rate)
         divisor = max(done, 1)
         means = {name: total / divisor for name, total in sums.items()}
-        return {**means, "it_per_s": done / (time.perf_counter() - t0), **self._sampling(sampler)}
+        health = curriculum.health() if curriculum is not None else {}
+        return {**means, "it_per_s": done / (time.perf_counter() - t0), **health}
 
-    def _pairs(
-        self, dataset: PairDataset, sampler: DifficultySampler | None
-    ) -> Iterator[tuple[int | None, PairSample]]:
-        """The window's pairs, each with the corpus index that produced it — `None` on the untouched uniform stream."""
-        if sampler is None:
-            yield from ((None, pair) for pair in dataset.stream())
+    def _pairs(self, dataset: PairDataset, curriculum: PairCurriculum | None) -> Iterator[tuple[PairDraw, PairSample]]:
+        """The window's pairs, each with the draw that produced it — index `None` on the untouched uniform stream."""
+        if curriculum is None:
+            yield from ((PairDraw(index=_UNTRACKED_INDEX), pair) for pair in dataset.stream())
             return
         for _ in range(len(dataset)):
-            index = sampler.draw()
-            yield index, dataset.pair(index)
+            draw = curriculum.step()
+            yield draw, dataset.pair(draw.index)
 
-    def _observe(self, sampler: DifficultySampler | None, target_index: int | None, outcome: _PairOutcome) -> None:
-        """Close the feedback loop — the step's own top-1 defect reweights that pair. A no-op on the uniform path."""
-        if sampler is None or target_index is None:
+    def _observe(self, curriculum: PairCurriculum | None, index: int, outcome: _PairOutcome) -> None:
+        """Close the per-pair feedback loop — the step's own top-1 defect. A no-op on the uniform path."""
+        if curriculum is None or index == _UNTRACKED_INDEX:
             return
-        sampler.observe(target_index, outcome.difficulty())
+        curriculum.observe(index, outcome.difficulty())
 
-    def _sampling(self, sampler: DifficultySampler | None) -> dict[str, float]:
-        """The sampler's two health numbers for the window row; empty when uniform, so an unasked run logs as before."""
-        if sampler is None:
-            return {}
-        return {"coverage": sampler.coverage(), "sampling_entropy": sampler.entropy()}
+    def _step(
+        self, model: JointModel, optimization: _Optimization, pair: PairSample, weight: float = 1.0
+    ) -> _PairOutcome:
+        """One optimisation step over a single GT pair; returns that pair's loss terms and edge tensors.
 
-    def _step(self, model: JointModel, optimization: _Optimization, pair: PairSample) -> _PairOutcome:
-        """One optimisation step over a single GT pair; returns that pair's loss terms and edge tensors."""
+        `weight` is the curriculum's per-sample say in the update. It scales the GRADIENT only: the logged
+        terms stay the pair's own unweighted numbers, so a window's loss row still compares across arms.
+        """
         outcome = self._losses(model, pair)
         optimization.zero_grad()
-        outcome.total.backward()
+        (weight * outcome.total).backward()
         nn.utils.clip_grad_norm_(self._trained(model), self.config.optim.grad_clip)
         optimization.step()
         return outcome
@@ -558,99 +673,19 @@ class JointTrainer:
         )
 
 
-def _parser() -> argparse.ArgumentParser:
-    """Every flag a joint run takes — kept apart from `main` so the run's WIRING reads as its own short function."""
-    parser = argparse.ArgumentParser(description="Train the joint detector+edge model on the non-held-out videos.")
-    parser.add_argument("--steps", type=int, default=1500)
-    parser.add_argument("--eval-every", type=int, default=500, help="steps per eval window")
-    # The step scale above is a probe-run unit: one pair per step means the ~18000-pair corpus makes an epoch,
-    # so `--steps 3000` is 17% of ONE pass against the published pack's 50 epochs, and `--patience` counts
-    # EVAL WINDOWS — five of them is 14% of an epoch at eval-every 500 and five whole epochs at 9000. The
-    # flags below say the same things in passes over the corpus, and win over their raw twin when given.
-    parser.add_argument("--epochs", type=float, default=None, help="passes over the GT pairs; overrides --steps")
-    parser.add_argument(
-        "--evals-per-epoch", type=int, default=None, help="eval windows per epoch; overrides --eval-every"
-    )
-    parser.add_argument(
-        "--patience-epochs",
-        type=float,
-        default=None,
-        help="epochs without a gain before stopping; overrides --patience",
-    )
-    parser.add_argument("--warm-start", action="store_true", help="initialise from the published pilkwang weights")
-    parser.add_argument("--det-weight", type=float, default=1.0, help="weight on the detection term vs the edge term")
-    parser.add_argument(
-        "--contrastive-weight", type=float, default=0.0, help="weight on the InfoNCE term over the node features"
-    )
-    # WHERE that weight acts. On the features it is measured to trade detection away for discrimination
-    # (proxy 0.8414 -> 0.7292, node recall 0.966 -> 0.867); the projecting sites give the term its own
-    # embedding to shape, `detached_projection` keeping the backbone out of its reach entirely.
-    parser.add_argument(
-        "--contrastive-site",
-        choices=tuple(ContrastiveSite),
-        default=ContrastiveSite.FEATURES,
-        type=ContrastiveSite,
-        help="where the InfoNCE term acts: on the shared features, or through its own projection head",
-    )
-    parser.add_argument("--temperature", type=float, default=0.07, help="InfoNCE softmax temperature over targets")
-    # The zni probe's mining under a MARGIN objective and an UNFROZEN backbone — the one combination never run.
-    # Its absolute form (decoy probability -> 0, UNet frozen) flattened the head; a weight here is matched to the
-    # term's own logged magnitude against the edge term, so the arm measures the mechanism and not a rescaling.
-    parser.add_argument(
-        "--hard-negative-weight",
-        type=float,
-        default=0.0,
-        help="weight on the ranking term holding each source's true logit above its nearest wrong targets'",
-    )
-    parser.add_argument(
-        "--hard-negatives", type=int, default=4, help="nearest wrong targets mined per annotated source"
-    )
-    # Fine-tuning a CONVERGED model at its original training rate is the classic way to walk off its optimum,
-    # which is what 3000 warm-start steps at 1e-4 did (never beat the init). Exposed so the rate is a
-    # variable of the experiment rather than an inherited constant.
-    parser.add_argument("--lr", type=float, default=1e-4, help="learning rate; lower it when warm-starting")
-    parser.add_argument("--cosine-lr", action="store_true", help="decay the rate to zero over the run")
-    parser.add_argument(
-        "--warm-pack", choices=tuple(WARM_PACKS), default="seed1", help="which published pack to continue"
-    )
-    parser.add_argument("--compile-backbone", action="store_true", help="torch.compile the U-Net (static shape)")
-    parser.add_argument(
-        "--difficulty-sampling",
-        action="store_true",
-        help="draw pairs in proportion to their measured top-1 defect instead of uniformly with replacement",
-    )
-    parser.add_argument(
-        "--prior-velocity",
-        action="store_true",
-        help="feed each source its t-1 -> t displacement as head input (~50%% slower per step)",
-    )
-    # The threshold is DERIVED, not swept: given bare, the flag takes the pipeline's own inference operating
-    # point — the response at which the shipped tracker would already have called the voxel a cell, so every
-    # voxel the mask spares is one the deployed model detects and our sparse annotation cannot adjudicate.
-    parser.add_argument(
-        "--ignore-ambiguous-above",
-        type=float,
-        nargs="?",
-        const=TrackerConfig().threshold,
-        default=None,
-        help="leave unannotated voxels above this sigmoid response unsupervised (bare = the tracker threshold)",
-    )
-    parser.add_argument("--patience", type=int, default=5, help="stop after N non-improving evals (<1 disables)")
-    parser.add_argument("--device", type=str, default="cuda")
-    parser.add_argument("--val-videos", type=int, default=2, help="validation movies the edge AUC is measured over")
-    parser.add_argument("--eval-threshold", type=float, default=0.5, help="detection threshold of the selector eval")
-    parser.add_argument("--resume", action="store_true", help="continue from the .resume.pt snapshot")
-    parser.add_argument("--weights", type=str, default="joint_tunet_ours.pt")
-    return parser
-
-
 def main() -> None:
-    args = _parser().parse_args()
+    args = JointTrainer._parser().parse_args()  # noqa: SLF001
 
     # The flat flags fan out into the concern each one belongs to — the CLI is the interface, this is the model.
     config = JointTrainConfig(
         model=ModelCfg(warm_pack=WARM_PACKS[args.warm_pack]),
-        data=DataCfg(difficulty_sampling=args.difficulty_sampling, prior_velocity=args.prior_velocity),
+        data=DataCfg(
+            difficulty_sampling=args.difficulty_sampling,
+            prior_velocity=args.prior_velocity,
+            synthetic_fraction=args.synthetic_fraction,
+            synthetic_sequences=args.synthetic_sequences,
+            paced_curriculum=args.paced_curriculum,
+        ),
         optim=OptimCfg(lr=args.lr, cosine_lr=args.cosine_lr),
         loss=LossCfg(
             det_weight=args.det_weight,
@@ -673,13 +708,6 @@ def main() -> None:
         runtime=RuntimeCfg(device=args.device, compile_backbone=args.compile_backbone),
     )
     root = DataRoot.from_config(_CONFIG)
-
-    def _enumerate(video: Path, graph_source: AnnotatedTracks) -> list[PairTarget]:
-        """Every consecutive-frame GT pair of one video, with its per-video intensity quantiles read from OME."""
-        quantiles = cast(ImageStatistics, zarr.open_group(video, mode="r").attrs["image_statistics"])["quantiles"]
-        q_low, q_high = float(quantiles["0.001"]), float(quantiles["0.999"])
-        return PairTarget.enumerate(graph_source.graph, video, q_low, q_high)
-
     proc = root.processed(_DATASET)
     save_to = proc / args.weights
     log = Obs.setup(save_to.with_suffix(".log"), truncate=not args.resume)  # tail-able while the run goes
@@ -690,30 +718,10 @@ def main() -> None:
         packs = (proc / WARM_PACKS["seed1"], proc / WARM_PACKS["seed2"])
         evaluator = ModelEvaluator.mount(validation, packs, recipe, config.runtime.device, tracker_config)
 
-    train_paths = TestMovieProxy.training_videos(root.videos("train"))
-    split = TrainingSplit(len(train_paths), len(VALIDATION_MOVIES), len(TEST_MOVIES))
-    logger.info(
-        "split: %d train / %d validation (selected on) / %d test (estimate only)",
-        split.train,
-        split.validation,
-        split.test,
-    )
-    train_targets: list[PairTarget] = []
-    with Obs.timed(log, f"enumerating GT pairs over {len(train_paths)} train videos"):
-        for path in Obs.progress(train_paths, "videos", len(train_paths)):
-            train_targets.extend(_enumerate(path, AnnotatedTracks.from_geff(root.track_store(path))))
-    logger.info("%d train pairs", len(train_targets))
-
-    # The edge AUC reads the SAME held-out movies the checkpoint is selected on — one validation set, and a
-    # pair-level forward per annotated frame, so `--val-videos` caps how many of them contribute.
-    held = list(zip(evaluator.proxy.paths, evaluator.proxy.truths, strict=True))[: args.val_videos]
-    val_targets: list[PairTarget] = []
-    for video, truth in held:
-        val_targets.extend(_enumerate(video, truth))
-    logger.info("%d val pairs over %d validation movies", len(val_targets), len(held))
+    pairs, split = PairSplit.assemble(root, config, evaluator.proxy, log, args.val_videos)
 
     setup = RunSetup(save_to, warm_start=args.warm_start, resume=args.resume, split=split)
-    JointTrainer(config).train(PairSplit(train_targets, val_targets), evaluator, setup)
+    JointTrainer(config).train(pairs, evaluator, setup)
 
 
 if __name__ == "__main__":

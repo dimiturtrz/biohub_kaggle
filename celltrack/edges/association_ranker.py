@@ -95,26 +95,114 @@ class AssociationContext:
         """Every per-node quantity the features need, measured off one video's detections and primary links."""
         positions_um = spacing.to_micrometres(detections.positions())
         timepoints = detections.timepoints()
-        row_in_frame, frame_count = _frame_positions(timepoints)
-        sources, targets = _link_rows(detections, links)
-        probability, scored = _link_probabilities(timepoints, row_in_frame, sources, targets, affinity)
+        row_in_frame, frame_count = cls._frame_positions(timepoints)
+        sources, targets = cls._link_rows(detections, links)
+        probability, scored = cls._link_probabilities(timepoints, row_in_frame, sources, targets, affinity)
         count = len(timepoints)
         return cls(
             positions_um=positions_um,
             timepoints=timepoints,
             row_in_frame=row_in_frame,
             frame_count=frame_count,
-            density=_frame_density(positions_um, timepoints),
+            density=cls._frame_density(positions_um, timepoints),
             in_degree=np.bincount(targets, minlength=count),
             out_degree=np.bincount(sources, minlength=count),
-            best_next_prob=_best_outgoing(count, sources, probability),
-            predicted_um=_predicted_positions(positions_um, sources, targets),
+            best_next_prob=cls._best_outgoing(count, sources, probability),
+            predicted_um=cls._predicted_positions(positions_um, sources, targets),
             link_sources=sources,
             link_targets=targets,
             link_prob=probability,
             link_scored=scored,
             max_timepoint=max(1, int(timepoints.max())) if count else 1,
         )
+
+    @staticmethod
+    def _frame_positions(timepoints: Int[np.ndarray, "n"]) -> tuple[Int[np.ndarray, "n"], Int[np.ndarray, "n"]]:
+        """Each node's index within its own frame, and how many detections that frame holds.
+
+        The index is what maps a node row onto the `s x t` grid a gap's matrices are built on; the count is the
+        `*_frame_count` feature (the public pipeline's `len(ids_by_t[t])`).
+        """
+        row_in_frame = np.zeros(len(timepoints), dtype=np.int64)
+        frame_count = np.zeros(len(timepoints), dtype=np.int64)
+        for timepoint in np.unique(timepoints):
+            rows = np.flatnonzero(timepoints == timepoint)
+            row_in_frame[rows] = np.arange(len(rows))
+            frame_count[rows] = len(rows)
+        return row_in_frame, frame_count
+
+    @staticmethod
+    def _frame_density(
+        positions_um: Float[np.ndarray, "n 3"], timepoints: Int[np.ndarray, "n"]
+    ) -> Float[np.ndarray, "n"]:
+        """How many same-frame detections lie within 7 um of each node, excluding itself — the crowding feature."""
+        density = np.zeros(len(timepoints), dtype=np.float64)
+        for timepoint in np.unique(timepoints):
+            rows = np.flatnonzero(timepoints == timepoint)
+            tree = KDTree(positions_um[rows])
+            counts = tree.query_ball_point(positions_um[rows], r=_DENSITY_RADIUS_UM, return_length=True)
+            density[rows] = np.maximum(counts - 1, 0)
+        return density
+
+    @staticmethod
+    def _link_rows(detections: TrackGraph, links: TrackGraph) -> tuple[Int[np.ndarray, "e"], Int[np.ndarray, "e"]]:
+        """The primary links as row indices into the DETECTION node arrays, whichever node order `links` carries."""
+        if len(links.edges) == 0:
+            empty = np.empty(0, dtype=np.int64)
+            return empty, empty
+        return detections.rows_of(links.edges[:, 0]), detections.rows_of(links.edges[:, 1])
+
+    @staticmethod
+    def _link_probabilities(
+        timepoints: Int[np.ndarray, "n"],
+        row_in_frame: Int[np.ndarray, "n"],
+        sources: Int[np.ndarray, "e"],
+        targets: Int[np.ndarray, "e"],
+        affinity: EdgeAffinity | None,
+    ) -> tuple[Float[np.ndarray, "e"], Bool[np.ndarray, "e"]]:
+        """The learned probability of each SELECTED link, and whether the affinity scored it at all.
+
+        This is the public pipeline's `learned_edge_probs`, which it fills from the emitted edge list: a link whose
+        gap the affinity never scored carries no probability, which is what makes `has_learned_edge` informative
+        rather than constant.
+        """
+        probability = np.zeros(len(sources), dtype=np.float64)
+        scored = np.zeros(len(sources), dtype=bool)
+        if affinity is None:
+            return probability, scored
+        for index, (source, target) in enumerate(zip(sources.tolist(), targets.tolist(), strict=True)):
+            matrix = affinity.probabilities(int(timepoints[source]))
+            if matrix is not None and int(timepoints[target]) == int(timepoints[source]) + 1:
+                probability[index] = float(matrix[row_in_frame[source], row_in_frame[target]])
+                scored[index] = True
+        return probability, scored
+
+    @staticmethod
+    def _best_outgoing(
+        count: int, sources: Int[np.ndarray, "e"], probability: Float[np.ndarray, "e"]
+    ) -> Float[np.ndarray, "n"]:
+        """The strongest outgoing link probability of each node — the `target_best_next_prob` feature.
+
+        A target that already has a confident successor of its own is a different proposition than one with none,
+        which is the crowding fact this feature carries into the score.
+        """
+        best = np.zeros(count, dtype=np.float64)
+        np.maximum.at(best, sources, probability)
+        return best
+
+    @staticmethod
+    def _predicted_positions(
+        positions_um: Float[np.ndarray, "n 3"], sources: Int[np.ndarray, "e"], targets: Int[np.ndarray, "e"]
+    ) -> Float[np.ndarray, "n 3"]:
+        """Where constant velocity says each node goes next: `position + 0.5 * (position - parent position)`.
+
+        A node with no parent in the context graph predicts its own position — no velocity is known, so the motion
+        distance degenerates to the raw distance and `motion_gain_um` to zero, exactly as the public pipeline's
+        `predicted = source_pos` branch does.
+        """
+        previous = positions_um.copy()
+        previous[targets] = positions_um[sources]
+        return positions_um + _VELOCITY_WEIGHT * (positions_um - previous)
 
     def rows_at(self, timepoint: int) -> Int[np.ndarray, "k"]:
         """The detection rows of one frame, in the ascending order every gap matrix is aligned to."""
@@ -357,89 +445,3 @@ class AssociationRanker:
         if gated.any():
             scored[gated] = self.probabilities(features.matrix(self.feature_names))
         return scored
-
-
-def _frame_positions(timepoints: Int[np.ndarray, "n"]) -> tuple[Int[np.ndarray, "n"], Int[np.ndarray, "n"]]:
-    """Each node's index within its own frame, and how many detections that frame holds.
-
-    The index is what maps a node row onto the `s x t` grid a gap's matrices are built on; the count is the
-    `*_frame_count` feature (the public pipeline's `len(ids_by_t[t])`).
-    """
-    row_in_frame = np.zeros(len(timepoints), dtype=np.int64)
-    frame_count = np.zeros(len(timepoints), dtype=np.int64)
-    for timepoint in np.unique(timepoints):
-        rows = np.flatnonzero(timepoints == timepoint)
-        row_in_frame[rows] = np.arange(len(rows))
-        frame_count[rows] = len(rows)
-    return row_in_frame, frame_count
-
-
-def _frame_density(positions_um: Float[np.ndarray, "n 3"], timepoints: Int[np.ndarray, "n"]) -> Float[np.ndarray, "n"]:
-    """How many same-frame detections lie within 7 um of each node, excluding itself — the crowding feature."""
-    density = np.zeros(len(timepoints), dtype=np.float64)
-    for timepoint in np.unique(timepoints):
-        rows = np.flatnonzero(timepoints == timepoint)
-        tree = KDTree(positions_um[rows])
-        counts = tree.query_ball_point(positions_um[rows], r=_DENSITY_RADIUS_UM, return_length=True)
-        density[rows] = np.maximum(counts - 1, 0)
-    return density
-
-
-def _link_rows(detections: TrackGraph, links: TrackGraph) -> tuple[Int[np.ndarray, "e"], Int[np.ndarray, "e"]]:
-    """The primary links as row indices into the DETECTION node arrays, whichever node order `links` carries."""
-    if len(links.edges) == 0:
-        empty = np.empty(0, dtype=np.int64)
-        return empty, empty
-    return detections.rows_of(links.edges[:, 0]), detections.rows_of(links.edges[:, 1])
-
-
-def _link_probabilities(
-    timepoints: Int[np.ndarray, "n"],
-    row_in_frame: Int[np.ndarray, "n"],
-    sources: Int[np.ndarray, "e"],
-    targets: Int[np.ndarray, "e"],
-    affinity: EdgeAffinity | None,
-) -> tuple[Float[np.ndarray, "e"], Bool[np.ndarray, "e"]]:
-    """The learned probability of each SELECTED link, and whether the affinity scored it at all.
-
-    This is the public pipeline's `learned_edge_probs`, which it fills from the emitted edge list: a link whose
-    gap the affinity never scored carries no probability, which is what makes `has_learned_edge` informative
-    rather than constant.
-    """
-    probability = np.zeros(len(sources), dtype=np.float64)
-    scored = np.zeros(len(sources), dtype=bool)
-    if affinity is None:
-        return probability, scored
-    for index, (source, target) in enumerate(zip(sources.tolist(), targets.tolist(), strict=True)):
-        matrix = affinity.probabilities(int(timepoints[source]))
-        if matrix is not None and int(timepoints[target]) == int(timepoints[source]) + 1:
-            probability[index] = float(matrix[row_in_frame[source], row_in_frame[target]])
-            scored[index] = True
-    return probability, scored
-
-
-def _best_outgoing(
-    count: int, sources: Int[np.ndarray, "e"], probability: Float[np.ndarray, "e"]
-) -> Float[np.ndarray, "n"]:
-    """The strongest outgoing link probability of each node — the `target_best_next_prob` feature.
-
-    A target that already has a confident successor of its own is a different proposition than one with none,
-    which is the crowding fact this feature carries into the score.
-    """
-    best = np.zeros(count, dtype=np.float64)
-    np.maximum.at(best, sources, probability)
-    return best
-
-
-def _predicted_positions(
-    positions_um: Float[np.ndarray, "n 3"], sources: Int[np.ndarray, "e"], targets: Int[np.ndarray, "e"]
-) -> Float[np.ndarray, "n 3"]:
-    """Where constant velocity says each node goes next: `position + 0.5 * (position - parent position)`.
-
-    A node with no parent in the context graph predicts its own position — no velocity is known, so the motion
-    distance degenerates to the raw distance and `motion_gain_um` to zero, exactly as the public pipeline's
-    `predicted = source_pos` branch does.
-    """
-    previous = positions_um.copy()
-    previous[targets] = positions_um[sources]
-    return positions_um + _VELOCITY_WEIGHT * (positions_um - previous)

@@ -1,5 +1,7 @@
 """Unit tests for edge PRC-AUC — the equivalence classes of ranking affinities against a sparse GT."""
 
+import math
+
 import numpy as np
 
 from core.metrics.edge_auc import EdgeAUC
@@ -45,3 +47,11 @@ def test_no_positives_is_nan():
     rng = np.random.default_rng(0)
     scores = rng.random((4, 4))
     assert np.isnan(EdgeAUC.of(scores, np.zeros((4, 4))))
+
+
+def test_ranked():
+    """The Mann-Whitney statistic: positives at ranks 2 and 4 give (6 - 3) / (2*2) = 0.75, ties scored 0.5."""
+    labels = np.array([False, True, False, True])
+    assert EdgeAUC.ranked(np.array([0.1, 0.2, 0.3, 0.4]), labels) == 0.75
+    assert EdgeAUC.ranked(np.array([1.0, 1.0, 1.0, 1.0]), labels) == 0.5
+    assert math.isnan(EdgeAUC.ranked(np.array([0.1, 0.2]), np.array([True, True])))  # one class only

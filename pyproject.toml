@@ -42,9 +42,6 @@ compile = [
     "triton-windows ; sys_platform == 'win32'",
     "triton ; sys_platform == 'linux'",
 ]
-# Feature-attribution tooling (captum) for interpreting what the detector and edge models attend to — an
-# opt-in devtool, not a runtime dep. `uv sync --extra attribution`, then run the attribution entrypoint.
-attribution = ["captum"]
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -90,7 +87,9 @@ extend_exclude = ["noxfile.py", "tools/oracle", "kaggle"]
 DEP001 = ["tracking_cellmot", "biohub_tracking"]
 # >>> LOCAL-SLOT: deptry-unused — PRUNE a starter once you wire it (keep pytest/pytest-cov/sdlc-devtools)
 # `kaggle` is the submit-extra CLI (`.venv/Scripts/kaggle.exe`), invoked never imported -> reads as unused.
-DEP002 = ["pytest", "pytest-cov", "sdlc-devtools", "beartype", "pydantic", "kaggle"]
+# `triton`/`triton-windows` are torch.compile's inductor BACKEND: torch loads them by name at compile time and
+# nothing in our source imports them, so they read as unused by construction rather than by neglect.
+DEP002 = ["pytest", "pytest-cov", "sdlc-devtools", "beartype", "pydantic", "kaggle", "triton", "triton-windows"]
 # <<< LOCAL-SLOT: deptry-unused
 
 [tool.ruff]

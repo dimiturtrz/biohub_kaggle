@@ -109,7 +109,7 @@ def _head() -> nn.Module:
     """A tiny pack-shaped head at random but fixed weights, in eval so dropout cannot mask a difference."""
     torch.manual_seed(0)
     head = _head_cls()(feat_dim=_FEAT_DIM, hidden_dim=_HIDDEN_DIM, n_heads=_HEADS, n_blocks=2)
-    head.pair_chunk_size = _PAIR_CHUNK
+    head.pair_chunk_size = _PAIR_CHUNK  # pyrefly: ignore[bad-argument-type]  # the pack head stores a plain int
     return head.eval()
 
 

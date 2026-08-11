@@ -239,8 +239,9 @@ class CellTracker:
         """
         if self.ranker is None or not self.config.linker.needs_ranker:
             return None
-        context = self.config.linker.without_ranker().build(spacing, affinity, mutual, volume_shape).link(nodes)
-        return self.ranker.affinities(spacing, nodes, context, affinity, self.config.linker.gate_um)
+        linker = self.config.linker
+        context = linker.without_ranker().build(spacing, affinity, mutual, volume_shape).link(nodes)
+        return self.ranker.affinities(spacing, nodes, context, affinity, linker.gate_um)
 
     def _stages(
         self,
