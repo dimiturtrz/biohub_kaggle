@@ -234,16 +234,17 @@ def main() -> None:
     tracking = SweepTracking(args.stems_label)
     first_cell = (args.thresholds[0], args.disappearance_costs[0])  # the cell `breakdown` was measured at
     for (threshold, cost), split in evaluator.scores(root).items():
+        resolved = evaluator.config_at(threshold, cost)  # `--set` wins over the swept coordinate, so report THIS
         logger.info(
             "threshold=%-6.4f disappearance=%-6.2f proxy score=%.4f (clamped %.4f, bonus %+.4f)",
-            threshold,
-            cost,
+            resolved.threshold,
+            resolved.linker.disappearance_cost,
             split.score,
             split.selection_score,
             split.score - split.selection_score,
         )
         per_movie = breakdown if (threshold, cost) == first_cell else {}
-        tracking.cell(evaluator.config_at(threshold, cost), split.score, per_movie)
+        tracking.cell(resolved, split.score, per_movie)
 
 
 if __name__ == "__main__":
