@@ -10485,6 +10485,12 @@
     {
       "kind": "calls",
       "source": "celltrack.training.pair_split.PairSplit.of_detected",
+      "target": "celltrack.training.pair_split.PairSplit._across_acquisitions",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.pair_split.PairSplit.of_detected",
       "target": "core.data.tracks.AnnotatedTracks.from_geff",
       "weight": 1
     },
@@ -19780,6 +19786,14 @@
       "label": "logged",
       "level": "method",
       "parent": "celltrack.training.joint_detector._PairOutcome",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.pair_split.PairSplit._across_acquisitions",
+      "label": "_across_acquisitions",
+      "level": "method",
+      "parent": "celltrack.training.pair_split.PairSplit",
       "role": null
     },
     {
