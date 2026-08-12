@@ -70,16 +70,26 @@ def test_link_with_a_high_affinity_overrides_the_nearer_target():
 def test_disappearance_cost_recovers_a_track_break():
     """A positive disappearance cost links a source whose only successor costs more than a free skip would.
 
-    With an affinity wired the link reward is zero, so a probability-0 pair five units apart costs 5 — above a
-    free skip, so the default linker ends the track. Charging 6 to disappear makes continuing the cheaper
-    option, recovering the edge; this is the frontier's disappearance weight preferring an unbroken lineage.
+    With a learned term pricing the cost the link reward is zero, so a pair the affinity REJECTS (probability 0)
+    five units apart costs 5 — above a free skip, so the default linker ends the track. Charging 6 to disappear
+    makes continuing the cheaper option, recovering the edge; this is the frontier's disappearance weight
+    preferring an unbroken lineage.
+
+    The rejection has to come from the PROBABILITY, not from a zero weight: a zero `affinity_bonus` means no
+    learned term is in play at all, which is the distance-only mode and links this pair on the link reward.
     """
-    affinity = _StubAffinity(np.array([[0.0]], dtype=np.float64))  # affinity present → no link reward, cost = distance
+    affinity = _StubAffinity(np.array([[0.0]], dtype=np.float64))  # priced and rejected, not merely unweighted
     coordinates = detections([[0, 0, 0, 0], [1, 0, 5, 0]])
-    ends = AssignmentLinker(spacing=Spacing(z=1.0, y=1.0, x=1.0), max_distance_um=10.0, affinity=affinity)
+    ends = AssignmentLinker(
+        spacing=Spacing(z=1.0, y=1.0, x=1.0), max_distance_um=10.0, affinity=affinity, affinity_bonus=20.0
+    )
     assert ends.link(coordinates).edges.tolist() == []
     continues = AssignmentLinker(
-        spacing=Spacing(z=1.0, y=1.0, x=1.0), max_distance_um=10.0, affinity=affinity, disappearance_cost=6.0
+        spacing=Spacing(z=1.0, y=1.0, x=1.0),
+        max_distance_um=10.0,
+        affinity=affinity,
+        affinity_bonus=20.0,
+        disappearance_cost=6.0,
     )
     assert continues.link(coordinates).edges.tolist() == [[0, 10]]
 
@@ -122,9 +132,19 @@ def test_link_agreement_gate_excludes_the_inverted_near_neighbour():
 def test_link_agreement_gate_off_is_byte_identical():
     """Unset, the gate changes nothing: the default linker's edges are byte-for-byte the explicit-None linker's."""
     graph, affinity = _inverted_scene()
+    # A non-zero bonus is what makes this test say anything: at bonus 0 no learned term prices the cost, both
+    # linkers fall into the distance-only mode the gate cannot touch, and the byte-identity holds vacuously.
     gates = (
-        AssignmentLinker(spacing=Spacing(z=1.0, y=1.0, x=1.0), max_distance_um=10.0, affinity=affinity),
-        AssignmentLinker(spacing=Spacing(z=1.0, y=1.0, x=1.0), max_distance_um=10.0, affinity=affinity, agreement=None),
+        AssignmentLinker(
+            spacing=Spacing(z=1.0, y=1.0, x=1.0), max_distance_um=10.0, affinity=affinity, affinity_bonus=20.0
+        ),
+        AssignmentLinker(
+            spacing=Spacing(z=1.0, y=1.0, x=1.0),
+            max_distance_um=10.0,
+            affinity=affinity,
+            affinity_bonus=20.0,
+            agreement=None,
+        ),
     )
 
     assert gates[0].agreement is None  # the shipped default is OFF
@@ -174,3 +194,21 @@ def test_link_mutual_bonus_off_is_byte_identical():
 
     assert default.mutual is None  # the shipped default is OFF
     assert default.link(graph).edges.tobytes() == _split_linker(None).link(graph).edges.tobytes()
+
+
+def test_priced_affinity():
+    """A zero weight is the knob's LIMIT, not a cliff — it must behave exactly like no affinity at all.
+
+    This is the defect the predicate exists to close. The link reward used to switch on `affinity is None`, so
+    a mounted affinity at `affinity_bonus = 0` fell between the two modes: prob-driven selection with nothing
+    to drive it. Every arc then cost a positive distance, nothing linked, and the short-track filter deleted the
+    whole graph — a sweep to zero read 0.0000 and looked like "the affinity is everything" when it was an empty
+    graph. Pinned on both linkers' shared accessor.
+    """
+    affinity = _StubAffinity(np.array([[0.9]], dtype=np.float64))
+    unweighted = AssignmentLinker(spacing=Spacing(z=1.0, y=1.0, x=1.0), max_distance_um=10.0, affinity=affinity)
+    unmounted = AssignmentLinker(spacing=Spacing(z=1.0, y=1.0, x=1.0), max_distance_um=10.0)
+    coordinates = detections([[0, 0, 0, 0], [1, 0, 5, 0]])
+
+    assert unweighted._priced_affinity() is None
+    assert unweighted.link(coordinates).edges.tolist() == unmounted.link(coordinates).edges.tolist() == [[0, 10]]

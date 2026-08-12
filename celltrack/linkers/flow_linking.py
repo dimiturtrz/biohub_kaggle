@@ -29,6 +29,7 @@ from scipy.spatial.distance import cdist
 from celltrack.affinity import EdgeAffinity
 from celltrack.linkers.admissible_affinity import AdmissibleAffinity
 from celltrack.linkers.agreement_gating import AgreementGate
+from celltrack.linkers.assignment_linking import LINK_REWARD as _LINK_REWARD
 from celltrack.linkers.boundary_prior import BoundaryFactorSource
 from celltrack.linkers.evidence_ramp import EvidenceRamp
 from celltrack.linkers.motion_prediction import MotionPrediction
@@ -167,6 +168,17 @@ class FlowLinker:
             )
         return transitions
 
+    def _priced_affinity(self) -> EdgeAffinity | None:
+        """The affinity that actually prices the cost, or None when no learned term is in play.
+
+        The two ways of having no learned term must behave identically, and they used to not: the link reward
+        switched on `affinity is None`, so a mounted affinity at `affinity_bonus = 0` fell between the modes —
+        prob-driven selection with no probability to drive it. Every arc then cost a positive distance, nothing
+        linked, and the short-track filter deleted the whole graph, so a sweep to zero read 0.0000 and looked
+        like "the affinity is everything" when it was an empty graph. A knob's zero must be its limiting case.
+        """
+        return self.affinity if self.affinity_bonus != 0.0 else None
+
     def _gated_cost(
         self, timepoint: int, distance: Float[np.ndarray, "s t"], priced: Float[np.ndarray, "s t"]
     ) -> Float[np.ndarray, "s t"]:
@@ -183,9 +195,10 @@ class FlowLinker:
         within_gate = distance <= self.max_distance_um
         if self.agreement is not None:
             within_gate = self.agreement.narrow(timepoint, within_gate)
-        cost = priced.astype(np.float64)
-        if self.affinity is not None and self.affinity_bonus != 0.0:
-            probability = self.affinity.probabilities(timepoint)
+        priced_by = self._priced_affinity()
+        cost = priced.astype(np.float64) - (0.0 if priced_by is not None else _LINK_REWARD)
+        if priced_by is not None:
+            probability = priced_by.probabilities(timepoint)
             if probability is not None:
                 priced_probability = AdmissibleAffinity.applied(self.admissible, probability, within_gate)
                 weight = EvidenceRamp.applied(self.ramp, distance, within_gate)

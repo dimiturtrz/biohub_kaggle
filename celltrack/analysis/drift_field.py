@@ -440,6 +440,33 @@ class DriftDiagnosis:
             annotated.explained(),
         )
 
+    def _held_out(self, sigmas: list[float], spacing_um: float, gap_count: int) -> None:
+        """Score the field on annotated steps after removing those very cells from the votes.
+
+        The sweep's `explained` is already out-of-sample in the sense that no annotation is used to BUILD the
+        field — but the annotated cells are themselves detections, so their own displacements are among the
+        votes. That is 1229 of 74347, about 1.6%, so the self-reference is small; small is not zero, and the
+        number underwrites a training decision. Dropping every detection the matcher paired with an annotation
+        removes it entirely, at the cost of a field estimated from 98.4% of the votes.
+        """
+        positions, timepoints = self._positions_um(), self.nodes.timepoints()
+        matched = DistanceMatcher(spacing=self.spacing).match(self.nodes, self.truth).is_matched()
+        kept = ~matched
+        logger.info("held-out field: %d of %d detections dropped as annotated", int(matched.sum()), len(positions))
+        gaps = [int(gap) for gap in np.unique(timepoints)[:gap_count]]
+        for sigma in sigmas:
+            settings = FieldSettings.over(positions, sigma, spacing_um, self.device)
+            votes = {gap: DisplacementVotes.of(positions[kept], timepoints[kept], gap) for gap in gaps}
+            fields = {gap: DriftField.of(vote, settings) for gap, vote in votes.items()}
+            annotated = AnnotatedResidual.of(self.truth, self.spacing, fields)
+            logger.info(
+                "sigma %5.1f um | HELD OUT annotated step %.3f -> %.3f um, explained %+.3f",
+                sigma,
+                float(np.median(annotated.raw_um)),
+                float(np.median(annotated.residual_um)),
+                annotated.explained(),
+            )
+
     def _reorder(self, matching: NodeMatching, sigma: float, spacing_um: float) -> None:
         """Ask whether the field reorders the linker's mislinked candidates — and what it breaks doing it."""
         settings = FieldSettings.over(self._positions_um(), sigma, spacing_um, self.device)
@@ -474,6 +501,7 @@ def main() -> None:
     parser.add_argument("--gaps", type=int, default=20)
     parser.add_argument("--shear", type=float, default=3.0)
     parser.add_argument("--reorder", action="store_true", help="run the mislink reordering test instead")
+    parser.add_argument("--held-out", action="store_true", help="score with annotated cells cut from the votes")
     args = parser.parse_args()
 
     root = DataRoot.from_config(args.config)
@@ -482,6 +510,9 @@ def main() -> None:
         mounted._reorder(matching, args.sigma[0], args.anchor_spacing)  # noqa: SLF001
         return
     diagnosis = DriftDiagnosis._detected(root, args.device, args.movie)  # noqa: SLF001
+    if args.held_out:
+        diagnosis._held_out(args.sigma, args.anchor_spacing, args.gaps)  # noqa: SLF001
+        return
     diagnosis._sweep(args.sigma, args.anchor_spacing, args.gaps, args.shear)  # noqa: SLF001
 
 

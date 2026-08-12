@@ -38,7 +38,8 @@ _FORBIDDEN = 1.0e12
 # affinity IS wired the reward is dropped to zero, so an edge is selected only where `distance - bonus*P` is
 # itself negative — the frontier's prob-driven selection. Kept below `_FORBIDDEN` so an out-of-gate pair, even
 # rewarded, never beats a skip.
-_LINK_REWARD = 1.0e9
+LINK_REWARD = 1.0e9
+_LINK_REWARD = LINK_REWARD  # local alias, kept so the cost expression reads as one line
 
 
 @dataclass(frozen=True)
@@ -107,6 +108,17 @@ class AssignmentLinker:
         real = (rows < len(sources)) & (columns < len(targets))
         return [(int(sources[r]), int(targets[c])) for r, c in zip(rows[real], columns[real], strict=True)]
 
+    def _priced_affinity(self) -> EdgeAffinity | None:
+        """The affinity that actually prices the cost, or None when no learned term is in play.
+
+        The two ways of having no learned term must behave identically, and they used to not: the link reward
+        switched on `affinity is None`, so a mounted affinity at `affinity_bonus = 0` fell between the modes —
+        prob-driven selection with no probability to drive it. Every arc then cost a positive distance, nothing
+        linked, and the short-track filter deleted the whole graph, so a sweep to zero read 0.0000 and looked
+        like "the affinity is everything" when it was an empty graph. A knob's zero must be its limiting case.
+        """
+        return self.affinity if self.affinity_bonus != 0.0 else None
+
     def _gated_cost(self, timepoint: int, distance: Float[np.ndarray, "s t"]) -> Float[np.ndarray, "s t"]:
         """`distance - bonus*P - link_reward` within the gate, forbidden beyond it — the cost a pair competes on.
 
@@ -118,10 +130,10 @@ class AssignmentLinker:
         within_gate = distance <= self.max_distance_um
         if self.agreement is not None:
             within_gate = self.agreement.narrow(timepoint, within_gate)
-        link_reward = _LINK_REWARD if self.affinity is None else 0.0
-        cost = distance - link_reward
-        if self.affinity is not None and self.affinity_bonus != 0.0:
-            probability = self.affinity.probabilities(timepoint)
+        priced_by = self._priced_affinity()
+        cost = distance - (0.0 if priced_by is not None else _LINK_REWARD)
+        if priced_by is not None:
+            probability = priced_by.probabilities(timepoint)
             if probability is not None:
                 priced_probability = AdmissibleAffinity.applied(self.admissible, probability, within_gate)
                 weight = EvidenceRamp.applied(self.ramp, distance, within_gate)
