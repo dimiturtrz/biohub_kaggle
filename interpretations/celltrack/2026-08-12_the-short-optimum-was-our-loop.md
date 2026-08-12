@@ -87,6 +87,35 @@ No constant enters; the balance is the two class counts, which the data supplies
 P_chosen keeps falling (the gap closing), and mislinks should not climb past the peak. If both keep falling
 together, the flattening has another cause and this fix is not it.
 
+### The falsifier fired, and the balance is REFUTED
+
+```
+step:       400      800      1200     1600     1785      held out
+balanced    0.8516   0.8323   0.8602*  0.8472   0.8269    0.9045  (53 mislinks)
+unbalanced  0.8531   0.8388   —        0.8513   0.8306    0.9265  (46 mislinks)
+```
+
+P_true fell exactly as before (0.167 -> 0.102) and the gap to P_chosen was unchanged at ~0.39, so **class
+imbalance is not what drives the flattening**. And the held-out number is decisive in the other direction:
+0.9045 against 0.9265, i.e. **-0.022**, far outside any floor. `balanced_links` stays default-off and the
+mechanism claim is withdrawn.
+
+Two things worth keeping from a dead arm:
+
+* **The selector preferred the worse model, by a lot.** Balanced peaked HIGHER in-run (0.8602 vs 0.8531) and
+  lost by 0.022 held out. The peaks differ by 0.0071 — about 3x the selector's repeatability floor — so this
+  is not selector noise, it is the four validation movies disagreeing with the four test movies. The balanced
+  arm's peak also sat at step 1200 against the unbalanced arm's 400, so the selector rewarded a
+  *more-trained* checkpoint that generalised worse. Any future arm judged on the in-run peak alone inherits
+  this failure mode.
+* **The re-baseline was negligible.** `joint_det_acc8` reads 0.9265 with divisions in `shipped()` against
+  0.9266 without — 0.0001. The division stage costs the edge term essentially nothing on these movies, so
+  older proxy numbers remain usable in practice even though they are not formally comparable.
+
+The flattening therefore still has no established cause. What is now excluded: the reduction's class
+imbalance (this arm), and the loss's *form* (the margin term is invariant to adding a constant to a row, and
+flattening happened under it anyway).
+
 ## A test that could not have caught any of this
 
 `_trained_bytes` reads the BEST-checkpoint, and `save_best` writes the INIT whenever no window improves — so a
