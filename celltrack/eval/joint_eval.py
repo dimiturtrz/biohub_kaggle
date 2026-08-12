@@ -77,6 +77,11 @@ def main() -> None:
         metavar="KEY=VALUE",
         help="override any tracker knob, exactly as `proxy_eval --set` does",
     )
+    parser.add_argument(
+        "--ensemble",
+        action="store_true",
+        help="blend the checkpoint's edge head with both published packs' heads, at equal weight",
+    )
     args = parser.parse_args()
 
     root = DataRoot.from_config(args.config)
@@ -90,15 +95,17 @@ def main() -> None:
     for assignment in args.overrides:
         config = ConfigOverride.apply(config, assignment)
     evaluator = JointCheckpointEval.mounted(root, stems, model.downsample, args.device, config)
-    result = evaluator.evaluate_joint(model)
+    packs = tuple(root.processed(_DATASET) / pack for pack in _PACKS)
+    result = evaluator.evaluate_ensemble(model, packs) if args.ensemble else evaluator.evaluate_joint(model)
     logger.info(
-        "checkpoint=%s movies=%s threshold=%.3f linker=%s boundary=%.1f bidirectional=%s",
+        "checkpoint=%s movies=%s threshold=%.3f linker=%s boundary=%.1f bidirectional=%s ensemble=%s",
         checkpoint.name,
         list(stems),
         config.threshold,
         config.linker.name,
         config.linker.disappearance_cost,
         config.bidirectional_edges,
+        args.ensemble,
     )
     logger.info(
         "faithful %.4f | clamped %.4f | node recall %.4f ratio %+.3f | mislinks %d inverted %.3f "

@@ -98,6 +98,27 @@ def test_evaluate(video_store: Path, in_bounds_tracks: AnnotatedTracks):
     assert result.mislinks >= 0
 
 
+def test_evaluate_ensemble(video_store: Path, in_bounds_tracks: AnnotatedTracks, monkeypatch: pytest.MonkeyPatch):
+    """Our head joins the published ones as an EQUAL member — N packs give N+1 scorers at 1/(N+1) each.
+
+    Equal is the self-balancing choice and the one needing no argument: the shipped two-seed tilt of 0.8/0.2
+    sits on a plateau so wide that 0.5/0.5 scores identically, so nothing here justifies favouring a member.
+    """
+    torch.manual_seed(0)
+    net = _Net(out_channels=2, layers=(2, 4))
+    feat_dim = 2 + 4 * _POS_EMBED_DIM
+    transformer = EdgeTransformerScorer._transformer_cls()(feat_dim=feat_dim, hidden_dim=8, n_heads=1, n_blocks=1)
+    model = JointModel(net, transformer, downsample=(1, 1, 1))
+    evaluator = _evaluator(_proxy(video_store, in_bounds_tracks))
+    stub = EdgeTransformerScorer.of(TemporalUNetDetector.of(net), transformer, evaluator.recipe)
+    monkeypatch.setattr(EdgeTransformerScorer, "from_pack", staticmethod(lambda pack, device: stub))
+
+    result = evaluator.evaluate_ensemble(model, (Path("one"), Path("two")))
+
+    assert isinstance(result, EvalResult)
+    assert math.isfinite(result.score)
+
+
 def test_evaluate_joint(video_store: Path, in_bounds_tracks: AnnotatedTracks):
     """`evaluate_joint` scores BOTH trained heads — the model's own transformer, not the mounted pilkwang one."""
     torch.manual_seed(0)

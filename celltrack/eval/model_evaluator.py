@@ -131,6 +131,37 @@ class ModelEvaluator:
         )
         return self._score(detector, one_seed)
 
+    def evaluate_ensemble(
+        self, model: JointModel, packs: tuple[Path, ...], weights: tuple[float, ...] | None = None
+    ) -> EvalResult:
+        """Score the model's association head BLENDED with published packs' heads — our weights as an extra seed.
+
+        The detector stays the model's own; only the edge affinity becomes a blend, so what this measures is
+        whether OUR head adds anything to theirs rather than whether our detector does. Each member computes its
+        own node features from its own backbone, which is why a pack contributes a whole scorer rather than a
+        tensor.
+
+        `weights` defaults to EQUAL across members — the self-balancing choice, and the one that needs no
+        argument. A tilt is the thing to measure, not to assume: the shipped two-seed 0.8/0.2 sits on a plateau
+        so wide that 0.5/0.5 scores identically, so there is no precedent here for favouring anyone.
+
+        The earlier null on this idea (a fine-tuned variant adding nothing to the two-seed blend) was measured
+        under a bare `TrackerConfig` — the per-frame linker with no fusion — which is the instrument since shown
+        to INVERT the ranking of our own checkpoints. It also used a checkpoint that loses under the shipped
+        pipeline. Both are reasons the old number does not carry, not reasons to expect a win.
+        """
+        detector = TemporalUNetDetector.of(model.detector)
+        ours = EdgeTransformerScorer.of(detector, model.transformer, self.recipe)
+        published = tuple(EdgeTransformerScorer.from_pack(pack, self.device) for pack in packs)
+        members = (*published, ours)
+        blended = BlendedEdgeTransformerScorer(
+            members,
+            weights if weights is not None else tuple(1.0 / len(members) for _ in members),
+            bidirectional=self.config.bidirectional_edges,
+            options=self.config.edge_options,
+        )
+        return self._score(detector, blended)
+
     def _score(self, detector: TemporalUNetDetector, edge_scorer: BlendedEdgeTransformerScorer) -> EvalResult:
         """One tracker pass per proxy movie, pooled into the split score and the detector's node levers.
 
