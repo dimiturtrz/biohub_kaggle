@@ -58,3 +58,41 @@ def test_distances_without_a_scored_previous_gap_are_the_raw_ones():
     term = MotionPrediction(affinity=_Affinity({}))
 
     assert term.distances(1, np.array([1]), np.array([2]), _TIMEPOINTS, _POSITIONS).tolist() == [[4.0]]
+
+
+# Four frames on the x axis at 0, 4, 8, 12 — a constant +4 step, one cell per frame linked with probability 1.
+_FOUR_TIMEPOINTS = np.array([0, 1, 2, 3], dtype=np.int64)
+_FOUR_POSITIONS = np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 4.0], [0.0, 0.0, 8.0], [0.0, 0.0, 12.0]], dtype=np.float64)
+_CONFIDENT_CHAIN = {0: np.array([[1.0]]), 1: np.array([[1.0]]), 2: np.array([[1.0]])}
+
+
+def test_history_one_is_the_single_step_form():
+    """History 1 reads only the previous gap — byte-identical to the original single-step velocity."""
+    single = MotionPrediction(affinity=_Affinity(_CONFIDENT_CHAIN), history=1)
+
+    predicted = single.distances(2, np.array([2]), np.array([3]), _FOUR_TIMEPOINTS, _FOUR_POSITIONS)
+
+    assert predicted.tolist() == [[4.0 - VELOCITY_DAMPING * 4.0]]  # one +4 step, same as history absent
+
+
+def test_history_averages_the_velocity_over_several_gaps():
+    """A multi-gap history averages the past steps — on a constant-velocity chain the average is the same +4.
+
+    The source at x=8 arrived +4 from x=4, which arrived +4 from x=0. Averaging both gaps still gives +4, so a
+    clean trajectory is unchanged; the point is that on a NOISY chain the average beats down the per-step noise,
+    which a single step cannot. Verified here on the noiseless case so the chaining arithmetic is pinned exactly.
+    """
+    multi = MotionPrediction(affinity=_Affinity(_CONFIDENT_CHAIN), history=3)
+
+    predicted = multi.distances(2, np.array([2]), np.array([3]), _FOUR_TIMEPOINTS, _FOUR_POSITIONS)
+
+    assert predicted.tolist() == [[4.0 - VELOCITY_DAMPING * 4.0]]  # averaged +4 and +4 → +4, chain arithmetic holds
+
+
+def test_history_beyond_the_available_frames_uses_what_exists():
+    """Asking for more history than the video has does not error — it averages the gaps that exist."""
+    multi = MotionPrediction(affinity=_Affinity(_CONFIDENT_CHAIN), history=9)
+
+    predicted = multi.distances(1, np.array([1]), np.array([2]), _FOUR_TIMEPOINTS, _FOUR_POSITIONS)
+
+    assert predicted.tolist() == [[4.0 - VELOCITY_DAMPING * 4.0]]  # only one prior gap exists at t=1

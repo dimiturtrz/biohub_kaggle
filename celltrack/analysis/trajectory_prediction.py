@@ -79,6 +79,7 @@ class PredictedStep:
         diagnosis: "TrajectoryDiagnosis",
         pairs: CandidatePairs,
         field_by_gap: dict[int, DriftField] | None,
+        history: int = 1,
     ) -> Self:
         """Advance each source by its GT velocity and measure `d(true) - d(decoy)` from the predicted point."""
         det_um = diagnosis.spacing.to_micrometres(diagnosis.prediction.positions())
@@ -91,7 +92,7 @@ class PredictedStep:
         speed: list[float] = []
         alignment: list[float] = []
         for source, true_target, rival in zip(pairs.source, pairs.true_target, pairs.rival, strict=True):
-            velocity = cls._gt_velocity(int(source), gt_of_det, predecessors, gt_um)
+            velocity = cls._gt_velocity(int(source), gt_of_det, predecessors, gt_um, history)
             if velocity is None:
                 continue
             origin = det_um[source]
@@ -121,12 +122,27 @@ class PredictedStep:
         gt_of_det: Int[np.ndarray, "n"],
         predecessors: dict[int, tuple[int, ...]],
         gt_um: Float[np.ndarray, "m 3"],
+        history: int = 1,
     ) -> Float[np.ndarray, "3"] | None:
-        """The source's ground-truth incoming displacement, or None if it has no annotated predecessor."""
+        """The source's per-frame velocity, averaged over up to `history` ground-truth incoming steps.
+
+        A single step is dominated by localisation noise: the individual motion (~1 um) is below the annotation's
+        integer-voxel noise (~1.7 um), so one displacement is mostly noise. Averaging the last `history` steps
+        beats that down as ~1/sqrt(history) while leaving a persistent velocity intact — the difference between
+        a single-step Kalman and a trajectory fit, and what decides whether the past predicts the next step.
+        """
         gt_row = int(gt_of_det[source_row])
-        if gt_row == UNMATCHED or not predecessors.get(gt_row):
+        if gt_row == UNMATCHED:
             return None
-        return gt_um[gt_row] - gt_um[predecessors[gt_row][0]]
+        steps: list[Float[np.ndarray, "3"]] = []
+        node = gt_row
+        for _ in range(history):
+            parents = predecessors.get(node)
+            if not parents:
+                break
+            steps.append(gt_um[node] - gt_um[parents[0]])
+            node = parents[0]
+        return np.mean(steps, axis=0) if steps else None
 
     @staticmethod
     def _gap(origin: Float[np.ndarray, "3"], true_target: Float[np.ndarray, "3"], rival: Float[np.ndarray, "3"]):
@@ -181,12 +197,12 @@ class TrajectoryDiagnosis:
             ("correct", CandidatePairs.correct(self.prediction, self.truth, self.matching, self.spacing, gate_um)),
         )
         for label, pairs in populations:
-            for variant, field in (("raw velocity", None), ("drift-removed", self.fields)):
-                self._log(
-                    label,
-                    variant,
-                    PredictedStep.of(self, pairs, field),
-                )
+            for variant, field, history in (
+                ("1-step", None, 1),
+                ("3-step fit", None, 3),
+                ("3-step+drift", self.fields, 3),
+            ):
+                self._log(label, variant, PredictedStep.of(self, pairs, field, history))
 
     @staticmethod
     def _log(label: str, variant: str, step: PredictedStep) -> None:

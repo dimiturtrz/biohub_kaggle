@@ -129,6 +129,13 @@ class LinkerConfig(BaseModel):
     # this is an on/off claim about which geometry the cost is written in, not a tuning surface. Setting it makes
     # `build` require the edge affinity the velocity is derived from.
     motion_distance: bool = False
+    # How many past gaps the motion-predicted velocity averages over (only read when motion_distance is
+    # ON). 1 = the previous gap alone, byte-identical to the single-step form. >1 fits the velocity over a
+    # trajectory, averaging down the localisation noise that dominates a single step (the individual motion
+    # ~1 um sits below the ~1.7 um voxel-annotation noise). The chain is soft (affinity-weighted), so it
+    # needs no prior linking pass. A tuning surface only in the weak sense of a WINDOW length, argued from
+    # the ~3-frame velocity correlation time measured in celltrack.analysis.motion_statistics.
+    motion_history: int = Field(1, ge=1)
     # None = OFF, so the shipped cost is byte-identical; `0.0` is the same cost through the ramp's own arithmetic
     # (`ramp ≡ 1`), which is what makes it the control arm of its own sweep. Set, the forward affinity's weight
     # becomes `1 + evidence_ramp * (d / mean_gated_distance - 1)`, clamped at zero (`EvidenceRamp`): a
@@ -402,7 +409,7 @@ class LinkerConfig(BaseModel):
                 "source->target probabilities); pass `affinity`, or drop the flag"
             )
             raise ValueError(message)
-        return MotionPrediction(affinity=affinity)
+        return MotionPrediction(affinity=affinity, history=self.motion_history)
 
 
 _Builder = Callable[[LinkerConfig, Spacing, EdgeAffinity | None, LinkerParts], Linker]
