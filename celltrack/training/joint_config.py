@@ -274,6 +274,13 @@ class RuntimeCfg(BaseModel):
 
     device: str = "cuda"
     seed: int = Field(0, ge=0)
+    # Frame-decompress threads and pairs kept in flight, so the GPU step overlaps the reads. The joint loop read
+    # its two frames INLINE — a measured ~16 ms each against a 160-440 ms step, so a tenth to a fifth of every
+    # step was the GPU waiting on zstd. The detector trainer already had this (threads 12 / prefetch 24); these
+    # are lower because a pair costs two or three frames rather than a batch of eight, so fewer readers saturate
+    # it. 1 is the serial path, byte-identical, and is what the curriculum path uses whatever this says.
+    loader_threads: PositiveInt = 4
+    loader_prefetch: PositiveInt = 8
     compile_backbone: bool = False  # torch.compile the U-Net (static shape); one-time warmup, then fused kernels
 
 

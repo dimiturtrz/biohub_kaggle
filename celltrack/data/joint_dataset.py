@@ -20,8 +20,11 @@ baked into the target: the pair shape the trainer consumes says nothing about st
 corpus stored some other way reaches the same loop unchanged.
 """
 
+from collections import deque
 from collections.abc import Iterator
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, replace
+from itertools import islice
 from typing import override
 
 import numpy as np
@@ -183,7 +186,33 @@ class PairDataset(Dataset[PairSample]):
             return None, None
         return target.frames.frame(target.timepoint - 1, self._downsample), torch.from_numpy(target.previous_centres)
 
-    def stream(self) -> Iterator[PairSample]:
-        """Yield every pair once, in index order — reproducible; batching is the trainer's job (ragged matrices)."""
-        for index in range(self._steps):
-            yield self[index]
+    def stream(self, threads: int = 1, prefetch: int = 0) -> Iterator[PairSample]:
+        """Yield every pair once, in index order — reproducible; batching is the trainer's job (ragged matrices).
+
+        With `threads > 1` the frames are decompressed by a thread pool with `prefetch` pairs in flight, so the
+        GPU step overlaps the reads instead of stalling on them. zarr's blosc/zstd decompression releases the
+        GIL, so threads parallelise it across cores with no process spawn — the throughput of DataLoader workers
+        without the Windows worker-pool deadlock. This is the same device `TunetFrameDataset.stream` already
+        uses; the joint loop was reading its two frames INLINE, at a measured ~16 ms each against a step of
+        160-440 ms, so it idled the GPU for roughly a tenth to a fifth of every step.
+
+        Items are yielded in INDEX ORDER even though they finish decompressing out of order, so a run stays
+        reproducible. `threads = 1` is the serial path, byte-identical to before, and it is what the sampler
+        path uses: a curriculum chooses the next index from feedback on the previous step, so reading ahead
+        would draw against a staler distribution than the run's own semantics promise.
+        """
+        if threads <= 1:
+            for index in range(self._steps):
+                yield self[index]
+            return
+        with ThreadPoolExecutor(max_workers=threads) as pool:
+            indices = iter(range(self._steps))
+            pending: deque[Future[PairSample]] = deque()
+            for index in islice(indices, max(prefetch, 1)):
+                pending.append(pool.submit(self.__getitem__, index))
+            for index in indices:
+                item = pending.popleft().result()
+                pending.append(pool.submit(self.__getitem__, index))
+                yield item
+            while pending:
+                yield pending.popleft().result()

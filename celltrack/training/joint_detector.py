@@ -546,7 +546,9 @@ class JointTrainer:
     def _pairs(self, dataset: PairDataset, curriculum: PairCurriculum | None) -> Iterator[tuple[PairDraw, PairSample]]:
         """The window's pairs, each with the draw that produced it — index `None` on the untouched uniform stream."""
         if curriculum is None:
-            yield from ((PairDraw(index=_UNTRACKED_INDEX), pair) for pair in dataset.stream())
+            runtime = self.config.runtime
+            stream = dataset.stream(runtime.loader_threads, runtime.loader_prefetch)
+            yield from ((PairDraw(index=_UNTRACKED_INDEX), pair) for pair in stream)
             return
         for _ in range(len(dataset)):
             draw = curriculum.step()

@@ -123,8 +123,18 @@ def test_pair(video_store: Path):
 
 
 def test_stream(video_store: Path):
-    """The stream yields every item once, in index order, matching direct indexing."""
+    """The stream yields every item once, in index order, matching direct indexing.
+
+    Threaded prefetch must not change WHAT is yielded or in what order — the reads finish out of order but
+    the sequence does not, which is what keeps a run reproducible while the GPU overlaps the decompression.
+    """
     dataset = _dataset(video_store)
     streamed = list(dataset.stream())
     assert len(streamed) == 4
     assert torch.equal(streamed[0].frame_t, dataset[0].frame_t)
+
+    prefetched = list(dataset.stream(threads=3, prefetch=2))
+
+    assert len(prefetched) == len(streamed)
+    assert all(torch.equal(one.frame_t, other.frame_t) for one, other in zip(prefetched, streamed, strict=True))
+    assert all(torch.equal(one.edge_matrix, other.edge_matrix) for one, other in zip(prefetched, streamed, strict=True))
