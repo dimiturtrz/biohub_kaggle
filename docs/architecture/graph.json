@@ -8245,6 +8245,12 @@
       "weight": 1
     },
     {
+      "kind": "construct",
+      "source": "celltrack.operating_point.TrackerConfig.shipped",
+      "target": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig",
+      "weight": 1
+    },
+    {
       "kind": "references",
       "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig",
       "target": "celltrack.affinity.EdgeAffinity",
@@ -8260,6 +8266,12 @@
       "kind": "references",
       "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig",
       "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig.build",
+      "target": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig.existing_child_gate",
       "weight": 1
     },
     {
@@ -18662,6 +18674,14 @@
       "descendants": 0,
       "id": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig.build",
       "label": "build",
+      "level": "method",
+      "parent": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig.existing_child_gate",
+      "label": "existing_child_gate",
       "level": "method",
       "parent": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig",
       "role": null
