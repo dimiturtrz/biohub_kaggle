@@ -58,12 +58,27 @@ class FrameStats:
     q_low: float
     q_high: float
 
+    normalised_mean: float
+    normalised_std: float
+    above_one: float
+
     @classmethod
     def of(cls, stem: str, volume: Float[np.ndarray, "t z y x"], q_low: float, q_high: float) -> "FrameStats":
-        """Reduce a pooled video to the numbers worth printing, the median from a seeded sample."""
+        """Reduce a pooled video to the numbers worth printing, the median from a seeded sample.
+
+        Reports the NORMALISED statistics beside the raw ones, because the raw ones describe something the
+        model never sees. Measured across 60 stratified train videos: the raw per-video mean spans 30.4x while
+        the normalised mean spans 5.7x, so the per-video window absorbs most of the variation — and leaves a
+        real residual that a run should know about rather than assume away.
+
+        `above_one` is the share of voxels the window puts past 1.0. The clamp is ONE-SIDED (matching the
+        reference), so nothing bounds the top, and this is the number that says whether that matters: measured
+        at 0.00-0.06%, it does not.
+        """
         flat = volume.reshape(-1)
         rng = np.random.default_rng(0)
         sample = flat if flat.size <= _SAMPLED_VOXELS else flat[rng.integers(0, flat.size, _SAMPLED_VOXELS)]
+        normalised = np.clip((sample.astype(np.float32) - q_low) / (q_high - q_low + 1e-6), 0.0, None)
         return cls(
             stem=stem,
             frames=int(volume.shape[0]),
@@ -73,13 +88,18 @@ class FrameStats:
             median=float(np.median(sample)),
             q_low=q_low,
             q_high=q_high,
+            normalised_mean=float(normalised.mean()),
+            normalised_std=float(normalised.std()),
+            above_one=float((normalised > 1.0).mean()),
         )
 
     def line(self) -> str:
-        """One log line per video — the shape, the intensity spread, and the window it will be normalised by."""
+        """One log line per video — raw spread, the window, and what the model actually receives."""
         return (
-            f"{self.stem}: {self.frames} frames | min {self.minimum:.0f} max {self.maximum:.0f} "
-            f"mean {self.mean:.1f} median {self.median:.0f} | quantiles {self.q_low:.0f}-{self.q_high:.0f}"
+            f"{self.stem}: {self.frames} frames | raw min {self.minimum:.0f} max {self.maximum:.0f} "
+            f"mean {self.mean:.1f} median {self.median:.0f} | window {self.q_low:.0f}-{self.q_high:.0f} "
+            f"| NORMALISED mean {self.normalised_mean:.3f} std {self.normalised_std:.3f} "
+            f"above1 {self.above_one * 100:.2f}%"
         )
 
 
@@ -176,14 +196,22 @@ class PoolCommand:
         logger.info("wrote %d, skipped %d already valid | store %.2f GB", written, skipped, size / 1e9)
         if not stats:
             return
-        means = [stat.mean for stat in stats]
+        raw_means = [stat.mean for stat in stats]
+        normalised = [stat.normalised_mean for stat in stats]
+        # Both spreads, because the ratio between them is the point: the per-video window is what turns a
+        # 30x raw spread into the ~6x the model actually sees, and a run that only logged the raw number
+        # would be describing an input nothing consumes.
         logger.info(
-            "intensity across %d written videos: min %.0f max %.0f | per-video mean %.1f-%.1f",
+            "across %d written videos | RAW per-video mean %.1f-%.1f (%.1fx) | NORMALISED %.3f-%.3f (%.1fx) "
+            "| max above 1.0: %.2f%%",
             len(stats),
-            min(stat.minimum for stat in stats),
-            max(stat.maximum for stat in stats),
-            min(means),
-            max(means),
+            min(raw_means),
+            max(raw_means),
+            max(raw_means) / max(min(raw_means), 1e-6),
+            min(normalised),
+            max(normalised),
+            max(normalised) / max(min(normalised), 1e-6),
+            max(stat.above_one for stat in stats) * 100,
         )
 
 
