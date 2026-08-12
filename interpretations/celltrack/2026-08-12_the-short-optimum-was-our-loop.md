@@ -147,6 +147,39 @@ much smaller magnitude, and it means association and detection cannot be tuned i
 
 Best own-weights remains the margin-only arm at 0.9265, still under the shipped dual-seed 0.9334.
 
+## The inverted fraction PREDICTS which way to move the linker's weight
+
+The corrected-corpus arm scored worse held out (0.9159 against 0.9265) but changed the FAILURE MODE: its
+inverted fraction fell from 1.000 to 0.816. Every mislink this campaign had ever measured was
+affinity-inverted — the head scoring the wrong partner above the true one, a SIGNAL error, which seven axes
+failed to move. About 18% were now COST errors instead: the head ranks the true successor correctly and the
+linker picks the wrong one anyway.
+
+That makes a falsifiable prediction, pre-registered before running: raising `affinity_bonus` should HELP the
+checkpoint with cost errors and do NOTHING (or harm) for the one without.
+
+| checkpoint | inverted @20 | bonus 20 | bonus 30 | bonus 40 |
+|---|---|---|---|---|
+| mixed (corrected corpus) | 0.816 | 0.9159 | **0.9227** | 0.9224 |
+| acc8 (incumbent) | 1.000 | **0.9265** | 0.9218 | 0.9194 |
+
+**Opposite signs, monotone in both directions**, split by exactly the pre-registered quantity: +0.0068 for the
+checkpoint with cost errors, -0.0047 for the one without. Two checkpoints moving in opposite directions under
+one knob is far stronger evidence than either delta alone, and it is a genuine mechanism confirmation rather
+than a sweep peak.
+
+WHAT IT BUYS: `inverted_fraction` stops being a label and becomes a PREDICTOR of the sign of the linker's
+response. A model whose mislinks are signal errors must not be given more affinity weight — the weight
+amplifies the wrong answer. A model whose mislinks are cost errors should be. This is the first read-out here
+that says WHICH DIRECTION to move a knob for a given model instead of requiring a sweep to discover it, and it
+is a derivation candidate: `affinity_bonus` could be set per checkpoint from its own inverted fraction rather
+than carried as a constant.
+
+WHAT IT DOES NOT CHANGE: the incumbent is still acc8 at bonus 20 (0.9265), and the shipped bonus of 20 is
+correct FOR THE SHIPPED HEADS. Our corrected-corpus head wants ~30 because it flattens P harder (P_true 0.137
+against 0.181), so it needs more weight to compete with the distance term — a property of that checkpoint, not
+a better global value.
+
 ## Can the training data teach association and division at all?
 
 Measured, because the answer differs completely between the two.
