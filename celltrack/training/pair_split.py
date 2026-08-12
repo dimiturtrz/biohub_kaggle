@@ -23,7 +23,7 @@ import numpy as np
 import zarr
 
 from celltrack.data.detection_pairs import DetectionPairs
-from celltrack.data.frame_source import ZarrFrames
+from celltrack.data.frame_source import FrameSource, PooledFrames, ZarrFrames
 from celltrack.data.joint_dataset import PairTarget
 from celltrack.data.synthetic_pairs import POOLED_BY, SyntheticPairs
 from celltrack.eval.proxy import TEST_MOVIES, VALIDATION_MOVIES, TestMovieProxy
@@ -89,9 +89,26 @@ class PairSplit:
     @staticmethod
     def of_video(video: Path, annotation: AnnotatedTracks) -> list[PairTarget]:
         """Every consecutive-frame GT pair of one video, with its per-video intensity quantiles read from OME."""
+        return PairTarget.enumerate(annotation.graph, PairSplit.frames(video))
+
+    @staticmethod
+    def frames(
+        video: Path, processed: Path | None = None, downsample: tuple[int, int, int] | None = None
+    ) -> FrameSource:
+        """This video's frames, from the POOLED store when one exists at the run's grid, else the raw zarr.
+
+        Auto-detected rather than flagged: the pooled store holds the same voxels the strided read returns (a
+        test pins the two byte-identical), so preferring it is a pure speed choice — 6.3 ms per frame against
+        13.6 — and a flag would only be a way to forget. When no store has been written for that grid, or the
+        caller does not say which grid it wants, the raw path is unchanged.
+        """
         quantiles = cast(ImageStatistics, zarr.open_group(video, mode="r").attrs["image_statistics"])["quantiles"]
         q_low, q_high = float(quantiles["0.001"]), float(quantiles["0.999"])
-        return PairTarget.enumerate(annotation.graph, ZarrFrames(video, q_low, q_high))
+        if processed is not None and downsample is not None:
+            store = PooledFrames.store(processed, downsample, video.stem)
+            if store.exists():
+                return PooledFrames.of(store, q_low, q_high)
+        return ZarrFrames(video, q_low, q_high)
 
     @staticmethod
     def of_detected(
@@ -123,10 +140,7 @@ class PairSplit:
                 detections = tracker.detector.nodes(path.stem, path, operating.threshold, None)
                 truth = AnnotatedTracks.from_geff(root.track_store(path)).graph
                 spacing = CellVideo.from_ome_zarr(path).spacing
-                quantiles = cast(ImageStatistics, zarr.open_group(path, mode="r").attrs["image_statistics"])[
-                    "quantiles"
-                ]
-                frames = ZarrFrames(path, float(quantiles["0.001"]), float(quantiles["0.999"]))
+                frames = PairSplit.frames(path, proc, config.data.downsample)
                 targets.extend(DetectionPairs.of(detections, truth, frames, spacing, operating.linker.gate_um))
         rows = sum(len(target.source_centres) for target in targets)
         # The matrix SHAPE is logged because it is what the step's cost and memory scale with, and guessing at

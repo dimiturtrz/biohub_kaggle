@@ -276,9 +276,16 @@ class RuntimeCfg(BaseModel):
     seed: int = Field(0, ge=0)
     # Frame-decompress threads and pairs kept in flight, so the GPU step overlaps the reads. The joint loop read
     # its two frames INLINE — a measured ~16 ms each against a 160-440 ms step, so a tenth to a fifth of every
-    # step was the GPU waiting on zstd. The detector trainer already had this (threads 12 / prefetch 24); these
-    # are lower because a pair costs two or three frames rather than a batch of eight, so fewer readers saturate
-    # it. 1 is the serial path, byte-identical, and is what the curriculum path uses whatever this says.
+    # step was the GPU waiting on zstd.
+    #
+    # WHY NOT AS MANY AS POSSIBLE: because the loop cannot consume them. ONE reader delivers 34.9 pairs/s
+    # (28.7 ms/pair measured on real data) while the loop consumes 2.3-6.2 pairs/s, so a single background
+    # thread already has 6-15x more throughput than the step can take, and the pooled store roughly halves the
+    # read again. Threads beyond that hide nothing and compete for cores with whatever else the box is running
+    # — which during these very measurements was two other training jobs. 4 is MARGIN for a contended box and a
+    # dense video, not a throughput requirement; 8 measures faster on the read alone (10.2 ms/pair) and is
+    # indistinguishable end-to-end. 1 is the serial path, byte-identical, and is what the curriculum path uses
+    # whatever this says.
     loader_threads: PositiveInt = 4
     loader_prefetch: PositiveInt = 8
     compile_backbone: bool = False  # torch.compile the U-Net (static shape); one-time warmup, then fused kernels

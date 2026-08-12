@@ -6,8 +6,9 @@ from typing import cast
 
 import numpy as np
 import pytest
+import zarr
 
-from celltrack.data.frame_source import ZarrFrames
+from celltrack.data.frame_source import DOWNSAMPLE_ATTR, PooledFrames, ZarrFrames
 from celltrack.data.joint_dataset import PairTarget
 from celltrack.eval.proxy import TestMovieProxy
 from celltrack.training.joint_config import DataCfg, JointTrainConfig
@@ -108,3 +109,23 @@ def test_of_detected():
 
     assert config.data.detected_videos == 0  # off by default, so the corpus of yesterday is unchanged
     assert PairSplit.of_detected(cast(DataRoot, None), config, [], logging.getLogger(__name__)) == []
+
+
+def test_frames(video_store: Path, tmp_path: Path):
+    """Frames come from the POOLED store when one exists at the run's grid, and from the raw zarr otherwise.
+
+    Auto-detection is the whole point — a flag would be a way to forget — so what is pinned is that the
+    resolver PICKS the pooled source only when a store for THAT grid is present, and silently falls back
+    when it is not. The two sources return identical voxels, so choosing wrongly would cost speed silently
+    rather than fail loudly, which is exactly the kind of thing that needs a test rather than a comment.
+    """
+    assert isinstance(PairSplit.frames(video_store), ZarrFrames)
+    assert isinstance(PairSplit.frames(video_store, tmp_path, (1, 4, 4)), ZarrFrames)  # no store written yet
+
+    store = PooledFrames.store(tmp_path, (1, 4, 4), video_store.stem)
+    store.parent.mkdir(parents=True, exist_ok=True)
+    array = zarr.create_array(store=str(store), shape=(1, 1, 1, 1), chunks=(1, 1, 1, 1), dtype=np.uint16)
+    array.attrs[DOWNSAMPLE_ATTR] = [1, 4, 4]
+
+    assert isinstance(PairSplit.frames(video_store, tmp_path, (1, 4, 4)), PooledFrames)
+    assert isinstance(PairSplit.frames(video_store, tmp_path, (1, 2, 2)), ZarrFrames)  # a different grid: raw

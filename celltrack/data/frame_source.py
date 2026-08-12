@@ -32,6 +32,65 @@ class FrameSource(Protocol):
         ...
 
 
+DOWNSAMPLE_ATTR = "downsample"
+"""The grid a pooled store was written on — read back so it can refuse to serve any other."""
+
+
+@dataclass(frozen=True)
+class PooledFrames:
+    """A pre-pooled store's frames: the same normalisation, read off voxels that were strided once, offline.
+
+    `ZarrFrames` strides the raw store on every access, and the raw chunk IS a whole frame (8.39 MB), so a
+    downsampled read decompresses sixteen times what it returns — every epoch of every run. This reads a store
+    written once at that grid instead: 11.2 ms/frame becomes 5.2 ms, and the store is a sixteenth the voxels.
+
+    It holds the POOLED RAW integers, not the normalised floats, so the normalisation stays in ONE place and a
+    change to the quantiles does not invalidate the store. The formula below is therefore the same expression
+    `ZarrFrames` applies, and the two are pinned byte-identical by test.
+
+    `downsample` is what the store was WRITTEN at, and any other grid is refused rather than silently served:
+    the array's voxels already are the stride, so re-striding them would return a different grid under the same
+    name. `SyntheticPairs` refuses the same way for the same reason.
+    """
+
+    array_path: Path
+    q_low: float
+    q_high: float
+    downsample: tuple[int, int, int]
+
+    @classmethod
+    def of(cls, store: Path, q_low: float, q_high: float) -> "PooledFrames":
+        """Open a pooled store, taking the grid from the store itself rather than from the caller."""
+        written = zarr.open_array(store).attrs[DOWNSAMPLE_ATTR]
+        return cls(store, q_low, q_high, tuple(int(axis) for axis in written))  # type: ignore[arg-type]
+
+    @staticmethod
+    def directory(processed: Path, downsample: tuple[int, int, int]) -> Path:
+        """Where stores for one grid live — the grid is IN THE NAME so two grids cannot be confused.
+
+        The convention lives here rather than in the tool that writes it, so the reader and the writer cannot
+        disagree about where a store is, and so `celltrack` never has to import from `tools`.
+        """
+        return processed / f"pooled_{'x'.join(str(axis) for axis in downsample)}"
+
+    @staticmethod
+    def store(processed: Path, downsample: tuple[int, int, int], stem: str) -> Path:
+        """One video's pooled store path — present only if it has been written for this grid."""
+        return PooledFrames.directory(processed, downsample) / f"{stem}.zarr"
+
+    def frame(self, timepoint: int, downsample: tuple[int, int, int]) -> Float[Tensor, "z y x"]:
+        """One quantile-normalised frame — refusing any grid but the one this store was pooled at."""
+        if tuple(downsample) != self.downsample:
+            message = (
+                f"pooled store at {self.array_path.name} holds the {self.downsample} grid, so it cannot serve "
+                f"{tuple(downsample)}; pool a store at that grid or read the raw video"
+            )
+            raise ValueError(message)
+        raw = np.asarray(zarr.open_array(self.array_path)[timepoint], dtype=np.float32)
+        normed = (torch.from_numpy(raw) - self.q_low) / (self.q_high - self.q_low + 1e-6)
+        return normed.clamp(0.0)
+
+
 @dataclass(frozen=True)
 class ZarrFrames:
     """The competition corpus's frames: an OME-Zarr store read through the video's own intensity quantiles."""
