@@ -45,6 +45,7 @@ from typing import Self
 
 import numpy as np
 from jaxtyping import Float, Int
+from scipy.optimize import curve_fit
 
 from celltrack.eval.proxy import CV_MOVIES, TestMovieProxy
 from core.data.tracks import Adjacency, TrackGraph
@@ -70,6 +71,14 @@ _PERCENTILES = (25.0, 50.0, 75.0, 95.0)
 _MIN_DRIFT_SAMPLES = 3
 # Coupling is a statement about a PAIR, so a frame holding one cell has nothing to say.
 _MIN_COUPLED = 2
+# Furth's law has three parameters, so a fit needs more points than that to say anything.
+_MIN_FURTH_POINTS = 4
+_MAX_FIT_EVALUATIONS = 20000
+_TINY = 1e-9
+# The MSD noise floor Furth's fit SHOULD recover, computed independently: a step is the difference of two
+# localised positions, so it carries twice the mean squared per-node error, and the measured median 3D
+# offset is 1.675 um (celltrack.analysis.localisation). It is a CHECK on the fit, never an input to it.
+_EXPECTED_NOISE_UM2 = 2.0 * 1.675**2
 
 
 @dataclass(frozen=True)
@@ -295,6 +304,119 @@ class NeighbourCoupling:
 
 
 @dataclass(frozen=True)
+class PersistentRandomWalk:
+    """Furth's law fitted to the MSD curve — the generative model behind an exponent between 1 and 2.
+
+    A scaling exponent strictly between diffusive and ballistic is the signature of a PERSISTENT RANDOM WALK:
+    velocity is an Ornstein-Uhlenbeck process that decorrelates over a time `tau`, so motion is ballistic while
+    `t << tau` and diffusive once `t >> tau`. Furth's formula is that model's mean squared displacement,
+
+        MSD(t) = 2 v^2 tau^2 [ t/tau - 1 + exp(-t/tau) ]  +  noise
+
+    and fitting it replaces a descriptive slope with two quantities that MEAN something. `speed_um` is the
+    cell's characteristic speed. `tau_frames` is the VELOCITY CORRELATION TIME, and it is the number the whole
+    temporal-window question reduces to: it says how many frames of history actually carry direction, so a
+    window shorter than tau throws information away and one much longer than tau averages in noise.
+
+    THE NOISE TERM IS THE MODEL'S OWN FALSIFIER, not a nuisance parameter. Independent localisation error adds a
+    CONSTANT to every lag, and we have measured that error separately (median offset 1.675 um on the dense
+    movie). A step is the difference of two independently localised positions, so the constant should land near
+    twice the mean squared per-node error. If the fitted constant comes back near that independently measured
+    value the model is corroborated by a quantity it was never fitted to; if it comes back wildly different, the
+    curve is not a persistent random walk and the fitted speed and tau mean nothing.
+
+    Fitted on LOG residuals so short and long lags weigh alike — a linear fit is dominated by the largest lag,
+    which is exactly where the ensemble is thinnest.
+    """
+
+    speed_um: float
+    tau_frames: float
+    noise_um2: float
+
+    @classmethod
+    def of(cls, displacement: "MeanSquaredDisplacement") -> Self:
+        """Fit `(speed, tau, noise)` to an MSD curve, or NaNs if it has too few usable points."""
+        lags = np.asarray(displacement.lags, dtype=np.float64)
+        msd = np.asarray(displacement.msd_um2, dtype=np.float64)
+        usable = np.isfinite(msd) & (msd > 0)
+        if usable.sum() < _MIN_FURTH_POINTS:
+            return cls(float("nan"), float("nan"), float("nan"))
+        try:
+            fitted = curve_fit(
+                lambda lag, speed, tau, noise: np.log(cls.predict(lag, speed, tau, noise)),
+                lags[usable],
+                np.log(msd[usable]),
+                p0=cls._initial(lags[usable], msd[usable]),
+                bounds=([_TINY, _TINY, 0.0], [np.inf, np.inf, np.inf]),
+                maxfev=_MAX_FIT_EVALUATIONS,
+            )[0]
+        except RuntimeError:  # the optimiser did not converge; report absence rather than a wrong number
+            return cls(float("nan"), float("nan"), float("nan"))
+        return cls(speed_um=float(fitted[0]), tau_frames=float(fitted[1]), noise_um2=float(fitted[2]))
+
+    @staticmethod
+    def predict(lag: Float[np.ndarray, "l"], speed: float, tau: float, noise: float) -> Float[np.ndarray, "l"]:
+        """Furth's mean squared displacement at `lag`, plus a constant localisation-noise floor."""
+        return 2.0 * speed**2 * tau**2 * (lag / tau - 1.0 + np.exp(-lag / tau)) + noise
+
+    @staticmethod
+    def _initial(lags: Float[np.ndarray, "l"], msd: Float[np.ndarray, "l"]) -> tuple[float, float, float]:
+        """A starting point taken from the curve itself rather than from invented constants.
+
+        The shortest lag is mostly noise plus one step, so it seeds both the noise floor and the speed; tau
+        starts at the middle of the observed lag range, which is the only scale the data offers.
+        """
+        return float(np.sqrt(msd[0]) / max(lags[0], 1.0)), float(np.median(lags)), float(msd[0]) / 2.0
+
+
+@dataclass(frozen=True)
+class CoMovingFrame:
+    """Positions with the whole-frame drift integrated out — the tissue's rest frame.
+
+    THE ATTRIBUTION PROBLEM this exists to settle. Furth's fit cannot tell an individual cell's persistence
+    from the tissue's: a coherent drift IS persistent motion and produces exactly the same curve. Since drift
+    is 61-92% of the mean step here, a correlation time measured in the lab frame may belong entirely to the
+    tissue — and a tissue's drift, however persistent, shifts every candidate equally and so disambiguates
+    nothing. Re-fitting in the rest frame is what separates the two.
+
+    The drift is a per-gap VELOCITY, so removing it means subtracting its running INTEGRAL from each frame's
+    positions, not the instantaneous vector — otherwise the correction is itself a displacement and injects
+    the very motion it is meant to remove. Frames with too few cells to estimate a drift contribute zero,
+    which leaves those frames uncorrected rather than corrupting them with a noisy estimate.
+    """
+
+    positions_um: Float[np.ndarray, "n 3"]
+
+    @classmethod
+    def of(
+        cls,
+        graph: TrackGraph,
+        positions_um: Float[np.ndarray, "n 3"],
+        steps_by_row: dict[int, int],
+    ) -> Self:
+        """Subtract the cumulative whole-frame drift, so what remains is motion relative to the tissue."""
+        timepoints = graph.timepoints()
+        drift_by_time = cls._per_gap_drift(graph, steps_by_row)
+        corrected = positions_um.copy()
+        offset = np.zeros(3)
+        for timepoint in np.unique(timepoints):
+            corrected[timepoints == timepoint] -= offset
+            offset = offset + drift_by_time.get(int(timepoint), np.zeros(3))
+        return cls(positions_um=corrected)
+
+    @staticmethod
+    def _per_gap_drift(graph: TrackGraph, steps_by_row: dict[int, int]) -> dict[int, Float[np.ndarray, "3"]]:
+        """The mean displacement leaving each frame — the tissue's velocity over that gap."""
+        timepoints = graph.timepoints()
+        drift = {}
+        for rows in NeighbourCoupling._by_timepoint(graph, steps_by_row):  # noqa: SLF001
+            vectors = np.asarray([steps_by_row[row] for row in rows])
+            if len(vectors) >= _MIN_DRIFT_SAMPLES:
+                drift[int(timepoints[rows[0]])] = vectors.mean(axis=0)
+        return drift
+
+
+@dataclass(frozen=True)
 class FrameDrift:
     """How much of a frame's motion is one vector every cell shares — and what is left once it is removed.
 
@@ -347,6 +469,8 @@ class MovieMotion:
     mean_turn_cosine: float
     persistence: PersistenceByStep
     displacement: MeanSquaredDisplacement
+    walk: PersistentRandomWalk
+    co_moving: PersistentRandomWalk
     coupling: NeighbourCoupling
     drift: FrameDrift
 
@@ -358,6 +482,7 @@ class MovieMotion:
         steps = chains.steps(positions_um)
         cosines, weaker = steps.turn_cosines()
         by_row = cls._steps_by_row(chains, positions_um)
+        displacement = MeanSquaredDisplacement.of(chains, positions_um, max_lag)
         return cls(
             stem=stem,
             chains=len(chains.rows),
@@ -366,7 +491,11 @@ class MovieMotion:
             stationary_fraction=steps.stationary_fraction(),
             mean_turn_cosine=float(cosines.mean()) if len(cosines) else float("nan"),
             persistence=PersistenceByStep.of(cosines, weaker, (STATIONARY_UM, 2 * STATIONARY_UM, 4 * STATIONARY_UM)),
-            displacement=MeanSquaredDisplacement.of(chains, positions_um, max_lag),
+            displacement=displacement,
+            walk=PersistentRandomWalk.of(displacement),
+            co_moving=PersistentRandomWalk.of(
+                MeanSquaredDisplacement.of(chains, CoMovingFrame.of(graph, positions_um, by_row).positions_um, max_lag)
+            ),
             coupling=NeighbourCoupling.of(graph, positions_um, by_row, seed),
             drift=FrameDrift.of(graph, by_row),
         )
@@ -400,6 +529,19 @@ class MovieMotion:
             "    turn cosine %.3f overall; by weaker step %s",
             self.mean_turn_cosine,
             self._counted(self.persistence.mean_cosine, self.persistence.counts),
+        )
+        logger.info(
+            "    Furth lab frame : speed %.2f um/frame  tau %.2f frames  noise %.2f um2 (expect ~%.1f)",
+            self.walk.speed_um,
+            self.walk.tau_frames,
+            self.walk.noise_um2,
+            _EXPECTED_NOISE_UM2,
+        )
+        logger.info(
+            "    Furth drift-free: speed %.2f um/frame  tau %.2f frames  noise %.2f um2",
+            self.co_moving.speed_um,
+            self.co_moving.tau_frames,
+            self.co_moving.noise_um2,
         )
         logger.info(
             "    frame drift %.2f um = %.0f%% of mean step; residual after removal %.2f um",

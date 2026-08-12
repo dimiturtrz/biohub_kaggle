@@ -14,11 +14,13 @@ from celltrack.analysis.motion_statistics import (
     GATE_UM,
     STATIONARY_UM,
     Chains,
+    CoMovingFrame,
     FrameDrift,
     MeanSquaredDisplacement,
     MovieMotion,
     NeighbourCoupling,
     PersistenceByStep,
+    PersistentRandomWalk,
     Steps,
 )
 from core.data.tracks import TrackGraph
@@ -212,3 +214,47 @@ def test_report(caplog: pytest.LogCaptureFixture) -> None:
     assert "fixture" in caplog.text
     assert "ballistic" in caplog.text
     assert "MSD exponent 2.00" in caplog.text
+
+
+def test_persistent_random_walk_of():
+    """Furth's parameters are recovered from a ballistic curve, and refused when there are too few points.
+
+    A constant-velocity track has MSD = (v*t)^2, so the fit must return that speed with a correlation time far
+    longer than the observation window — the ballistic limit of the model, where velocity never decorrelates.
+    """
+    graph = _graph([_straight(20)])
+    displacement = MeanSquaredDisplacement.of(Chains.of(graph), _positions(graph), max_lag=12)
+
+    walk = PersistentRandomWalk.of(displacement)
+
+    assert walk.speed_um == pytest.approx(1.625, rel=0.2)
+    assert walk.tau_frames > 12  # no decorrelation is visible inside the window
+    assert np.isnan(PersistentRandomWalk.of(MeanSquaredDisplacement((1,), (1.0,), 2.0)).tau_frames)
+
+
+def test_predict():
+    """Furth's law spans both limits: ballistic at short lag, diffusive at long, plus a constant noise floor."""
+    speed, tau = 2.0, 5.0
+
+    short = PersistentRandomWalk.predict(np.array([0.01]), speed, tau, noise=0.0)
+    long_lag = PersistentRandomWalk.predict(np.array([500.0]), speed, tau, noise=0.0)
+
+    assert short[0] == pytest.approx((speed * 0.01) ** 2, rel=1e-3)  # v^2 t^2
+    assert long_lag[0] == pytest.approx(2 * speed**2 * tau * 500.0, rel=1e-2)  # linear in t
+    assert PersistentRandomWalk.predict(np.array([0.0]), speed, tau, noise=3.0)[0] == pytest.approx(3.0)
+
+
+def test_co_moving_frame_of():
+    """Removing a rigid translation leaves the cells where they started — the drift is integrated, not subtracted.
+
+    The drift is a per-gap VELOCITY, so the correction has to accumulate: frame t moves by the sum of every
+    earlier gap's drift. Subtracting the instantaneous vector instead would itself be a displacement and would
+    inject the motion it is meant to remove.
+    """
+    graph, by_row = _rigid_body()
+    positions = _positions(graph)
+
+    corrected = CoMovingFrame.of(graph, positions, by_row).positions_um
+
+    spread = [float(np.ptp(corrected[graph.timepoints() == t][:, 2])) for t in np.unique(graph.timepoints())]
+    assert max(spread) == pytest.approx(0.0, abs=1e-9)  # every cell of a frame lands at one x, the drift gone
