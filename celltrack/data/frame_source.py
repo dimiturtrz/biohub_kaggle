@@ -12,7 +12,7 @@ corpus's: `ZarrFrames` strides a full-resolution store by it, while a corpus tha
 refuses any value but the pooling it already carries.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
@@ -21,6 +21,8 @@ import torch
 import zarr
 from jaxtyping import Float
 from torch import Tensor
+
+from celltrack.data.normalisation import HIGH_QUANTILE, LOW_QUANTILE, Normalisation, QuantileWindow
 
 
 @runtime_checkable
@@ -57,6 +59,9 @@ class PooledFrames:
     q_low: float
     q_high: float
     downsample: tuple[int, int, int]
+    # The preprocessing layer, selectable per run. Defaults to the reference's own window, so a caller that
+    # does not ask reads exactly what every arm before it read — and what the MOUNTED weights were trained on.
+    normalisation: Normalisation = field(default_factory=QuantileWindow)
 
     @classmethod
     def of(cls, store: Path, q_low: float, q_high: float) -> "PooledFrames":
@@ -87,8 +92,11 @@ class PooledFrames:
             )
             raise ValueError(message)
         raw = np.asarray(zarr.open_array(self.array_path)[timepoint], dtype=np.float32)
-        normed = (torch.from_numpy(raw) - self.q_low) / (self.q_high - self.q_low + 1e-6)
-        return normed.clamp(0.0)
+        return torch.from_numpy(self.normalisation.apply(raw, self._quantiles()))
+
+    def _quantiles(self) -> dict[str, float]:
+        """This video's shipped intensity quantiles, as the strategy layer's contract spells them."""
+        return {LOW_QUANTILE: self.q_low, HIGH_QUANTILE: self.q_high}
 
 
 @dataclass(frozen=True)
@@ -98,11 +106,15 @@ class ZarrFrames:
     zarr_path: Path
     q_low: float
     q_high: float
+    normalisation: Normalisation = field(default_factory=QuantileWindow)
 
     def frame(self, timepoint: int, downsample: tuple[int, int, int]) -> Float[Tensor, "z y x"]:
         """One quantile-normalised, strided, non-negative frame — the detector's own preprocessing recipe."""
         dz, dy, dx = downsample
         array = zarr.open_array(self.zarr_path / "0")
         raw = np.asarray(array[timepoint, ::dz, ::dy, ::dx], dtype=np.float32)
-        normed = (torch.from_numpy(raw) - self.q_low) / (self.q_high - self.q_low + 1e-6)
-        return normed.clamp(0.0)
+        return torch.from_numpy(self.normalisation.apply(raw, self._quantiles()))
+
+    def _quantiles(self) -> dict[str, float]:
+        """This video's shipped intensity quantiles, as the strategy layer's contract spells them."""
+        return {LOW_QUANTILE: self.q_low, HIGH_QUANTILE: self.q_high}
