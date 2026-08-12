@@ -2,6 +2,60 @@
   "edges": [
     {
       "kind": "import",
+      "source": "celltrack.analysis.drift_field",
+      "target": "celltrack.analysis.localisation",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.analysis.drift_field",
+      "target": "celltrack.analysis.motion_statistics",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.analysis.drift_field",
+      "target": "celltrack.eval.dense_diagnosis",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.analysis.drift_field",
+      "target": "celltrack.eval.proxy",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.analysis.drift_field",
+      "target": "celltrack.operating_point",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.analysis.drift_field",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.analysis.drift_field",
+      "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.analysis.drift_field",
+      "target": "core.metrics.matching",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.analysis.drift_field",
+      "target": "core.paths",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "celltrack.analysis.localisation",
       "target": "celltrack.eval.dense_diagnosis",
       "weight": 1
@@ -2204,6 +2258,366 @@
     },
     {
       "kind": "references",
+      "source": "celltrack.analysis.drift_field.AnnotatedResidual",
+      "target": "celltrack.analysis.drift_field.DriftField",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.drift_field.AnnotatedResidual",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.drift_field.AnnotatedResidual",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.AnnotatedResidual.of",
+      "target": "core.data.tracks.Adjacency.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.AnnotatedResidual.of",
+      "target": "core.data.tracks.TrackGraph.positions",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.AnnotatedResidual.of",
+      "target": "core.data.tracks.TrackGraph.timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.AnnotatedResidual.of",
+      "target": "core.geometry.Spacing.to_micrometres",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.drift_field.CandidateReordering",
+      "target": "celltrack.analysis.drift_field.DriftField",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.drift_field.CandidateReordering",
+      "target": "celltrack.analysis.localisation.CandidatePairs",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.drift_field.CandidateReordering",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.drift_field.CandidateReordering",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.CandidateReordering.of",
+      "target": "core.data.tracks.TrackGraph.positions",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.CandidateReordering.of",
+      "target": "core.data.tracks.TrackGraph.timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.CandidateReordering.of",
+      "target": "core.geometry.Spacing.to_micrometres",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis",
+      "target": "celltrack.analysis.drift_field.AnnotatedResidual",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis",
+      "target": "celltrack.analysis.drift_field.DriftField",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis",
+      "target": "celltrack.analysis.drift_field.FieldSettings",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis",
+      "target": "celltrack.analysis.drift_field.SyntheticRecovery",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis",
+      "target": "core.metrics.matching.NodeMatching",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis",
+      "target": "core.paths.DataRoot",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._detected",
+      "target": "celltrack.eval.dense_diagnosis.DenseDiagnosis.configured",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._detected",
+      "target": "celltrack.eval.proxy.TestMovieProxy.load",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._detected",
+      "target": "celltrack.operating_point.TrackerConfig.shipped",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._fields",
+      "target": "celltrack.analysis.drift_field.DisplacementVotes.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._fields",
+      "target": "celltrack.analysis.drift_field.DriftDiagnosis._positions_um",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._fields",
+      "target": "celltrack.analysis.drift_field.DriftField.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._fields",
+      "target": "core.data.tracks.TrackGraph.timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._linked",
+      "target": "celltrack.eval.dense_diagnosis.DenseDiagnosis.configured",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._linked",
+      "target": "celltrack.eval.proxy.TestMovieProxy.load",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._linked",
+      "target": "celltrack.operating_point.TrackerConfig.shipped",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._linked",
+      "target": "core.metrics.matching.DistanceMatcher",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._linked",
+      "target": "core.metrics.matching.DistanceMatcher.match",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._positions_um",
+      "target": "core.data.tracks.TrackGraph.positions",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._positions_um",
+      "target": "core.geometry.Spacing.to_micrometres",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._reorder",
+      "target": "celltrack.analysis.drift_field.CandidateReordering.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._reorder",
+      "target": "celltrack.analysis.drift_field.DriftDiagnosis._fields",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._reorder",
+      "target": "celltrack.analysis.drift_field.DriftDiagnosis._positions_um",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._reorder",
+      "target": "celltrack.analysis.drift_field.FieldSettings.over",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._reorder",
+      "target": "celltrack.analysis.localisation.CandidatePairs.correct",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._reorder",
+      "target": "celltrack.analysis.localisation.CandidatePairs.mislinked",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._reorder",
+      "target": "celltrack.operating_point.TrackerConfig.shipped",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._reorder",
+      "target": "core.data.tracks.TrackGraph.timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._report_sweep",
+      "target": "celltrack.analysis.drift_field.AnnotatedResidual.explained",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._report_sweep",
+      "target": "celltrack.analysis.drift_field.SyntheticRecovery.error_um",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._sweep",
+      "target": "celltrack.analysis.drift_field.AnnotatedResidual.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._sweep",
+      "target": "celltrack.analysis.drift_field.DriftDiagnosis._fields",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._sweep",
+      "target": "celltrack.analysis.drift_field.DriftDiagnosis._positions_um",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._sweep",
+      "target": "celltrack.analysis.drift_field.DriftDiagnosis._report_sweep",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._sweep",
+      "target": "celltrack.analysis.drift_field.FieldSettings.over",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._sweep",
+      "target": "celltrack.analysis.drift_field.SyntheticRecovery.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._sweep",
+      "target": "core.data.tracks.TrackGraph.timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.drift_field.DriftField",
+      "target": "celltrack.analysis.drift_field.DisplacementVotes",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.drift_field.DriftField",
+      "target": "celltrack.analysis.drift_field.FieldSettings",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftField.of",
+      "target": "celltrack.analysis.drift_field.DisplacementVotes.count",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.FieldSettings.over",
+      "target": "celltrack.analysis.drift_field.DriftField.anchor_grid",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.drift_field.SyntheticRecovery",
+      "target": "celltrack.analysis.drift_field.FieldSettings",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.SyntheticRecovery.of",
+      "target": "celltrack.analysis.drift_field.DisplacementVotes.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.SyntheticRecovery.of",
+      "target": "celltrack.analysis.drift_field.DriftField.of",
+      "weight": 1
+    },
+    {
+      "kind": "references",
       "source": "celltrack.analysis.localisation.AnnotatedStepByFate",
       "target": "core.data.tracks.TrackGraph",
       "weight": 1
@@ -3104,6 +3518,30 @@
     },
     {
       "kind": "references",
+      "source": "celltrack.analysis.motion_statistics.CoMovingFrame",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.motion_statistics.CoMovingFrame._per_gap_drift",
+      "target": "celltrack.analysis.motion_statistics.NeighbourCoupling._by_timepoint",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.motion_statistics.CoMovingFrame._per_gap_drift",
+      "target": "core.data.tracks.TrackGraph.timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.motion_statistics.CoMovingFrame.of",
+      "target": "core.data.tracks.TrackGraph.timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "references",
       "source": "celltrack.analysis.motion_statistics.FrameDrift",
       "target": "core.data.tracks.TrackGraph",
       "weight": 1
@@ -3151,6 +3589,12 @@
       "weight": 1
     },
     {
+      "kind": "holds",
+      "source": "celltrack.analysis.motion_statistics.MovieMotion",
+      "target": "celltrack.analysis.motion_statistics.PersistentRandomWalk",
+      "weight": 1
+    },
+    {
       "kind": "references",
       "source": "celltrack.analysis.motion_statistics.MovieMotion",
       "target": "core.data.tracks.TrackGraph",
@@ -3166,6 +3610,12 @@
       "kind": "calls",
       "source": "celltrack.analysis.motion_statistics.MovieMotion.of",
       "target": "celltrack.analysis.motion_statistics.Chains.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.motion_statistics.MovieMotion.of",
+      "target": "celltrack.analysis.motion_statistics.CoMovingFrame.of",
       "weight": 1
     },
     {
@@ -3190,6 +3640,12 @@
       "kind": "calls",
       "source": "celltrack.analysis.motion_statistics.MovieMotion.of",
       "target": "celltrack.analysis.motion_statistics.PersistenceByStep.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.motion_statistics.MovieMotion.of",
+      "target": "celltrack.analysis.motion_statistics.PersistentRandomWalk.of",
       "weight": 1
     },
     {
@@ -3220,6 +3676,12 @@
       "kind": "calls",
       "source": "celltrack.analysis.motion_statistics.NeighbourCoupling._by_timepoint",
       "target": "core.data.tracks.TrackGraph.timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.motion_statistics.PersistentRandomWalk",
+      "target": "celltrack.analysis.motion_statistics.MeanSquaredDisplacement",
       "weight": 1
     },
     {
@@ -11997,7 +12459,7 @@
   ],
   "nodes": [
     {
-      "descendants": 97,
+      "descendants": 98,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -12013,11 +12475,19 @@
       "role": null
     },
     {
-      "descendants": 7,
+      "descendants": 8,
       "id": "celltrack.analysis",
       "label": "analysis",
       "level": "module",
       "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.drift_field",
+      "label": "drift_field",
+      "level": "module",
+      "parent": "celltrack.analysis",
       "role": null
     },
     {
@@ -12942,6 +13412,62 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.analysis.drift_field.AnnotatedResidual",
+      "label": "AnnotatedResidual",
+      "level": "class",
+      "parent": "celltrack.analysis.drift_field",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.drift_field.CandidateReordering",
+      "label": "CandidateReordering",
+      "level": "class",
+      "parent": "celltrack.analysis.drift_field",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.drift_field.DisplacementVotes",
+      "label": "DisplacementVotes",
+      "level": "class",
+      "parent": "celltrack.analysis.drift_field",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.drift_field.DriftDiagnosis",
+      "label": "DriftDiagnosis",
+      "level": "class",
+      "parent": "celltrack.analysis.drift_field",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.drift_field.DriftField",
+      "label": "DriftField",
+      "level": "class",
+      "parent": "celltrack.analysis.drift_field",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.drift_field.FieldSettings",
+      "label": "FieldSettings",
+      "level": "class",
+      "parent": "celltrack.analysis.drift_field",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.drift_field.SyntheticRecovery",
+      "label": "SyntheticRecovery",
+      "level": "class",
+      "parent": "celltrack.analysis.drift_field",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.analysis.localisation.AnnotatedStepByFate",
       "label": "AnnotatedStepByFate",
       "level": "class",
@@ -13094,6 +13620,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.analysis.motion_statistics.CoMovingFrame",
+      "label": "CoMovingFrame",
+      "level": "class",
+      "parent": "celltrack.analysis.motion_statistics",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.analysis.motion_statistics.FrameDrift",
       "label": "FrameDrift",
       "level": "class",
@@ -13128,6 +13662,14 @@
       "descendants": 0,
       "id": "celltrack.analysis.motion_statistics.PersistenceByStep",
       "label": "PersistenceByStep",
+      "level": "class",
+      "parent": "celltrack.analysis.motion_statistics",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.motion_statistics.PersistentRandomWalk",
+      "label": "PersistentRandomWalk",
       "level": "class",
       "parent": "celltrack.analysis.motion_statistics",
       "role": "satellite"
@@ -15022,6 +15564,214 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.analysis.drift_field.AnnotatedResidual.explained",
+      "label": "explained",
+      "level": "method",
+      "parent": "celltrack.analysis.drift_field.AnnotatedResidual",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.drift_field.AnnotatedResidual.of",
+      "label": "of",
+      "level": "method",
+      "parent": "celltrack.analysis.drift_field.AnnotatedResidual",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.drift_field.CandidateReordering._gap",
+      "label": "_gap",
+      "level": "method",
+      "parent": "celltrack.analysis.drift_field.CandidateReordering",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.drift_field.CandidateReordering.broken",
+      "label": "broken",
+      "level": "method",
+      "parent": "celltrack.analysis.drift_field.CandidateReordering",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.drift_field.CandidateReordering.count",
+      "label": "count",
+      "level": "method",
+      "parent": "celltrack.analysis.drift_field.CandidateReordering",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.drift_field.CandidateReordering.of",
+      "label": "of",
+      "level": "method",
+      "parent": "celltrack.analysis.drift_field.CandidateReordering",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.drift_field.CandidateReordering.rescued",
+      "label": "rescued",
+      "level": "method",
+      "parent": "celltrack.analysis.drift_field.CandidateReordering",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.drift_field.DisplacementVotes.count",
+      "label": "count",
+      "level": "method",
+      "parent": "celltrack.analysis.drift_field.DisplacementVotes",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.drift_field.DisplacementVotes.of",
+      "label": "of",
+      "level": "method",
+      "parent": "celltrack.analysis.drift_field.DisplacementVotes",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.drift_field.DriftDiagnosis._detected",
+      "label": "_detected",
+      "level": "method",
+      "parent": "celltrack.analysis.drift_field.DriftDiagnosis",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.drift_field.DriftDiagnosis._fields",
+      "label": "_fields",
+      "level": "method",
+      "parent": "celltrack.analysis.drift_field.DriftDiagnosis",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.drift_field.DriftDiagnosis._linked",
+      "label": "_linked",
+      "level": "method",
+      "parent": "celltrack.analysis.drift_field.DriftDiagnosis",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.drift_field.DriftDiagnosis._positions_um",
+      "label": "_positions_um",
+      "level": "method",
+      "parent": "celltrack.analysis.drift_field.DriftDiagnosis",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.drift_field.DriftDiagnosis._reorder",
+      "label": "_reorder",
+      "level": "method",
+      "parent": "celltrack.analysis.drift_field.DriftDiagnosis",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.drift_field.DriftDiagnosis._report_sweep",
+      "label": "_report_sweep",
+      "level": "method",
+      "parent": "celltrack.analysis.drift_field.DriftDiagnosis",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.drift_field.DriftDiagnosis._sweep",
+      "label": "_sweep",
+      "level": "method",
+      "parent": "celltrack.analysis.drift_field.DriftDiagnosis",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.drift_field.DriftField._histogram",
+      "label": "_histogram",
+      "level": "method",
+      "parent": "celltrack.analysis.drift_field.DriftField",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.drift_field.DriftField._unbin",
+      "label": "_unbin",
+      "level": "method",
+      "parent": "celltrack.analysis.drift_field.DriftField",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.drift_field.DriftField.anchor_grid",
+      "label": "anchor_grid",
+      "level": "method",
+      "parent": "celltrack.analysis.drift_field.DriftField",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.drift_field.DriftField.at",
+      "label": "at",
+      "level": "method",
+      "parent": "celltrack.analysis.drift_field.DriftField",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.drift_field.DriftField.global_drift",
+      "label": "global_drift",
+      "level": "method",
+      "parent": "celltrack.analysis.drift_field.DriftField",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.drift_field.DriftField.of",
+      "label": "of",
+      "level": "method",
+      "parent": "celltrack.analysis.drift_field.DriftField",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.drift_field.FieldSettings.over",
+      "label": "over",
+      "level": "method",
+      "parent": "celltrack.analysis.drift_field.FieldSettings",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.drift_field.SyntheticRecovery._shear",
+      "label": "_shear",
+      "level": "method",
+      "parent": "celltrack.analysis.drift_field.SyntheticRecovery",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.drift_field.SyntheticRecovery.error_um",
+      "label": "error_um",
+      "level": "method",
+      "parent": "celltrack.analysis.drift_field.SyntheticRecovery",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.drift_field.SyntheticRecovery.of",
+      "label": "of",
+      "level": "method",
+      "parent": "celltrack.analysis.drift_field.SyntheticRecovery",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.analysis.localisation.AnnotatedStepByFate.of",
       "label": "of",
       "level": "method",
@@ -15502,6 +16252,22 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.analysis.motion_statistics.CoMovingFrame._per_gap_drift",
+      "label": "_per_gap_drift",
+      "level": "method",
+      "parent": "celltrack.analysis.motion_statistics.CoMovingFrame",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.motion_statistics.CoMovingFrame.of",
+      "label": "of",
+      "level": "method",
+      "parent": "celltrack.analysis.motion_statistics.CoMovingFrame",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.analysis.motion_statistics.FrameDrift.of",
       "label": "of",
       "level": "method",
@@ -15602,6 +16368,30 @@
       "label": "of",
       "level": "method",
       "parent": "celltrack.analysis.motion_statistics.PersistenceByStep",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.motion_statistics.PersistentRandomWalk._initial",
+      "label": "_initial",
+      "level": "method",
+      "parent": "celltrack.analysis.motion_statistics.PersistentRandomWalk",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.motion_statistics.PersistentRandomWalk.of",
+      "label": "of",
+      "level": "method",
+      "parent": "celltrack.analysis.motion_statistics.PersistentRandomWalk",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.motion_statistics.PersistentRandomWalk.predict",
+      "label": "predict",
+      "level": "method",
+      "parent": "celltrack.analysis.motion_statistics.PersistentRandomWalk",
       "role": null
     },
     {
