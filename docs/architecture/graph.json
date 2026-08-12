@@ -8870,6 +8870,12 @@
     },
     {
       "kind": "calls",
+      "source": "celltrack.linkers.motion_prediction.MotionPrediction._incoming",
+      "target": "celltrack.models.prior_velocity.PriorVelocity.expected_incoming",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
       "source": "celltrack.linkers.motion_prediction.MotionPrediction._velocity",
       "target": "celltrack.affinity.EdgeAffinity.probabilities",
       "weight": 1
@@ -8877,7 +8883,13 @@
     {
       "kind": "calls",
       "source": "celltrack.linkers.motion_prediction.MotionPrediction._velocity",
-      "target": "celltrack.models.prior_velocity.PriorVelocity.expected_incoming",
+      "target": "celltrack.linkers.motion_prediction.MotionPrediction._incoming",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.linkers.motion_prediction.MotionPrediction._velocity",
+      "target": "celltrack.linkers.motion_prediction.MotionPrediction._parent_distribution",
       "weight": 1
     },
     {
@@ -20472,6 +20484,22 @@
       "label": "link",
       "level": "method",
       "parent": "celltrack.linkers.motion_linking.MotionHungarianLinker",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.linkers.motion_prediction.MotionPrediction._incoming",
+      "label": "_incoming",
+      "level": "method",
+      "parent": "celltrack.linkers.motion_prediction.MotionPrediction",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.linkers.motion_prediction.MotionPrediction._parent_distribution",
+      "label": "_parent_distribution",
+      "level": "method",
+      "parent": "celltrack.linkers.motion_prediction.MotionPrediction",
       "role": null
     },
     {
