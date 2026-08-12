@@ -5336,6 +5336,36 @@
     },
     {
       "kind": "calls",
+      "source": "celltrack.eval.model_evaluator.ModelEvaluator.evaluate_ensemble",
+      "target": "celltrack.detectors.tunet.TemporalUNetDetector.of",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.eval.model_evaluator.ModelEvaluator.evaluate_ensemble",
+      "target": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.model_evaluator.ModelEvaluator.evaluate_ensemble",
+      "target": "celltrack.eval.model_evaluator.ModelEvaluator._score",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.model_evaluator.ModelEvaluator.evaluate_ensemble",
+      "target": "celltrack.models.edge_transformer.EdgeTransformerScorer.from_pack",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.model_evaluator.ModelEvaluator.evaluate_ensemble",
+      "target": "celltrack.models.edge_transformer.EdgeTransformerScorer.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
       "source": "celltrack.eval.model_evaluator.ModelEvaluator.evaluate_joint",
       "target": "celltrack.detectors.tunet.TemporalUNetDetector.of",
       "weight": 1
@@ -16688,6 +16718,14 @@
       "descendants": 0,
       "id": "celltrack.eval.model_evaluator.ModelEvaluator.evaluate",
       "label": "evaluate",
+      "level": "method",
+      "parent": "celltrack.eval.model_evaluator.ModelEvaluator",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.model_evaluator.ModelEvaluator.evaluate_ensemble",
+      "label": "evaluate_ensemble",
       "level": "method",
       "parent": "celltrack.eval.model_evaluator.ModelEvaluator",
       "role": null
