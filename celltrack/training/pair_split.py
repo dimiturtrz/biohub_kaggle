@@ -14,6 +14,7 @@ the synthetic half carries a precondition (`POOLED_BY`) that must fail at startu
 from __future__ import annotations
 
 import logging
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import cast
@@ -116,7 +117,7 @@ class PairSplit:
             operating,
         )
         targets: list[PairTarget] = []
-        chosen = train_paths[:videos]
+        chosen = PairSplit._across_acquisitions(train_paths, videos)
         with Obs.timed(log, f"detecting over {len(chosen)} train videos for the detected-pair corpus"):
             for path in Obs.progress(chosen, "videos", len(chosen)):
                 detections = tracker.detector.nodes(path.stem, path, operating.threshold, None)
@@ -132,15 +133,46 @@ class PairSplit:
         # it once already cost a 32GB VRAM spill: ungated, a frame's ~743 detections make an edge matrix ~60x
         # the annotated one. A run whose widths read in the hundreds is not gated, whatever the flag says.
         widths = [len(target.target_centres) for target in targets] or [0]
+        # The ACQUISITION MIX is logged beside the shape because its absence is what hid a corpus of 20 videos
+        # that were all the sparse acquisition: targets/gap read 8.3 and looked crowded, since it is crowded
+        # relative to the annotated corpus whatever the video. A corpus property nothing prints is one nobody
+        # checks.
+        mix = Counter(path.stem.split("_")[0] for path in chosen)
         logger.info(
-            "%d detected pairs, %d supervised rows | targets/gap mean %.1f median %d max %d — the deployed set",
+            "%d detected pairs, %d supervised rows | targets/gap mean %.1f median %d max %d | acquisitions %s",
             len(targets),
             rows,
             sum(widths) / len(widths),
             int(np.median(widths)),
             max(widths),
+            dict(sorted(mix.items())),
         )
         return targets
+
+    @staticmethod
+    def _across_acquisitions(train_paths: list[Path], videos: int) -> list[Path]:
+        """`videos` train videos drawn ROUND-ROBIN across acquisitions, not the first N of a sorted list.
+
+        Taking the head of a sorted list took 20 of 20 videos from `44b6` alone, because that prefix sorts
+        before `6bba` — while the pool is 124 `6bba` against 67 `44b6`. That is the SPARSE acquisition (~107
+        detections per frame) and the score is dominated by the dense `6bba_05db0fb1` (~743 per frame), which
+        holds every measured mislink. So the corpus built specifically to supply crowded, contested candidate
+        sets contained none of the crowding, and nothing in the logs said so: the reported targets/gap looked
+        healthy because it is crowded RELATIVE to the annotated corpus whatever the video.
+
+        Stratified rather than shuffled because the two acquisitions differ in exactly the property this corpus
+        exists to capture, so the mix should be a stated intent rather than a draw.
+        """
+        groups: dict[str, list[Path]] = {}
+        for path in train_paths:
+            groups.setdefault(path.stem.split("_")[0], []).append(path)
+        ordered = [
+            group[index]
+            for index in range(max(map(len, groups.values())))
+            for group in groups.values()
+            if index < len(group)
+        ]
+        return ordered[:videos]
 
     @staticmethod
     def of_synthetic(root: DataRoot, config: JointTrainConfig, log: logging.Logger) -> list[PairTarget]:

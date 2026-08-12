@@ -74,6 +74,29 @@ def test_of_synthetic(tmp_path: Path):
         PairSplit.of_synthetic(root, wrong_grid, log)
 
 
+def test_across_acquisitions():
+    """The detected corpus is drawn across acquisitions, not off the head of a sorted list.
+
+    Taking the first N of sorted paths took 20 of 20 videos from `44b6` alone — it sorts before `6bba` — so a
+    corpus built to supply CROWDED candidate sets was drawn entirely from the SPARSE acquisition, while the
+    score is dominated by the dense one. The pin is that no acquisition is starved at any size, since that is
+    the property the bug violated and the logs did not show.
+    """
+    paths = [Path(f"44b6_{index:02d}.zarr") for index in range(6)] + [
+        Path(f"6bba_{index:02d}.zarr") for index in range(9)
+    ]
+
+    for size in (2, 4, 10):
+        chosen = PairSplit._across_acquisitions(paths, size)
+        prefixes = {path.stem.split("_")[0] for path in chosen}
+        assert len(chosen) == size
+        assert len(set(chosen)) == size  # no video counted twice
+        assert prefixes == {"44b6", "6bba"}
+
+    # Asking for more than one acquisition can supply still fills the request from what remains.
+    assert len(PairSplit._across_acquisitions(paths, 15)) == 15
+
+
 def test_of_detected():
     """The detected corpus is opt-in: at 0 videos it returns empty WITHOUT mounting a detector.
 
