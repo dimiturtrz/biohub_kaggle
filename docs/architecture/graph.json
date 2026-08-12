@@ -476,6 +476,54 @@
     },
     {
       "kind": "import",
+      "source": "celltrack.analysis.trajectory_prediction",
+      "target": "celltrack.analysis.drift_field",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.analysis.trajectory_prediction",
+      "target": "celltrack.analysis.localisation",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.analysis.trajectory_prediction",
+      "target": "celltrack.eval.dense_diagnosis",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.analysis.trajectory_prediction",
+      "target": "celltrack.operating_point",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.analysis.trajectory_prediction",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.analysis.trajectory_prediction",
+      "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.analysis.trajectory_prediction",
+      "target": "core.metrics.matching",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.analysis.trajectory_prediction",
+      "target": "core.paths",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "celltrack.data.candidate_density",
       "target": "celltrack.data.joint_dataset",
       "weight": 1
@@ -5044,6 +5092,138 @@
       "kind": "calls",
       "source": "celltrack.analysis.softmax_population.SoftmaxPopulation.of",
       "target": "core.geometry.Spacing.to_micrometres",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.trajectory_prediction.PredictedStep",
+      "target": "celltrack.analysis.drift_field.DriftField",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.trajectory_prediction.PredictedStep",
+      "target": "celltrack.analysis.localisation.CandidatePairs",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.trajectory_prediction.PredictedStep",
+      "target": "celltrack.analysis.trajectory_prediction.TrajectoryDiagnosis",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.trajectory_prediction.PredictedStep.of",
+      "target": "core.data.tracks.Adjacency.of",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.analysis.trajectory_prediction.TrajectoryDiagnosis",
+      "target": "celltrack.analysis.drift_field.DriftField",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.trajectory_prediction.TrajectoryDiagnosis",
+      "target": "celltrack.analysis.trajectory_prediction.PredictedStep",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.analysis.trajectory_prediction.TrajectoryDiagnosis",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.analysis.trajectory_prediction.TrajectoryDiagnosis",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.analysis.trajectory_prediction.TrajectoryDiagnosis",
+      "target": "core.metrics.matching.NodeMatching",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.trajectory_prediction.TrajectoryDiagnosis",
+      "target": "core.paths.DataRoot",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.trajectory_prediction.TrajectoryDiagnosis._log",
+      "target": "celltrack.analysis.trajectory_prediction.PredictedStep.count",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.trajectory_prediction.TrajectoryDiagnosis._log",
+      "target": "celltrack.analysis.trajectory_prediction.PredictedStep.prefers_true",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.trajectory_prediction.TrajectoryDiagnosis._log",
+      "target": "celltrack.analysis.trajectory_prediction.PredictedStep.rescued",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.trajectory_prediction.TrajectoryDiagnosis._of",
+      "target": "celltrack.analysis.drift_field.DisplacementVotes.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.trajectory_prediction.TrajectoryDiagnosis._of",
+      "target": "celltrack.analysis.drift_field.DriftDiagnosis._linked",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.trajectory_prediction.TrajectoryDiagnosis._of",
+      "target": "celltrack.analysis.drift_field.DriftField.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.trajectory_prediction.TrajectoryDiagnosis._of",
+      "target": "celltrack.analysis.drift_field.FieldSettings.over",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.trajectory_prediction.TrajectoryDiagnosis._report",
+      "target": "celltrack.analysis.localisation.CandidatePairs.correct",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.trajectory_prediction.TrajectoryDiagnosis._report",
+      "target": "celltrack.analysis.localisation.CandidatePairs.mislinked",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.trajectory_prediction.TrajectoryDiagnosis._report",
+      "target": "celltrack.analysis.trajectory_prediction.PredictedStep.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.trajectory_prediction.TrajectoryDiagnosis._report",
+      "target": "celltrack.analysis.trajectory_prediction.TrajectoryDiagnosis._log",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.trajectory_prediction.TrajectoryDiagnosis._report",
+      "target": "celltrack.operating_point.TrackerConfig.shipped",
       "weight": 1
     },
     {
@@ -12783,7 +12963,7 @@
   ],
   "nodes": [
     {
-      "descendants": 99,
+      "descendants": 100,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -12799,7 +12979,7 @@
       "role": null
     },
     {
-      "descendants": 9,
+      "descendants": 10,
       "id": "celltrack.analysis",
       "label": "analysis",
       "level": "module",
@@ -12874,6 +13054,14 @@
       "descendants": 0,
       "id": "celltrack.analysis.softmax_population",
       "label": "softmax_population",
+      "level": "module",
+      "parent": "celltrack.analysis",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.trajectory_prediction",
+      "label": "trajectory_prediction",
       "level": "module",
       "parent": "celltrack.analysis",
       "role": null
@@ -14212,6 +14400,22 @@
       "label": "SoftmaxPopulation",
       "level": "class",
       "parent": "celltrack.analysis.softmax_population",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.trajectory_prediction.PredictedStep",
+      "label": "PredictedStep",
+      "level": "class",
+      "parent": "celltrack.analysis.trajectory_prediction",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.trajectory_prediction.TrajectoryDiagnosis",
+      "label": "TrajectoryDiagnosis",
+      "level": "class",
+      "parent": "celltrack.analysis.trajectory_prediction",
       "role": "satellite"
     },
     {
@@ -17596,6 +17800,94 @@
       "label": "report",
       "level": "method",
       "parent": "celltrack.analysis.softmax_population.SoftmaxPopulation",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.trajectory_prediction.PredictedStep._cosine",
+      "label": "_cosine",
+      "level": "method",
+      "parent": "celltrack.analysis.trajectory_prediction.PredictedStep",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.trajectory_prediction.PredictedStep._gap",
+      "label": "_gap",
+      "level": "method",
+      "parent": "celltrack.analysis.trajectory_prediction.PredictedStep",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.trajectory_prediction.PredictedStep._gt_velocity",
+      "label": "_gt_velocity",
+      "level": "method",
+      "parent": "celltrack.analysis.trajectory_prediction.PredictedStep",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.trajectory_prediction.PredictedStep.broken",
+      "label": "broken",
+      "level": "method",
+      "parent": "celltrack.analysis.trajectory_prediction.PredictedStep",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.trajectory_prediction.PredictedStep.count",
+      "label": "count",
+      "level": "method",
+      "parent": "celltrack.analysis.trajectory_prediction.PredictedStep",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.trajectory_prediction.PredictedStep.of",
+      "label": "of",
+      "level": "method",
+      "parent": "celltrack.analysis.trajectory_prediction.PredictedStep",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.trajectory_prediction.PredictedStep.prefers_true",
+      "label": "prefers_true",
+      "level": "method",
+      "parent": "celltrack.analysis.trajectory_prediction.PredictedStep",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.trajectory_prediction.PredictedStep.rescued",
+      "label": "rescued",
+      "level": "method",
+      "parent": "celltrack.analysis.trajectory_prediction.PredictedStep",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.trajectory_prediction.TrajectoryDiagnosis._log",
+      "label": "_log",
+      "level": "method",
+      "parent": "celltrack.analysis.trajectory_prediction.TrajectoryDiagnosis",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.trajectory_prediction.TrajectoryDiagnosis._of",
+      "label": "_of",
+      "level": "method",
+      "parent": "celltrack.analysis.trajectory_prediction.TrajectoryDiagnosis",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.trajectory_prediction.TrajectoryDiagnosis._report",
+      "label": "_report",
+      "level": "method",
+      "parent": "celltrack.analysis.trajectory_prediction.TrajectoryDiagnosis",
       "role": null
     },
     {
