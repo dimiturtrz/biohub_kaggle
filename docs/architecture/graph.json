@@ -10041,6 +10041,12 @@
     {
       "kind": "references",
       "source": "celltrack.postproc.gap_closer.DensityGapBridge",
+      "target": "celltrack.postproc.gap_closer._BridgeGeometry",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.postproc.gap_closer.DensityGapBridge",
       "target": "core.data.tracks.Adjacency",
       "weight": 1
     },
@@ -10132,6 +10138,12 @@
       "kind": "calls",
       "source": "celltrack.postproc.gap_closer.DensityGapBridge._proposals",
       "target": "celltrack.postproc.gap_closer.DensityGapBridge._radii",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.postproc.gap_closer.DensityGapBridge._proposals",
+      "target": "celltrack.postproc.gap_closer._BridgeGeometry",
       "weight": 1
     },
     {
@@ -15522,6 +15534,14 @@
       "descendants": 0,
       "id": "celltrack.postproc.gap_closer._Bridge",
       "label": "_Bridge",
+      "level": "class",
+      "parent": "celltrack.postproc.gap_closer",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.gap_closer._BridgeGeometry",
+      "label": "_BridgeGeometry",
       "level": "class",
       "parent": "celltrack.postproc.gap_closer",
       "role": "satellite"
