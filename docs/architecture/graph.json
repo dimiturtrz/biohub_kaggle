@@ -2432,6 +2432,54 @@
     },
     {
       "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._held_out",
+      "target": "celltrack.analysis.drift_field.AnnotatedResidual.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._held_out",
+      "target": "celltrack.analysis.drift_field.DisplacementVotes.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._held_out",
+      "target": "celltrack.analysis.drift_field.DriftDiagnosis._positions_um",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._held_out",
+      "target": "celltrack.analysis.drift_field.DriftField.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._held_out",
+      "target": "celltrack.analysis.drift_field.FieldSettings.over",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._held_out",
+      "target": "core.data.tracks.TrackGraph.timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._held_out",
+      "target": "core.metrics.matching.DistanceMatcher",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.drift_field.DriftDiagnosis._held_out",
+      "target": "core.metrics.matching.DistanceMatcher.match",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
       "source": "celltrack.analysis.drift_field.DriftDiagnosis._linked",
       "target": "celltrack.eval.dense_diagnosis.DenseDiagnosis.configured",
       "weight": 1
@@ -7593,12 +7641,6 @@
     {
       "kind": "calls",
       "source": "celltrack.linkers.assignment_linking.AssignmentLinker._gated_cost",
-      "target": "celltrack.affinity.EdgeAffinity.probabilities",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.linkers.assignment_linking.AssignmentLinker._gated_cost",
       "target": "celltrack.linkers.admissible_affinity.AdmissibleAffinity.applied",
       "weight": 1
     },
@@ -7606,6 +7648,12 @@
       "kind": "calls",
       "source": "celltrack.linkers.assignment_linking.AssignmentLinker._gated_cost",
       "target": "celltrack.linkers.agreement_gating.AgreementGate.narrow",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.linkers.assignment_linking.AssignmentLinker._gated_cost",
+      "target": "celltrack.linkers.assignment_linking.AssignmentLinker._priced_affinity",
       "weight": 1
     },
     {
@@ -7917,12 +7965,6 @@
     {
       "kind": "calls",
       "source": "celltrack.linkers.flow_linking.FlowLinker._gated_cost",
-      "target": "celltrack.affinity.EdgeAffinity.probabilities",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.linkers.flow_linking.FlowLinker._gated_cost",
       "target": "celltrack.linkers.admissible_affinity.AdmissibleAffinity.applied",
       "weight": 1
     },
@@ -7936,6 +7978,12 @@
       "kind": "calls",
       "source": "celltrack.linkers.flow_linking.FlowLinker._gated_cost",
       "target": "celltrack.linkers.evidence_ramp.EvidenceRamp.applied",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.linkers.flow_linking.FlowLinker._gated_cost",
+      "target": "celltrack.linkers.flow_linking.FlowLinker._priced_affinity",
       "weight": 1
     },
     {
@@ -15652,6 +15700,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.analysis.drift_field.DriftDiagnosis._held_out",
+      "label": "_held_out",
+      "level": "method",
+      "parent": "celltrack.analysis.drift_field.DriftDiagnosis",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.analysis.drift_field.DriftDiagnosis._linked",
       "label": "_linked",
       "level": "method",
@@ -19228,6 +19284,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.linkers.assignment_linking.AssignmentLinker._priced_affinity",
+      "label": "_priced_affinity",
+      "level": "method",
+      "parent": "celltrack.linkers.assignment_linking.AssignmentLinker",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.linkers.assignment_linking.AssignmentLinker.link",
       "label": "link",
       "level": "method",
@@ -19366,6 +19430,14 @@
       "descendants": 0,
       "id": "celltrack.linkers.flow_linking.FlowLinker._network",
       "label": "_network",
+      "level": "method",
+      "parent": "celltrack.linkers.flow_linking.FlowLinker",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.linkers.flow_linking.FlowLinker._priced_affinity",
+      "label": "_priced_affinity",
       "level": "method",
       "parent": "celltrack.linkers.flow_linking.FlowLinker",
       "role": null
