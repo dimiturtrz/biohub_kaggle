@@ -92,6 +92,13 @@ class TrackerConfig:
         return cls(
             linker=LinkerConfig(name="flow", gate_um=10.0, affinity_bonus=20.0, disappearance_cost=3.0),
             bidirectional_edges=True,
+            # Divisions are part of the SUBMITTED recipe (0.899 against the 0.895 base), so the selector runs
+            # them too — the same argument as the linker above, and the reason this method exists. Every field
+            # of `AffinityDivisionConfig` now defaults to the submitted value, so the recipe is the type rather
+            # than a list of literals: symmetry ranking, both probability floors off, both gates derived from
+            # the linker's own, and the budget derived from the measured division rate (a leaderboard-confirmed
+            # removal — caps of ~1072, ~400 and the derived ~157 forks all scored 0.899).
+            division=AffinityDivisionConfig(),
         )
 
     def __post_init__(self) -> None:

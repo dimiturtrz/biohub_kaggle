@@ -36,7 +36,15 @@ def test_shipped():
     assert shipped.bidirectional_edges is True  # +0.004 on the LB under a global consumer, -0.0027 under a local one
     assert (shipped.linker.gate_um, shipped.linker.affinity_bonus) == (10.0, 20.0)
     assert (shipped.min_track_length, shipped.smooth_strength) == (6, 0.8)  # both LB-arbitrated, not proxy
-    assert shipped.division is None  # divisions stay opt-in: the proxy cannot arbitrate that axis
+    # Divisions are IN the submitted recipe (0.899 vs the 0.895 base) and the proxy cannot arbitrate the axis,
+    # so the pin is the leaderboard's: symmetry ranking, no probability floors, and both the gates and the fork
+    # budget DERIVED rather than set. Every one of these is a field default, so the recipe is the type itself.
+    division = shipped.division
+    assert division is not None
+    assert division.ranking == "symmetry"  # beat probability and the frontier's geometry at identical gates
+    assert (division.min_second_prob, division.min_kept_prob) == (0.0, 0.0)  # the floor excluded the true case
+    assert (division.parent_gate_um, division.sister_gate_um) == (None, None)  # derived from the linker's gate
+    assert division.max_added_forks is None  # ~1072, ~400 and the derived ~157 forks all scored 0.899
 
 
 def test_no_measuring_module_constructs_a_bare_operating_point():

@@ -435,7 +435,12 @@ class AffinityDivisionConfig(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    ranking: str = "probability"
+    # LB-ARBITRATED, so it is the default: symmetry-ranked recovery scored 0.899 against the 0.895 base, three
+    # times over (fork budgets of ~1072, ~400 and the derived ~157 all read 0.899). `probability` is measured NOT
+    # to discriminate — the one recoverable division's parent probability sits below more than 1200 false ones —
+    # so leaving it as the default meant every diagnostic that switched divisions on without an override got a
+    # stage measured to find nothing, while the submission got one measured to pay.
+    ranking: str = "symmetry"
     # OFF. A probability floor is a SECOND bound on speculation, and the budget is already the first — derived
     # from the measured division rate, so it admits exactly as many forks as there are divisions to find. The
     # one measurement we have of the floor is that it EXCLUDED the true case: at 0.5 the one recoverable
@@ -454,7 +459,12 @@ class AffinityDivisionConfig(BaseModel):
     sister_gate_um: float | None = None
     # The frontier disqualifies a parent whose existing link is already long (7.65um) before looking at any
     # candidate; infinity is that gate OFF, which is what this stage has always run.
-    existing_child_gate_um: float = math.inf
+    # None is the gate OFF, which is what this stage has always run. It used to say that with `math.inf`, and
+    # that sentinel could not survive the run's own provenance: pydantic serialises infinity to JSON `null`, so
+    # a config carrying it dumped and failed to read back (`float` rejects None) — invisible until
+    # `TrackerConfig.shipped()` began carrying a division block and the round-trip test finally saw one.
+    # A sentinel the serialisation format cannot express is not a default, it is a latent bug.
+    existing_child_gate_um: float | None = None
     # The frontier's sister weight, read from seven byte-identical forks at public 0.915. Only `geometry` reads it.
     sister_weight: float = 0.15
     # An absolute ceiling beside the fraction (`budget` takes the smaller). Larger than any video's edge count,
@@ -478,6 +488,10 @@ class AffinityDivisionConfig(BaseModel):
             self.sister_gate_um if self.sister_gate_um is not None else _SISTERS_PER_PARENT * self.parent_gate(gate_um)
         )
 
+    def existing_child_gate(self) -> float:
+        """The mother's-own-link gate — unbounded unless one is set, the gate this stage has always run without."""
+        return self.existing_child_gate_um if self.existing_child_gate_um is not None else math.inf
+
     def build(
         self, spacing: Spacing, affinity: EdgeAffinity, min_track_length: int, gate_um: float
     ) -> AffinityDivisionRecovery:
@@ -497,7 +511,7 @@ class AffinityDivisionConfig(BaseModel):
             min_second_prob=self.min_second_prob,
             parent_gate_um=self.parent_gate(gate_um),
             sister_gate_um=self.sister_gate(gate_um),
-            existing_child_gate_um=self.existing_child_gate_um,
+            existing_child_gate_um=self.existing_child_gate(),
             max_added_forks=self.max_added_forks,
             min_kept_prob=self.min_kept_prob,
         )

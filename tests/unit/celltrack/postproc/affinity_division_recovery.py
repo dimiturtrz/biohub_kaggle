@@ -97,6 +97,20 @@ def test_sister_gate():
     assert AffinityDivisionConfig(sister_gate_um=7.2).sister_gate(10.0) == 7.2
 
 
+def test_existing_child_gate():
+    """Unset, the mother's-own-link gate is unbounded — and says so with None, which JSON can carry.
+
+    It used to say it with `math.inf`. Pydantic serialises infinity to JSON `null`, so a config holding it
+    dumped and then failed to validate back (`float` rejects None) — a latent break in the run's provenance
+    that stayed invisible while no shipped config carried a division block.
+    """
+    assert AffinityDivisionConfig().existing_child_gate() == math.inf
+    assert AffinityDivisionConfig(existing_child_gate_um=7.8).existing_child_gate() == 7.8
+
+    config = AffinityDivisionConfig()
+    assert AffinityDivisionConfig.model_validate_json(config.model_dump_json()) == config
+
+
 def test_transform():
     """The parent's top target is its kept child and its second is an unparented cell — a fork is proposed."""
     forked = recovery(_KEPT_TOP).transform(graph(_MITOSIS, [[0, 1]]))

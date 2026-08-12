@@ -16,7 +16,6 @@ import glob
 import logging
 import os
 import sys
-from dataclasses import replace
 from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -41,7 +40,6 @@ sys.path.insert(0, str(pack_source()))
 
 from celltrack.multi_gpu_submission import MultiGpuSubmission  # noqa: E402
 from celltrack.operating_point import TrackerConfig  # noqa: E402
-from celltrack.postproc.affinity_division_recovery import AffinityDivisionConfig  # noqa: E402
 
 # THE DIVISION TERM, CONTESTED FOR THE FIRST TIME. score = adjusted_edge_jaccard + 0.1 * division_jaccard and
 # we have banked exactly zero of the second term all campaign — the flow solver's capacity-1 node split emits no
@@ -78,20 +76,18 @@ from celltrack.postproc.affinity_division_recovery import AffinityDivisionConfig
 # byte-identical to the hand-set 7.0 / 14.0 this replaces — same score, same fork counts, while the PROPOSAL
 # counts doubled, which is what shows the gate arrived rather than the knob being dead.
 #
-# THE BUDGET STAYS AT THE MEASURED-GOOD CAP, and that is a correction. Caps of 300 and 100 — 1072 and ~400
-# forks — both scored 0.899, which I read as "the budget is flat, so the cap is removable". It is flat over
-# the range the
-# LEADERBOARD tested and the derived rate sits BELOW it: at 157 forks the proxy recovers no division at all
-# (div_jac 0.0000 against 0.0294 at cap 300). So this ships the budget that is known to pay and removes only
-# the numbers that are known to cost nothing.
-_DIVISION = AffinityDivisionConfig(
-    ranking="symmetry",
-    max_added_forks=100,
-)
-# The base is MOUNTED, not restated: `TrackerConfig.shipped()` is the leaderboard-arbitrated 0.895 recipe
-# (thr 0.97, flow linker gate 10 / bonus 20 / boundary 3, bidirectional fusion, min6, smooth 0.8), and it lives
-# in the library so the selector and the submission cannot drift apart. This kernel adds exactly one variable.
-_CONFIG = replace(TrackerConfig.shipped(), division=_DIVISION)
+# THE BUDGET IS DERIVED, and the leaderboard closed the question rather than an argument doing it. Caps of 300
+# and 100 (~1072 and ~400 forks) both scored 0.899, and I first read that as "the budget is flat, so the cap is
+# removable" — an over-claim, because it was flat only over the range the LEADERBOARD had tested, while the
+# derived rate sits BELOW it at ~157 forks. I then predicted the derived budget would forfeit the division term,
+# because the proxy reads div_jac 0.0000 there. BOTH readings were wrong: the derived budget scored 0.899 too,
+# and cap 100 ALSO reads div_jac 0.0000 while scoring 0.899. So a proxy div_jac of zero says nothing about
+# whether the term pays, and the last division number is gone.
+#
+# NOTHING ABOUT DIVISIONS IS RESTATED HERE ANY MORE. Every field above is now the DEFAULT of
+# `AffinityDivisionConfig`, and `TrackerConfig.shipped()` carries the stage — so the recipe is the type, the
+# selector runs what the submission runs, and this file names no division literal at all.
+_CONFIG = TrackerConfig.shipped()
 _SUBMISSION = Path("/kaggle/working/submission.csv")
 
 
