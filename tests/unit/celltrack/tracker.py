@@ -274,7 +274,7 @@ def test_run_reuses_the_bidirectional_affinity_for_the_gate(monkeypatch: pytest.
 
 def test_fused_affinities(monkeypatch: pytest.MonkeyPatch):
     """The fusion rule, called directly: off when nothing reads it, the mounted affinity under `bidirectional_edges`,
-    and a second reversed pass otherwise. It is public because `celltrack.eval.ranker_distribution` reconstructs
+    and a second reversed pass otherwise. It is public because `celltrack.analysis.ranker_distribution` reconstructs
     the tracker's first linking pass and must resolve the fused affinity by exactly this rule, not a copy of it."""
     forward = _FusedAffinity()
 

@@ -349,6 +349,64 @@ class RivalDistanceGap:
 
 
 @dataclass(frozen=True)
+class AnnotatedStepByFate:
+    """How far the ANNOTATION says each edge's cell travelled, cut by whether we reproduced that edge.
+
+    THE ARBITER between two readings of the elevated endpoint error. The mislinked edges are described as fast
+    movers, but that description is taken from DETECTED positions — and if both endpoints are mislocalised by
+    ~3.5 um in uncorrelated directions, the step between them inherits about sqrt(2) times that, which is the
+    same size as the displacement being called fast. The apparent motion could therefore be manufactured by our
+    own read-out rather than observed.
+
+    This measures the step between ANNOTATED centres, which no detection touches. If the mislinked edges are
+    long here too, the cells genuinely move fast and the endpoint error is a separate problem riding along. If
+    they are ordinary here while long in the detections, the fast mover is our artefact, and the association
+    failure is a localisation failure wearing a motion costume.
+    """
+
+    mislinked_um: Float[np.ndarray, "m"]
+    correct_um: Float[np.ndarray, "c"]
+
+    @classmethod
+    def of(cls, truth: TrackGraph, prediction: TrackGraph, matching: NodeMatching, spacing: Spacing) -> Self:
+        """Annotated per-edge displacement, split by the fate the tracker gave that edge."""
+        fates = DenseFateDiagnosis.of(prediction, truth, matching).fates
+        steps = truth.link_displacements(spacing)
+        mislinked = (fates == Fate.MISLINK_CONFLICT) | (fates == Fate.MISLINK_FREE)
+        return cls(mislinked_um=steps[mislinked], correct_um=steps[fates == Fate.CORRECT])
+
+
+@dataclass(frozen=True)
+class EndpointSides:
+    """A candidate triple's localisation error split by WHICH END it sits on — the confound separator.
+
+    The mislinked edges' endpoints carry about twice the population's localisation error, and that aggregate
+    admits two very different readings. If the error is on the SOURCE, the head is issued a bad query. If it is
+    on the TRUE TARGET, the head is asked to score a detection that is not sitting on the successor it is
+    supposed to represent — in which case a low `P_true` is a mechanical consequence of where the feature was
+    read, not evidence that the features cannot separate the two cells. Those imply different work, and the
+    pooled number cannot tell them apart.
+
+    THE RIVAL IS NOT MEASURABLE HERE and its absence is the point. Every mislink's chosen partner is an
+    UNANNOTATED detection, so there is no annotated centre to subtract and the rival column is expected to come
+    back empty. It is reported rather than dropped, because a non-empty rival column would mean the wrong
+    partner was an annotated cell after all — contradicting the standing finding, and worth seeing loudly.
+
+    The control is the same split over the REPRODUCED edges. Endpoint error that is elevated on both classes is
+    a property of the tissue; error elevated only on the mislinks implicates the failure.
+    """
+
+    source: OffsetSummary
+    true_target: OffsetSummary
+    rival: OffsetSummary
+
+    @classmethod
+    def of(cls, offsets: LocalisationOffsets, pairs: CandidatePairs) -> Self:
+        """Summarise the offsets of each side of the triple, taking each side's rows on its own."""
+        return cls(*(offsets.select(rows).summary() for rows in (pairs.source, pairs.true_target, pairs.rival)))
+
+
+@dataclass(frozen=True)
 class LocalisationDiagnosis:
     """Running one movie under a chosen operating point and logging every cut of its localisation error.
 
@@ -390,6 +448,7 @@ class LocalisationDiagnosis:
         logger.info("annotated step: median=%.3f um over %d links", float(np.median(steps)), len(steps))
         logger.info("mislinked annotated edges=%d  distinct endpoints=%d", endpoints.edge_count, len(endpoints.rows))
         logger.info("crowded (>1 detection within 7 um of the annotated cell) = %d nodes", len(crowded.rows))
+        self._annotated_steps(AnnotatedStepByFate.of(self.truth, self.prediction, self.matching, self.spacing))
         for label, cut in (
             ("all matched", offsets),
             ("crowded control", offsets.select(crowded.rows)),
@@ -414,6 +473,37 @@ class LocalisationDiagnosis:
         ):
             self._collisions(label, DeltaCollisions.of(self.prediction, pairs, self.downsample))
             self._gaps(label, RivalDistanceGap.of(self.prediction, pairs, self.spacing), noise_um)
+            self._sides(label, EndpointSides.of(offsets, pairs))
+
+    @staticmethod
+    def _annotated_steps(steps: AnnotatedStepByFate) -> None:
+        """Log the ANNOTATED step length for mislinked against reproduced edges — motion, with no detection in it."""
+        for label, values in (("mislinked", steps.mislinked_um), ("correct", steps.correct_um)):
+            if not len(values):
+                logger.info("annotated step (%s): n=0", label)
+                continue
+            quartiles = np.percentile(values, [_LOWER_QUARTILE, _MEDIAN, _UPPER_QUARTILE])
+            logger.info(
+                "annotated step (%-9s) n=%4d  median=%.3f um  IQR=[%.3f, %.3f]  max=%.3f",
+                label,
+                len(values),
+                quartiles[1],
+                quartiles[0],
+                quartiles[2],
+                float(values.max()),
+            )
+
+    def _sides(self, label: str, sides: EndpointSides) -> None:
+        """Log the triple's localisation error by side — where an elevated endpoint error actually sits."""
+        for side, summary in (("source", sides.source), ("true target", sides.true_target), ("rival", sides.rival)):
+            logger.info(
+                "  %-20s %-12s n=%4d  median=%.3f um  per-axis |z,y,x|=%s",
+                label,
+                side,
+                summary.count,
+                summary.median_um,
+                "/".join(f"{value:.3f}" for value in summary.axis_median_abs_um),
+            )
 
     @staticmethod
     def _gaps(label: str, gaps: RivalDistanceGap, noise_um: float) -> None:

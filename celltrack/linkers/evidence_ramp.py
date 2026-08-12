@@ -1,7 +1,7 @@
 """A distance-dependent WEIGHT on the learned-evidence term: the same bonus, spent where the evidence is needed.
 
 `cost = distance - affinity_bonus * P` weighs the head's probability by ONE scalar at every separation. Measured
-(`celltrack.eval.shortcut_diagnosis`, dense movie, real detections) the two halves of that cost do not decay
+(`celltrack.analysis.shortcut_diagnosis`, dense movie, real detections) the two halves of that cost do not decay
 together: over in-gate judged pairs the learned probability separates the true successor at every band it can be
 judged in (AUC 0.972 at 4-7um, 0.950 at 7-10um, 0.970 pooled over 5-10um) while proximity collapses with range
 (0.706, 0.642, 0.823). The head's value RELATIVE to distance therefore RISES with distance — and a constant bonus

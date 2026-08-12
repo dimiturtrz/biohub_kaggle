@@ -1,9 +1,12 @@
 import numpy as np
+import pytest
 
-from celltrack.eval.localisation import (
+from celltrack.analysis.localisation import (
+    AnnotatedStepByFate,
     CandidatePairs,
     CrowdedNodes,
     DeltaCollisions,
+    EndpointSides,
     LocalisationOffsets,
     MatchingInverse,
     MislinkEndpoints,
@@ -233,3 +236,41 @@ def test_mislink_endpoints_of_a_reproduced_edge_is_empty() -> None:
     matching = NodeMatching(gt_rows=np.array([0, 1], dtype=np.int64))
 
     assert MislinkEndpoints.of(prediction, truth, matching).rows.tolist() == []
+
+
+def test_endpoint_sides_of() -> None:
+    """The triple's offsets are reported per side, and an unannotated rival comes back as an EMPTY summary.
+
+    The empty rival column is the point rather than an omission: every real mislink's chosen partner is an
+    unannotated detection, so there is no annotated centre to subtract. A non-empty rival column would mean the
+    wrong partner was an annotated cell after all, which contradicts the standing measurement.
+    """
+    offsets = LocalisationOffsets(
+        prediction_rows=np.array([0, 1], dtype=np.int64),
+        offsets=np.array([[0.0, 0.0, 1.0], [0.0, 0.0, 3.0]]),
+    )
+
+    sides = EndpointSides.of(offsets, _pairs(true_target=1, rival=2))
+
+    assert (sides.source.count, sides.source.median_um) == (1, 1.0)
+    assert (sides.true_target.count, sides.true_target.median_um) == (1, 3.0)
+    assert sides.rival.count == 0
+    assert np.isnan(sides.rival.median_um)
+
+
+def test_annotated_step_by_fate_of() -> None:
+    """The step between ANNOTATED centres, split by fate — the quantity no detection touches.
+
+    This is the arbiter for whether a mislinked edge's cell really travelled far, or whether the apparent
+    distance was manufactured by two mislocalised endpoints. Measuring it off the annotation is what makes it
+    independent of the read-out, so the fixture puts the annotated source and target 40 voxels apart while the
+    tracker links elsewhere.
+    """
+    truth = _graph([[0, 0, 0, 0], [1, 0, 0, 40], [1, 0, 0, 4], [0, 0, 80, 0], [1, 0, 80, 4]], [[0, 1], [3, 4]])
+    prediction = _graph([[0, 0, 0, 0], [1, 0, 0, 40], [1, 0, 0, 4], [0, 0, 80, 0], [1, 0, 80, 4]], [[0, 2], [3, 4]])
+    matching = NodeMatching(gt_rows=np.array([0, 1, 2, 3, 4], dtype=np.int64))
+
+    steps = AnnotatedStepByFate.of(truth, prediction, matching, _SPACING)
+
+    assert steps.mislinked_um == pytest.approx([40 * 0.40625])
+    assert steps.correct_um == pytest.approx([4 * 0.40625])

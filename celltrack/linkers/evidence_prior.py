@@ -6,7 +6,7 @@ normalised over EVERY source in the frame, while the gate admits a handful, so t
 probability mass that lands on ADMISSIBLE parents is exactly the head saying "one of these is the parent" —
 and a column holding almost none of it is the head saying "none of these is", which is what an appearance is.
 
-MEASURED on the dense movie (`celltrack.eval.softmax_population`, 69164 target columns): the in-gate share is
+MEASURED on the dense movie (`celltrack.analysis.softmax_population`, 69164 target columns): the in-gate share is
 mean 0.7796, median 0.9174, p25 0.7289, p5 0.0861. So the signal is real and strongly skewed — most targets
 have a confident admissible parent and a twentieth have essentially none.
 

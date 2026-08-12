@@ -204,7 +204,7 @@ class CellTracker:
         """The bidirectionally fused probabilities the linker's agreement knobs read — `None` when unused.
 
         Public because a diagnosis that reconstructs the tracker's own first linking pass
-        (`celltrack.eval.ranker_distribution`) must resolve the fused affinity by exactly this rule; a second
+        (`celltrack.analysis.ranker_distribution`) must resolve the fused affinity by exactly this rule; a second
         copy of it would let the reconstruction silently link under a different cost than the tracker does.
 
         Scored only when a knob consumes it (`LinkerConfig.needs_mutual`: the admission floor, the cost's

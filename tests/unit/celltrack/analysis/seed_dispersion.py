@@ -11,10 +11,7 @@ from typing import cast
 import numpy as np
 import pytest
 
-from celltrack.edges.blended_edge_scoring import GapSeedScores
-from celltrack.eval.dense_diagnosis import DenseDiagnosis
-from celltrack.eval.proxy import TestMovieProxy
-from celltrack.eval.seed_dispersion import (
+from celltrack.analysis.seed_dispersion import (
     DispersionSample,
     PairScores,
     Quartiles,
@@ -23,6 +20,9 @@ from celltrack.eval.seed_dispersion import (
     SeedScoreIndex,
     Separation,
 )
+from celltrack.edges.blended_edge_scoring import GapSeedScores
+from celltrack.eval.dense_diagnosis import DenseDiagnosis
+from celltrack.eval.proxy import TestMovieProxy
 from celltrack.operating_point import TrackerConfig
 from celltrack.tracker import CellTracker, TrackedVideo
 from core.data.tracks import AnnotatedTracks, TrackGraph

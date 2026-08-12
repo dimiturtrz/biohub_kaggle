@@ -86,7 +86,7 @@ _CHANCE_AUC = 0.5
 class BaseRateGuard:
     """The refusal rule every separability number in this repo sits behind — one home, so it cannot drift.
 
-    Public, and imported by sibling diagnoses (`celltrack.eval.seed_dispersion`), because the rule is not
+    Public, and imported by sibling diagnoses (`celltrack.analysis.seed_dispersion`), because the rule is not
     about candidate pairs specifically: ANY ranking read on a population that is nearly all-positive or
     nearly all-negative measures how the population was built rather than what the model knows, and this
     project has been burned by exactly that more than once (see the module docstring for the two cases). The

@@ -3,7 +3,7 @@ from typing import cast
 
 import numpy as np
 
-from celltrack.eval.mitotic_appearance import (
+from celltrack.analysis.mitotic_appearance import (
     FEATURE_NAMES,
     AppearanceFeatures,
     DivisionCandidates,

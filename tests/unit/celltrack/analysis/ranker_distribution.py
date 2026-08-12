@@ -6,8 +6,7 @@ import numpy as np
 import pytest
 
 from celltrack.affinity import EdgeAffinity
-from celltrack.edges.association_ranker import AssociationContext, AssociationRanker, _RankerMLP
-from celltrack.eval.ranker_distribution import (
+from celltrack.analysis.ranker_distribution import (
     DriftReport,
     FeatureDrift,
     FeaturePopulation,
@@ -15,6 +14,7 @@ from celltrack.eval.ranker_distribution import (
     RankerOutput,
     ScoredMovie,
 )
+from celltrack.edges.association_ranker import AssociationContext, AssociationRanker, _RankerMLP
 from celltrack.linkers.linkers import LinkerConfig
 from core.data.tracks import TrackGraph
 from core.data.video import CellVideo

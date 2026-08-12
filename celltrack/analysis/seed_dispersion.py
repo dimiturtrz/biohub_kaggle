@@ -20,7 +20,7 @@ carries a CONTROL (`Separation.auc_softmax_headroom`), because it is not indepen
 it sits at and the three populations here sit at very different levels by construction.
 
 The decisive number is the rank AUC of dispersion separating mislinked pairs from correct ones, and it sits
-behind `celltrack.eval.shortcut_diagnosis.BaseRateGuard`, the shared refusal that keeps a separability figure
+behind `celltrack.analysis.shortcut_diagnosis.BaseRateGuard`, the shared refusal that keeps a separability figure
 off a degenerate population — this project has been burned by that twice already, and the mislink class here
 is small (order 3% of the annotated edges) precisely because the tracker is mostly right.
 
@@ -44,11 +44,11 @@ import numpy as np
 from jaxtyping import Float, Int
 
 from celltrack.affinity import EdgeAffinity
+from celltrack.analysis.shortcut_diagnosis import BaseRateGuard
 from celltrack.edges.blended_edge_scoring import GapSeedScores
 from celltrack.eval.dense_diagnosis import DENSE_MOVIE, DenseDiagnosis, DenseFateDiagnosis, Fate, GapSlots
 from celltrack.eval.proxy import TestMovieProxy
 from celltrack.eval.proxy_eval import ConfigOverride
-from celltrack.eval.shortcut_diagnosis import BaseRateGuard
 from celltrack.operating_point import TrackerConfig
 from core.data.tracks import Adjacency, TrackGraph
 from core.metrics.edge_auc import EdgeAUC

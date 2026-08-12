@@ -80,7 +80,7 @@ class DenseFateDiagnosis:
         inverse is well defined and lets a ground-truth edge be looked up as the detections standing in for it.
 
         Public because every per-edge diagnosis needs exactly this lookup to reach a truth edge's endpoints
-        through the prediction (`MislinkSignal` here, `celltrack.eval.seed_dispersion` next door), and a second
+        through the prediction (`MislinkSignal` here, `celltrack.analysis.seed_dispersion` next door), and a second
         copy of the inversion is a second chance to invert it differently.
         """
         predicted_of_truth = np.full(truth_count, UNMATCHED, dtype=np.int64)
@@ -327,7 +327,7 @@ class GapSlots:
     was never scored (a bridge's invented midpoint) is reported absent rather than guessed at.
 
     Its own type, and public, because more than one per-gap quantity is indexed this way — the blended
-    probabilities (`AffinityIndex`) and the per-seed scores (`celltrack.eval.seed_dispersion`) — and the row
+    probabilities (`AffinityIndex`) and the per-seed scores (`celltrack.analysis.seed_dispersion`) — and the row
     space is exactly the thing that must not be re-derived twice with one of them subtly off.
     """
 

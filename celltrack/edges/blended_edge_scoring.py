@@ -74,7 +74,7 @@ class GapSeedScores:
     The blend keeps only the weighted MEAN of the seeds' logits; the DISPERSION between them — the one
     quantity an ensemble has that a single model cannot — is destroyed by the weighted sum before any
     consumer sees it. This carries both halves out intact so a diagnosis can ask whether that dispersion
-    knows anything (`celltrack.eval.seed_dispersion`).
+    knows anything (`celltrack.analysis.seed_dispersion`).
 
     `logits` are raw: pre-alignment and pre-weighting, the same convention `seed_logit_moments` reports in,
     because a scale difference between the seeds is part of what a dispersion read has to account for rather

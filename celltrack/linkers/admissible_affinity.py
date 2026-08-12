@@ -6,7 +6,7 @@ gate. So the probability priced into `cost = distance - affinity_bonus * P` is n
 the assignment does not have: it answers "which of the 700 cells in the previous frame is this one's parent"
 when the question the solver asks is "which of the four admissible ones".
 
-MEASURED (`celltrack.eval.softmax_population`, dense movie, 69164 target columns, shipped operating point):
+MEASURED (`celltrack.analysis.softmax_population`, dense movie, 69164 target columns, shipped operating point):
 the in-gate share of each target's mass is mean 0.7796, median 0.9174, p25 0.7289, p5 0.0861. So on average
 22% of the evidence sits on parents the gate excludes, and the leak is wildly uneven — a fifth of targets lose
 more than a quarter of their mass and the worst twentieth lose over 90% of it.

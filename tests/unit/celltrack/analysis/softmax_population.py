@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from jaxtyping import Float
 
-from celltrack.eval.softmax_population import SoftmaxPopulation
+from celltrack.analysis.softmax_population import SoftmaxPopulation
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
 

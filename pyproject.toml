@@ -222,11 +222,14 @@ source_modules = ["core"]
 forbidden_modules = ["celltrack"]
 
 [[tool.importlinter.contracts]]
-name = "celltrack layers: models holds the nn.Module defs at the base; detectors/edges/linkers/postproc use them; tracker over those; eval/training on top"
+name = "celltrack layers: models holds the nn.Module defs at the base; detectors/edges/linkers/postproc use them; tracker over those; eval/training/analysis on top"
 type = "layers"
 containers = ["celltrack"]
 layers = [
-    "training",
+    # Independent top consumers: training fits models, analysis explains runs. Neither may import the other
+    # — a diagnostic that a trainer depends on has stopped being a diagnostic, and a trainer reached from a
+    # diagnostic would put fitting in the path of an explanation.
+    "training | analysis",
     "eval",
     "tracker",
     "edges | linkers | postproc",

@@ -6,15 +6,15 @@ from typing import cast
 import numpy as np
 import pytest
 
-from celltrack.eval.dense_diagnosis import DenseDiagnosis
-from celltrack.eval.proxy import TestMovieProxy
-from celltrack.eval.shortcut_diagnosis import (
+from celltrack.analysis.shortcut_diagnosis import (
     BaseRateGuard,
     CandidatePairs,
     MatchedAnnotation,
     ShortcutDiagnosis,
     ShortcutReport,
 )
+from celltrack.eval.dense_diagnosis import DenseDiagnosis
+from celltrack.eval.proxy import TestMovieProxy
 from core.data.tracks import AnnotatedTracks, TrackGraph
 from core.geometry import Spacing
 from core.metrics.matching import UNMATCHED, NodeMatching
