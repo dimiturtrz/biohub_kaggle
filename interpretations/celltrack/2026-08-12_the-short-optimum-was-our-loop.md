@@ -116,6 +116,57 @@ The flattening therefore still has no established cause. What is now excluded: t
 imbalance (this arm), and the loss's *form* (the margin term is invariant to adding a constant to a row, and
 flattening happened under it anyway).
 
+## Three arms, and the selector ranks them backwards
+
+All three share the fixed mechanics (averaged updates, masked detection anchor, one epoch, detected corpus,
+hard-negative margin) and differ only in the link loss. Held out on the untouched test four:
+
+| arm | in-run peak | held out | mislinks | node ratio |
+|---|---|---|---|---|
+| margin only | 0.8531 | **0.9265** | 46 | +0.015 |
+| margin + symmetric axes | 0.8490 | 0.9231 | **44** | +0.041 |
+| margin + balanced reduction | **0.8602** | 0.9045 | 53 | +0.005 |
+
+**The in-run ranking is the exact inverse of the held-out ranking.** The selector's spread (0.011) is larger
+than its repeatability floor, so this is not noise — the four densely-annotated VALIDATION movies genuinely
+disagree with the four TEST movies about which association model is better. Every checkpoint this campaign
+chose on that selector is therefore suspect in the same way, and an arm reported on its in-run peak alone
+should not be believed.
+
+**Symmetric axes improve ASSOCIATION and pay for it in DETECTION.** 44 mislinks is the best association of
+any arm here, and its node ratio nearly triples (+0.041 against +0.015) — the metric charges that, so it
+scores lower despite linking better. Both heads read one trunk, so a link objective that pushes harder on
+association drags detection toward over-firing. That is the same coupling the contrastive term showed, at a
+much smaller magnitude, and it means association and detection cannot be tuned independently here.
+
+Best own-weights remains the margin-only arm at 0.9265, still under the shipped dual-seed 0.9334.
+
+## Can the training data teach association and division at all?
+
+Measured, because the answer differs completely between the two.
+
+**Association: the labels are adequate; we were using the wrong corpus.** The annotated corpus poses 0.99
+in-gate candidates per source and is 1.9% contested — almost no discrimination problem — while inference
+faces 3.80 candidates and is 95.4% contested. Detection-matched pairs (8.3 targets/gap) are what moved
+0.9060 -> 0.9265. The rivals never need labels; they only need to be PRESENT as competitors. What remains
+looks like a representation limit rather than a data limit, since two independently-initialised seeds fail on
+the SAME pairs.
+
+**Division: the labels are insufficient by three orders of magnitude.** Counted over all 199 train videos:
+133318 annotated nodes, **151 division events** (0.113%), per-video median 0, max 5, and **112 of 199 videos
+contain none at all**. No learned mitosis detector is trainable on that. It also explains after the fact why
+the division gain that DID land came from parameter-free geometry — 151 examples can support a geometric
+argument and nothing more.
+
+The synthetic corpus inverts that ratio: 2174 sequences, 4056226 nodes, **165267 division events** (4.07%) —
+1094x more events than the real corpus, labelled by construction. And the reason synthetic FAILED for
+association does not carry over: it failed because the warm-started head already solved synthetic pairs
+(synthetic edge loss 0.004-0.009 against 0.20-0.53 on real), so the synthetic share diluted a budget that had
+better work to do. Dilution needs an existing signal to dilute; for division there is none.
+
+The design that follows, and the asymmetry is the whole point: **151 real divisions is a hopeless training
+set and a perfectly good test set.** Train on synthetic, hold out every real division as the judge.
+
 ## A test that could not have caught any of this
 
 `_trained_bytes` reads the BEST-checkpoint, and `save_best` writes the INIT whenever no window improves — so a
