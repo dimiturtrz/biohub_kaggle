@@ -12,6 +12,7 @@ plus per-GPU execution of the submission in `celltrack.multi_gpu_submission`; th
 the one operating point it tests.
 """
 
+import dataclasses
 import glob
 import logging
 import os
@@ -87,7 +88,19 @@ from celltrack.operating_point import TrackerConfig  # noqa: E402
 # NOTHING ABOUT DIVISIONS IS RESTATED HERE ANY MORE. Every field above is now the DEFAULT of
 # `AffinityDivisionConfig`, and `TrackerConfig.shipped()` carries the stage — so the recipe is the type, the
 # selector runs what the submission runs, and this file names no division literal at all.
-_CONFIG = TrackerConfig.shipped()
+# LEADERBOARD TEST of multi-frame motion-predicted distance (physically correct; proxy-blind). The shipped
+# flow cost prices a candidate by raw distance; this prices it by distance from where the source was HEADING,
+# the velocity averaged over the last 3 gaps (argued from the ~3-frame velocity correlation time). The proxy
+# reads it ~0.0013 below baseline — within noise, and expected, because the 4 proxy movies' only hard cases
+# are the walled dense mislinks (unrescuable) while everything else raw distance already gets right. The value
+# lives in the hidden denser annotations' real fast-movers the sparse proxy cannot contain — the same
+# proxy-blindness that hid the threshold lever. Off by default in `shipped()`; turned on here for the one
+# instrument that can see it. A/B against the 0.899 base (same config, motion off).
+_shipped = TrackerConfig.shipped()
+_CONFIG = dataclasses.replace(
+    _shipped,
+    linker=_shipped.linker.model_copy(update={"motion_distance": True, "motion_history": 3}),
+)
 _SUBMISSION = Path("/kaggle/working/submission.csv")
 
 
