@@ -82,6 +82,12 @@ def main() -> None:
         action="store_true",
         help="blend the checkpoint's edge head with both published packs' heads, at equal weight",
     )
+    parser.add_argument(
+        "--ensemble-detectors",
+        type=int,
+        default=0,
+        help="published DETECTORS blended beside ours (0 = ours alone; 1 = seed2, the independently trained one)",
+    )
     args = parser.parse_args()
 
     root = DataRoot.from_config(args.config)
@@ -96,7 +102,15 @@ def main() -> None:
         config = ConfigOverride.apply(config, assignment)
     evaluator = JointCheckpointEval.mounted(root, stems, model.downsample, args.device, config)
     packs = tuple(root.processed(_DATASET) / pack for pack in _PACKS)
-    result = evaluator.evaluate_ensemble(model, packs) if args.ensemble else evaluator.evaluate_joint(model)
+    # seed2 FIRST when only one published detector is asked for: our detector is a fine-tune of seed1, so
+    # pairing it with seed1 averages a model with its own parent, while seed2 is independently initialised and
+    # is where any ensemble diversity would have to come from.
+    detector_packs = tuple(reversed(packs))[: args.ensemble_detectors]
+    result = (
+        evaluator.evaluate_ensemble(model, packs, detector_packs=detector_packs)
+        if args.ensemble
+        else evaluator.evaluate_joint(model)
+    )
     logger.info(
         "checkpoint=%s movies=%s threshold=%.3f linker=%s boundary=%.1f bidirectional=%s ensemble=%s",
         checkpoint.name,

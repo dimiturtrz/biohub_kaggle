@@ -132,7 +132,11 @@ class ModelEvaluator:
         return self._score(detector, one_seed)
 
     def evaluate_ensemble(
-        self, model: JointModel, packs: tuple[Path, ...], weights: tuple[float, ...] | None = None
+        self,
+        model: JointModel,
+        packs: tuple[Path, ...],
+        weights: tuple[float, ...] | None = None,
+        detector_packs: tuple[Path, ...] = (),
     ) -> EvalResult:
         """Score the model's association head BLENDED with published packs' heads — our weights as an extra seed.
 
@@ -160,9 +164,14 @@ class ModelEvaluator:
             bidirectional=self.config.bidirectional_edges,
             options=self.config.edge_options,
         )
-        return self._score(detector, blended)
+        return self._score(detector, blended, detector_packs)
 
-    def _score(self, detector: TemporalUNetDetector, edge_scorer: BlendedEdgeTransformerScorer) -> EvalResult:
+    def _score(
+        self,
+        detector: TemporalUNetDetector,
+        edge_scorer: BlendedEdgeTransformerScorer,
+        detector_packs: tuple[Path, ...] = (),
+    ) -> EvalResult:
         """One tracker pass per proxy movie, pooled into the split score and the detector's node levers.
 
         Scored with cudnn autotuning OFF, restoring it afterwards. The trainers enable `cudnn.benchmark` —
@@ -176,18 +185,23 @@ class ModelEvaluator:
         autotune = torch.backends.cudnn.benchmark
         torch.backends.cudnn.benchmark = False
         try:
-            return self._scored(detector, edge_scorer)
+            return self._scored(detector, edge_scorer, detector_packs)
         finally:
             torch.backends.cudnn.benchmark = autotune
 
-    def _scored(self, detector: TemporalUNetDetector, edge_scorer: BlendedEdgeTransformerScorer) -> EvalResult:
+    def _scored(
+        self,
+        detector: TemporalUNetDetector,
+        edge_scorer: BlendedEdgeTransformerScorer,
+        detector_packs: tuple[Path, ...] = (),
+    ) -> EvalResult:
         """The scoring pass itself — see `_score` for why it runs with autotuning disabled.
 
         The mislink signal rides this pass for free: `run_scored` hands back the affinity and the detections it
         was aligned to, both already computed for the linker, and the analysis over them is array algebra on the
         CPU. No second forward, no second tracker run — so it runs EVERY window, at every window's own weights.
         """
-        tracker = self._tracker(detector, edge_scorer)
+        tracker = self._tracker(detector, edge_scorer, detector_packs)
         matcher = DistanceMatcher(spacing=self.proxy.spacing)
         metrics: list[VideoMetrics] = []
         nodes: list[NodeCounts] = []
@@ -216,9 +230,26 @@ class ModelEvaluator:
             mislinks=len(signal.p_true),
         )
 
-    def _tracker(self, detector: TemporalUNetDetector, edge_scorer: BlendedEdgeTransformerScorer) -> CellTracker:
-        """Mount the trained detector into the shipped tracker behind the given edge affinity — one assembly."""
+    def _tracker(
+        self,
+        detector: TemporalUNetDetector,
+        edge_scorer: BlendedEdgeTransformerScorer,
+        detector_packs: tuple[Path, ...] = (),
+    ) -> CellTracker:
+        """Mount the trained detector into the shipped tracker behind the given edge affinity — one assembly.
+
+        `detector_packs` add PUBLISHED detectors beside ours, blended in logit space by `BlendDetectorScorer`
+        exactly as the shipped dual-seed submission blends its two. Empty is the single-detector pipeline every
+        number before this was measured under, so it is inert by default.
+        """
+        # `from_pack` hands back the detector AND the recipe it was published with; the recipe is dropped
+        # deliberately, because every member of a blend must be read out on ONE grid — ours — or the logit
+        # volumes would not be voxel-aligned to average.
+        published = tuple(
+            (TemporalUNetDetector.from_pack(pack, map_location=self.device)[0].to(self.device).eval(), store)
+            for pack, store in ((pack, EphemeralResponseStore()) for pack in detector_packs)
+        )
         scorer = BlendDetectorScorer(
-            detectors=((detector, EphemeralResponseStore()),), recipe=self.recipe, device=self.device
+            detectors=((detector, EphemeralResponseStore()), *published), recipe=self.recipe, device=self.device
         )
         return CellTracker(detector=scorer, edge_scorer=edge_scorer, device=self.device, config=self.config)
