@@ -127,11 +127,17 @@ hard-negative margin) and differ only in the link loss. Held out on the untouche
 | margin + symmetric axes | 0.8490 | 0.9231 | **44** | +0.041 |
 | margin + balanced reduction | **0.8602** | 0.9045 | 53 | +0.005 |
 
-**The in-run ranking is the exact inverse of the held-out ranking.** The selector's spread (0.011) is larger
-than its repeatability floor, so this is not noise — the four densely-annotated VALIDATION movies genuinely
-disagree with the four TEST movies about which association model is better. Every checkpoint this campaign
-chose on that selector is therefore suspect in the same way, and an arm reported on its in-run peak alone
-should not be believed.
+**CORRECTED.** An earlier version of this section said the in-run ranking is "the exact inverse" of the
+held-out one. That is wrong: in-run was balanced > margin > symmetric, held out was margin > symmetric >
+balanced, and the exact inverse would have been symmetric > margin > balanced.
+
+What is actually supported is narrower: **the selector ranked FIRST the arm that finished LAST**, by 0.022.
+The other two are separated by 0.0034 held out, which is at the noise floor and orders nothing. With three
+arms at one seed each, a disagreement this size could arise by chance perhaps one time in six, so this is a
+warning rather than a result — enough to distrust an arm reported on its in-run peak alone, not enough to
+claim the validation four systematically disagree with the test four. The mechanism candidate (the two sets
+are annotated at different densities, and the node-count ratio charges over-detection differently) is
+untested.
 
 **Symmetric axes improve ASSOCIATION and pay for it in DETECTION.** 44 mislinks is the best association of
 any arm here, and its node ratio nearly triples (+0.041 against +0.015) — the metric charges that, so it
