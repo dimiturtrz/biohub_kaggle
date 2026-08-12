@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import numpy as np
 
 from celltrack.detectors.center_prior import CenterConfirmer
@@ -179,3 +181,25 @@ def test_reuse_config_build():
     stage = ReuseConfig(gate_um=5.0, radius_um=2.0, max_added_fraction=0.04).build(Spacing(1.0, 1.0, 1.0))
     assert isinstance(stage, GapCloser)
     assert (stage.gate_um, stage.reuse_um, stage.max_added_fraction) == (5.0, 2.0, 0.04)
+
+
+def test_density_gap_bridge_spans_two_missing_frames_only_when_allowed():
+    """A cell missed for TWO frames is bridged with two motion-predicted nodes at max_gap=2, not at max_gap=1.
+
+    A track ends at t1 having moved +4 in x (from t0), then is missed at t2 and t3 and reappears at t4 at x=16
+    — exactly `4 + 3*4` where its velocity predicts. At max_gap=1 the bridge only looks one frame on and finds
+    no start, so nothing is added (byte-identical to the shipped one-frame bridge). At max_gap=2 it predicts
+    across both frames and inserts the two synthetic midpoints at x=8 (t2) and x=12 (t3).
+    """
+    two_frame_gap = graph([[0, 0, 0, 0], [1, 0, 0, 4], [4, 0, 0, 16], [5, 0, 0, 20]], [[0, 1], [2, 3]])
+
+    one = bridger()  # max_gap defaults to 1
+    two = replace(bridger(), max_gap=2)
+
+    assert one.transform(two_frame_gap).edges.tolist() == [[0, 10], [20, 30]]  # unchanged, no bridge
+    bridged = two.transform(two_frame_gap)
+    inserted = bridged.coordinates[len(two_frame_gap.node_ids) :]
+    assert inserted[:, 0].tolist() == [2, 3]  # two synthetic nodes, at the two missing frames
+    assert inserted[:, 3].tolist() == [8, 12]  # motion-predicted x positions
+    edges = bridged.edges.tolist()
+    assert [10, 31] in edges and [32, 20] in edges  # end -> synthetic chain -> start

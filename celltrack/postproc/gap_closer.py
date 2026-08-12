@@ -273,13 +273,31 @@ class GapCloser:
 
 
 @dataclass(frozen=True)
+class _BridgeGeometry:
+    """The per-node geometry a frame's bridge matching reads: positions, incoming velocity, and Voronoi radius.
+
+    Bundled so the matching signature stays small — the three arrays always travel together and are computed
+    once per gap width before the per-frame loop.
+    """
+
+    positions_um: Float[np.ndarray, "n 3"]
+    velocity: Float[np.ndarray, "n 3"]
+    radius: Float[np.ndarray, "n"]
+
+
+@dataclass(frozen=True)
 class _Bridge:
-    """One accepted density-adaptive bridge: the end and start rows and the synthetic t+1 voxel between them."""
+    """One accepted density-adaptive bridge: the end and start rows and the synthetic voxels between them.
+
+    `midpoints_voxel` holds one voxel per missing frame — a single one for a one-frame gap, and the two
+    motion-predicted steps for a two-frame gap. The chain of that many synthetic nodes plus the edges through
+    them is what the metric counts, so a longer gap inserts a longer chain from the same end velocity.
+    """
 
     cost: float
     end: int
     start: int
-    midpoint_voxel: Int[np.ndarray, "3"]
+    midpoints_voxel: Int[np.ndarray, "m 3"]
 
 
 @dataclass(frozen=True)
@@ -301,6 +319,12 @@ class DensityGapBridge:
     spacing: Spacing
     reach_um: float
     max_added_fraction: float
+    # The most consecutive missing frames a bridge spans. 1 recovers a single dropout (byte-identical to the
+    # original); 2 also recovers a cell missed for two frames in a row, inserting two motion-predicted nodes.
+    # A longer gap is a weaker claim — the velocity is extrapolated further and the metric's node-count penalty
+    # charges every inserted node — so the SAME density-adaptive radius gates it, and a wider gap is only ever
+    # taken when the prediction still lands on a single unambiguous start.
+    max_gap: int = 1
 
     def transform(self, graph: TrackGraph) -> TrackGraph:
         """Return the graph with a synthetic node and two edges added for every unambiguous one-frame gap."""
@@ -337,14 +361,16 @@ class DensityGapBridge:
     ) -> list[_Bridge]:
         """A bridge for every end whose motion prediction lands a single start two frames on within its radius."""
         last = int(timepoints.max()) if len(timepoints) else 0
-        ends = np.flatnonzero((adjacency.out_degrees == _UNLINKED) & (timepoints < last - 1))
         starts = np.flatnonzero(adjacency.in_degrees == _UNLINKED)
-        radius = self._radii(ends, positions_um, timepoints)
         proposals: list[_Bridge] = []
-        for timepoint in np.unique(timepoints[ends]) if len(ends) else np.empty(0, dtype=timepoints.dtype):
-            frame_ends = ends[timepoints[ends] == timepoint]
-            frame_starts = starts[timepoints[starts] == timepoint + _GAP_SPAN]
-            proposals.extend(self._match_frame(frame_ends, frame_starts, positions_um, velocity, radius))
+        for missing in range(1, self.max_gap + 1):
+            span = missing + 1
+            ends = np.flatnonzero((adjacency.out_degrees == _UNLINKED) & (timepoints < last - missing))
+            geometry = _BridgeGeometry(positions_um, velocity, self._radii(ends, positions_um, timepoints))
+            for timepoint in np.unique(timepoints[ends]) if len(ends) else np.empty(0, dtype=timepoints.dtype):
+                frame_ends = ends[timepoints[ends] == timepoint]
+                frame_starts = starts[timepoints[starts] == timepoint + span]
+                proposals.extend(self._match_frame(frame_ends, frame_starts, geometry, missing))
         return proposals
 
     def _radii(
@@ -372,51 +398,61 @@ class DensityGapBridge:
         self,
         frame_ends: Int[np.ndarray, "e"],
         frame_starts: Int[np.ndarray, "s"],
-        positions_um: Float[np.ndarray, "n 3"],
-        velocity: Float[np.ndarray, "n 3"],
-        radius: Float[np.ndarray, "n"],
+        geometry: "_BridgeGeometry",
+        missing: int,
     ) -> list[_Bridge]:
-        """Each end whose predicted t+2 position has exactly one start within its radius yields one bridge."""
+        """Each end whose predicted position `missing+1` frames on has exactly one start in radius yields a bridge."""
         if not len(frame_ends) or not len(frame_starts):
             return []
-        predicted = positions_um[frame_ends] + _GAP_SPAN * velocity[frame_ends]
+        positions_um, velocity, radius = geometry.positions_um, geometry.velocity, geometry.radius
+        predicted = positions_um[frame_ends] + (missing + 1) * velocity[frame_ends]
         distances = cdist(predicted, positions_um[frame_starts])
         within = distances <= radius[frame_ends][:, None]
         matched: list[_Bridge] = []
         for row in np.flatnonzero(within.sum(axis=1) == 1):
             column = int(np.flatnonzero(within[row])[0])
             end, start = int(frame_ends[row]), int(frame_starts[column])
-            midpoint = np.rint(self.spacing.to_voxels(positions_um[end] + velocity[end])).astype(np.int64)
-            matched.append(_Bridge(cost=float(distances[row, column]), end=end, start=start, midpoint_voxel=midpoint))
+            steps = positions_um[end] + np.arange(1, missing + 1)[:, None] * velocity[end]
+            midpoints = np.rint(self.spacing.to_voxels(steps)).astype(np.int64)
+            matched.append(_Bridge(cost=float(distances[row, column]), end=end, start=start, midpoints_voxel=midpoints))
         return matched
 
     @staticmethod
     def _accept(proposals: list[_Bridge], cap: int) -> list[_Bridge]:
-        """Greedily take the tightest bridges, one per end and per start, until the added-node cap is spent."""
+        """Greedily take the tightest bridges, one per end and per start, until the added-NODE cap is spent.
+
+        A two-frame bridge inserts two nodes, so the cap counts synthetic nodes rather than bridges — a wider
+        gap draws proportionally more of the allowance, which is what keeps the node-count penalty bounded.
+        """
         used: set[int] = set()
         taken: list[_Bridge] = []
+        inserted = 0
         for bridge in proposals:
-            if len(taken) >= cap or used & {bridge.end, bridge.start}:
+            nodes = len(bridge.midpoints_voxel)
+            if inserted + nodes > cap or used & {bridge.end, bridge.start}:
                 continue
             used |= {bridge.end, bridge.start}
             taken.append(bridge)
+            inserted += nodes
         return taken
 
     def _build(self, graph: TrackGraph, bridges: list[_Bridge]) -> TrackGraph:
-        """The graph with one synthetic t+1 node and two consecutive edges added per accepted bridge."""
+        """The graph with a chain of synthetic nodes and the edges through them added per accepted bridge."""
         next_id = int(graph.node_ids.max()) + 1 if len(graph.node_ids) else 0
         bounds = graph.coordinates[:, 1:].max(axis=0)
         new_ids: list[int] = []
         new_coordinates: list[list[int]] = []
         new_edges: list[list[int]] = []
-        for offset, bridge in enumerate(bridges):
-            middle_id = next_id + offset
-            timepoint = int(graph.timepoints()[bridge.end]) + 1
-            voxel = np.clip(bridge.midpoint_voxel, 0, bounds)
-            new_ids.append(middle_id)
-            new_coordinates.append([timepoint, int(voxel[0]), int(voxel[1]), int(voxel[2])])
-            source, target = int(graph.node_ids[bridge.end]), int(graph.node_ids[bridge.start])
-            new_edges += [[source, middle_id], [middle_id, target]]
+        for bridge in bridges:
+            end_time = int(graph.timepoints()[bridge.end])
+            chain = list(range(next_id, next_id + len(bridge.midpoints_voxel)))
+            next_id += len(chain)
+            for step, (node_id, voxel) in enumerate(zip(chain, bridge.midpoints_voxel, strict=True), start=1):
+                clipped = np.clip(voxel, 0, bounds)
+                new_ids.append(node_id)
+                new_coordinates.append([end_time + step, int(clipped[0]), int(clipped[1]), int(clipped[2])])
+            waypoints = [int(graph.node_ids[bridge.end]), *chain, int(graph.node_ids[bridge.start])]
+            new_edges += [[waypoints[i], waypoints[i + 1]] for i in range(len(waypoints) - 1)]
         node_ids = np.concatenate([graph.node_ids, np.asarray(new_ids, dtype=graph.node_ids.dtype)])
         coordinates = np.concatenate([graph.coordinates, np.asarray(new_coordinates, dtype=graph.coordinates.dtype)])
         edges = np.concatenate([graph.edges, np.asarray(new_edges, dtype=graph.edges.dtype)])
@@ -434,10 +470,16 @@ class BridgeConfig(BaseModel):
 
     reach_um: float = Field(10.0, gt=0)
     max_added_fraction: float = Field(0.05, ge=0)
+    # The most consecutive missing frames a bridge spans. 1 = the shipped one-frame bridge, byte-identical; 2
+    # also recovers a two-frame dropout. The frontier's 0.915 config runs a two-frame gap close; this is that
+    # capability in our density-gated bridge, off until measured.
+    max_gap: int = Field(1, ge=1)
 
     def build(self, spacing: Spacing) -> DensityGapBridge:
         """The bridge stage at this video's spacing."""
-        return DensityGapBridge(spacing=spacing, reach_um=self.reach_um, max_added_fraction=self.max_added_fraction)
+        return DensityGapBridge(
+            spacing=spacing, reach_um=self.reach_um, max_added_fraction=self.max_added_fraction, max_gap=self.max_gap
+        )
 
 
 class ReuseConfig(BaseModel):
