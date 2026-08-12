@@ -2467,9 +2467,45 @@
       "weight": 1
     },
     {
+      "kind": "holds",
+      "source": "celltrack.data.frame_source.PooledFrames",
+      "target": "celltrack.data.normalisation.Normalisation",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.frame_source.PooledFrames.frame",
+      "target": "celltrack.data.frame_source.PooledFrames._quantiles",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.frame_source.PooledFrames.frame",
+      "target": "celltrack.data.normalisation.Normalisation.apply",
+      "weight": 1
+    },
+    {
       "kind": "calls",
       "source": "celltrack.data.frame_source.PooledFrames.store",
       "target": "celltrack.data.frame_source.PooledFrames.directory",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.data.frame_source.ZarrFrames",
+      "target": "celltrack.data.normalisation.Normalisation",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.frame_source.ZarrFrames.frame",
+      "target": "celltrack.data.frame_source.ZarrFrames._quantiles",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.frame_source.ZarrFrames.frame",
+      "target": "celltrack.data.normalisation.Normalisation.apply",
       "weight": 1
     },
     {
@@ -2536,6 +2572,12 @@
       "kind": "calls",
       "source": "celltrack.data.joint_dataset.PairTarget.enumerate",
       "target": "core.data.tracks.TrackGraph.timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.data.normalisation.NormalisationConfig",
+      "target": "celltrack.data.normalisation.Normalisation",
       "weight": 1
     },
     {
@@ -11679,7 +11721,7 @@
   ],
   "nodes": [
     {
-      "descendants": 94,
+      "descendants": 95,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -11695,7 +11737,7 @@
       "role": null
     },
     {
-      "descendants": 10,
+      "descendants": 11,
       "id": "celltrack.data",
       "label": "data",
       "level": "module",
@@ -11746,6 +11788,14 @@
       "descendants": 0,
       "id": "celltrack.data.joint_dataset",
       "label": "joint_dataset",
+      "level": "module",
+      "parent": "celltrack.data",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.normalisation",
+      "label": "normalisation",
       "level": "module",
       "parent": "celltrack.data",
       "role": null
@@ -12684,6 +12734,46 @@
       "label": "PairTarget",
       "level": "class",
       "parent": "celltrack.data.joint_dataset",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.normalisation.GlobalWindow",
+      "label": "GlobalWindow",
+      "level": "class",
+      "parent": "celltrack.data.normalisation",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.normalisation.Normalisation",
+      "label": "Normalisation",
+      "level": "class",
+      "parent": "celltrack.data.normalisation",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.normalisation.NormalisationConfig",
+      "label": "NormalisationConfig",
+      "level": "class",
+      "parent": "celltrack.data.normalisation",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.normalisation.PerSliceWindow",
+      "label": "PerSliceWindow",
+      "level": "class",
+      "parent": "celltrack.data.normalisation",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.normalisation.QuantileWindow",
+      "label": "QuantileWindow",
+      "level": "class",
+      "parent": "celltrack.data.normalisation",
       "role": "satellite"
     },
     {
@@ -14832,6 +14922,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.data.frame_source.PooledFrames._quantiles",
+      "label": "_quantiles",
+      "level": "method",
+      "parent": "celltrack.data.frame_source.PooledFrames",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.data.frame_source.PooledFrames.directory",
       "label": "directory",
       "level": "method",
@@ -14860,6 +14958,14 @@
       "label": "store",
       "level": "method",
       "parent": "celltrack.data.frame_source.PooledFrames",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.frame_source.ZarrFrames._quantiles",
+      "label": "_quantiles",
+      "level": "method",
+      "parent": "celltrack.data.frame_source.ZarrFrames",
       "role": null
     },
     {
@@ -14948,6 +15054,78 @@
       "label": "enumerate",
       "level": "method",
       "parent": "celltrack.data.joint_dataset.PairTarget",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.normalisation.GlobalWindow.__init__",
+      "label": "__init__",
+      "level": "method",
+      "parent": "celltrack.data.normalisation.GlobalWindow",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.normalisation.GlobalWindow.apply",
+      "label": "apply",
+      "level": "method",
+      "parent": "celltrack.data.normalisation.GlobalWindow",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.normalisation.Normalisation.apply",
+      "label": "apply",
+      "level": "method",
+      "parent": "celltrack.data.normalisation.Normalisation",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.normalisation.NormalisationConfig._known",
+      "label": "_known",
+      "level": "method",
+      "parent": "celltrack.data.normalisation.NormalisationConfig",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.normalisation.NormalisationConfig.build",
+      "label": "build",
+      "level": "method",
+      "parent": "celltrack.data.normalisation.NormalisationConfig",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.normalisation.PerSliceWindow.__init__",
+      "label": "__init__",
+      "level": "method",
+      "parent": "celltrack.data.normalisation.PerSliceWindow",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.normalisation.PerSliceWindow.apply",
+      "label": "apply",
+      "level": "method",
+      "parent": "celltrack.data.normalisation.PerSliceWindow",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.normalisation.QuantileWindow.__init__",
+      "label": "__init__",
+      "level": "method",
+      "parent": "celltrack.data.normalisation.QuantileWindow",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.normalisation.QuantileWindow.apply",
+      "label": "apply",
+      "level": "method",
+      "parent": "celltrack.data.normalisation.QuantileWindow",
       "role": null
     },
     {
