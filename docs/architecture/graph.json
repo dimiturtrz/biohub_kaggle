@@ -2,6 +2,60 @@
   "edges": [
     {
       "kind": "import",
+      "source": "celltrack.analysis.appearance_identity",
+      "target": "celltrack.analysis.drift_field",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.analysis.appearance_identity",
+      "target": "celltrack.analysis.localisation",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.analysis.appearance_identity",
+      "target": "celltrack.eval.dense_diagnosis",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.analysis.appearance_identity",
+      "target": "celltrack.operating_point",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.analysis.appearance_identity",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.analysis.appearance_identity",
+      "target": "core.data.video",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.analysis.appearance_identity",
+      "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.analysis.appearance_identity",
+      "target": "core.metrics.matching",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.analysis.appearance_identity",
+      "target": "core.paths",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "celltrack.analysis.drift_field",
       "target": "celltrack.analysis.localisation",
       "weight": 1
@@ -2254,6 +2308,228 @@
       "kind": "import",
       "source": "core.metrics.score",
       "target": "core.metrics.matching",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.appearance_identity.IdentityDiagnosis",
+      "target": "celltrack.analysis.appearance_identity.IdentitySimilarity",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.appearance_identity.IdentityDiagnosis",
+      "target": "celltrack.analysis.appearance_identity.RawBoxes",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.analysis.appearance_identity.IdentityDiagnosis",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.analysis.appearance_identity.IdentityDiagnosis",
+      "target": "core.data.video.CellVideo",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.analysis.appearance_identity.IdentityDiagnosis",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.analysis.appearance_identity.IdentityDiagnosis",
+      "target": "core.metrics.matching.NodeMatching",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.appearance_identity.IdentityDiagnosis",
+      "target": "core.paths.DataRoot",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.appearance_identity.IdentityDiagnosis._boxes",
+      "target": "celltrack.analysis.appearance_identity.RawBoxes.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.appearance_identity.IdentityDiagnosis._log",
+      "target": "celltrack.analysis.appearance_identity.IdentitySimilarity.count",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.appearance_identity.IdentityDiagnosis._log",
+      "target": "celltrack.analysis.appearance_identity.IdentitySimilarity.prefers_true",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.appearance_identity.IdentityDiagnosis._of",
+      "target": "celltrack.analysis.drift_field.DriftDiagnosis._linked",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.appearance_identity.IdentityDiagnosis._of",
+      "target": "core.data.video.CellVideo.from_ome_zarr",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.appearance_identity.IdentityDiagnosis._of",
+      "target": "core.paths.DataRoot.videos",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.appearance_identity.IdentityDiagnosis._report",
+      "target": "celltrack.analysis.appearance_identity.IdentityDiagnosis._boxes",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.appearance_identity.IdentityDiagnosis._report",
+      "target": "celltrack.analysis.appearance_identity.IdentityDiagnosis._log",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.appearance_identity.IdentityDiagnosis._report",
+      "target": "celltrack.analysis.appearance_identity.IdentitySimilarity.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.appearance_identity.IdentityDiagnosis._report",
+      "target": "celltrack.analysis.appearance_identity.InGateRanking.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.appearance_identity.IdentityDiagnosis._report",
+      "target": "celltrack.analysis.appearance_identity.RawBoxes._size",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.appearance_identity.IdentityDiagnosis._report",
+      "target": "celltrack.analysis.appearance_identity.RotationGain.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.appearance_identity.IdentityDiagnosis._report",
+      "target": "celltrack.analysis.localisation.CandidatePairs.correct",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.appearance_identity.IdentityDiagnosis._report",
+      "target": "celltrack.analysis.localisation.CandidatePairs.mislinked",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.appearance_identity.IdentityDiagnosis._report",
+      "target": "celltrack.operating_point.TrackerConfig.shipped",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.appearance_identity.IdentitySimilarity",
+      "target": "celltrack.analysis.appearance_identity.RawBoxes",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.appearance_identity.InGateRanking",
+      "target": "celltrack.analysis.appearance_identity.IdentityDiagnosis",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.appearance_identity.InGateRanking",
+      "target": "celltrack.analysis.localisation.CandidatePairs",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.appearance_identity.InGateRanking._rank",
+      "target": "celltrack.analysis.appearance_identity.IdentityDiagnosis._boxes",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.appearance_identity.InGateRanking._rank",
+      "target": "celltrack.analysis.appearance_identity.IdentitySimilarity.correlate",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.appearance_identity.RawBoxes",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.appearance_identity.RawBoxes",
+      "target": "core.data.video.CellVideo",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.appearance_identity.RawBoxes",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.appearance_identity.RawBoxes._size",
+      "target": "core.geometry.Spacing.as_array",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.appearance_identity.RawBoxes.of",
+      "target": "core.data.tracks.TrackGraph.positions",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.appearance_identity.RawBoxes.of",
+      "target": "core.data.tracks.TrackGraph.timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.appearance_identity.RawBoxes.of",
+      "target": "core.data.video.CellVideo.window",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.appearance_identity.RotationGain",
+      "target": "celltrack.analysis.appearance_identity.RawBoxes",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.appearance_identity.RotationGain.of",
+      "target": "celltrack.analysis.appearance_identity.IdentitySimilarity.correlate",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.appearance_identity.RotationGain.of",
+      "target": "celltrack.analysis.appearance_identity.RawBoxes.select",
       "weight": 1
     },
     {
@@ -12507,7 +12783,7 @@
   ],
   "nodes": [
     {
-      "descendants": 98,
+      "descendants": 99,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -12523,11 +12799,19 @@
       "role": null
     },
     {
-      "descendants": 8,
+      "descendants": 9,
       "id": "celltrack.analysis",
       "label": "analysis",
       "level": "module",
       "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.appearance_identity",
+      "label": "appearance_identity",
+      "level": "module",
+      "parent": "celltrack.analysis",
       "role": null
     },
     {
@@ -13457,6 +13741,46 @@
       "level": "class",
       "parent": "celltrack.affinity",
       "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.appearance_identity.IdentityDiagnosis",
+      "label": "IdentityDiagnosis",
+      "level": "class",
+      "parent": "celltrack.analysis.appearance_identity",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.appearance_identity.IdentitySimilarity",
+      "label": "IdentitySimilarity",
+      "level": "class",
+      "parent": "celltrack.analysis.appearance_identity",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.appearance_identity.InGateRanking",
+      "label": "InGateRanking",
+      "level": "class",
+      "parent": "celltrack.analysis.appearance_identity",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.appearance_identity.RawBoxes",
+      "label": "RawBoxes",
+      "level": "class",
+      "parent": "celltrack.analysis.appearance_identity",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.appearance_identity.RotationGain",
+      "label": "RotationGain",
+      "level": "class",
+      "parent": "celltrack.analysis.appearance_identity",
+      "role": "satellite"
     },
     {
       "descendants": 0,
@@ -15608,6 +15932,182 @@
       "label": "probabilities",
       "level": "method",
       "parent": "celltrack.affinity.EdgeAffinity",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.appearance_identity.IdentityDiagnosis._boxes",
+      "label": "_boxes",
+      "level": "method",
+      "parent": "celltrack.analysis.appearance_identity.IdentityDiagnosis",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.appearance_identity.IdentityDiagnosis._log",
+      "label": "_log",
+      "level": "method",
+      "parent": "celltrack.analysis.appearance_identity.IdentityDiagnosis",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.appearance_identity.IdentityDiagnosis._of",
+      "label": "_of",
+      "level": "method",
+      "parent": "celltrack.analysis.appearance_identity.IdentityDiagnosis",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.appearance_identity.IdentityDiagnosis._report",
+      "label": "_report",
+      "level": "method",
+      "parent": "celltrack.analysis.appearance_identity.IdentityDiagnosis",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.appearance_identity.IdentitySimilarity.correlate",
+      "label": "correlate",
+      "level": "method",
+      "parent": "celltrack.analysis.appearance_identity.IdentitySimilarity",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.appearance_identity.IdentitySimilarity.count",
+      "label": "count",
+      "level": "method",
+      "parent": "celltrack.analysis.appearance_identity.IdentitySimilarity",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.appearance_identity.IdentitySimilarity.of",
+      "label": "of",
+      "level": "method",
+      "parent": "celltrack.analysis.appearance_identity.IdentitySimilarity",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.appearance_identity.IdentitySimilarity.prefers_true",
+      "label": "prefers_true",
+      "level": "method",
+      "parent": "celltrack.analysis.appearance_identity.IdentitySimilarity",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.appearance_identity.InGateRanking._in_gate",
+      "label": "_in_gate",
+      "level": "method",
+      "parent": "celltrack.analysis.appearance_identity.InGateRanking",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.appearance_identity.InGateRanking._rank",
+      "label": "_rank",
+      "level": "method",
+      "parent": "celltrack.analysis.appearance_identity.InGateRanking",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.appearance_identity.InGateRanking.chance",
+      "label": "chance",
+      "level": "method",
+      "parent": "celltrack.analysis.appearance_identity.InGateRanking",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.appearance_identity.InGateRanking.count",
+      "label": "count",
+      "level": "method",
+      "parent": "celltrack.analysis.appearance_identity.InGateRanking",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.appearance_identity.InGateRanking.of",
+      "label": "of",
+      "level": "method",
+      "parent": "celltrack.analysis.appearance_identity.InGateRanking",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.appearance_identity.InGateRanking.top_one",
+      "label": "top_one",
+      "level": "method",
+      "parent": "celltrack.analysis.appearance_identity.InGateRanking",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.appearance_identity.RawBoxes._size",
+      "label": "_size",
+      "level": "method",
+      "parent": "celltrack.analysis.appearance_identity.RawBoxes",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.appearance_identity.RawBoxes.aligned",
+      "label": "aligned",
+      "level": "method",
+      "parent": "celltrack.analysis.appearance_identity.RawBoxes",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.appearance_identity.RawBoxes.of",
+      "label": "of",
+      "level": "method",
+      "parent": "celltrack.analysis.appearance_identity.RawBoxes",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.appearance_identity.RawBoxes.select",
+      "label": "select",
+      "level": "method",
+      "parent": "celltrack.analysis.appearance_identity.RawBoxes",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.appearance_identity.RotationGain._rotate",
+      "label": "_rotate",
+      "level": "method",
+      "parent": "celltrack.analysis.appearance_identity.RotationGain",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.appearance_identity.RotationGain.count",
+      "label": "count",
+      "level": "method",
+      "parent": "celltrack.analysis.appearance_identity.RotationGain",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.appearance_identity.RotationGain.median_gain",
+      "label": "median_gain",
+      "level": "method",
+      "parent": "celltrack.analysis.appearance_identity.RotationGain",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.appearance_identity.RotationGain.of",
+      "label": "of",
+      "level": "method",
+      "parent": "celltrack.analysis.appearance_identity.RotationGain",
       "role": null
     },
     {
