@@ -49,14 +49,7 @@ from celltrack.postproc.topology_repair import TopologyConfig  # noqa: E402
 _shipped = TrackerConfig.shipped()
 _CONFIG = dataclasses.replace(
     _shipped,
-    linker=LinkerConfig(
-        name="motion",
-        tight_um=6.0,
-        gate_um=10.0,
-        ranker_bonus=0.6375,
-        affinity_bonus=0.1125,
-    ),
-    topology=TopologyConfig(),
+    linker=LinkerConfig(name="motion", tight_um=6.0, gate_um=10.0, ranker_bonus=0.6375, affinity_bonus=0.1125),
     threshold=0.96875,
 )
 # The CC0 re-ranker artifact mounts here; MultiGpuSubmission mounts it per shard via CellTracker.with_ranker.

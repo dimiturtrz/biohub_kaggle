@@ -49,23 +49,17 @@ from celltrack.postproc.topology_repair import TopologyConfig  # noqa: E402
 _shipped = TrackerConfig.shipped()
 _CONFIG = dataclasses.replace(
     _shipped,
-    linker=LinkerConfig(
-        name="motion",
-        tight_um=6.0,
-        gate_um=10.0,
-        ranker_bonus=0.6375,
-        affinity_bonus=0.1125,
-    ),
+    linker=LinkerConfig(name="motion", tight_um=6.0, gate_um=10.0, affinity_bonus=0.75),
     topology=TopologyConfig(),
     threshold=0.96875,
 )
-# The CC0 re-ranker artifact mounts here; MultiGpuSubmission mounts it per shard via CellTracker.with_ranker.
-_RANKER = Path(next(iter(glob.glob("/kaggle/input/**/ASSOCIATION_RANKER_MANIFEST.json", recursive=True)))).parent
+# No ranker mounted — this arm isolates the ranker's contribution by carrying the full 0.75 learned-P weight
+# on the edge affinity alone (affinity_bonus=0.75, ranker_pack=None).
 _SUBMISSION = Path("/kaggle/working/submission.csv")
 
 
 def main() -> None:
-    MultiGpuSubmission(packs=pilkwang_packs(), config=_CONFIG, ranker_pack=_RANKER).run(test_videos(), _SUBMISSION)
+    MultiGpuSubmission(packs=pilkwang_packs(), config=_CONFIG, ranker_pack=None).run(test_videos(), _SUBMISSION)
 
 
 # Spawned per-GPU workers re-enter this module as `__mp_main__`; exclude exactly that so a child launches no
