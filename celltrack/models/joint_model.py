@@ -86,7 +86,10 @@ class JointModel(nn.Module):
             n_heads=_N_HEADS,
             n_blocks=_N_BLOCKS,
         )
-        detector.load_state_dict(state["detector_state"])
+        # A run saved under torch.compile prefixes its keys with `_orig_mod.`; strip it so a compiled run's
+        # checkpoint loads into the plain module (the weights are identical — compile only wraps the forward).
+        detector_state = {key.replace("._orig_mod.", "."): value for key, value in state["detector_state"].items()}
+        detector.load_state_dict(detector_state)
         transformer.load_state_dict(state["transformer_state"])
         model = cls(detector, transformer, tuple(config["downsample"]))
         return model.to(device).eval()
