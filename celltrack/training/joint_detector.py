@@ -31,7 +31,6 @@ own-trained baseline. Either way the best checkpoint by selection score is saved
 
 from __future__ import annotations
 
-import argparse
 import contextlib
 import logging
 import math
@@ -45,8 +44,10 @@ from torch import Tensor, nn
 from torch.nn.attention import SDPBackend, sdpa_kernel
 
 from celltrack.data.difficulty_sampler import DifficultySampler
+from celltrack.data.gpu_scene import GpuScenes
 from celltrack.data.joint_dataset import PairDataset, PairSample, PairTarget
 from celltrack.data.pair_curriculum import FixedMixture, PacedMixture, PairCurriculum, PairDraw
+from celltrack.data.synthetic_scene import SceneConfig
 from celltrack.detectors.tunet import DetectorRecipe
 from celltrack.eval.model_evaluator import EvalResult, ModelEvaluator
 from celltrack.eval.proxy import VALIDATION_MOVIES, TestMovieProxy
@@ -60,9 +61,9 @@ from celltrack.operating_point import TrackerConfig
 from celltrack.training.contrastive_term import ContrastiveTerm
 from celltrack.training.early_stop import EarlyStop
 from celltrack.training.joint_checkpoint import RESUME_SUFFIX, JointCheckpoint, RunProgress
+from celltrack.training.joint_cli import JointCli
 from celltrack.training.joint_config import (
     WARM_PACKS,
-    ContrastiveSite,
     DataCfg,
     EvalCfg,
     JointTrainConfig,
@@ -160,142 +161,6 @@ class _EvalResult:
 
 class JointTrainer:
     """Runs the joint detector+edge training loop under one configuration, checkpointing the best proxy score."""
-
-    @staticmethod
-    def _parser() -> argparse.ArgumentParser:
-        """Every flag a joint run takes — kept apart from `main` so the run's WIRING reads as its own short function."""
-        parser = argparse.ArgumentParser(description="Train the joint detector+edge model on the non-held-out videos.")
-        parser.add_argument("--steps", type=int, default=1500)
-        parser.add_argument("--eval-every", type=int, default=500, help="steps per eval window")
-        # The step scale above is a probe-run unit: one pair per step means the ~18000-pair corpus makes an epoch,
-        # so `--steps 3000` is 17% of ONE pass against the published pack's 50 epochs, and `--patience` counts
-        # EVAL WINDOWS — five of them is 14% of an epoch at eval-every 500 and five whole epochs at 9000. The
-        # flags below say the same things in passes over the corpus, and win over their raw twin when given.
-        parser.add_argument("--epochs", type=float, default=None, help="passes over the GT pairs; overrides --steps")
-        parser.add_argument(
-            "--evals-per-epoch", type=int, default=None, help="eval windows per epoch; overrides --eval-every"
-        )
-        parser.add_argument(
-            "--patience-epochs",
-            type=float,
-            default=None,
-            help="epochs without a gain before stopping; overrides --patience",
-        )
-        parser.add_argument("--warm-start", action="store_true", help="initialise from the published pilkwang weights")
-        parser.add_argument(
-            "--det-weight", type=float, default=1.0, help="weight on the detection term vs the edge term"
-        )
-        parser.add_argument(
-            "--contrastive-weight", type=float, default=0.0, help="weight on the InfoNCE term over the node features"
-        )
-        # WHERE that weight acts. On the features it is measured to trade detection away for discrimination
-        # (proxy 0.8414 -> 0.7292, node recall 0.966 -> 0.867); the projecting sites give the term its own
-        # embedding to shape, `detached_projection` keeping the backbone out of its reach entirely.
-        parser.add_argument(
-            "--contrastive-site",
-            choices=tuple(ContrastiveSite),
-            default=ContrastiveSite.FEATURES,
-            type=ContrastiveSite,
-            help="where the InfoNCE term acts: on the shared features, or through its own projection head",
-        )
-        parser.add_argument("--temperature", type=float, default=0.07, help="InfoNCE softmax temperature over targets")
-        # The zni probe's mining under a MARGIN objective and an UNFROZEN backbone — the one combination never run.
-        # Its absolute form (decoy probability -> 0, UNet frozen) flattened the head; a weight here is matched to the
-        # term's own logged magnitude against the edge term, so the arm measures the mechanism and not a rescaling.
-        parser.add_argument(
-            "--hard-negative-weight",
-            type=float,
-            default=0.0,
-            help="weight on the ranking term holding each source's true logit above its nearest wrong targets'",
-        )
-        parser.add_argument(
-            "--hard-negatives", type=int, default=4, help="nearest wrong targets mined per annotated source"
-        )
-        parser.add_argument(
-            "--symmetric-links",
-            action="store_true",
-            help="normalise the link loss across TARGETS too (one child per source), not sources alone",
-        )
-        parser.add_argument(
-            "--balanced-links",
-            action="store_true",
-            help="count the link loss once per decision, balancing the true candidate against its rivals",
-        )
-        # Fine-tuning a CONVERGED model at its original training rate is the classic way to walk off its optimum,
-        # which is what 3000 warm-start steps at 1e-4 did (never beat the init). Exposed so the rate is a
-        # variable of the experiment rather than an inherited constant.
-        parser.add_argument("--lr", type=float, default=1e-4, help="learning rate; lower it when warm-starting")
-        parser.add_argument(
-            "--batch-size",
-            type=int,
-            default=1,
-            help="pairs forwarded together in one backbone pass, averaged into one step (1 = per-pair)",
-        )
-        parser.add_argument("--cosine-lr", action="store_true", help="decay the rate to zero over the run")
-        parser.add_argument(
-            "--warm-pack", choices=tuple(WARM_PACKS), default="seed1", help="which published pack to continue"
-        )
-        parser.add_argument("--compile-backbone", action="store_true", help="torch.compile the U-Net (static shape)")
-        # The corpus whose candidate set is the one the tracker deploys against: 3.86 in-gate candidates per
-        # source with 97.1% contested, where the annotated pairs carry 0.99 and 1.9%. These REPLACE the
-        # annotated pairs — mixing re-introduces the uncontested rows the corpus exists to escape.
-        parser.add_argument(
-            "--detected-videos",
-            type=int,
-            default=0,
-            help="train videos to build the DETECTED-neighbourhood corpus over (0 = the annotated pairs)",
-        )
-        parser.add_argument(
-            "--difficulty-sampling",
-            action="store_true",
-            help="draw pairs in proportion to their measured top-1 defect instead of uniformly with replacement",
-        )
-        # The one property our own corpus cannot have: every cell of a synthetic frame is labelled, so the crowded
-        # near-neighbours enter the edge matrix as TRUE NEGATIVES instead of sitting outside it as unannotated
-        # detections — which is what all 38 of the dense movie's mislinked partners are.
-        parser.add_argument(
-            "--synthetic-fraction",
-            type=float,
-            default=0.0,
-            help="share of steps drawn from the fully-labelled synthetic corpus (0 = the real corpus alone)",
-        )
-        parser.add_argument(
-            "--synthetic-sequences", type=int, default=None, help="synthetic sequences to enumerate (default: all)"
-        )
-        parser.add_argument(
-            "--paced-curriculum",
-            action="store_true",
-            help="replace the fixed synthetic share with the EMA'd, loss-weighting, hard-early feedback controller",
-        )
-        parser.add_argument(
-            "--prior-velocity",
-            action="store_true",
-            help="feed each source its t-1 -> t displacement as head input (~50%% slower per step)",
-        )
-        parser.add_argument("--temporal-position", action="store_true", help="frame-position embedding (motion sight)")
-        # The threshold is DERIVED, not swept: given bare, the flag takes the pipeline's own inference operating
-        # point — the response at which the shipped tracker would already have called the voxel a cell, so every
-        # voxel the mask spares is one the deployed model detects and our sparse annotation cannot adjudicate.
-        parser.add_argument(
-            "--ignore-ambiguous-above",
-            type=float,
-            nargs="?",
-            const=TrackerConfig.shipped().threshold,
-            default=None,
-            help="leave unannotated voxels above this sigmoid response unsupervised (bare = the tracker threshold)",
-        )
-        parser.add_argument("--patience", type=int, default=5, help="stop after N non-improving evals (<1 disables)")
-        parser.add_argument("--device", type=str, default="cuda")
-        parser.add_argument("--val-videos", type=int, default=2, help="validation movies the edge AUC is measured over")
-        parser.add_argument(
-            "--eval-threshold",
-            type=float,
-            default=TrackerConfig.shipped().threshold,
-            help="detection threshold of the selector eval (defaults to the SHIPPED operating point's)",
-        )
-        parser.add_argument("--resume", action="store_true", help="continue from the .resume.pt snapshot")
-        parser.add_argument("--weights", type=str, default="joint_tunet_ours.pt")
-        return parser
 
     def __init__(self, config: JointTrainConfig) -> None:
         self.config = config
@@ -463,6 +328,8 @@ class JointTrainer:
             # Compile the backbone (static shape); the temporal-attention SDPA is forced to MATH at forward
             # time (see `_step`) — its efficient backward has a broken compiled meta-kernel.
             model.detector.unet = torch.compile(model.detector.unet, dynamic=False)  # type: ignore[bad-assignment]
+            if self.config.data.gpu_scene_fraction:  # fuse the uniform-N generated-scene edge head (measured 4x)
+                model.compile_scene_head(SceneConfig().n_cells)
         self.contrastive.to(self.config.runtime.device)
         optimizer = torch.optim.AdamW(self._trained(model), lr=self.config.optim.lr)
         return model, _Optimization(optimizer, self._schedule(optimizer))
@@ -527,14 +394,20 @@ class JointTrainer:
         model.train()
         steps = len(dataset)
         batch_size = self.config.optim.batch_size
+        gpu_count = round(batch_size * self.config.data.gpu_scene_fraction)
+        real_count = max(1, batch_size - gpu_count)
         sums: dict[str, float] = {}
         done, t0 = 0, time.perf_counter()
         batch: list[tuple[PairDraw, PairSample]] = []
         for draw, pair in self._pairs(dataset, curriculum):
             batch.append((draw, pair))
-            if len(batch) < batch_size and done + len(batch) < steps:
+            if len(batch) < real_count and done + len(batch) < steps:
                 continue
-            for (draw, _), outcome in zip(batch, self._step_batch(model, optimization, batch), strict=True):
+            # Each batch is `real_count` real pairs plus `gpu_count` FRESH GPU-generated hard scenes, forwarded
+            # together. Only the real pairs are logged and fed back — the generated ones shape the gradient but
+            # are not the run's measured population — so the loss row stays comparable to a no-generation run.
+            outcomes = self._step_batch(model, optimization, batch + self._gpu_batch(gpu_count), len(batch))
+            for (draw, _), outcome in zip(batch, outcomes[: len(batch)], strict=True):
                 for name, value in outcome.logged().items():
                     sums[name] = sums.get(name, 0.0) + value
                 self._observe(curriculum, draw.index, outcome)
@@ -566,10 +439,16 @@ class JointTrainer:
         curriculum.observe(index, outcome.difficulty())
 
     def _step_batch(
-        self, model: JointModel, optimization: _Optimization, batch: list[tuple[PairDraw, PairSample]]
+        self, model: JointModel, optimization: _Optimization, batch: list[tuple[PairDraw, PairSample]], real_count: int
     ) -> list[_PairOutcome]:
-        """One step over a batch — backbone forwarded ONCE over stacked windows, gradient the batch MEAN."""
+        """One step over a batch — backbone forwarded ONCE over stacked windows, gradient the batch MEAN.
+
+        The first `real_count` pairs are real and train BOTH heads. Generated scenes beyond train association
+        always, and detection too when `gpu_scene_detection` is set — their 100% labels are the honest detection
+        signal the real corpus (~98% of cells supervised as background) lacks, judged on the LB not sparse recall.
+        """
         device = self.config.runtime.device
+        scene_detection = self.config.data.gpu_scene_detection
         samples = [pair.to(device) for _, pair in batch]
         velocities = [self._velocity.of(model, sample, self._autocast()) for sample in samples]
         windows = torch.stack([torch.stack([s.frame_t, s.frame_t1], dim=0) for s in samples], dim=0)  # (B, 2, Z, Y, X)
@@ -577,13 +456,31 @@ class JointTrainer:
             forwards = model.forward_batch(
                 windows, [s.source_centres for s in samples], [s.target_centres for s in samples], velocities
             )
-            outcomes = [self._losses_from(out, sample) for out, sample in zip(forwards, samples, strict=True)]
+            outcomes = [
+                self._losses_from(out, sample, detection=index < real_count or scene_detection)
+                for index, (out, sample) in enumerate(zip(forwards, samples, strict=True))
+            ]
         terms = [draw.weight * out.total for (draw, _), out in zip(batch, outcomes, strict=True)]
         (torch.stack(terms).sum() / len(batch)).backward()
         nn.utils.clip_grad_norm_(self._trained(model), self.config.optim.grad_clip)
         optimization.step()
         optimization.zero_grad()
         return outcomes
+
+    def _gpu_batch(self, count: int) -> list[tuple[PairDraw, PairSample]]:
+        """`count` FRESH GPU-generated hard scene-pairs — untracked (they shape the gradient, not the feedback).
+
+        The generator persists across windows (lazily created, seeded once) so every batch draws a NEW crowded
+        population rather than replaying a pool — the whole point of generating on the GPU rather than loading.
+        """
+        if count <= 0:
+            return []
+        if not hasattr(self, "_scene_source"):
+            device = self.config.runtime.device
+            object.__setattr__(self, "_scene_source", GpuScenes(SceneConfig(), device))
+            object.__setattr__(self, "_scene_rng", torch.Generator(device).manual_seed(self.config.runtime.seed))
+        pairs = self._scene_source.batch(count, self._scene_rng)  # type: ignore[attr-defined]
+        return [(PairDraw(index=_UNTRACKED_INDEX), pair) for pair in pairs]
 
     def _losses(self, model: JointModel, pair: PairSample) -> _PairOutcome:
         """One pair's loss tensors — the per-pair forward then `_losses_from`; used by the no-grad eval."""
@@ -597,8 +494,13 @@ class JointTrainer:
         """Pin SDPA to the math backend under compile so inductor traces its clean composite backward; no-op eager."""
         return sdpa_kernel(SDPBackend.MATH) if self.config.runtime.compile_backbone else contextlib.nullcontext()
 
-    def _losses_from(self, out: JointForward, sample: PairSample) -> _PairOutcome:
-        """Every loss term for one pair from its already-computed forward (GT centres divided to the heads' grid)."""
+    def _losses_from(self, out: JointForward, sample: PairSample, *, detection: bool = True) -> _PairOutcome:
+        """Every loss term for one pair from its already-computed forward (GT centres divided to the heads' grid).
+
+        `detection=False` (generated hard scenes) zeroes the detection term: their blob appearance would corrupt
+        a detector saturated on real data, while the association terms they carry teach the appearance-agnostic
+        motion rule. The backbone still sees them through the edge gradient, which is ~30x smaller than det here.
+        """
         loss_config = self.config.loss
         source_centres, target_centres, edge_matrix = sample.source_centres, sample.target_centres, sample.edge_matrix
         downsample = torch.tensor(self.config.data.downsample, dtype=torch.float32, device=str(out.edge_logits.device))
@@ -608,9 +510,12 @@ class JointTrainer:
             out.edge_logits, edge_matrix, loss_config.link_axes, balanced=loss_config.balanced_links
         )
         ignore = loss_config.ignore_ambiguous_above
-        det = BalancedBCE.of(
-            out.detection_t.unsqueeze(0), [centres_t_grid], loss_config.neg_weight, ignore
-        ) + BalancedBCE.of(out.detection_t1.unsqueeze(0), [centres_t1_grid], loss_config.neg_weight, ignore)
+        det = (
+            BalancedBCE.of(out.detection_t.unsqueeze(0), [centres_t_grid], loss_config.neg_weight, ignore)
+            + BalancedBCE.of(out.detection_t1.unsqueeze(0), [centres_t1_grid], loss_config.neg_weight, ignore)
+            if detection
+            else torch.zeros((), device=str(out.edge_logits.device))
+        )
         contrastive = self.contrastive.forward(out.source_features, out.target_features, edge_matrix)
         decoys = HardNegativeMargin.mine(source_centres, target_centres, edge_matrix, loss_config.hard_negatives)
         hard_negative = HardNegativeMargin.of(out.edge_logits, edge_matrix, decoys)
@@ -691,7 +596,7 @@ class JointTrainer:
 
 
 def main() -> None:
-    args = JointTrainer._parser().parse_args()  # noqa: SLF001
+    args = JointCli.build_parser().parse_args()
 
     # The flat flags fan out into the concern each one belongs to — the CLI is the interface, this is the model.
     config = JointTrainConfig(
@@ -702,6 +607,9 @@ def main() -> None:
             prior_velocity=args.prior_velocity,
             synthetic_fraction=args.synthetic_fraction,
             synthetic_sequences=args.synthetic_sequences,
+            synthetic_scenes=args.synthetic_scenes,
+            gpu_scene_fraction=args.gpu_scene_fraction,
+            gpu_scene_detection=args.gpu_scene_detection,
             paced_curriculum=args.paced_curriculum,
         ),
         optim=OptimCfg(lr=args.lr, cosine_lr=args.cosine_lr, batch_size=args.batch_size),

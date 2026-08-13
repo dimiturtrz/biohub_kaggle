@@ -27,7 +27,18 @@ import math
 from dataclasses import dataclass
 
 import numpy as np
+import torch
 from jaxtyping import Float, Int
+from torch import Tensor
+
+from celltrack.data.joint_dataset import PairTarget
+from core.data.tracks import TrackGraph
+
+# The generated volumes are ALREADY on the isotropic 64^3 post-downsample grid, but the pipeline reads pooled
+# frames against RAW-grid node coordinates divided by this factor — so scene node positions are lifted into the
+# raw grid (y, x times 4; z unchanged) and a run must use this downsample, exactly as the static synthetic does.
+_SCENE_DOWNSAMPLE: tuple[int, int, int] = (1, 4, 4)
+_Q_LOW, _Q_HIGH = 0.001, 0.999
 
 
 @dataclass(frozen=True)
@@ -168,3 +179,63 @@ class Scene:
                     total += 1
                     hard += int(nearest[cell] != cell)
         return hard / total if total else float("nan")
+
+    def track_graph(self) -> TrackGraph:
+        """The scene's lineage as a `TrackGraph`, node coordinates lifted into the RAW grid the pipeline expects.
+
+        The volumes are on the 64^3 grid, but the trainer divides node positions by `_SCENE_DOWNSAMPLE` to reach
+        the frame grid, so `(z, y, x)` are lifted by `(1, 4, 4)` to cancel that division and land back on the
+        rendered voxel. `edges` are already row indices into the node array, which is what the enumeration reads.
+        """
+        lift = np.asarray([1, *_SCENE_DOWNSAMPLE], dtype=np.float64)  # (t, z, y, x); t and z unchanged, y/x by 4
+        coordinates = np.column_stack([self.timepoints, self.positions_vox]) * lift
+        return TrackGraph(
+            node_ids=np.arange(len(self.timepoints), dtype=np.int64),
+            coordinates=np.rint(coordinates).astype(np.int64),
+            edges=self.edges,
+        )
+
+    def pair_targets(self) -> list[PairTarget]:
+        """This scene as the consecutive-frame `PairTarget`s the joint trainer consumes — frames from its volumes."""
+        return PairTarget.enumerate(self.track_graph(), SceneFrames.of(self.volumes))
+
+
+@dataclass(frozen=True)
+class SceneFrames:
+    """A generated scene's volumes as a `FrameSource` — quantile-normalised the way a competition video's are."""
+
+    volumes: Float[np.ndarray, "t z y x"]
+    q_low: float
+    q_high: float
+
+    @classmethod
+    def of(cls, volumes: Float[np.ndarray, "t z y x"]) -> "SceneFrames":
+        """Precompute the intensity window once so a per-frame read is a subtract-and-scale, not a re-quantile."""
+        low, high = np.quantile(volumes, [_Q_LOW, _Q_HIGH])
+        return cls(volumes=volumes, q_low=float(low), q_high=float(high))
+
+    def frame(self, timepoint: int, downsample: tuple[int, int, int]) -> Float[Tensor, "z y x"]:
+        """That frame, quantile-normalised and non-negative — already on the grid, so never strided again."""
+        if tuple(downsample) != _SCENE_DOWNSAMPLE:
+            raise ValueError(
+                f"generated scenes render on the {_SCENE_DOWNSAMPLE}-equivalent 64^3 grid with raw-lifted nodes; "
+                f"a run at downsample {tuple(downsample)} would read a grid the coordinates do not live on"
+            )
+        normed = (torch.from_numpy(self.volumes[timepoint]) - self.q_low) / (self.q_high - self.q_low + 1e-6)
+        return normed.clamp(0.0)
+
+
+class SceneCorpus:
+    """A pool of generated scenes as the trainer's own `PairTarget`s — the dynamic synthetic corpus."""
+
+    @staticmethod
+    def generate(config: SceneConfig, n_scenes: int, seed: int) -> list[PairTarget]:
+        """`n_scenes` scenes at the config's difficulty, flattened into every consecutive-frame pair they hold.
+
+        Each scene is a fresh seed, so the pool is varied; the volumes stay resident (referenced by their
+        `SceneFrames`) so the loop reads them without a re-decode, at ~4 MB per scene.
+        """
+        targets: list[PairTarget] = []
+        for index in range(n_scenes):
+            targets.extend(Scene.generate(config, seed + index).pair_targets())
+        return targets

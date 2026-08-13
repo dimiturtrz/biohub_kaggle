@@ -51,6 +51,19 @@ class JointModel(nn.Module):
         self.detector = detector
         self.transformer = transformer
         self.downsample = downsample
+        self._scene_transformer: nn.Module | None = None  # compiled clone for the uniform-N generated scenes
+        self._scene_nodes = 0
+
+    def compile_scene_head(self, node_count: int) -> None:
+        """Compile the edge transformer for the generated scenes' FIXED node count — routed by count in `_heads`.
+
+        The scenes all carry `node_count` nodes, so a static-shape `torch.compile` fuses the 700-node attention
+        (measured 4x per call) and compiles exactly once, while the ragged real pairs — every one a different
+        node count that would thrash a static compile past the recompile cap — keep the eager transformer. Same
+        weights, so the gradient is identical; only the launch schedule differs.
+        """
+        self._scene_transformer = torch.compile(self.transformer, dynamic=False)  # type: ignore[assignment]
+        self._scene_nodes = node_count
 
     @classmethod
     def from_checkpoint(cls, path: Path, device: str = "cpu") -> "JointModel":
@@ -146,5 +159,9 @@ class JointModel(nn.Module):
         feat_target = EdgeTransformerScorer.node_features(
             features[1], target_voxel / downsample, NodeWindowSlot(spatial, 1.0, device), target_step
         )
-        edge_logits = self.transformer(feat_source, feat_target, source_voxel, target_voxel)  # (s, u)
+        # A uniform-N scene routes to the compiled head (fused 700-node attention); ragged real pairs stay eager.
+        compiled = self._scene_transformer
+        is_scene = compiled is not None and source_voxel.shape[0] == self._scene_nodes
+        transformer = compiled if is_scene else self.transformer
+        edge_logits = transformer(feat_source, feat_target, source_voxel, target_voxel)  # (s, u)
         return JointForward(detection_t, detection_t1, edge_logits, feat_source, feat_target)

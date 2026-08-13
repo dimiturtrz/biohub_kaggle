@@ -89,6 +89,18 @@ class DataCfg(BaseModel):
     synthetic_fraction: float = Field(0.0, ge=0.0, lt=1.0)
     # How many synthetic sequences to enumerate (each is 6 frames = 5 pairs); None takes all 2174 of them.
     synthetic_sequences: PositiveInt | None = None
+    # How many hard scenes to GENERATE dynamically (crowded fast-movers with a known answer, the dense-hard
+    # SceneConfig default) instead of loading the static npz. >0 makes the synthetic corpus the generator's; the
+    # mix into real pairs is still `synthetic_fraction`. This is the contested signal the real corpus lacks.
+    synthetic_scenes: int = Field(0, ge=0)
+    # Fraction of EACH training batch generated fresh on the GPU per step (dynamic, no pool to memorise, ~4ms/8).
+    # 0 = off; 0.5 = half of every batch is fresh hard scenes. The complement is drawn from the real corpus.
+    gpu_scene_fraction: float = Field(0.0, ge=0.0, lt=1.0)
+    # Whether generated scenes also train the DETECTION head. True is the HONEST signal real data lacks — a scene
+    # labels 100% of its cells where the real corpus supervises ~98% AS background — so it counteracts, not
+    # poisons, the detection-loss-punishes-good-detectors bias; annotated-recall may still read down because the
+    # sparse eval only sees ~1-2% of cells. False trains association only (blob appearance never touches the head).
+    gpu_scene_detection: bool = True
     # Replace the FIXED share above with the feedback controller (`PacedMixture`): the two populations
     # alternate structurally and an EMA'd difficulty moves a per-sample LOSS WEIGHT instead of a draw
     # probability, with save-best corrected for the difficulty the window trained at. Off by default.

@@ -60,6 +60,23 @@ def test_forward_batch():
         assert torch.equal(single.source_features, batch.source_features)
 
 
+def test_compile_scene_head():
+    """After compiling the scene head for a node count, a pair of THAT count routes to the compiled transformer
+    and computes the same edge logits the eager head does — the routing is transparent, only the launch differs."""
+    model = _joint_model().eval()
+    frame_t, frame_t1 = torch.zeros(4, 8, 8), torch.zeros(4, 8, 8)
+    source_positions = torch.tensor([[2, 4, 4], [1, 2, 2]])  # 2 sources — the count we compile for
+    target_positions = torch.tensor([[2, 4, 4], [1, 2, 2]])
+
+    with torch.no_grad():
+        eager = model.forward(frame_t, frame_t1, source_positions, target_positions)
+        model.compile_scene_head(2)
+        routed = model.forward(frame_t, frame_t1, source_positions, target_positions)
+
+    assert model._scene_nodes == 2
+    assert torch.allclose(eager.edge_logits, routed.edge_logits, atol=1e-4)
+
+
 def test_forward_prior_velocity():
     """A source prior step widens both frames' features by three columns — the targets' being the zero vector."""
     model = _joint_model(extra_features=PriorVelocity.DIM).eval()
