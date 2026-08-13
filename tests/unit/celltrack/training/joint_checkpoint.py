@@ -42,7 +42,12 @@ def test_payload():
     payload = _checkpoint().payload(_model())
 
     assert set(payload) == {"detector_state", "transformer_state", "config"}
-    assert payload["config"] == {"out_channels": 1, "layers": [2, 4], "downsample": [1, 4, 4]}
+    assert payload["config"] == {
+        "out_channels": 1,
+        "layers": [2, 4],
+        "downsample": [1, 4, 4],
+        "temporal_position": False,
+    }
 
 
 def test_save_best(tmp_path: Path):

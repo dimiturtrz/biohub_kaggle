@@ -272,6 +272,7 @@ class JointTrainer:
             action="store_true",
             help="feed each source its t-1 -> t displacement as head input (~50%% slower per step)",
         )
+        parser.add_argument("--temporal-position", action="store_true", help="frame-position embedding (motion sight)")
         # The threshold is DERIVED, not swept: given bare, the flag takes the pipeline's own inference operating
         # point — the response at which the shipped tracker would already have called the voxel a cell, so every
         # voxel the mask spares is one the deployed model detects and our sparse annotation cannot adjudicate.
@@ -451,6 +452,8 @@ class JointTrainer:
         before the widening would hold the discarded projection and train nothing through it, in silence.
         """
         model = self._model(warm_start=warm_start).to(self.config.runtime.device)
+        if self.config.model.temporal_position:  # motion sight; the position table lands on the model's device
+            model.detector.install_temporal_position()
         self._velocity.widen(model)
         if self.config.runtime.device == "cuda":
             # channels_last_3d is a lossless layout that measured faster on the feature convs. torch stubs
@@ -692,7 +695,7 @@ def main() -> None:
 
     # The flat flags fan out into the concern each one belongs to — the CLI is the interface, this is the model.
     config = JointTrainConfig(
-        model=ModelCfg(warm_pack=WARM_PACKS[args.warm_pack]),
+        model=ModelCfg(warm_pack=WARM_PACKS[args.warm_pack], temporal_position=args.temporal_position),
         data=DataCfg(
             detected_videos=args.detected_videos,
             difficulty_sampling=args.difficulty_sampling,

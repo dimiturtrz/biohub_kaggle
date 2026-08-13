@@ -10,8 +10,61 @@ import json
 from pathlib import Path
 
 import torch
+from torch import nn
 
 from celltrack.models.temporal_unet_detector import IDENTITY_VIEW, DetectorRecipe, FlipView, TemporalUNetDetector
+
+
+class _AttnBlock(nn.Module):
+    """Stands in for the external `_TemporalAttention`: the `norm`/`attn` pair `install` detects and wraps."""
+
+    def __init__(self, channels: int) -> None:
+        super().__init__()
+        self.norm = nn.LayerNorm(channels)
+        self.attn = nn.MultiheadAttention(channels, 2, batch_first=True)
+
+
+def test_install_temporal_position():
+    """`install_temporal_position` replaces every real attention block, skips Identity, and flips the flag.
+
+    The full-resolution stage is an `nn.Identity` (no attention), so it must be left alone; every other block
+    becomes a position-embedded wrapper. The stubbed backbone carries no temporal blocks, so a representative
+    pair is assigned onto it — the install logic is what is under test, not the third-party module.
+    """
+    detector = TemporalUNetDetector(8, (8, 16))
+    detector.unet.temporal_blocks = nn.ModuleList([nn.Identity(), _AttnBlock(16)])
+
+    detector.install_temporal_position()
+
+    assert detector.temporal_position is True
+    assert [type(block).__name__ for block in detector.unet.temporal_blocks] == [
+        "Identity",
+        "TemporalPositionAttention",
+    ]
+
+
+def test_install_temporal_position_is_idempotent():
+    """A second install is a no-op — it must not wrap the wrappers it already installed."""
+    detector = TemporalUNetDetector(8, (8, 16))
+    detector.unet.temporal_blocks = nn.ModuleList([_AttnBlock(16)])
+
+    detector.install_temporal_position()
+    detector.install_temporal_position()
+
+    assert [type(block).__name__ for block in detector.unet.temporal_blocks] == ["TemporalPositionAttention"]
+
+
+def test_install_temporal_position_reuses_the_blocks_weights():
+    """The wrapper shares the original block's trained `norm`/`attn`, so a warm start keeps its weights."""
+    detector = TemporalUNetDetector(8, (8, 16))
+    original = _AttnBlock(16)
+    detector.unet.temporal_blocks = nn.ModuleList([original])
+
+    detector.install_temporal_position()
+
+    wrapped = detector.unet.temporal_blocks[0]
+    assert wrapped.attn is original.attn
+    assert torch.equal(wrapped.position, torch.zeros_like(wrapped.position))  # zero-init: byte-identical at step 0
 
 
 def _tiny_detector() -> TemporalUNetDetector:

@@ -9278,6 +9278,12 @@
     },
     {
       "kind": "calls",
+      "source": "celltrack.models.joint_model.JointModel.from_checkpoint",
+      "target": "celltrack.models.temporal_unet_detector.TemporalUNetDetector.install_temporal_position",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
       "source": "celltrack.models.prior_velocity.GapHistory.velocity",
       "target": "celltrack.models.prior_velocity.PriorVelocity.expected_incoming",
       "weight": 1
@@ -9406,6 +9412,12 @@
       "kind": "calls",
       "source": "celltrack.models.temporal_unet_detector.TemporalUNetDetector.from_pack",
       "target": "celltrack.models.temporal_unet_detector.DetectorRecipe.from_config",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.models.temporal_unet_detector.TemporalUNetDetector.install_temporal_position",
+      "target": "celltrack.models.temporal_position_attention.TemporalPositionAttention",
       "weight": 1
     },
     {
@@ -12987,7 +12999,7 @@
   ],
   "nodes": [
     {
-      "descendants": 100,
+      "descendants": 101,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -13539,7 +13551,7 @@
       "role": null
     },
     {
-      "descendants": 7,
+      "descendants": 8,
       "id": "celltrack.models",
       "label": "models",
       "level": "module",
@@ -13590,6 +13602,14 @@
       "descendants": 0,
       "id": "celltrack.models.relative_position_transformer",
       "label": "relative_position_transformer",
+      "level": "module",
+      "parent": "celltrack.models",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.temporal_position_attention",
+      "label": "temporal_position_attention",
       "level": "module",
       "parent": "celltrack.models",
       "role": null
@@ -15344,6 +15364,14 @@
       "label": "RelativePositionEdgeTransformer",
       "level": "class",
       "parent": "celltrack.models.relative_position_transformer",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.temporal_position_attention.TemporalPositionAttention",
+      "label": "TemporalPositionAttention",
+      "level": "class",
+      "parent": "celltrack.models.temporal_position_attention",
       "role": "primary"
     },
     {
@@ -20988,6 +21016,22 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.models.temporal_position_attention.TemporalPositionAttention.__init__",
+      "label": "__init__",
+      "level": "method",
+      "parent": "celltrack.models.temporal_position_attention.TemporalPositionAttention",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.temporal_position_attention.TemporalPositionAttention.forward",
+      "label": "forward",
+      "level": "method",
+      "parent": "celltrack.models.temporal_position_attention.TemporalPositionAttention",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.models.temporal_unet_detector.DetectorRecipe.as_config",
       "label": "as_config",
       "level": "method",
@@ -21110,6 +21154,14 @@
       "descendants": 0,
       "id": "celltrack.models.temporal_unet_detector.TemporalUNetDetector.from_pack",
       "label": "from_pack",
+      "level": "method",
+      "parent": "celltrack.models.temporal_unet_detector.TemporalUNetDetector",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.temporal_unet_detector.TemporalUNetDetector.install_temporal_position",
+      "label": "install_temporal_position",
       "level": "method",
       "parent": "celltrack.models.temporal_unet_detector.TemporalUNetDetector",
       "role": null

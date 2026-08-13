@@ -54,6 +54,11 @@ class ModelCfg(BaseModel):
     # against the pair's 0.9334). Training the same recipe from a DIFFERENT parent is how the result earns
     # a place — ensembles pay for disagreement, not for quality alone.
     warm_pack: Path = WARM_PACKS["seed1"]
+    # Add a learned frame-position embedding to the backbone's per-voxel time attention — the one capability
+    # the order-blind published backbone cannot be configured into. Off = the published attention, byte for
+    # byte. On, the model can represent WHICH frame came first, i.e. a direction; it must LEARN to use it, so
+    # this belongs to a long run, not the short warm-start optimum where a zero-initialised input never grows.
+    temporal_position: bool = False
 
 
 class DataCfg(BaseModel):

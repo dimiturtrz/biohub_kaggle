@@ -139,6 +139,28 @@ class TemporalUNetDetector(nn.Module):
         self.layers = list(layers)
         self.unet = self._backbone_cls()(in_channels=1, out_channels=out_channels, layers=list(layers))
         self.detect_head = nn.Conv3d(out_channels, 1, kernel_size=1)
+        # Whether the backbone's per-voxel time attention carries a frame-position embedding (motion sight).
+        # False = the published order-blind backbone. `install_temporal_position` flips it and rewrites the
+        # attention blocks; the flag is persisted so a trained checkpoint rebuilds the same blocks before loading.
+        self.temporal_position = False
+
+    def install_temporal_position(self, max_positions: int = 8) -> None:
+        """Give the backbone motion sight: wrap each temporal-attention block with a frame-position embedding.
+
+        Called AFTER the backbone's weights are in place (a warm start's pack load, or the moment before a
+        checkpoint load), so the reused `norm`/`attn` weights are the trained ones and only the zero-initialised
+        position table is fresh. Identity blocks (the skipped full-resolution stage) carry no attention and are
+        left alone. Idempotent guard: a second call would wrap the wrappers, so it refuses once installed.
+        """
+        from celltrack.models.temporal_position_attention import TemporalPositionAttention  # noqa: PLC0415
+
+        if self.temporal_position:
+            return
+        blocks = cast(nn.ModuleList, self.unet.temporal_blocks)  # external backbone is untyped
+        for index, block in enumerate(blocks):
+            if hasattr(block, "attn"):  # a real _TemporalAttention (Identity, the skipped stage, has none)
+                blocks[index] = TemporalPositionAttention(block, max_positions=max_positions)
+        self.temporal_position = True
 
     @staticmethod
     def _backbone_cls() -> type[nn.Module]:

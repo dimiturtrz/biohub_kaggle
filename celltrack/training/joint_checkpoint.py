@@ -62,6 +62,7 @@ class JointCheckpoint:
                 "out_channels": self.out_channels,
                 "layers": list(self.layers),
                 "downsample": list(self.downsample),
+                "temporal_position": getattr(model.detector, "temporal_position", False),
             },
         }
 

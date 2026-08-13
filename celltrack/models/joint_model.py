@@ -65,6 +65,8 @@ class JointModel(nn.Module):
         state = torch.load(path, map_location=device, weights_only=False)
         config = state["config"]
         detector = TemporalUNetDetector(config["out_channels"], tuple(config["layers"]))
+        if config.get("temporal_position"):  # rebuild the position-embedded attention before its weights load
+            detector.install_temporal_position()
         transformer = EdgeTransformerScorer._transformer_cls()(  # noqa: SLF001 — the pack's head class, mounted
             feat_dim=state["transformer_state"]["proj.weight"].shape[1],
             hidden_dim=_HIDDEN_DIM,
