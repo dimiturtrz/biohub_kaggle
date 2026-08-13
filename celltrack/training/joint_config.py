@@ -105,14 +105,13 @@ class OptimCfg(BaseModel):
     # This is the from-scratch default the trainer already ran; the published recipe's 1e-3 is NOT it.
     lr: float = Field(1e-4, gt=0)
     grad_clip: float = Field(1.0, gt=0)
-    # Pairs whose gradients are AVERAGED into one update. A pair's target counts are ragged, so pairs cannot be
-    # stacked into a batch tensor — but that never prevented averaging their GRADIENTS, and the loop stepped on
-    # every single pair, i.e. at batch size one, for the whole campaign. Every warm-start arm then peaked within
-    # a few hundred steps and degraded, a curve read as "warm-start fine-tuning has a short optimum" when an
-    # un-averaged update is equally consistent with it: at batch one each step follows a single pair's noise.
-    # 1 reproduces the per-pair update exactly (the scale below is 1/1 and the step lands on every pair), so
-    # this is inert until asked for and the old arms stay comparable.
-    accumulate_pairs: PositiveInt = 1
+    # Pairs FORWARDED TOGETHER in one backbone pass and averaged into one optimiser step. A pair's target counts
+    # are ragged, so the HEADS run per pair, but the backbone — the GPU cost — takes any batch dimension, so
+    # stacking B pairs' windows fills the device where a per-pair forward left it ~40% idle for the whole
+    # campaign. The gradient is the mean over the batch, so `lr` keeps its meaning across sizes. 1 reproduces the
+    # per-pair update exactly (mean of one, step on every pair), so the old single-pair arms stay comparable; a
+    # larger value both averages the update (steadier than one pair's noise) and uses the card.
+    batch_size: PositiveInt = 1
     # Decay the rate to zero over the run (cosine). Warm-starting a CONVERGED model is exactly the case a
     # schedule is for: a flat rate keeps taking full-size steps away from an optimum the weights already sit
     # in, while an annealed one explores early and settles.

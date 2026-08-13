@@ -98,9 +98,40 @@ class JointModel(nn.Module):
         without circularity, and targets take the zero vector — the same value a first-frame node takes.
         Omitted, both frames' features are exactly what they were before the feature existed.
         """
-        device = str(frame_t.device)
         window = torch.stack([frame_t, frame_t1], dim=0).unsqueeze(0).unsqueeze(2)  # (1, 2, 1, Z, Y, X)
         features = self.detector.unet(window)[0]  # (2, C, Z, Y', X')
+        return self._heads(features, source_positions, target_positions, source_velocity)
+
+    def forward_batch(
+        self,
+        windows: Float[Tensor, "b two z y x"],
+        source_positions: list[Int[Tensor, "s 3"]],
+        target_positions: list[Int[Tensor, "u 3"]],
+        source_velocities: list[Float[Tensor, "s 3"] | None],
+    ) -> list[JointForward]:
+        """One backbone pass over B pairs, then the two heads per pair — the batched training path.
+
+        The backbone is the GPU cost and it takes any `(B, T, ...)`, so stacking B pairs' `(2, Z, Y, X)` windows
+        into one `(B, 2, 1, Z, Y, X)` call fills the device where a per-pair forward leaves it idle. The heads
+        run per pair because each pair has its own ragged node sets (they are cheap — small transformers over
+        tens of nodes), so the result is a list, one `JointForward` per pair. `forward` is exactly the `B = 1`
+        case, so a batched run computes the identical thing a per-pair run does, one optimiser step later.
+        """
+        features = self.detector.unet(windows.unsqueeze(2))  # (B, 2, C, Z, Y', X')
+        return [
+            self._heads(features[index], source_positions[index], target_positions[index], source_velocities[index])
+            for index in range(features.shape[0])
+        ]
+
+    def _heads(
+        self,
+        features: Float[Tensor, "two c z y x"],
+        source_positions: Int[Tensor, "s 3"],
+        target_positions: Int[Tensor, "u 3"],
+        source_velocity: Float[Tensor, "s 3"] | None,
+    ) -> JointForward:
+        """Both detection maps, the source→target edge logits and the node features, from one pair's features."""
+        device = str(features.device)
         detection_t = self.detector.detect_head(features[0:1])[0, 0]  # (Z, Y', X')
         detection_t1 = self.detector.detect_head(features[1:2])[0, 0]
         spatial = torch.tensor(features.shape[2:], dtype=torch.float32, device=device)

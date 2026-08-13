@@ -36,6 +36,30 @@ def test_forward():
     assert out.source_features.shape == (1, feature_dim) and out.target_features.shape == (2, feature_dim)
 
 
+def test_forward_batch():
+    """A batched forward computes each pair IDENTICALLY to a per-pair forward — the batching is transparent.
+
+    This is the load-bearing property: a batch=B run must train on the same per-pair quantities a batch=1 run
+    does (only the optimiser step is shared), so the backbone forwarded once over B stacked pairs and read out
+    per pair equals B independent forwards to the bit.
+    """
+    torch.manual_seed(0)
+    model = _joint_model().eval()
+    frames = [(torch.randn(4, 8, 8), torch.randn(4, 8, 8)) for _ in range(2)]
+    sources = [torch.tensor([[2, 4, 4]]), torch.tensor([[1, 2, 2]])]
+    targets = [torch.tensor([[2, 4, 4], [1, 2, 2]]), torch.tensor([[3, 5, 5]])]
+
+    with torch.no_grad():
+        singles = [model.forward(ft, ft1, s, t) for (ft, ft1), s, t in zip(frames, sources, targets, strict=True)]
+        windows = torch.stack([torch.stack([ft, ft1], dim=0) for ft, ft1 in frames], dim=0)  # (2, 2, Z, Y, X)
+        batched = model.forward_batch(windows, sources, targets, [None, None])
+
+    for single, batch in zip(singles, batched, strict=True):
+        assert torch.equal(single.edge_logits, batch.edge_logits)
+        assert torch.equal(single.detection_t, batch.detection_t)
+        assert torch.equal(single.source_features, batch.source_features)
+
+
 def test_forward_prior_velocity():
     """A source prior step widens both frames' features by three columns — the targets' being the zero vector."""
     model = _joint_model(extra_features=PriorVelocity.DIM).eval()

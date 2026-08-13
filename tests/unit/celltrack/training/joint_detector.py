@@ -336,7 +336,7 @@ def test_train_accumulate_one_leaves_the_weights_untouched(
 ):
     """Accumulating over one pair IS the per-pair step, so every arm measured before it stays comparable."""
     default = _trained_weights(_cpu_config(), video_store, in_bounds_tracks, tmp_path / "default")
-    explicit = _cpu_config().model_copy(update={"optim": OptimCfg(lr=1e-4, accumulate_pairs=1)})
+    explicit = _cpu_config().model_copy(update={"optim": OptimCfg(lr=1e-4, batch_size=1)})
     assert _trained_weights(explicit, video_store, in_bounds_tracks, tmp_path / "one") == default
 
 
@@ -352,7 +352,7 @@ def test_train_accumulate_averages_instead_of_stepping(
     run never saved. The snapshot holds the trained weights unconditionally, so a difference here is a real one.
     """
     default = _trained_weights(_cpu_config(), video_store, in_bounds_tracks, tmp_path / "single")
-    batched = _cpu_config().model_copy(update={"optim": OptimCfg(lr=1e-4, accumulate_pairs=2)})
+    batched = _cpu_config().model_copy(update={"optim": OptimCfg(lr=1e-4, batch_size=2)})
     assert _trained_weights(batched, video_store, in_bounds_tracks, tmp_path / "batched") != default
 
 

@@ -54,7 +54,7 @@ from celltrack.losses.balanced_bce import BalancedBCE
 from celltrack.losses.hard_negative_margin import HardNegativeMargin
 from celltrack.losses.softmax_focal_bce import SoftmaxFocalBCE
 from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeTransformerScorer
-from celltrack.models.joint_model import JointModel
+from celltrack.models.joint_model import JointForward, JointModel
 from celltrack.models.temporal_unet_detector import TemporalUNetDetector
 from celltrack.operating_point import TrackerConfig
 from celltrack.training.contrastive_term import ContrastiveTerm
@@ -226,10 +226,10 @@ class JointTrainer:
         # variable of the experiment rather than an inherited constant.
         parser.add_argument("--lr", type=float, default=1e-4, help="learning rate; lower it when warm-starting")
         parser.add_argument(
-            "--accumulate-pairs",
+            "--batch-size",
             type=int,
             default=1,
-            help="pairs averaged into one update (1 = the per-pair step every arm so far has taken)",
+            help="pairs forwarded together in one backbone pass, averaged into one step (1 = per-pair)",
         )
         parser.add_argument("--cosine-lr", action="store_true", help="decay the rate to zero over the run")
         parser.add_argument(
@@ -526,19 +526,21 @@ class JointTrainer:
         """Train one optimiser step per pair of `dataset`; returns each term's window mean plus `it_per_s`."""
         model.train()
         steps = len(dataset)
+        batch_size = self.config.optim.batch_size
         sums: dict[str, float] = {}
         done, t0 = 0, time.perf_counter()
+        batch: list[tuple[PairDraw, PairSample]] = []
         for draw, pair in self._pairs(dataset, curriculum):
-            # The update lands every `accumulate_pairs` pairs, and ALWAYS on the window's last pair so no
-            # half-built gradient survives into the next window (where the evaluation and a checkpoint sit).
-            batched = done + 1
-            apply = batched % self.config.optim.accumulate_pairs == 0 or batched == steps
-            outcome = self._step(model, optimization, pair, draw.weight, apply=apply)
-            for name, value in outcome.logged().items():
-                sums[name] = sums.get(name, 0.0) + value
-            self._observe(curriculum, draw.index, outcome)
-            done += 1
-            if done % _HEARTBEAT_UPDATES == 0:
+            batch.append((draw, pair))
+            if len(batch) < batch_size and done + len(batch) < steps:
+                continue
+            for (draw, _), outcome in zip(batch, self._step_batch(model, optimization, batch), strict=True):
+                for name, value in outcome.logged().items():
+                    sums[name] = sums.get(name, 0.0) + value
+                self._observe(curriculum, draw.index, outcome)
+                done += 1
+            batch = []
+            if done % _HEARTBEAT_UPDATES < batch_size:
                 rate = done / (time.perf_counter() - t0)
                 logger.info("  ..%d/%d in window | loss %.4f | %.1f it/s", done, steps, sums["train_loss"] / done, rate)
         divisor = max(done, 1)
@@ -563,63 +565,61 @@ class JointTrainer:
             return
         curriculum.observe(index, outcome.difficulty())
 
-    def _step(
-        self, model: JointModel, optimization: _Optimization, pair: PairSample, weight: float = 1.0, *, apply: bool
-    ) -> _PairOutcome:
-        """One pair's contribution to the current update; the optimiser moves only when `apply`.
-
-        `weight` is the curriculum's per-sample say in the update. It scales the GRADIENT only: the logged
-        terms stay the pair's own unweighted numbers, so a window's loss row still compares across arms.
-
-        Dividing by `accumulate_pairs` makes the applied gradient the MEAN over the accumulated pairs rather
-        than their sum, so the effective learning rate does not scale with the batch and an arm's `lr` keeps
-        its meaning across accumulation settings. The clip then bounds that mean — the quantity the optimiser
-        actually follows — where it used to bound one pair's own gradient.
-        """
-        outcome = self._losses(model, pair)
-        ((weight / self.config.optim.accumulate_pairs) * outcome.total).backward()
-        if apply:
-            nn.utils.clip_grad_norm_(self._trained(model), self.config.optim.grad_clip)
-            optimization.step()
-            optimization.zero_grad()
-        return outcome
+    def _step_batch(
+        self, model: JointModel, optimization: _Optimization, batch: list[tuple[PairDraw, PairSample]]
+    ) -> list[_PairOutcome]:
+        """One step over a batch — backbone forwarded ONCE over stacked windows, gradient the batch MEAN."""
+        device = self.config.runtime.device
+        samples = [pair.to(device) for _, pair in batch]
+        velocities = [self._velocity.of(model, sample, self._autocast()) for sample in samples]
+        windows = torch.stack([torch.stack([s.frame_t, s.frame_t1], dim=0) for s in samples], dim=0)  # (B, 2, Z, Y, X)
+        with self._attention(), self._autocast():
+            forwards = model.forward_batch(
+                windows, [s.source_centres for s in samples], [s.target_centres for s in samples], velocities
+            )
+            outcomes = [self._losses_from(out, sample) for out, sample in zip(forwards, samples, strict=True)]
+        terms = [draw.weight * out.total for (draw, _), out in zip(batch, outcomes, strict=True)]
+        (torch.stack(terms).sum() / len(batch)).backward()
+        nn.utils.clip_grad_norm_(self._trained(model), self.config.optim.grad_clip)
+        optimization.step()
+        optimization.zero_grad()
+        return outcomes
 
     def _losses(self, model: JointModel, pair: PairSample) -> _PairOutcome:
-        """The loss tensors for one pair — shared by the training step and the no-grad eval.
-
-        Positions reach the model at FULL resolution (it divides by the downsample for the feature grid,
-        mirroring the inference scorer); the detection heads emit on the downsampled grid, so their GT
-        centres are divided here to match.
-        """
-        device = self.config.runtime.device
-        loss_config = self.config.loss
-        sample = pair.to(device)
+        """One pair's loss tensors — the per-pair forward then `_losses_from`; used by the no-grad eval."""
+        sample = pair.to(self.config.runtime.device)
         velocity = self._velocity.of(model, sample, self._autocast())
+        with self._attention(), self._autocast():
+            out = model.forward(sample.frame_t, sample.frame_t1, sample.source_centres, sample.target_centres, velocity)
+            return self._losses_from(out, sample)
+
+    def _attention(self):
+        """Pin SDPA to the math backend under compile so inductor traces its clean composite backward; no-op eager."""
+        return sdpa_kernel(SDPBackend.MATH) if self.config.runtime.compile_backbone else contextlib.nullcontext()
+
+    def _losses_from(self, out: JointForward, sample: PairSample) -> _PairOutcome:
+        """Every loss term for one pair from its already-computed forward (GT centres divided to the heads' grid)."""
+        loss_config = self.config.loss
         source_centres, target_centres, edge_matrix = sample.source_centres, sample.target_centres, sample.edge_matrix
-        downsample = torch.tensor(self.config.data.downsample, dtype=torch.float32, device=device)
+        downsample = torch.tensor(self.config.data.downsample, dtype=torch.float32, device=str(out.edge_logits.device))
         centres_t_grid = (source_centres.to(torch.float32) / downsample).round().long()
         centres_t1_grid = (target_centres.to(torch.float32) / downsample).round().long()
-        # Under compile, pin SDPA to the math backend so inductor traces its clean composite backward; no-op eager.
-        compiled = self.config.runtime.compile_backbone
-        attention = sdpa_kernel(SDPBackend.MATH) if compiled else contextlib.nullcontext()
-        with attention, self._autocast():
-            out = model.forward(sample.frame_t, sample.frame_t1, source_centres, target_centres, velocity)
-            edge = SoftmaxFocalBCE.of(
-                out.edge_logits, edge_matrix, loss_config.link_axes, balanced=loss_config.balanced_links
-            )
-            ignore = loss_config.ignore_ambiguous_above
-            det = BalancedBCE.of(
-                out.detection_t.unsqueeze(0), [centres_t_grid], loss_config.neg_weight, ignore
-            ) + BalancedBCE.of(out.detection_t1.unsqueeze(0), [centres_t1_grid], loss_config.neg_weight, ignore)
-            contrastive = self.contrastive.forward(out.source_features, out.target_features, edge_matrix)
-            decoys = HardNegativeMargin.mine(source_centres, target_centres, edge_matrix, loss_config.hard_negatives)
-            hard_negative = HardNegativeMargin.of(out.edge_logits, edge_matrix, decoys)
-            loss = (
-                edge
-                + loss_config.det_weight * det
-                + loss_config.contrastive_weight * contrastive
-                + loss_config.hard_negative_weight * hard_negative
-            )
+        edge = SoftmaxFocalBCE.of(
+            out.edge_logits, edge_matrix, loss_config.link_axes, balanced=loss_config.balanced_links
+        )
+        ignore = loss_config.ignore_ambiguous_above
+        det = BalancedBCE.of(
+            out.detection_t.unsqueeze(0), [centres_t_grid], loss_config.neg_weight, ignore
+        ) + BalancedBCE.of(out.detection_t1.unsqueeze(0), [centres_t1_grid], loss_config.neg_weight, ignore)
+        contrastive = self.contrastive.forward(out.source_features, out.target_features, edge_matrix)
+        decoys = HardNegativeMargin.mine(source_centres, target_centres, edge_matrix, loss_config.hard_negatives)
+        hard_negative = HardNegativeMargin.of(out.edge_logits, edge_matrix, decoys)
+        loss = (
+            edge
+            + loss_config.det_weight * det
+            + loss_config.contrastive_weight * contrastive
+            + loss_config.hard_negative_weight * hard_negative
+        )
         ignored = self._ignored((out.detection_t, centres_t_grid), (out.detection_t1, centres_t1_grid))
         return _PairOutcome(loss, edge, det, contrastive, hard_negative, out.edge_logits, edge_matrix, ignored)
 
@@ -704,7 +704,7 @@ def main() -> None:
             synthetic_sequences=args.synthetic_sequences,
             paced_curriculum=args.paced_curriculum,
         ),
-        optim=OptimCfg(lr=args.lr, cosine_lr=args.cosine_lr, accumulate_pairs=args.accumulate_pairs),
+        optim=OptimCfg(lr=args.lr, cosine_lr=args.cosine_lr, batch_size=args.batch_size),
         loss=LossCfg(
             det_weight=args.det_weight,
             contrastive_weight=args.contrastive_weight,
