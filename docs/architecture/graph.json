@@ -11787,7 +11787,19 @@
     {
       "kind": "calls",
       "source": "celltrack.training.pair_split.PairSplit.assemble",
+      "target": "celltrack.data.candidate_density.CandidateDensity.of_pairs",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.pair_split.PairSplit.assemble",
       "target": "celltrack.eval.proxy.TestMovieProxy.training_videos",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.pair_split.PairSplit.assemble",
+      "target": "celltrack.operating_point.TrackerConfig.shipped",
       "weight": 1
     },
     {
@@ -11800,6 +11812,12 @@
       "kind": "calls",
       "source": "celltrack.training.pair_split.PairSplit.assemble",
       "target": "core.data.tracks.AnnotatedTracks.from_geff",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.pair_split.PairSplit.assemble",
+      "target": "core.data.video.CellVideo.from_ome_zarr",
       "weight": 1
     },
     {

@@ -22,6 +22,7 @@ from typing import cast
 import numpy as np
 import zarr
 
+from celltrack.data.candidate_density import CandidateDensity
 from celltrack.data.detection_pairs import DetectionPairs
 from celltrack.data.frame_source import FrameSource, PooledFrames, ZarrFrames
 from celltrack.data.joint_dataset import PairTarget
@@ -78,6 +79,15 @@ class PairSplit:
                 for path in Obs.progress(train_paths, "videos", len(train_paths)):
                     train_targets.extend(cls.of_video(path, AnnotatedTracks.from_geff(root.track_store(path))))
         logger.info("%d train pairs", len(train_targets))
+        # What a training STEP actually asks, measured on the shipped linker's own gate so the corpus and the
+        # deployment are compared on the same radius: a corpus whose contested fraction is far from the tracker's
+        # is training on a different question (the sparse-acquisition defect hid for thirteen arms because this
+        # line was missing). Spacing is any train video's — identical across the acquisitions post-downsample.
+        if train_targets:
+            spacing = CellVideo.from_ome_zarr(train_paths[0]).spacing
+            CandidateDensity.of_pairs(train_targets, spacing, TrackerConfig.shipped().linker.gate_um).report(
+                "train corpus"
+            )
 
         # The edge AUC reads the SAME held-out movies the checkpoint is selected on — one validation set, and a
         # pair-level forward per annotated frame, so `val_videos` caps how many of them contribute.
