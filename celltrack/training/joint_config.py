@@ -331,7 +331,6 @@ class RuntimeCfg(BaseModel):
     # whatever this says.
     loader_threads: PositiveInt = 4
     loader_prefetch: PositiveInt = 8
-    compile_backbone: bool = False  # torch.compile the U-Net (static shape); one-time warmup, then fused kernels
 
 
 class JointTrainConfig(BaseModel):

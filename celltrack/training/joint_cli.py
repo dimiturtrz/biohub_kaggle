@@ -94,7 +94,6 @@ class JointCli:
         parser.add_argument(
             "--warm-pack", choices=tuple(WARM_PACKS), default="seed1", help="which published pack to continue"
         )
-        parser.add_argument("--compile-backbone", action="store_true", help="torch.compile the U-Net (static shape)")
         # Frame decompression prefetches the GPU step (uniform path): more threads = the GPU stops stalling on
         # zarr reads. Defaults are conservative; a 32-core box saturates the GPU at ~16 threads / 24 in flight.
         parser.add_argument("--loader-threads", type=int, default=4, help="frame-decompression threads (prefetch)")

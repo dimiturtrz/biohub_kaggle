@@ -31,7 +31,6 @@ own-trained baseline. Either way the best checkpoint by selection score is saved
 
 from __future__ import annotations
 
-import contextlib
 import logging
 import math
 import time
@@ -338,12 +337,12 @@ class JointTrainer:
             # channels_last_3d is a lossless layout that measured faster on the feature convs. torch stubs
             # omit the memory_format overload of Module.to; the call is runtime-valid.
             model = model.to(memory_format=torch.channels_last_3d)  # type: ignore[no-matching-overload]
-        if self.config.runtime.compile_backbone:
-            # Compile the backbone (static shape); the temporal-attention SDPA is forced to MATH at forward
-            # time (see `_step`) — its efficient backward has a broken compiled meta-kernel.
-            model.detector.unet = torch.compile(model.detector.unet, dynamic=False)  # type: ignore[bad-assignment]
-            if self.config.data.gpu_scene_fraction:  # fuse the uniform-N generated-scene edge head (measured 4x)
-                model.compile_scene_head(SceneConfig().n_cells)
+        # Compile the backbone ALWAYS (static 64^3 shape) — not an option: a crash is a bug to fix at its root,
+        # not a reason to run eager. The temporal-attention SDPA is forced to MATH at forward time (see `_step`)
+        # — its efficient backward has a broken compiled meta-kernel.
+        model.detector.unet = torch.compile(model.detector.unet, dynamic=False)  # type: ignore[bad-assignment]
+        if self.config.data.gpu_scene_fraction:  # fuse the uniform-N generated-scene edge head (measured 4x)
+            model.compile_scene_head(SceneConfig().n_cells)
         self.contrastive.to(self.config.runtime.device)
         optimizer = torch.optim.AdamW(self._trained(model), lr=self.config.optim.lr)
         return model, _Optimization(optimizer, self._schedule(optimizer))
@@ -533,8 +532,9 @@ class JointTrainer:
             return self._losses_from(out, sample)
 
     def _attention(self):
-        """Pin SDPA to the math backend under compile so inductor traces its clean composite backward; no-op eager."""
-        return sdpa_kernel(SDPBackend.MATH) if self.config.runtime.compile_backbone else contextlib.nullcontext()
+        """Pin SDPA to the math backend — the backbone is always compiled, and inductor needs the clean composite
+        backward (the efficient SDPA backward has a broken compiled meta-kernel)."""
+        return sdpa_kernel(SDPBackend.MATH)
 
     def _losses_from(self, out: JointForward, sample: PairSample, *, detection: bool = True) -> _PairOutcome:
         """Every loss term for one pair from its already-computed forward (GT centres divided to the heads' grid).
@@ -697,7 +697,6 @@ def main() -> None:
         ),
         runtime=RuntimeCfg(
             device=args.device,
-            compile_backbone=args.compile_backbone,
             loader_threads=args.loader_threads,
             loader_prefetch=args.loader_prefetch,
         ),
