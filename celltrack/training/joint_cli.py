@@ -96,11 +96,12 @@ class JointCli:
         )
         # Frame decompression prefetches the GPU step (uniform path): more threads = the GPU stops stalling on
         # zarr reads. Defaults are conservative; a 32-core box saturates the GPU at ~16 threads / 24 in flight.
-        # Training is DECOMPRESS-bound: the tiny UNet computes a batch in a burst, then the GPU idles waiting on
-        # the next pairs' frames. Measured at batch 16 (RTX5090 / 32-thread CPU): 4-8 threads starve it (~9 it/s,
-        # util drains to ~15%), 24 threads + 32 prefetch keep it fed (~19 it/s, util sustained ~75%). 2x.
-        parser.add_argument("--loader-threads", type=int, default=24, help="frame-decompression threads (prefetch)")
-        parser.add_argument("--loader-prefetch", type=int, default=32, help="pairs kept in flight ahead of the step")
+        # KEEP THESE LOW. Each loader thread holds a concurrent memory-mapped zarr reader, and `prefetch` in-flight
+        # decompressed pairs sit in host RAM; 24 threads / 32 prefetch OOM'd a 94GB box (Windows commit limit) in
+        # ~10s under concurrent load. The 2x throughput that config bought is NOT worth crashing the machine — a
+        # safe fast config must be RE-MEASURED with RSS + commit-charge monitoring (bead) before the default rises.
+        parser.add_argument("--loader-threads", type=int, default=4, help="frame-decompression threads (mmap readers)")
+        parser.add_argument("--loader-prefetch", type=int, default=8, help="pairs kept in flight ahead of the step")
         # The corpus whose candidate set is the one the tracker deploys against: 3.86 in-gate candidates per
         # source with 97.1% contested, where the annotated pairs carry 0.99 and 1.9%. These REPLACE the
         # annotated pairs — mixing re-introduces the uncontested rows the corpus exists to escape.
