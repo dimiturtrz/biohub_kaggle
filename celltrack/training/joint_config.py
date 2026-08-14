@@ -203,6 +203,10 @@ class LossCfg(BaseModel):
     # How many nearest wrong targets each annotated source contributes — the zni probe's mined count, kept so the
     # two tools mine the same set and only the OBJECTIVE over it differs.
     hard_negatives: PositiveInt = 4
+    # Weight each pair's loss by SNR/(1+crowd) (`SampleWeight`), batch-normalised to mean 1: trust bright,
+    # isolated supervision, ease off dim crowded cells the labels cannot adjudicate. A soft LOSS (it scales the
+    # gradient), NOT a soft logit (see the calibration term). False = every pair weighs equally, yesterday's run.
+    reliability_weighting: bool = False
     # Sigmoid response above which an UNANNOTATED voxel stops being supervised as background (see
     # `BalancedBCE`). Our labels cover ~1-2% of a frame's cells, so the zero target calls thousands of real
     # cells background — and warm-starting a saturated detector aims exactly those gradients at its correct

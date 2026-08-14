@@ -71,6 +71,11 @@ class JointCli:
             help="normalise the link loss across TARGETS too (one child per source), not sources alone",
         )
         parser.add_argument(
+            "--reliability-weighting",
+            action="store_true",
+            help="weight each pair's loss by SNR/(1+crowd): trust clean supervision, ease off ambiguous cells",
+        )
+        parser.add_argument(
             "--balanced-links",
             action="store_true",
             help="count the link loss once per decision, balancing the true candidate against its rivals",

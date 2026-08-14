@@ -53,6 +53,7 @@ from celltrack.eval.model_evaluator import EvalResult, ModelEvaluator
 from celltrack.eval.proxy import VALIDATION_MOVIES, TestMovieProxy
 from celltrack.losses.balanced_bce import BalancedBCE
 from celltrack.losses.hard_negative_margin import HardNegativeMargin
+from celltrack.losses.sample_weight import SampleWeight
 from celltrack.losses.softmax_focal_bce import SoftmaxFocalBCE
 from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeTransformerScorer
 from celltrack.models.joint_model import JointForward, JointModel
@@ -96,6 +97,10 @@ _HIDDEN_DIM, _N_HEADS, _N_BLOCKS = 128, 4, 4
 _POS_FEATURE_DIM = 4 * _POS_EMBED_DIM  # sinusoidal embed of (t, z, y, x)
 # The uniform stream draws no index at all; -1 says so without a `int | None` that every reader must unwrap.
 _UNTRACKED_INDEX = -1
+# The (1,4,4) downsample makes the heads' grid isotropic at the z-spacing, so one downsampled voxel is this many
+# micrometres on every axis — the unit the reliability weight's crowd gate is measured in (see downsample memory).
+_ISOTROPIC_UM = 1.625
+_GATE_UM = TrackerConfig.shipped().linker.gate_um  # the linker's admission gate — a source's competing rivals
 
 
 @dataclass(frozen=True)
@@ -114,6 +119,7 @@ class _PairOutcome:
     edge_logits: Tensor
     edge_matrix: Tensor
     ignored_fraction: float | None = None
+    reliability: Tensor | None = None  # the pair's raw SNR/(1+crowd) weight, batch-normalised by the step
 
     def logged(self) -> dict[str, float]:
         """The detached per-term floats under the names the run tracks — a summed number hides which half moved.
@@ -327,6 +333,7 @@ class JointTrainer:
             if adapted == 0:
                 raise ValueError(f"LoRA targets {self._lora.targets} matched no layers")
             logger.info("LoRA: froze base, adapted %d layers (rank %d)", adapted, self._lora.rank)
+            model = model.to(self.config.runtime.device)  # the new adapter params default to CPU — move them
         if self.config.runtime.device == "cuda":
             # channels_last_3d is a lossless layout that measured faster on the feature convs. torch stubs
             # omit the memory_format overload of Module.to; the call is runtime-valid.
@@ -478,12 +485,29 @@ class JointTrainer:
                 self._losses_from(out, sample, detection=index < real_count or scene_detection)
                 for index, (out, sample) in enumerate(zip(forwards, samples, strict=True))
             ]
-        terms = [draw.weight * out.total for (draw, _), out in zip(batch, outcomes, strict=True)]
+        weights = self._reliability_weights(outcomes)
+        terms = [
+            draw.weight * weight * out.total for (draw, _), out, weight in zip(batch, outcomes, weights, strict=True)
+        ]
         (torch.stack(terms).sum() / len(batch)).backward()
         nn.utils.clip_grad_norm_(self._trained(model), self.config.optim.grad_clip)
         optimization.step()
         optimization.zero_grad()
         return outcomes
+
+    def _reliability_weights(self, outcomes: list[_PairOutcome]) -> list[Tensor]:
+        """Per-pair reliability multipliers normalised to batch-mean 1 — redistributes emphasis, no rescale.
+
+        All ones when the weighting is off (any pair carries no reliability), so an unasked run steps exactly
+        yesterday's gradient. Mean-1 normalisation keeps the total loss scale — and therefore the effective
+        learning rate — unchanged, so only the RELATIVE weight of clean vs ambiguous pairs moves.
+        """
+        raw = [out.reliability for out in outcomes]
+        device = outcomes[0].total.device
+        if any(weight is None for weight in raw):
+            return [torch.ones((), device=device) for _ in outcomes]
+        stacked = torch.stack([weight for weight in raw if weight is not None])
+        return list(stacked / stacked.mean().clamp(min=1e-6))
 
     def _gpu_batch(self, count: int) -> list[tuple[PairDraw, PairSample]]:
         """`count` FRESH GPU-generated hard scene-pairs — untracked (they shape the gradient, not the feedback).
@@ -544,7 +568,20 @@ class JointTrainer:
             + loss_config.hard_negative_weight * hard_negative
         )
         ignored = self._ignored((out.detection_t, centres_t_grid), (out.detection_t1, centres_t1_grid))
-        return _PairOutcome(loss, edge, det, contrastive, hard_negative, out.edge_logits, edge_matrix, ignored)
+        reliability = (
+            SampleWeight.of(
+                sample.frame_t,
+                centres_t_grid,
+                centres_t1_grid.to(torch.float32) * _ISOTROPIC_UM,  # isotropic µm on the heads' own grid
+                centres_t_grid.to(torch.float32) * _ISOTROPIC_UM,
+                _GATE_UM,
+            )
+            if loss_config.reliability_weighting
+            else None
+        )
+        return _PairOutcome(
+            loss, edge, det, contrastive, hard_negative, out.edge_logits, edge_matrix, ignored, reliability
+        )
 
     def _autocast(self) -> torch.autocast:
         """The run's precision context — bf16 on CUDA, a no-op elsewhere; one definition for every forward here."""
@@ -647,6 +684,7 @@ def main() -> None:
             ignore_ambiguous_above=args.ignore_ambiguous_above,
             symmetric_links=args.symmetric_links,
             balanced_links=args.balanced_links,
+            reliability_weighting=args.reliability_weighting,
         ),
         eval=EvalCfg(tracker=replace(TrackerConfig.shipped(), threshold=args.eval_threshold)),
         schedule=ScheduleCfg(

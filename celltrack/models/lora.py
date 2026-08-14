@@ -56,6 +56,8 @@ class LoRA:
             self.base = base
             self.base.requires_grad_(requires_grad=False)
             self.scaling = config.scaling()
+            self.in_features = base.in_features  # a drop-in Linear reports its own dims (callers introspect proj)
+            self.out_features = base.out_features
             self.down = nn.Parameter(torch.empty(config.rank, base.in_features))
             self.up = nn.Parameter(torch.zeros(base.out_features, config.rank))
             nn.init.kaiming_uniform_(self.down, a=5**0.5)  # delta is `up @ down`; `up`=0 makes it zero at init
@@ -74,6 +76,8 @@ class LoRA:
             self.base = base
             self.base.requires_grad_(requires_grad=False)
             self.scaling = config.scaling()
+            self.in_channels = base.in_channels  # a drop-in Conv3d reports its own dims for any introspection
+            self.out_channels = base.out_channels
             kernel = cast(tuple[int, int, int], base.kernel_size)
             padding = cast(tuple[int, int, int], base.padding)
             self.down = nn.Conv3d(base.in_channels, config.rank, kernel_size=1, bias=False)
@@ -93,15 +97,31 @@ class LoRA:
         a `targets` typo that matches nothing would otherwise train zero adapters and read as a silent null.
         """
         module.requires_grad_(requires_grad=False)
+        skip = LoRA._attention_internals(module)
         adapted = 0
         for name, child in list(module.named_modules()):
-            if not any(target in name for target in config.targets):
+            if id(child) in skip or not any(target in name for target in config.targets):
                 continue
             replacement = LoRA._adapt(child, config)
             if replacement is not None:
                 LoRA._set_submodule(module, name, replacement)
                 adapted += 1
         return adapted
+
+    @staticmethod
+    def _attention_internals(module: nn.Module) -> set[int]:
+        """The ids of every module living inside an `nn.MultiheadAttention` — off-limits to adaptation.
+
+        MHA reads its projections' `.weight`/`.bias` FUNCTIONALLY (`F.multi_head_attention_forward`), never
+        through their `forward`, so a wrapped projection would both crash on the missing `.weight` AND leave its
+        delta unapplied. The attention QKV is simply not adaptable by module-swap; the MLPs, `proj` and the
+        feature convs — whose `forward` we do invoke — carry the reshape instead.
+        """
+        inside: set[int] = set()
+        for child in module.modules():
+            if isinstance(child, nn.MultiheadAttention):
+                inside.update(id(sub) for sub in child.modules())
+        return inside
 
     @staticmethod
     def _adapt(child: nn.Module, config: LoraConfig) -> nn.Module | None:
