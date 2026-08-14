@@ -139,6 +139,17 @@ class JointCli:
             help="feed each source its t-1 -> t displacement as head input (~50%% slower per step)",
         )
         parser.add_argument("--temporal-position", action="store_true", help="frame-position embedding (motion sight)")
+        # LoRA: freeze the pilkwang base, train low-rank adapters on the association locus. Detection is anchored
+        # by the frozen base; the adapters give association the feature reshape the frozen backbone cannot.
+        parser.add_argument("--lora", action="store_true", help="freeze the base, train low-rank adapters only")
+        parser.add_argument("--lora-rank", type=int, default=16, help="adapter rank (per-layer capacity)")
+        parser.add_argument("--lora-alpha", type=float, default=16.0, help="adapter scale (delta = alpha/rank * BA)")
+        parser.add_argument(
+            "--lora-targets",
+            nargs="+",
+            default=["transformer", "decoder_blocks"],
+            help="dotted-path substrings of the leaves to adapt (default: transformer + U-Net decoder)",
+        )
         # The threshold is DERIVED, not swept: given bare, the flag takes the pipeline's own inference operating
         # point — the response at which the shipped tracker would already have called the voxel a cell, so every
         # voxel the mask spares is one the deployed model detects and our sparse annotation cannot adjudicate.

@@ -24,6 +24,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt
 
 from celltrack.losses.softmax_focal_bce import SOURCE_AXIS, TARGET_AXIS
+from celltrack.models.lora import LoraConfig
 from celltrack.operating_point import TrackerConfig
 
 logger = logging.getLogger(__name__)
@@ -42,6 +43,27 @@ WARM_PACKS = {
 _EPOCH_OVERRIDES = (("epochs", "steps"), ("evals_per_epoch", "eval_every"), ("patience_epochs", "patience"))
 
 
+class LoraCfg(BaseModel):
+    """Low-rank adapters over a FROZEN base — off by default, byte-identical to the parent when off.
+
+    When on, `_prepare` freezes the whole warm-started model and injects rank-`rank` deltas into every leaf
+    whose dotted path contains one of `targets`. The default targets the association locus: the whole edge
+    transformer plus the U-Net decoder whose features it reads — the mislink signal is in the FEATURES, not the
+    head alone (a1v/zni), so a head-only adaptation is expected to under-move it.
+    """
+
+    model_config = _VALIDATED
+
+    enabled: bool = False
+    rank: PositiveInt = 16
+    alpha: float = Field(16.0, gt=0)
+    targets: tuple[str, ...] = ("transformer", "decoder_blocks")
+
+    def to_config(self) -> LoraConfig:
+        """The `celltrack.models.lora` config this pydantic view configures — the trainer injects from it."""
+        return LoraConfig(rank=self.rank, alpha=self.alpha, targets=self.targets)
+
+
 class ModelCfg(BaseModel):
     """The object being trained: the backbone's shape, and which published pack a warm start continues."""
 
@@ -49,6 +71,7 @@ class ModelCfg(BaseModel):
 
     out_channels: PositiveInt = 32  # the published feature width the mounted transformer head expects
     layers: tuple[PositiveInt, ...] = (32, 64, 128)  # the published U-Net stage widths
+    lora: LoraCfg = Field(default_factory=LoraCfg)  # frozen-base low-rank adapters; off = full model as before
     # WHICH published pack to continue. Warm-starting from seed1 produces that seed's descendant, and a
     # descendant adds nothing to an ensemble containing its parent (measured: +0.0075 alone, but 0.9315
     # against the pair's 0.9334). Training the same recipe from a DIFFERENT parent is how the result earns

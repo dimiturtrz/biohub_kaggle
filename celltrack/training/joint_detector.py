@@ -56,6 +56,7 @@ from celltrack.losses.hard_negative_margin import HardNegativeMargin
 from celltrack.losses.softmax_focal_bce import SoftmaxFocalBCE
 from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeTransformerScorer
 from celltrack.models.joint_model import JointForward, JointModel
+from celltrack.models.lora import LoRA
 from celltrack.models.temporal_unet_detector import TemporalUNetDetector
 from celltrack.operating_point import TrackerConfig
 from celltrack.training.contrastive_term import ContrastiveTerm
@@ -67,6 +68,7 @@ from celltrack.training.joint_config import (
     DataCfg,
     EvalCfg,
     JointTrainConfig,
+    LoraCfg,
     LossCfg,
     ModelCfg,
     OptimCfg,
@@ -320,6 +322,11 @@ class JointTrainer:
         if self.config.model.temporal_position:  # motion sight; the position table lands on the model's device
             model.detector.install_temporal_position()
         self._velocity.widen(model)
+        if self._lora.enabled:  # freeze the base, adapt the association locus; detection is anchored
+            adapted = LoRA.inject(model, self._lora.to_config())
+            if adapted == 0:
+                raise ValueError(f"LoRA targets {self._lora.targets} matched no layers")
+            logger.info("LoRA: froze base, adapted %d layers (rank %d)", adapted, self._lora.rank)
         if self.config.runtime.device == "cuda":
             # channels_last_3d is a lossless layout that measured faster on the feature convs. torch stubs
             # omit the memory_format overload of Module.to; the call is runtime-valid.
@@ -339,13 +346,24 @@ class JointTrainer:
 
         At the `FEATURES` site the contrastive term holds none, so the list IS `model.parameters()` in the
         same order: an unasked run's optimiser and gradient clip are the ones of yesterday, to the byte.
+
+        Under LoRA the base is frozen, so the optimiser is handed ONLY the adapter deltas — the frozen weights
+        would contribute zero gradient but still be tracked, and the point of the adapters is that they are all
+        that moves.
         """
+        if self._lora.enabled:
+            return [*LoRA.adapter_parameters(model), *self.contrastive.parameters()]
         return [*model.parameters(), *self.contrastive.parameters()]
 
     @property
     def _velocity(self) -> PriorVelocitySource:
         """The run's history feed, reading the flag live — `train` re-resolves the config before the model exists."""
         return PriorVelocitySource(enabled=self.config.data.prior_velocity)
+
+    @property
+    def _lora(self) -> LoraCfg:
+        """The run's adapter config, read live — keeps callers off a four-deep reach through `config.model.lora`."""
+        return self.config.model.lora
 
     def _model(self, *, warm_start: bool) -> JointModel:
         """A joint model to train — warm-started from the published pack, or fresh at the configured size."""
@@ -600,7 +618,13 @@ def main() -> None:
 
     # The flat flags fan out into the concern each one belongs to — the CLI is the interface, this is the model.
     config = JointTrainConfig(
-        model=ModelCfg(warm_pack=WARM_PACKS[args.warm_pack], temporal_position=args.temporal_position),
+        model=ModelCfg(
+            warm_pack=WARM_PACKS[args.warm_pack],
+            temporal_position=args.temporal_position,
+            lora=LoraCfg(
+                enabled=args.lora, rank=args.lora_rank, alpha=args.lora_alpha, targets=tuple(args.lora_targets)
+            ),
+        ),
         data=DataCfg(
             detected_videos=args.detected_videos,
             difficulty_sampling=args.difficulty_sampling,

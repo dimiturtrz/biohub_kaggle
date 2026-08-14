@@ -17,6 +17,7 @@ from celltrack.training.joint_config import (
     DataCfg,
     EvalCfg,
     JointTrainConfig,
+    LoraCfg,
     LossCfg,
     ModelCfg,
     OptimCfg,
@@ -55,6 +56,15 @@ def test_defaults_are_the_measured_recipe():
     assert config.schedule.es_min_delta == 0.0
     assert (config.schedule.epochs, config.schedule.evals_per_epoch, config.schedule.patience_epochs) == (None,) * 3
     assert (config.runtime.device, config.runtime.seed, config.runtime.compile_backbone) == ("cuda", 0, False)
+
+
+def test_to_config():
+    """LoraCfg hands the trainer the celltrack.models.lora config it configures — same rank, alpha, targets."""
+    config = LoraCfg(rank=8, alpha=32.0, targets=("transformer", "decoder_blocks")).to_config()
+    assert config.rank == 8
+    assert config.alpha == 32.0
+    assert config.targets == ("transformer", "decoder_blocks")
+    assert config.scaling() == 4.0
 
 
 def test_projects():
