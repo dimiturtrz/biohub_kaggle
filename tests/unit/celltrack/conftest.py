@@ -58,8 +58,19 @@ class _StubTransformer(nn.Module):
         self.proj = nn.Linear(feat_dim, hidden_dim)
 
     @override
-    def forward(self, feat_src: Tensor, feat_tgt: Tensor, src_voxel: Tensor, tgt_voxel: Tensor) -> Tensor:
-        return self.proj(feat_src) @ self.proj(feat_tgt).T  # (s, t) logits
+    def forward(
+        self,
+        feat_src: Tensor,
+        feat_tgt: Tensor,
+        src_voxel: Tensor,
+        tgt_voxel: Tensor,
+        mask_src: Tensor | None = None,
+        mask_tgt: Tensor | None = None,
+    ) -> Tensor:
+        # Matches the real head's contract: unbatched (s, feat) -> (s, t) or padded batched (B, s, feat) ->
+        # (B, s, t), with optional key-padding masks. This stub is a pure matmul, so padding never leaks between
+        # nodes and the masks are accepted-and-ignored; the real head's masked attention is verified elsewhere.
+        return self.proj(feat_src) @ self.proj(feat_tgt).transpose(-1, -2)
 
 
 @pytest.fixture(autouse=True)

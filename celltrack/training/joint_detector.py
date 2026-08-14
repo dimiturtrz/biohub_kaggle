@@ -695,7 +695,12 @@ def main() -> None:
             evals_per_epoch=args.evals_per_epoch,
             patience_epochs=args.patience_epochs,
         ),
-        runtime=RuntimeCfg(device=args.device, compile_backbone=args.compile_backbone),
+        runtime=RuntimeCfg(
+            device=args.device,
+            compile_backbone=args.compile_backbone,
+            loader_threads=args.loader_threads,
+            loader_prefetch=args.loader_prefetch,
+        ),
     )
     root = DataRoot.from_config(_CONFIG)
     proc = root.processed(_DATASET)

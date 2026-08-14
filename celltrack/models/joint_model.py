@@ -15,8 +15,9 @@ from pathlib import Path
 from typing import override
 
 import torch
-from jaxtyping import Float, Int
+from jaxtyping import Bool, Float, Int
 from torch import Tensor, nn
+from torch.nn.utils.rnn import pad_sequence
 
 from celltrack.models.edge_transformer import EdgeTransformerScorer, NodeWindowSlot
 from celltrack.models.temporal_unet_detector import TemporalUNetDetector
@@ -134,10 +135,74 @@ class JointModel(nn.Module):
         case, so a batched run computes the identical thing a per-pair run does, one optimiser step later.
         """
         features = self.detector.unet(windows.unsqueeze(2))  # (B, 2, C, Z, Y', X')
+        if self._scene_transformer is not None:  # generated scenes route per-pair to the compiled uniform-N head
+            return [
+                self._heads(features[i], source_positions[i], target_positions[i], source_velocities[i])
+                for i in range(features.shape[0])
+            ]
+        return self._batched_heads(features, source_positions, target_positions, source_velocities)
+
+    def _batched_heads(
+        self,
+        features: Float[Tensor, "b two c z y x"],
+        source_positions: list[Int[Tensor, "s 3"]],
+        target_positions: list[Int[Tensor, "u 3"]],
+        source_velocities: list[Float[Tensor, "s 3"] | None],
+    ) -> list[JointForward]:
+        """Both detection maps for every pair, then ONE batched transformer call over the padded node sets.
+
+        The per-pair `_heads` runs the ragged edge transformer once per pair — tens of tiny attention kernels
+        that leave the GPU idle between launches. The transformer accepts a padded `(B, N, D)` batch with a
+        key-padding mask, so padding every pair's sources to the batch's widest, stacking, and calling once
+        fills the device; the mask makes the pad nodes inert, so each pair's `[:s, :u]` block is identical to
+        its unbatched logits. Detection is a plain batched conv. Feature GATHER stays per pair — it is cheap
+        indexing, not the bottleneck the batched attention is.
+        """
+        device = str(features.device)
+        detect_t = self.detector.detect_head(features[:, 0])[:, 0]  # (B, Z, Y', X')
+        detect_t1 = self.detector.detect_head(features[:, 1])[:, 0]
+        spatial = torch.tensor(features.shape[3:], dtype=torch.float32, device=device)
+        downsample = torch.tensor(self.downsample, dtype=torch.float32, device=device)
+        sources: list[Tensor] = []
+        targets: list[Tensor] = []
+        source_voxels: list[Tensor] = []
+        target_voxels: list[Tensor] = []
+        for index in range(features.shape[0]):
+            velocity = source_velocities[index]
+            source_voxel = source_positions[index].to(torch.float32)
+            target_voxel = target_positions[index].to(torch.float32)
+            source_step = None if velocity is None else velocity / downsample
+            target_step = None if velocity is None else torch.zeros_like(target_voxel)
+            sources.append(
+                EdgeTransformerScorer.node_features(
+                    features[index, 0], source_voxel / downsample, NodeWindowSlot(spatial, 0.0, device), source_step
+                )
+            )
+            targets.append(
+                EdgeTransformerScorer.node_features(
+                    features[index, 1], target_voxel / downsample, NodeWindowSlot(spatial, 1.0, device), target_step
+                )
+            )
+            source_voxels.append(source_voxel)
+            target_voxels.append(target_voxel)
+        logits = self.transformer(
+            pad_sequence(sources, batch_first=True),
+            pad_sequence(targets, batch_first=True),
+            pad_sequence(source_voxels, batch_first=True),
+            pad_sequence(target_voxels, batch_first=True),
+            self._length_mask(sources, device),
+            self._length_mask(targets, device),
+        )  # (B, maxS, maxU)
         return [
-            self._heads(features[index], source_positions[index], target_positions[index], source_velocities[index])
-            for index in range(features.shape[0])
+            JointForward(detect_t[i], detect_t1[i], logits[i, : sources[i].shape[0], : targets[i].shape[0]], s, t)
+            for i, (s, t) in enumerate(zip(sources, targets, strict=True))
         ]
+
+    @staticmethod
+    def _length_mask(nodes: list[Float[Tensor, "n d"]], device: str) -> Bool[Tensor, "b n"]:
+        """A `(B, maxN)` boolean mask, True over each pair's real nodes and False over the padding."""
+        lengths = torch.tensor([node.shape[0] for node in nodes], device=device)
+        return torch.arange(int(lengths.max()), device=device)[None, :] < lengths[:, None]
 
     def _heads(
         self,

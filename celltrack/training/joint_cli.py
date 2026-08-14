@@ -95,6 +95,10 @@ class JointCli:
             "--warm-pack", choices=tuple(WARM_PACKS), default="seed1", help="which published pack to continue"
         )
         parser.add_argument("--compile-backbone", action="store_true", help="torch.compile the U-Net (static shape)")
+        # Frame decompression prefetches the GPU step (uniform path): more threads = the GPU stops stalling on
+        # zarr reads. Defaults are conservative; a 32-core box saturates the GPU at ~16 threads / 24 in flight.
+        parser.add_argument("--loader-threads", type=int, default=4, help="frame-decompression threads (prefetch)")
+        parser.add_argument("--loader-prefetch", type=int, default=8, help="pairs kept in flight ahead of the step")
         # The corpus whose candidate set is the one the tracker deploys against: 3.86 in-gate candidates per
         # source with 97.1% contested, where the annotated pairs carry 0.99 and 1.9%. These REPLACE the
         # annotated pairs — mixing re-introduces the uncontested rows the corpus exists to escape.

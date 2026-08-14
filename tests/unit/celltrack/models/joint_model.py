@@ -37,11 +37,14 @@ def test_forward():
 
 
 def test_forward_batch():
-    """A batched forward computes each pair IDENTICALLY to a per-pair forward — the batching is transparent.
+    """A batched forward computes each pair EQUIVALENTLY to a per-pair forward — the batching is transparent.
 
     This is the load-bearing property: a batch=B run must train on the same per-pair quantities a batch=1 run
-    does (only the optimiser step is shared), so the backbone forwarded once over B stacked pairs and read out
-    per pair equals B independent forwards to the bit.
+    does (only the optimiser step is shared). The edge transformer runs as ONE padded, key-masked call over the
+    whole batch rather than a per-pair loop (the 2.5x throughput win), so each pair's [:s, :u] block equals its
+    unbatched logits up to floating point — the padded attention and the batch-size-dependent detection conv
+    each select a different kernel, ~1e-6, far below anything training reads. The scene path (a compiled
+    uniform-N head) keeps the per-pair loop.
     """
     torch.manual_seed(0)
     model = _joint_model().eval()
@@ -55,9 +58,9 @@ def test_forward_batch():
         batched = model.forward_batch(windows, sources, targets, [None, None])
 
     for single, batch in zip(singles, batched, strict=True):
-        assert torch.equal(single.edge_logits, batch.edge_logits)
-        assert torch.equal(single.detection_t, batch.detection_t)
-        assert torch.equal(single.source_features, batch.source_features)
+        assert torch.allclose(single.edge_logits, batch.edge_logits, atol=1e-4)
+        assert torch.allclose(single.detection_t, batch.detection_t, atol=1e-4)
+        assert torch.allclose(single.source_features, batch.source_features, atol=1e-4)
 
 
 def test_compile_scene_head():
