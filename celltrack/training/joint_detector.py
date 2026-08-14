@@ -344,6 +344,9 @@ class JointTrainer:
         # which the ragged per-pair loss is not. The temporal-attention SDPA is forced to MATH at forward time
         # (see `_step`) — its efficient backward has a broken compiled meta-kernel.
         model.detector.unet = torch.compile(model.detector.unet, dynamic=False)  # type: ignore[bad-assignment]
+        # The edge head stays EAGER: it is a tiny attention over the padded nodes, already collapsed to ONE
+        # batched call, so compiling it fused little — and the SAME module runs ragged per-pair in the selector
+        # eval (whole videos, every gap a different node count), where a static compile thrashes the recompile cap.
         if self.config.data.gpu_scene_fraction:  # fuse the uniform-N generated-scene edge head (measured 4x)
             model.compile_scene_head(SceneConfig().n_cells)
         self.contrastive.to(self.config.runtime.device)

@@ -164,6 +164,8 @@ class JointModel(nn.Module):
         detect_t1 = self.detector.detect_head(features[:, 1])[:, 0]
         spatial = torch.tensor(features.shape[3:], dtype=torch.float32, device=device)
         downsample = torch.tensor(self.downsample, dtype=torch.float32, device=device)
+        # Zero-pad each pair's nodes to the BATCH max (pad_sequence) — the pad rows index voxel 0 and the mask
+        # makes them inert, so each pair's [:s, :u] block is identical to its unbatched forward.
         source_voxels = pad_sequence([p.to(torch.float32) for p in source_positions], batch_first=True)  # (B, S, 3)
         target_voxels = pad_sequence([p.to(torch.float32) for p in target_positions], batch_first=True)  # (B, U, 3)
         source_lengths = torch.tensor([p.shape[0] for p in source_positions], device=device)
