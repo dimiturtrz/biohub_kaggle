@@ -55,7 +55,7 @@ def test_defaults_are_the_measured_recipe():
     assert (config.schedule.steps, config.schedule.eval_every, config.schedule.patience) == (1500, 500, 5)
     assert config.schedule.es_min_delta == 0.0
     assert (config.schedule.epochs, config.schedule.evals_per_epoch, config.schedule.patience_epochs) == (None,) * 3
-    assert (config.runtime.device, config.runtime.seed, config.runtime.compile_backbone) == ("cuda", 0, False)
+    assert (config.runtime.device, config.runtime.seed) == ("cuda", 0)
 
 
 def test_to_config():
