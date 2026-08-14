@@ -87,6 +87,19 @@ def test_node_features():
     assert torch.equal(features, torch.cat([indexed, position], dim=-1))  # no velocity == exactly the old tensor
 
 
+def test_batched_node_features():
+    """The batched gather over padded pairs equals the per-pair node_features, row for row within each pair."""
+    feature_map, _, slot = _node_feature_inputs()
+    maps = torch.stack([feature_map, feature_map * 2.0])  # (2, C, 4, 4, 4) — two distinct feature maps
+    pos_a = torch.tensor([[1.0, 2.0, 2.0], [0.0, 1.0, 1.0]])  # 2 nodes
+    pos_b = torch.tensor([[1.0, 2.0, 2.0], [0.0, 0.0, 0.0], [3.0, 3.0, 3.0]])  # 3 nodes
+    padded = torch.nn.utils.rnn.pad_sequence([pos_a, pos_b], batch_first=True)  # (2, 3, 3), pair a padded to 3
+
+    batched = EdgeTransformerScorer.batched_node_features(maps, padded, slot)
+    assert torch.allclose(batched[0, :2], EdgeTransformerScorer.node_features(maps[0], pos_a, slot))
+    assert torch.allclose(batched[1, :3], EdgeTransformerScorer.node_features(maps[1], pos_b, slot))
+
+
 def test_node_features_prior_velocity():
     """A supplied prior step appends three raw columns at the pack's own displacement scale, leaving the rest alone."""
     feature_map, grid_positions, slot = _node_feature_inputs()

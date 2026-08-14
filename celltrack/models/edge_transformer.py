@@ -329,6 +329,45 @@ class EdgeTransformerScorer(nn.Module):
         return torch.cat(columns, dim=-1)
 
     @staticmethod
+    def batched_node_features(
+        feature_maps: Float[Tensor, "b c z y x"],
+        grid_positions: Float[Tensor, "b n 3"],
+        slot: NodeWindowSlot,
+    ) -> Float[Tensor, "b n d"]:
+        """`node_features` over a PADDED batch — one gather and one embed for every pair at once, no Python loop.
+
+        The per-pair `node_features` is a small index-plus-embed run once per pair; over a batch that is a loop
+        of tiny kernels, and the loop's launch overhead is the residual GPU idle after the transformer itself is
+        batched. This gathers `feature_maps[b, :, z, y, x]` for every pair with a single advanced index and
+        embeds the whole `(b, n, 3)` grid at once, so `[b, :len]` equals the unbatched `node_features` for pair b.
+        Pad rows index voxel 0 (clamped) and are masked out by the transformer; velocity is omitted (the batched
+        training path does not carry it).
+        """
+        clamped = torch.minimum(grid_positions.round().long().clamp(min=0), (slot.spatial - 1).long())
+        batch, nodes = grid_positions.shape[0], grid_positions.shape[1]
+        rows = torch.arange(batch, device=feature_maps.device)[:, None].expand(batch, nodes)
+        gathered = feature_maps[rows, :, clamped[..., 0], clamped[..., 1], clamped[..., 2]]  # (b, n, c)
+        return torch.cat([gathered, EdgeTransformerScorer._batched_position_embedding(grid_positions, slot)], dim=-1)
+
+    @staticmethod
+    def _batched_position_embedding(
+        grid_positions: Float[Tensor, "b n 3"],
+        slot: NodeWindowSlot,
+    ) -> Float[Tensor, "b n d"]:
+        """`_position_embedding` over a `(b, n, 3)` batch — the same sinusoidal embed with a leading batch axis."""
+        window_time = 2.0
+        batch, nodes = grid_positions.shape[0], grid_positions.shape[1]
+        time_column = torch.full((batch, nodes, 1), slot.time_fraction, device=slot.device)
+        coordinates = torch.cat([time_column, grid_positions], dim=-1)  # (b, n, 4)
+        norms = coordinates / torch.cat([torch.tensor([window_time], device=slot.device), slot.spatial]).clamp(min=1.0)
+        freqs = (2.0 ** torch.arange(_POS_EMBED_DIM // 2, device=slot.device, dtype=torch.float32)) * torch.pi
+        parts: list[Tensor] = []
+        for axis in range(4):
+            angles = norms[..., axis].unsqueeze(-1) * freqs
+            parts.extend([angles.sin(), angles.cos()])
+        return torch.cat(parts, dim=-1)
+
+    @staticmethod
     def _position_embedding(
         grid_positions: Float[Tensor, "n 3"],
         slot: NodeWindowSlot,
