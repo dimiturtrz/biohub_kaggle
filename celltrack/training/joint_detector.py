@@ -338,8 +338,11 @@ class JointTrainer:
             # omit the memory_format overload of Module.to; the call is runtime-valid.
             model = model.to(memory_format=torch.channels_last_3d)  # type: ignore[no-matching-overload]
         # Compile the backbone ALWAYS (static 64^3 shape) — not an option: a crash is a bug to fix at its root,
-        # not a reason to run eager. The temporal-attention SDPA is forced to MATH at forward time (see `_step`)
-        # — its efficient backward has a broken compiled meta-kernel.
+        # not a reason to run eager. Default mode (fusion), not reduce-overhead: CUDA-graphing the backbone ALONE
+        # leaves the step-wide launch gaps (heads/loss/optimiser stay eager) untouched, so it did not lift the
+        # oscillating util and only added graph-capture warmup — the launch-latency needs the WHOLE step static,
+        # which the ragged per-pair loss is not. The temporal-attention SDPA is forced to MATH at forward time
+        # (see `_step`) — its efficient backward has a broken compiled meta-kernel.
         model.detector.unet = torch.compile(model.detector.unet, dynamic=False)  # type: ignore[bad-assignment]
         if self.config.data.gpu_scene_fraction:  # fuse the uniform-N generated-scene edge head (measured 4x)
             model.compile_scene_head(SceneConfig().n_cells)
