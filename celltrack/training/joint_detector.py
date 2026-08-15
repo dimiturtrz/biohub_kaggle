@@ -357,8 +357,10 @@ class JointTrainer:
         """A joint model to train — chained from a prior stage's checkpoint, warm-started from the pack, or fresh.
 
         `init_weights` continues a checkpoint THIS trainer wrote (the staged curriculum): `from_checkpoint`
-        rebuilds both heads at the width the file was saved at — a prior-velocity widening or a compile prefix
-        reloads without a second declaration — so the stage inherits the last stage's weights and nothing else.
+        rebuilds both heads at the width the file was saved at — a compile prefix reloads transparently — so
+        the stage inherits the last stage's weights and nothing else. CAVEAT: chaining a `--prior-velocity`
+        checkpoint is broken — `_prepare` widens the head a SECOND time over the already-widened proj (bd
+        biohub_kaggle: double-widen). The non-velocity curriculum path is unaffected.
         """
         architecture, downsample = self.config.model, self.config.data.downsample
         if init_weights is not None:
