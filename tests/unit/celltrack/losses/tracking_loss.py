@@ -136,9 +136,9 @@ def test_batched():
 def test_batched_equals_per_pair():
     """The vectorised total equals the per-pair total term-for-term — the equivalence the batched path stands on.
 
-    Detection is ON for every pair, which is the ONLY condition the batched loss covers (`gpu_scene_detection`).
-    That the two paths agree here is what lets a generated-scene batch take the fast vectorised loop rather than
-    the reference per-pair loop: a scene under `gpu_scene_detection` is just another detection-on pair.
+    Detection is ON for every pair, the condition the batched loss covers. The equality holds independent of the
+    corpus, so it is the LOSS half of routing scenes onto the fast loop — but scenes stay on the per-pair loop for
+    a separate reason (`_batched_eligible`): a crowded scene overflows the batched path's `_MAX_NODES` padding.
     """
     sources = [torch.tensor([[2, 4, 4]]), torch.tensor([[1, 2, 2]])]
     targets = [torch.tensor([[2, 4, 4], [1, 2, 2]]), torch.tensor([[3, 5, 5]])]
