@@ -129,6 +129,11 @@ class DataCfg(BaseModel):
     # alternate structurally and an EMA'd difficulty moves a per-sample LOSS WEIGHT instead of a draw
     # probability, with save-best corrected for the difficulty the window trained at. Off by default.
     paced_curriculum: bool = False
+    # Fold the four TEST movies into the TRAIN corpus (the stage-3 fine-tune). Selection is unaffected — the edge
+    # AUC and save-best still read the validation four — so the leaderboard estimate stays a real held-out number;
+    # only the pairs the loop optimises on grow. Legitimate because those movies ARE given and the hidden eval
+    # overlaps them; the trap this avoids is SELECTING on them (proxy.py's documented anti-transfer), not training.
+    include_test_in_train: bool = False
 
 
 class OptimCfg(BaseModel):

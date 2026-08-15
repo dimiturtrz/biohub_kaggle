@@ -28,7 +28,7 @@ from celltrack.data.frame_source import FrameSource, PooledFrames, ZarrFrames
 from celltrack.data.joint_dataset import PairTarget
 from celltrack.data.synthetic_pairs import POOLED_BY, SyntheticPairs
 from celltrack.data.synthetic_scene import SceneConfig, SceneCorpus
-from celltrack.eval.proxy import TEST_MOVIES, VALIDATION_MOVIES, TestMovieProxy
+from celltrack.eval.proxy import CV_MOVIES, TEST_MOVIES, VALIDATION_MOVIES, TestMovieProxy
 from celltrack.operating_point import TrackerConfig
 from celltrack.tracker import CellTracker
 from celltrack.training.joint_config import WARM_PACKS, JointTrainConfig
@@ -63,13 +63,18 @@ class PairSplit:
         cls, root: DataRoot, config: JointTrainConfig, proxy: TestMovieProxy, log: logging.Logger, val_videos: int
     ) -> tuple["PairSplit", TrainingSplit]:
         """Every pair the run reads, plus the video-level split that is its provenance."""
-        train_paths = TestMovieProxy.training_videos(root.videos("train"))
-        split = TrainingSplit(len(train_paths), len(VALIDATION_MOVIES), len(TEST_MOVIES))
+        # Stage-3 folds the test four INTO train (held out only the validation four), so they train but never
+        # select — the leaderboard estimate stays the validation four. Default keeps both CV sets held out.
+        held_out = VALIDATION_MOVIES if config.data.include_test_in_train else CV_MOVIES
+        train_paths = TestMovieProxy.training_videos(root.videos("train"), held_out)
+        test_held = 0 if config.data.include_test_in_train else len(TEST_MOVIES)
+        split = TrainingSplit(len(train_paths), len(VALIDATION_MOVIES), test_held)
         logger.info(
-            "split: %d train / %d validation (selected on) / %d test (estimate only)",
+            "split: %d train / %d validation (selected on) / %d test (%s)",
             split.train,
             split.validation,
             split.test,
+            "estimate only" if not config.data.include_test_in_train else "FOLDED INTO TRAIN — not a held-out estimate",
         )
         detected = cls.of_detected(root, config, train_paths, log)
         if detected:

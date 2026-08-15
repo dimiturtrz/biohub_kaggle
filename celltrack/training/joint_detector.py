@@ -167,7 +167,7 @@ class JointTrainer:
         save_to = setup.save_to
         torch.set_float32_matmul_precision("high")  # TF32 on the fp32 matmuls the bf16 autocast leaves alone
         torch.backends.cudnn.benchmark = True  # one static frame shape — cudnn picks the fastest algo once
-        model, optimization = self._prepare(warm_start=setup.warm_start)
+        model, optimization = self._prepare(warm_start=setup.warm_start, init_weights=setup.init_weights)
 
         run = TrainingRun.open(self.config.model_dump(), setup)
         resume_path = save_to.with_suffix(RESUME_SUFFIX)
@@ -291,7 +291,7 @@ class JointTrainer:
             return None
         return torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.config.schedule.steps)
 
-    def _prepare(self, *, warm_start: bool) -> tuple[JointModel, _Optimization]:
+    def _prepare(self, *, warm_start: bool, init_weights: Path | None = None) -> tuple[JointModel, _Optimization]:
         """The run's trained objects, built in the one order that keeps BOTH a warm start and a widened head.
 
         The order is load-bearing. `widen_linear_inputs` REPLACES the head's input projection with a new
@@ -299,7 +299,7 @@ class JointTrainer:
         into it → widen → and only then hand `model.parameters()` to the optimiser. An optimiser constructed
         before the widening would hold the discarded projection and train nothing through it, in silence.
         """
-        model = self._model(warm_start=warm_start).to(self.config.runtime.device)
+        model = self._model(warm_start=warm_start, init_weights=init_weights).to(self.config.runtime.device)
         if self.config.model.temporal_position:  # motion sight; the position table lands on the model's device
             model.detector.install_temporal_position()
         self._velocity.widen(model)
@@ -353,9 +353,19 @@ class JointTrainer:
         """The run's adapter config, read live — keeps callers off a four-deep reach through `config.model.lora`."""
         return self.config.model.lora
 
-    def _model(self, *, warm_start: bool) -> JointModel:
-        """A joint model to train — warm-started from the published pack, or fresh at the configured size."""
+    def _model(self, *, warm_start: bool, init_weights: Path | None = None) -> JointModel:
+        """A joint model to train — chained from a prior stage's checkpoint, warm-started from the pack, or fresh.
+
+        `init_weights` continues a checkpoint THIS trainer wrote (the staged curriculum): `from_checkpoint`
+        rebuilds both heads at the width the file was saved at — a prior-velocity widening or a compile prefix
+        reloads without a second declaration — so the stage inherits the last stage's weights and nothing else.
+        """
         architecture, downsample = self.config.model, self.config.data.downsample
+        if init_weights is not None:
+            if warm_start:
+                raise ValueError("--init-weights and --warm-start are mutually exclusive: one init, not two")
+            logger.info("chained from prior-stage checkpoint at %s", init_weights)
+            return JointModel.from_checkpoint(init_weights, self.config.runtime.device)
         if warm_start:
             pack = DataRoot.from_config(_CONFIG).processed(_DATASET) / architecture.warm_pack
             scorer = EdgeTransformerScorer.from_pack(pack, self.config.runtime.device)
@@ -639,6 +649,7 @@ def main() -> None:
             gpu_scene_fraction=args.gpu_scene_fraction,
             gpu_scene_detection=args.gpu_scene_detection,
             paced_curriculum=args.paced_curriculum,
+            include_test_in_train=args.include_test_in_train,
         ),
         optim=OptimCfg(lr=args.lr, cosine_lr=args.cosine_lr, batch_size=args.batch_size),
         loss=LossCfg(
@@ -681,7 +692,8 @@ def main() -> None:
 
     pairs, split = PairSplit.assemble(root, config, evaluator.proxy, log, args.val_videos)
 
-    setup = RunSetup(save_to, warm_start=args.warm_start, resume=args.resume, split=split)
+    init_weights = proc / args.init_weights if args.init_weights else None
+    setup = RunSetup(save_to, warm_start=args.warm_start, resume=args.resume, split=split, init_weights=init_weights)
     JointTrainer(config).train(pairs, evaluator, setup)
 
 

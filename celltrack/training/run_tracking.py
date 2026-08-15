@@ -45,6 +45,7 @@ class RunSetup:
     warm_start: bool = False
     resume: bool = False
     split: TrainingSplit | None = None
+    init_weights: Path | None = None
 
 
 class TrainingRun:

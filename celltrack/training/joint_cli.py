@@ -36,6 +36,23 @@ class JointCli:
             help="epochs without a gain before stopping; overrides --patience",
         )
         parser.add_argument("--warm-start", action="store_true", help="initialise from the published pilkwang weights")
+        # Chain a staged curriculum: load a checkpoint THIS trainer wrote (both heads, any width it saved at) as the
+        # init, fresh optimiser — so synth-pretrain -> train-real -> finetune each warm from the last and the slow
+        # early stages are done ONCE. Distinct from --warm-start (the pilkwang pack); the two are mutually exclusive.
+        parser.add_argument(
+            "--init-weights",
+            type=str,
+            default=None,
+            help="init from a joint checkpoint this trainer saved (path relative to processed/)",
+        )
+        # Stage-3 corpus: fold the four TEST movies into the train set (competitors do, and the hidden set overlaps
+        # them). Selection still lands on the validation four, so the LB estimate stays honest — only the TRAIN
+        # corpus grows. Off by default: test stays held out as an estimate.
+        parser.add_argument(
+            "--include-test-in-train",
+            action="store_true",
+            help="fold the four test movies into the TRAIN corpus (selection stays on the validation four)",
+        )
         parser.add_argument(
             "--det-weight", type=float, default=1.0, help="weight on the detection term vs the edge term"
         )

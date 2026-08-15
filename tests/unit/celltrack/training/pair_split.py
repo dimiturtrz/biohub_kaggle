@@ -53,7 +53,7 @@ def test_assemble(monkeypatch: pytest.MonkeyPatch, video_store: Path, in_bounds_
     """One video in, its pairs out of BOTH halves — and no synthetic corpus decoded when none is asked for."""
     root = DataRoot(video_store.parent)
     monkeypatch.setattr(DataRoot, "videos", lambda self, split: [video_store])
-    monkeypatch.setattr(TestMovieProxy, "training_videos", staticmethod(list))
+    monkeypatch.setattr(TestMovieProxy, "training_videos", staticmethod(lambda videos, held_out=None: list(videos)))
     monkeypatch.setattr(AnnotatedTracks, "from_geff", staticmethod(lambda path: in_bounds_tracks))
     proxy = TestMovieProxy(paths=(video_store,), truths=(in_bounds_tracks,), spacing=Spacing(z=1.0, y=1.0, x=1.0))
 
