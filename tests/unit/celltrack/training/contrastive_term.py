@@ -13,7 +13,7 @@ import torch
 from torch import Tensor, nn
 
 from celltrack.losses.info_nce import InfoNCE
-from celltrack.training.contrastive_term import ContrastiveTerm
+from celltrack.training.contrastive_term import ContrastiveTerm, ContrastiveTermConfig
 from celltrack.training.joint_config import ContrastiveSite, LossCfg
 
 _APPEARANCE_DIM = 2
@@ -23,7 +23,8 @@ _TRAILING_DIM = 3  # the position embed the term must never contrast
 def _term(site: ContrastiveSite) -> ContrastiveTerm:
     """The term at one site, at temperature 1 so every expected value below is a closed form."""
     torch.manual_seed(0)
-    return ContrastiveTerm(LossCfg(contrastive_site=site, temperature=1.0), _APPEARANCE_DIM)
+    loss = LossCfg(contrastive_site=site, temperature=1.0)
+    return ContrastiveTerm(ContrastiveTermConfig.from_loss(loss, _APPEARANCE_DIM))
 
 
 def _features(appearance: list[list[float]]) -> Tensor:
@@ -40,6 +41,12 @@ def _identity(term: ContrastiveTerm) -> ContrastiveTerm:
             layer.weight.copy_(torch.eye(_APPEARANCE_DIM))
             layer.bias.zero_()
     return term
+
+
+def test_from_loss():
+    """The term's config reads exactly three values off the whole objective — temperature, site, appearance width."""
+    config = ContrastiveTermConfig.from_loss(LossCfg(contrastive_site=ContrastiveSite.PROJECTION, temperature=0.7), 5)
+    assert config == ContrastiveTermConfig(temperature=0.7, site=ContrastiveSite.PROJECTION, appearance_dim=5)
 
 
 def test_forward():

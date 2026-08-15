@@ -1502,6 +1502,30 @@
     },
     {
       "kind": "import",
+      "source": "celltrack.losses.tracking_loss",
+      "target": "celltrack.losses.balanced_bce",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.losses.tracking_loss",
+      "target": "celltrack.losses.hard_negative_margin",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.losses.tracking_loss",
+      "target": "celltrack.losses.sample_weight",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.losses.tracking_loss",
+      "target": "celltrack.losses.softmax_focal_bce",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "celltrack.models.edge_transformer",
       "target": "celltrack.models.prior_velocity",
       "weight": 1
@@ -1953,6 +1977,24 @@
     {
       "kind": "import",
       "source": "celltrack.training.joint_config",
+      "target": "celltrack.losses.softmax_focal_bce",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.joint_config",
+      "target": "celltrack.losses.tracking_loss",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.joint_config",
+      "target": "celltrack.models.lora",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.joint_config",
       "target": "celltrack.operating_point",
       "weight": 1
     },
@@ -1965,6 +2007,12 @@
     {
       "kind": "import",
       "source": "celltrack.training.joint_detector",
+      "target": "celltrack.data.gpu_scene",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.joint_detector",
       "target": "celltrack.data.joint_dataset",
       "weight": 1
     },
@@ -1972,6 +2020,12 @@
       "kind": "import",
       "source": "celltrack.training.joint_detector",
       "target": "celltrack.data.pair_curriculum",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.joint_detector",
+      "target": "celltrack.data.synthetic_scene",
       "weight": 1
     },
     {
@@ -1995,19 +2049,7 @@
     {
       "kind": "import",
       "source": "celltrack.training.joint_detector",
-      "target": "celltrack.losses.balanced_bce",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.training.joint_detector",
-      "target": "celltrack.losses.hard_negative_margin",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.training.joint_detector",
-      "target": "celltrack.losses.softmax_focal_bce",
+      "target": "celltrack.losses.tracking_loss",
       "weight": 1
     },
     {
@@ -2020,6 +2062,12 @@
       "kind": "import",
       "source": "celltrack.training.joint_detector",
       "target": "celltrack.models.joint_model",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.joint_detector",
+      "target": "celltrack.models.lora",
       "weight": 1
     },
     {
@@ -2044,6 +2092,18 @@
       "kind": "import",
       "source": "celltrack.training.joint_detector",
       "target": "celltrack.training.early_stop",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.joint_detector",
+      "target": "celltrack.training.joint_checkpoint",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.joint_detector",
+      "target": "celltrack.training.joint_cli",
       "weight": 1
     },
     {
@@ -2212,60 +2272,6 @@
       "kind": "import",
       "source": "celltrack.training.tracked_run",
       "target": "core.tracking",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.training.tracking_loss",
-      "target": "celltrack.data.joint_dataset",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.training.tracking_loss",
-      "target": "celltrack.losses.balanced_bce",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.training.tracking_loss",
-      "target": "celltrack.losses.hard_negative_margin",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.training.tracking_loss",
-      "target": "celltrack.losses.sample_weight",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.training.tracking_loss",
-      "target": "celltrack.losses.softmax_focal_bce",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.training.tracking_loss",
-      "target": "celltrack.models.joint_model",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.training.tracking_loss",
-      "target": "celltrack.operating_point",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.training.tracking_loss",
-      "target": "celltrack.training.contrastive_term",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.training.tracking_loss",
-      "target": "celltrack.training.joint_config",
       "weight": 1
     },
     {
@@ -9200,6 +9206,132 @@
     },
     {
       "kind": "holds",
+      "source": "celltrack.losses.tracking_loss.BatchedPrediction",
+      "target": "celltrack.losses.tracking_loss.PairPrediction",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.losses.tracking_loss.TrackingLoss",
+      "target": "celltrack.losses.tracking_loss.BatchedPrediction",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.losses.tracking_loss.TrackingLoss",
+      "target": "celltrack.losses.tracking_loss.PairGroundTruth",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.losses.tracking_loss.TrackingLoss",
+      "target": "celltrack.losses.tracking_loss.PairPrediction",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.losses.tracking_loss.TrackingLoss",
+      "target": "celltrack.losses.tracking_loss.TrackingLossConfig",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.losses.tracking_loss.TrackingLoss",
+      "target": "celltrack.losses.tracking_loss._PairOutcome",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.losses.tracking_loss.TrackingLoss._ignored",
+      "target": "celltrack.losses.balanced_bce.BalancedBCE.ignored_fraction",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.losses.tracking_loss.TrackingLoss.batched",
+      "target": "celltrack.losses.balanced_bce.BalancedBCE.per_frame",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.losses.tracking_loss.TrackingLoss.batched",
+      "target": "celltrack.losses.softmax_focal_bce.SoftmaxFocalBCE.batched",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.losses.tracking_loss.TrackingLoss.batched",
+      "target": "celltrack.losses.tracking_loss.TrackingLoss._grid",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.losses.tracking_loss.TrackingLoss.batched",
+      "target": "celltrack.losses.tracking_loss.TrackingLoss._ignored",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.losses.tracking_loss.TrackingLoss.batched",
+      "target": "celltrack.losses.tracking_loss.TrackingLoss._padded_edges",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.losses.tracking_loss.TrackingLoss.batched",
+      "target": "celltrack.losses.tracking_loss._PairOutcome",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.losses.tracking_loss.TrackingLoss.per_pair",
+      "target": "celltrack.losses.balanced_bce.BalancedBCE.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.losses.tracking_loss.TrackingLoss.per_pair",
+      "target": "celltrack.losses.hard_negative_margin.HardNegativeMargin.mine",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.losses.tracking_loss.TrackingLoss.per_pair",
+      "target": "celltrack.losses.hard_negative_margin.HardNegativeMargin.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.losses.tracking_loss.TrackingLoss.per_pair",
+      "target": "celltrack.losses.sample_weight.SampleWeight.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.losses.tracking_loss.TrackingLoss.per_pair",
+      "target": "celltrack.losses.softmax_focal_bce.SoftmaxFocalBCE.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.losses.tracking_loss.TrackingLoss.per_pair",
+      "target": "celltrack.losses.tracking_loss.TrackingLoss._grid",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.losses.tracking_loss.TrackingLoss.per_pair",
+      "target": "celltrack.losses.tracking_loss.TrackingLoss._ignored",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.losses.tracking_loss.TrackingLoss.per_pair",
+      "target": "celltrack.losses.tracking_loss._PairOutcome",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
       "source": "celltrack.models.contrastive_projection.ContrastiveProjection",
       "target": "celltrack.models.contrastive_projection.ContrastiveProjectionConfig",
       "weight": 1
@@ -11169,7 +11301,7 @@
     {
       "kind": "references",
       "source": "celltrack.training.contrastive_term.ContrastiveTerm",
-      "target": "celltrack.training.joint_config.LossCfg",
+      "target": "celltrack.training.contrastive_term.ContrastiveTermConfig",
       "weight": 1
     },
     {
@@ -11194,6 +11326,24 @@
       "kind": "calls",
       "source": "celltrack.training.contrastive_term.ContrastiveTerm.forward",
       "target": "celltrack.training.contrastive_term.ContrastiveTerm._contrasted",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.contrastive_term.ContrastiveTermConfig",
+      "target": "celltrack.training.contrastive_term.ContrastiveTermConfig",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.training.contrastive_term.ContrastiveTermConfig",
+      "target": "celltrack.training.joint_config.ContrastiveSite",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.contrastive_term.ContrastiveTermConfig",
+      "target": "celltrack.training.joint_config.LossCfg",
       "weight": 1
     },
     {
@@ -11521,9 +11671,27 @@
       "weight": 1
     },
     {
+      "kind": "references",
+      "source": "celltrack.training.joint_config.LossCfg",
+      "target": "celltrack.losses.tracking_loss.TrackingLossConfig",
+      "weight": 1
+    },
+    {
       "kind": "holds",
       "source": "celltrack.training.joint_config.LossCfg",
       "target": "celltrack.training.joint_config.ContrastiveSite",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.joint_config.LossCfg.to_tracking_loss_config",
+      "target": "celltrack.losses.tracking_loss.TrackingLossConfig",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_config.LossCfg.to_tracking_loss_config",
+      "target": "celltrack.operating_point.TrackerConfig.shipped",
       "weight": 1
     },
     {
@@ -11595,6 +11763,48 @@
     {
       "kind": "references",
       "source": "celltrack.training.joint_detector.JointTrainer",
+      "target": "celltrack.losses.tracking_loss.BatchedPrediction",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.joint_detector.JointTrainer",
+      "target": "celltrack.losses.tracking_loss.PairGroundTruth",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.joint_detector.JointTrainer",
+      "target": "celltrack.losses.tracking_loss.PairPrediction",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.training.joint_detector.JointTrainer",
+      "target": "celltrack.losses.tracking_loss.TrackingLoss",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.joint_detector.JointTrainer",
+      "target": "celltrack.losses.tracking_loss._PairOutcome",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.joint_detector.JointTrainer",
+      "target": "celltrack.models.joint_model.BatchedForward",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.joint_detector.JointTrainer",
+      "target": "celltrack.models.joint_model.JointForward",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.joint_detector.JointTrainer",
       "target": "celltrack.models.joint_model.JointModel",
       "weight": 1
     },
@@ -11653,21 +11863,15 @@
       "weight": 1
     },
     {
-      "kind": "holds",
-      "source": "celltrack.training.joint_detector.JointTrainer",
-      "target": "celltrack.training.tracking_loss.TrackingLoss",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.training.joint_detector.JointTrainer",
-      "target": "celltrack.training.tracking_loss._PairOutcome",
-      "weight": 1
-    },
-    {
       "kind": "references",
       "source": "celltrack.training.joint_detector.JointTrainer",
       "target": "celltrack.training.tunet_detector._Optimization",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.joint_detector.JointTrainer.__init__",
+      "target": "celltrack.losses.tracking_loss.TrackingLoss",
       "weight": 1
     },
     {
@@ -11677,9 +11881,33 @@
       "weight": 1
     },
     {
-      "kind": "construct",
+      "kind": "calls",
       "source": "celltrack.training.joint_detector.JointTrainer.__init__",
-      "target": "celltrack.training.tracking_loss.TrackingLoss",
+      "target": "celltrack.training.contrastive_term.ContrastiveTermConfig.from_loss",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.joint_detector.JointTrainer._batched_prediction",
+      "target": "celltrack.losses.tracking_loss.BatchedPrediction",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer._batched_prediction",
+      "target": "celltrack.models.joint_model.BatchedForward.unpad",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer._batched_prediction",
+      "target": "celltrack.training.joint_detector.JointTrainer._prediction",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer._batched_step",
+      "target": "celltrack.losses.tracking_loss.TrackingLoss.batched",
       "weight": 1
     },
     {
@@ -11703,13 +11931,19 @@
     {
       "kind": "calls",
       "source": "celltrack.training.joint_detector.JointTrainer._batched_step",
-      "target": "celltrack.training.joint_detector.JointTrainer._trained",
+      "target": "celltrack.training.joint_detector.JointTrainer._batched_prediction",
       "weight": 1
     },
     {
       "kind": "calls",
       "source": "celltrack.training.joint_detector.JointTrainer._batched_step",
-      "target": "celltrack.training.tracking_loss.TrackingLoss.batched",
+      "target": "celltrack.training.joint_detector.JointTrainer._ground_truth",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer._batched_step",
+      "target": "celltrack.training.joint_detector.JointTrainer._trained",
       "weight": 1
     },
     {
@@ -11815,6 +12049,12 @@
       "weight": 1
     },
     {
+      "kind": "construct",
+      "source": "celltrack.training.joint_detector.JointTrainer._ground_truth",
+      "target": "celltrack.losses.tracking_loss.PairGroundTruth",
+      "weight": 1
+    },
+    {
       "kind": "calls",
       "source": "celltrack.training.joint_detector.JointTrainer._initial_best",
       "target": "celltrack.training.joint_detector.JointTrainer._checkpoint",
@@ -11847,6 +12087,12 @@
     {
       "kind": "calls",
       "source": "celltrack.training.joint_detector.JointTrainer._losses",
+      "target": "celltrack.losses.tracking_loss.TrackingLoss.per_pair",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer._losses",
       "target": "celltrack.models.joint_model.JointModel.forward",
       "weight": 1
     },
@@ -11865,7 +12111,13 @@
     {
       "kind": "calls",
       "source": "celltrack.training.joint_detector.JointTrainer._losses",
-      "target": "celltrack.training.tracking_loss.TrackingLoss.per_pair",
+      "target": "celltrack.training.joint_detector.JointTrainer._ground_truth",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer._losses",
+      "target": "celltrack.training.joint_detector.JointTrainer._prediction",
       "weight": 1
     },
     {
@@ -11907,7 +12159,7 @@
     {
       "kind": "calls",
       "source": "celltrack.training.joint_detector.JointTrainer._observe",
-      "target": "celltrack.training.tracking_loss._PairOutcome.difficulty",
+      "target": "celltrack.losses.tracking_loss._PairOutcome.difficulty",
       "weight": 1
     },
     {
@@ -11932,6 +12184,12 @@
       "kind": "construct",
       "source": "celltrack.training.joint_detector.JointTrainer._pairs",
       "target": "celltrack.data.pair_curriculum.PairDraw",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.joint_detector.JointTrainer._prediction",
+      "target": "celltrack.losses.tracking_loss.PairPrediction",
       "weight": 1
     },
     {
@@ -12009,6 +12267,18 @@
     {
       "kind": "calls",
       "source": "celltrack.training.joint_detector.JointTrainer._step_batch",
+      "target": "celltrack.losses.tracking_loss.TrackingLoss.per_pair",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer._step_batch",
+      "target": "celltrack.losses.tracking_loss.TrackingLoss.reliability_weights",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer._step_batch",
       "target": "celltrack.models.joint_model.JointModel.forward_batch",
       "weight": 1
     },
@@ -12039,19 +12309,19 @@
     {
       "kind": "calls",
       "source": "celltrack.training.joint_detector.JointTrainer._step_batch",
+      "target": "celltrack.training.joint_detector.JointTrainer._ground_truth",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer._step_batch",
+      "target": "celltrack.training.joint_detector.JointTrainer._prediction",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer._step_batch",
       "target": "celltrack.training.joint_detector.JointTrainer._trained",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.joint_detector.JointTrainer._step_batch",
-      "target": "celltrack.training.tracking_loss.TrackingLoss.per_pair",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.joint_detector.JointTrainer._step_batch",
-      "target": "celltrack.training.tracking_loss.TrackingLoss.reliability_weights",
       "weight": 1
     },
     {
@@ -12508,138 +12778,6 @@
       "kind": "calls",
       "source": "celltrack.training.tracked_run.TrackedRun.fit",
       "target": "celltrack.training.tracked_run.TrackedRun._record",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.training.tracking_loss.TrackingLoss",
-      "target": "celltrack.data.joint_dataset.PairSample",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.training.tracking_loss.TrackingLoss",
-      "target": "celltrack.models.joint_model.BatchedForward",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.training.tracking_loss.TrackingLoss",
-      "target": "celltrack.models.joint_model.JointForward",
-      "weight": 1
-    },
-    {
-      "kind": "holds",
-      "source": "celltrack.training.tracking_loss.TrackingLoss",
-      "target": "celltrack.training.contrastive_term.ContrastiveTerm",
-      "weight": 1
-    },
-    {
-      "kind": "holds",
-      "source": "celltrack.training.tracking_loss.TrackingLoss",
-      "target": "celltrack.training.joint_config.JointTrainConfig",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.training.tracking_loss.TrackingLoss",
-      "target": "celltrack.training.tracking_loss._PairOutcome",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.tracking_loss.TrackingLoss._ignored",
-      "target": "celltrack.losses.balanced_bce.BalancedBCE.ignored_fraction",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.tracking_loss.TrackingLoss.batched",
-      "target": "celltrack.losses.balanced_bce.BalancedBCE.per_frame",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.tracking_loss.TrackingLoss.batched",
-      "target": "celltrack.losses.softmax_focal_bce.SoftmaxFocalBCE.batched",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.tracking_loss.TrackingLoss.batched",
-      "target": "celltrack.models.joint_model.BatchedForward.unpad",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.tracking_loss.TrackingLoss.batched",
-      "target": "celltrack.training.tracking_loss.TrackingLoss._grid",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.tracking_loss.TrackingLoss.batched",
-      "target": "celltrack.training.tracking_loss.TrackingLoss._ignored",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.tracking_loss.TrackingLoss.batched",
-      "target": "celltrack.training.tracking_loss.TrackingLoss._padded_edges",
-      "weight": 1
-    },
-    {
-      "kind": "construct",
-      "source": "celltrack.training.tracking_loss.TrackingLoss.batched",
-      "target": "celltrack.training.tracking_loss._PairOutcome",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.tracking_loss.TrackingLoss.per_pair",
-      "target": "celltrack.losses.balanced_bce.BalancedBCE.of",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.tracking_loss.TrackingLoss.per_pair",
-      "target": "celltrack.losses.hard_negative_margin.HardNegativeMargin.mine",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.tracking_loss.TrackingLoss.per_pair",
-      "target": "celltrack.losses.hard_negative_margin.HardNegativeMargin.of",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.tracking_loss.TrackingLoss.per_pair",
-      "target": "celltrack.losses.sample_weight.SampleWeight.of",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.tracking_loss.TrackingLoss.per_pair",
-      "target": "celltrack.losses.softmax_focal_bce.SoftmaxFocalBCE.of",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.tracking_loss.TrackingLoss.per_pair",
-      "target": "celltrack.training.contrastive_term.ContrastiveTerm.forward",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.tracking_loss.TrackingLoss.per_pair",
-      "target": "celltrack.training.tracking_loss.TrackingLoss._ignored",
-      "weight": 1
-    },
-    {
-      "kind": "construct",
-      "source": "celltrack.training.tracking_loss.TrackingLoss.per_pair",
-      "target": "celltrack.training.tracking_loss._PairOutcome",
       "weight": 1
     },
     {
@@ -14115,7 +14253,7 @@
       "role": null
     },
     {
-      "descendants": 5,
+      "descendants": 6,
       "id": "celltrack.losses",
       "label": "losses",
       "level": "module",
@@ -14158,6 +14296,14 @@
       "descendants": 0,
       "id": "celltrack.losses.softmax_focal_bce",
       "label": "softmax_focal_bce",
+      "level": "module",
+      "parent": "celltrack.losses",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.losses.tracking_loss",
+      "label": "tracking_loss",
       "level": "module",
       "parent": "celltrack.losses",
       "role": null
@@ -14331,7 +14477,7 @@
       "role": null
     },
     {
-      "descendants": 14,
+      "descendants": 13,
       "id": "celltrack.training",
       "label": "training",
       "level": "module",
@@ -14430,14 +14576,6 @@
       "descendants": 0,
       "id": "celltrack.training.tracked_run",
       "label": "tracked_run",
-      "level": "module",
-      "parent": "celltrack.training",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.tracking_loss",
-      "label": "tracking_loss",
       "level": "module",
       "parent": "celltrack.training",
       "role": null
@@ -15940,6 +16078,54 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.losses.tracking_loss.BatchedPrediction",
+      "label": "BatchedPrediction",
+      "level": "class",
+      "parent": "celltrack.losses.tracking_loss",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.losses.tracking_loss.PairGroundTruth",
+      "label": "PairGroundTruth",
+      "level": "class",
+      "parent": "celltrack.losses.tracking_loss",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.losses.tracking_loss.PairPrediction",
+      "label": "PairPrediction",
+      "level": "class",
+      "parent": "celltrack.losses.tracking_loss",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.losses.tracking_loss.TrackingLoss",
+      "label": "TrackingLoss",
+      "level": "class",
+      "parent": "celltrack.losses.tracking_loss",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.losses.tracking_loss.TrackingLossConfig",
+      "label": "TrackingLossConfig",
+      "level": "class",
+      "parent": "celltrack.losses.tracking_loss",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.losses.tracking_loss._PairOutcome",
+      "label": "_PairOutcome",
+      "level": "class",
+      "parent": "celltrack.losses.tracking_loss",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.models.contrastive_projection.ContrastiveProjection",
       "label": "ContrastiveProjection",
       "level": "class",
@@ -16404,6 +16590,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.training.contrastive_term.ContrastiveTermConfig",
+      "label": "ContrastiveTermConfig",
+      "level": "class",
+      "parent": "celltrack.training.contrastive_term",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.training.early_stop.EarlyStop",
       "label": "EarlyStop",
       "level": "class",
@@ -16609,22 +16803,6 @@
       "level": "class",
       "parent": "celltrack.training.tracked_run",
       "role": "primary"
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.tracking_loss.TrackingLoss",
-      "label": "TrackingLoss",
-      "level": "class",
-      "parent": "celltrack.training.tracking_loss",
-      "role": "primary"
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.tracking_loss._PairOutcome",
-      "label": "_PairOutcome",
-      "level": "class",
-      "parent": "celltrack.training.tracking_loss",
-      "role": "satellite"
     },
     {
       "descendants": 0,
@@ -21596,6 +21774,78 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.losses.tracking_loss.TrackingLoss.__init__",
+      "label": "__init__",
+      "level": "method",
+      "parent": "celltrack.losses.tracking_loss.TrackingLoss",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.losses.tracking_loss.TrackingLoss._grid",
+      "label": "_grid",
+      "level": "method",
+      "parent": "celltrack.losses.tracking_loss.TrackingLoss",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.losses.tracking_loss.TrackingLoss._ignored",
+      "label": "_ignored",
+      "level": "method",
+      "parent": "celltrack.losses.tracking_loss.TrackingLoss",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.losses.tracking_loss.TrackingLoss._padded_edges",
+      "label": "_padded_edges",
+      "level": "method",
+      "parent": "celltrack.losses.tracking_loss.TrackingLoss",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.losses.tracking_loss.TrackingLoss.batched",
+      "label": "batched",
+      "level": "method",
+      "parent": "celltrack.losses.tracking_loss.TrackingLoss",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.losses.tracking_loss.TrackingLoss.per_pair",
+      "label": "per_pair",
+      "level": "method",
+      "parent": "celltrack.losses.tracking_loss.TrackingLoss",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.losses.tracking_loss.TrackingLoss.reliability_weights",
+      "label": "reliability_weights",
+      "level": "method",
+      "parent": "celltrack.losses.tracking_loss.TrackingLoss",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.losses.tracking_loss._PairOutcome.difficulty",
+      "label": "difficulty",
+      "level": "method",
+      "parent": "celltrack.losses.tracking_loss._PairOutcome",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.losses.tracking_loss._PairOutcome.logged",
+      "label": "logged",
+      "level": "method",
+      "parent": "celltrack.losses.tracking_loss._PairOutcome",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.models.contrastive_projection.ContrastiveProjection.__init__",
       "label": "__init__",
       "level": "method",
@@ -23012,6 +23262,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.training.contrastive_term.ContrastiveTermConfig.from_loss",
+      "label": "from_loss",
+      "level": "method",
+      "parent": "celltrack.training.contrastive_term.ContrastiveTermConfig",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.training.early_stop.EarlyStop.__init__",
       "label": "__init__",
       "level": "method",
@@ -23212,6 +23470,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.training.joint_config.LossCfg.to_tracking_loss_config",
+      "label": "to_tracking_loss_config",
+      "level": "method",
+      "parent": "celltrack.training.joint_config.LossCfg",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.training.joint_config.ScheduleCfg._eval_every",
       "label": "_eval_every",
       "level": "method",
@@ -23276,6 +23542,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.training.joint_detector.JointTrainer._batched_prediction",
+      "label": "_batched_prediction",
+      "level": "method",
+      "parent": "celltrack.training.joint_detector.JointTrainer",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.training.joint_detector.JointTrainer._batched_step",
       "label": "_batched_step",
       "level": "method",
@@ -23318,6 +23592,14 @@
       "descendants": 0,
       "id": "celltrack.training.joint_detector.JointTrainer._gpu_batch",
       "label": "_gpu_batch",
+      "level": "method",
+      "parent": "celltrack.training.joint_detector.JointTrainer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.joint_detector.JointTrainer._ground_truth",
+      "label": "_ground_truth",
       "level": "method",
       "parent": "celltrack.training.joint_detector.JointTrainer",
       "role": null
@@ -23374,6 +23656,14 @@
       "descendants": 0,
       "id": "celltrack.training.joint_detector.JointTrainer._pairs",
       "label": "_pairs",
+      "level": "method",
+      "parent": "celltrack.training.joint_detector.JointTrainer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.joint_detector.JointTrainer._prediction",
+      "label": "_prediction",
       "level": "method",
       "parent": "celltrack.training.joint_detector.JointTrainer",
       "role": null
@@ -23576,78 +23866,6 @@
       "label": "fit",
       "level": "method",
       "parent": "celltrack.training.tracked_run.TrackedRun",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.tracking_loss.TrackingLoss.__init__",
-      "label": "__init__",
-      "level": "method",
-      "parent": "celltrack.training.tracking_loss.TrackingLoss",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.tracking_loss.TrackingLoss._grid",
-      "label": "_grid",
-      "level": "method",
-      "parent": "celltrack.training.tracking_loss.TrackingLoss",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.tracking_loss.TrackingLoss._ignored",
-      "label": "_ignored",
-      "level": "method",
-      "parent": "celltrack.training.tracking_loss.TrackingLoss",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.tracking_loss.TrackingLoss._padded_edges",
-      "label": "_padded_edges",
-      "level": "method",
-      "parent": "celltrack.training.tracking_loss.TrackingLoss",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.tracking_loss.TrackingLoss.batched",
-      "label": "batched",
-      "level": "method",
-      "parent": "celltrack.training.tracking_loss.TrackingLoss",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.tracking_loss.TrackingLoss.per_pair",
-      "label": "per_pair",
-      "level": "method",
-      "parent": "celltrack.training.tracking_loss.TrackingLoss",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.tracking_loss.TrackingLoss.reliability_weights",
-      "label": "reliability_weights",
-      "level": "method",
-      "parent": "celltrack.training.tracking_loss.TrackingLoss",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.tracking_loss._PairOutcome.difficulty",
-      "label": "difficulty",
-      "level": "method",
-      "parent": "celltrack.training.tracking_loss._PairOutcome",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.training.tracking_loss._PairOutcome.logged",
-      "label": "logged",
-      "level": "method",
-      "parent": "celltrack.training.tracking_loss._PairOutcome",
       "role": null
     },
     {

@@ -22,6 +22,7 @@ from celltrack.detectors.tunet import DetectorRecipe
 from celltrack.edges.blended_edge_scoring import BlendedEdgeTransformerScorer
 from celltrack.eval.model_evaluator import ModelEvaluator
 from celltrack.eval.proxy import TestMovieProxy
+from celltrack.losses.tracking_loss import _PairOutcome
 from celltrack.models.edge_transformer import _POS_EMBED_DIM
 from celltrack.models.joint_model import JointModel
 from celltrack.models.prior_velocity import PriorVelocity
@@ -40,7 +41,6 @@ from celltrack.training.joint_config import (
 from celltrack.training.joint_detector import JointTrainer
 from celltrack.training.pair_split import PairSplit
 from celltrack.training.run_tracking import RunSetup, TrainingSplit
-from celltrack.training.tracking_loss import _PairOutcome
 from core.data.tracks import AnnotatedTracks
 from core.data.video import ImageStatistics
 from core.geometry import Spacing

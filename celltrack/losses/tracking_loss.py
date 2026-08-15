@@ -3,32 +3,97 @@
 The trainer owns the STEP (forward, backward, optimiser); `TrackingLoss` owns the OBJECTIVE. It computes the four
 decoupled terms — a detection `BalancedBCE` per frame, a `SoftmaxFocalBCE` over the links, an optional InfoNCE
 over the node features, an optional hard-negative margin — for one pair (`per_pair`) or, for the pure-default
-config, vectorised over the whole padded batch with no per-pair Python loop (`batched`). `_PairOutcome` is the
-result type both return; it lives here because it is what the loss produces, not what the loop drives.
+config, vectorised over the whole padded batch with no per-pair Python loop (`batched`).
+
+It reaches for nothing above the loss layer: the model's forward and the dataset's sample arrive REPACKAGED into
+the loss's own input structs (`PairPrediction`/`PairGroundTruth`/`BatchedPrediction`), the objective's knobs arrive as
+its own `TrackingLossConfig`, and the contrastive term arrives as a bare `ContrastiveObjective` callable — so this
+module imports only its sibling loss primitives and lives beside them, not up in `training/`. `_PairOutcome` is
+the result type both entry points return; it lives here because it is what the loss produces.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import torch
 from jaxtyping import Float, Int
 from torch import Tensor
 
-from celltrack.data.joint_dataset import PairSample
 from celltrack.losses.balanced_bce import BalancedBCE
 from celltrack.losses.hard_negative_margin import HardNegativeMargin
 from celltrack.losses.sample_weight import SampleWeight
 from celltrack.losses.softmax_focal_bce import SoftmaxFocalBCE
-from celltrack.models.joint_model import BatchedForward, JointForward
-from celltrack.operating_point import TrackerConfig
-from celltrack.training.contrastive_term import ContrastiveTerm
-from celltrack.training.joint_config import JointTrainConfig
 
 # The (1,4,4) downsample makes the heads' grid isotropic at the z-spacing, so one downsampled voxel is this many
 # micrometres on every axis — the unit the reliability weight's crowd gate is measured in (see downsample memory).
 _ISOTROPIC_UM = 1.625
-_GATE_UM = TrackerConfig.shipped().linker.gate_um  # the linker's admission gate — a source's competing rivals
+
+
+@dataclass(frozen=True)
+class TrackingLossConfig:
+    """The objective's own knobs — every value the terms read, and nothing about the model or the run.
+
+    Filled from the trainer's `LossCfg` (`LossCfg.to_tracking_loss_config`), so the loss never sees the whole
+    training config: it carries the term weights, the two masking thresholds, the link normalisation axes
+    already resolved, the head grid, and the linker's admission gate the reliability weight measures crowd in.
+    """
+
+    link_axes: tuple[int, ...]
+    balanced_links: bool
+    neg_weight: float
+    ignore_ambiguous_above: float | None
+    det_weight: float
+    contrastive_weight: float
+    hard_negative_weight: float
+    hard_negatives: int
+    reliability_weighting: bool
+    downsample: tuple[int, int, int]
+    gate_um: float
+
+
+@dataclass(frozen=True)
+class PairPrediction:
+    """One pair's model outputs as the loss consumes them — the loss's own view, not the model's forward type."""
+
+    edge_logits: Float[Tensor, "s u"]
+    detection_t: Tensor
+    detection_t1: Tensor
+    source_features: Float[Tensor, "s d"]
+    target_features: Float[Tensor, "u d"]
+
+
+@dataclass(frozen=True)
+class PairGroundTruth:
+    """One pair's ground truth as the loss consumes it — the loss's own view, not the dataset's sample type."""
+
+    source_centres: Int[Tensor, "s 3"]
+    target_centres: Int[Tensor, "u 3"]
+    edge_matrix: Float[Tensor, "s u"]
+    frame_t: Tensor
+
+
+@dataclass(frozen=True)
+class BatchedPrediction:
+    """The padded-batch forward as the loss consumes it — the `(B, ...)` blocks, plus the per-pair views behind them.
+
+    `per_pair` carries each pair's unpadded prediction for the detached diagnostics (the difficulty read and the
+    ignored-fraction), which the vectorised terms cannot recover from the padded block alone.
+    """
+
+    logits: Float[Tensor, "b max max"]
+    detect_t: Tensor
+    detect_t1: Tensor
+    source_mask: Tensor
+    target_mask: Tensor
+    per_pair: list[PairPrediction]
+
+
+# The contrastive term as the loss needs it — features in, one scalar out, nothing about where it acts. The
+# trainer supplies the implementation (it owns the projection head, a model weight the loss layer may not hold);
+# the loss only ever calls it. Injecting this callable is what keeps the objective in the loss layer.
+ContrastiveObjective = Callable[[Float[Tensor, "s d"], Float[Tensor, "u d"], Float[Tensor, "s u"]], Float[Tensor, ""]]
 
 
 @dataclass(frozen=True)
@@ -84,59 +149,57 @@ class _PairOutcome:
 class TrackingLoss:
     """Every training term for the joint model — per pair, or vectorised over the padded batch. No optimiser here."""
 
-    def __init__(self, config: JointTrainConfig, contrastive: ContrastiveTerm) -> None:
+    def __init__(self, config: TrackingLossConfig, contrastive: ContrastiveObjective) -> None:
         self._config = config
         self._contrastive = contrastive
 
-    def per_pair(self, out: JointForward, sample: PairSample, *, detection: bool = True) -> _PairOutcome:
+    def per_pair(self, prediction: PairPrediction, target: PairGroundTruth, *, detection: bool = True) -> _PairOutcome:
         """Every loss term for one pair from its already-computed forward (GT centres divided to the heads' grid).
 
         `detection=False` (generated hard scenes) zeroes the detection term: their blob appearance would corrupt
         a detector saturated on real data, while the association terms they carry teach the appearance-agnostic
         motion rule. The backbone still sees them through the edge gradient, which is ~30x smaller than det here.
         """
-        loss_config = self._config.loss
-        source_centres, target_centres, edge_matrix = sample.source_centres, sample.target_centres, sample.edge_matrix
-        downsample = torch.tensor(self._config.data.downsample, dtype=torch.float32, device=str(out.edge_logits.device))
-        centres_t_grid = (source_centres.to(torch.float32) / downsample).round().long()
-        centres_t1_grid = (target_centres.to(torch.float32) / downsample).round().long()
-        edge = SoftmaxFocalBCE.of(
-            out.edge_logits, edge_matrix, loss_config.link_axes, balanced=loss_config.balanced_links
-        )
-        ignore = loss_config.ignore_ambiguous_above
+        config = self._config
+        edge_logits = prediction.edge_logits
+        edge_matrix = target.edge_matrix
+        centres_t_grid = self._grid(target.source_centres)
+        centres_t1_grid = self._grid(target.target_centres)
+        edge = SoftmaxFocalBCE.of(edge_logits, edge_matrix, config.link_axes, balanced=config.balanced_links)
+        ignore = config.ignore_ambiguous_above
         det = (
-            BalancedBCE.of(out.detection_t.unsqueeze(0), [centres_t_grid], loss_config.neg_weight, ignore)
-            + BalancedBCE.of(out.detection_t1.unsqueeze(0), [centres_t1_grid], loss_config.neg_weight, ignore)
+            BalancedBCE.of(prediction.detection_t.unsqueeze(0), [centres_t_grid], config.neg_weight, ignore)
+            + BalancedBCE.of(prediction.detection_t1.unsqueeze(0), [centres_t1_grid], config.neg_weight, ignore)
             if detection
-            else torch.zeros((), device=str(out.edge_logits.device))
+            else torch.zeros((), device=str(edge_logits.device))
         )
-        contrastive = self._contrastive.forward(out.source_features, out.target_features, edge_matrix)
-        decoys = HardNegativeMargin.mine(source_centres, target_centres, edge_matrix, loss_config.hard_negatives)
-        hard_negative = HardNegativeMargin.of(out.edge_logits, edge_matrix, decoys)
+        contrastive = self._contrastive(prediction.source_features, prediction.target_features, edge_matrix)
+        decoys = HardNegativeMargin.mine(
+            target.source_centres, target.target_centres, edge_matrix, config.hard_negatives
+        )
+        hard_negative = HardNegativeMargin.of(edge_logits, edge_matrix, decoys)
         loss = (
             edge
-            + loss_config.det_weight * det
-            + loss_config.contrastive_weight * contrastive
-            + loss_config.hard_negative_weight * hard_negative
+            + config.det_weight * det
+            + config.contrastive_weight * contrastive
+            + config.hard_negative_weight * hard_negative
         )
-        ignored = self._ignored((out.detection_t, centres_t_grid), (out.detection_t1, centres_t1_grid))
+        ignored = self._ignored((prediction.detection_t, centres_t_grid), (prediction.detection_t1, centres_t1_grid))
         reliability = (
             SampleWeight.of(
-                sample.frame_t,
+                target.frame_t,
                 centres_t_grid,
                 centres_t1_grid.to(torch.float32) * _ISOTROPIC_UM,  # isotropic µm on the heads' own grid
                 centres_t_grid.to(torch.float32) * _ISOTROPIC_UM,
-                _GATE_UM,
+                config.gate_um,
             )
-            if loss_config.reliability_weighting
+            if config.reliability_weighting
             else None
         )
-        return _PairOutcome(
-            loss, edge, det, contrastive, hard_negative, out.edge_logits, edge_matrix, ignored, reliability
-        )
+        return _PairOutcome(loss, edge, det, contrastive, hard_negative, edge_logits, edge_matrix, ignored, reliability)
 
     def batched(
-        self, batched: BatchedForward, samples: list[PairSample]
+        self, prediction: BatchedPrediction, targets: list[PairGroundTruth]
     ) -> tuple[Float[Tensor, " b"], list[_PairOutcome]]:
         """Edge + detection VECTORISED over the padded batch — the per-pair total for backward, plus the outcomes.
 
@@ -147,21 +210,21 @@ class TrackingLoss:
         padded result. Optional terms (contrastive, hard-negative) are zero here: the caller routes any run that
         asks for them to the per-pair loop.
         """
-        loss = self._config.loss
-        edges = self._padded_edges(samples, batched.logits.shape[1], batched.logits.device)
+        config = self._config
+        edges = self._padded_edges(targets, prediction.logits.shape[1], prediction.logits.device)
         edge = SoftmaxFocalBCE.batched(
-            batched.logits,
+            prediction.logits,
             edges,
-            (batched.source_mask, batched.target_mask),
-            loss.link_axes,
-            balanced=loss.balanced_links,
+            (prediction.source_mask, prediction.target_mask),
+            config.link_axes,
+            balanced=config.balanced_links,
         )
-        grids_t = [self._grid(sample.source_centres) for sample in samples]
-        grids_t1 = [self._grid(sample.target_centres) for sample in samples]
+        grids_t = [self._grid(target.source_centres) for target in targets]
+        grids_t1 = [self._grid(target.target_centres) for target in targets]
         detection = BalancedBCE.per_frame(
-            batched.detect_t, grids_t, loss.neg_weight, loss.ignore_ambiguous_above
-        ) + BalancedBCE.per_frame(batched.detect_t1, grids_t1, loss.neg_weight, loss.ignore_ambiguous_above)
-        total = edge + loss.det_weight * detection  # (B,)
+            prediction.detect_t, grids_t, config.neg_weight, config.ignore_ambiguous_above
+        ) + BalancedBCE.per_frame(prediction.detect_t1, grids_t1, config.neg_weight, config.ignore_ambiguous_above)
+        total = edge + config.det_weight * detection  # (B,)
         zero = edge.new_zeros(())
         outcomes = [
             _PairOutcome(
@@ -171,10 +234,10 @@ class TrackingLoss:
                 zero,
                 zero,
                 forward.edge_logits,
-                sample.edge_matrix,
+                target.edge_matrix,
                 self._ignored((forward.detection_t, grids_t[index]), (forward.detection_t1, grids_t1[index])),
             )
-            for index, (forward, sample) in enumerate(zip(batched.unpad(), samples, strict=True))
+            for index, (forward, target) in enumerate(zip(prediction.per_pair, targets, strict=True))
         ]
         return total, outcomes
 
@@ -194,21 +257,21 @@ class TrackingLoss:
 
     def _grid(self, centres: Int[Tensor, "n 3"]) -> Int[Tensor, "n 3"]:
         """Annotated centres divided to the heads' downsampled grid — the coordinate the detection loss reads."""
-        downsample = torch.tensor(self._config.data.downsample, dtype=torch.float32, device=centres.device)
+        downsample = torch.tensor(self._config.downsample, dtype=torch.float32, device=centres.device)
         return (centres.to(torch.float32) / downsample).round().long()
 
     @staticmethod
-    def _padded_edges(samples: list[PairSample], size: int, device: torch.device) -> Float[Tensor, "b max max"]:
+    def _padded_edges(targets: list[PairGroundTruth], size: int, device: torch.device) -> Float[Tensor, "b max max"]:
         """Each pair's `(s, u)` one-hot annotation zero-padded into the `(B, size, size)` block the loss reads."""
-        edges = torch.zeros(len(samples), size, size, device=device)
-        for index, sample in enumerate(samples):
-            matrix = sample.edge_matrix
+        edges = torch.zeros(len(targets), size, size, device=device)
+        for index, target in enumerate(targets):
+            matrix = target.edge_matrix
             edges[index, : matrix.shape[0], : matrix.shape[1]] = matrix.to(device)
         return edges
 
     def _ignored(self, *frames: tuple[Tensor, Tensor]) -> float | None:
         """The pair's mean unsupervised fraction, or `None` when nothing is masked — a sigmoid, no backward."""
-        above = self._config.loss.ignore_ambiguous_above
+        above = self._config.ignore_ambiguous_above
         if above is None:
             return None
         shares = [BalancedBCE.ignored_fraction(logits.unsqueeze(0), [centres], above) for logits, centres in frames]

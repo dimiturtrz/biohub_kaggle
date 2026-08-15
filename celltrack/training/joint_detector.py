@@ -50,12 +50,19 @@ from celltrack.data.synthetic_scene import SceneConfig
 from celltrack.detectors.tunet import DetectorRecipe
 from celltrack.eval.model_evaluator import EvalResult, ModelEvaluator
 from celltrack.eval.proxy import VALIDATION_MOVIES, TestMovieProxy
+from celltrack.losses.tracking_loss import (
+    BatchedPrediction,
+    PairGroundTruth,
+    PairPrediction,
+    TrackingLoss,
+    _PairOutcome,
+)
 from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeTransformerScorer
-from celltrack.models.joint_model import JointModel
+from celltrack.models.joint_model import BatchedForward, JointForward, JointModel
 from celltrack.models.lora import LoRA
 from celltrack.models.temporal_unet_detector import TemporalUNetDetector
 from celltrack.operating_point import TrackerConfig
-from celltrack.training.contrastive_term import ContrastiveTerm
+from celltrack.training.contrastive_term import ContrastiveTerm, ContrastiveTermConfig
 from celltrack.training.early_stop import EarlyStop
 from celltrack.training.joint_checkpoint import RESUME_SUFFIX, JointCheckpoint, RunProgress
 from celltrack.training.joint_cli import JointCli
@@ -74,7 +81,6 @@ from celltrack.training.joint_config import (
 from celltrack.training.pair_split import PairSplit
 from celltrack.training.prior_velocity_source import PriorVelocitySource
 from celltrack.training.run_tracking import RunSetup, TrainingRun
-from celltrack.training.tracking_loss import TrackingLoss, _PairOutcome
 from celltrack.training.tunet_detector import _Optimization
 from core.metrics.edge_auc import EdgeAUC
 from core.obs import Obs
@@ -116,8 +122,34 @@ class JointTrainer:
         self.config = config
         # The contrastive term's placement is fixed for the whole run, and the projecting sites carry weights
         # the optimiser must own — so it is built once, here, beside the config that chose it.
-        self.contrastive = ContrastiveTerm(config.loss, config.model.out_channels)
-        self._loss = TrackingLoss(config, self.contrastive)  # every training term; the trainer owns only the step
+        self.contrastive = ContrastiveTerm(ContrastiveTermConfig.from_loss(config.loss, config.model.out_channels))
+        # Every training term; the trainer owns only the step. The loss reads its own config and input structs, so
+        # it imports nothing of the model or the dataset — the trainer repacks each forward at the call site.
+        self._loss = TrackingLoss(config.loss.to_tracking_loss_config(config.data.downsample), self.contrastive)
+
+    @staticmethod
+    def _prediction(out: JointForward) -> PairPrediction:
+        """The model's forward repacked into the loss's own input — the seam that keeps the loss off the model type."""
+        return PairPrediction(
+            out.edge_logits, out.detection_t, out.detection_t1, out.source_features, out.target_features
+        )
+
+    @staticmethod
+    def _ground_truth(sample: PairSample) -> PairGroundTruth:
+        """The dataset's sample repacked into the loss's own target — the seam that keeps the loss off the data type."""
+        return PairGroundTruth(sample.source_centres, sample.target_centres, sample.edge_matrix, sample.frame_t)
+
+    @staticmethod
+    def _batched_prediction(batched: BatchedForward) -> BatchedPrediction:
+        """The padded batched forward repacked for the loss — the `(B, ...)` blocks plus the per-pair unpadded views."""
+        return BatchedPrediction(
+            batched.logits,
+            batched.detect_t,
+            batched.detect_t1,
+            batched.source_mask,
+            batched.target_mask,
+            [JointTrainer._prediction(forward) for forward in batched.unpad()],
+        )
 
     def train(self, pairs: PairSplit, evaluator: ModelEvaluator, setup: RunSetup) -> float:
         """Train (or fine-tune) on the GT pairs, saving the best SELECTION score. Returns that best score.
@@ -433,7 +465,9 @@ class JointTrainer:
                 windows, [s.source_centres for s in samples], [s.target_centres for s in samples], velocities
             )
             outcomes = [
-                self._loss.per_pair(out, sample, detection=index < real_count or scene_detection)
+                self._loss.per_pair(
+                    self._prediction(out), self._ground_truth(sample), detection=index < real_count or scene_detection
+                )
                 for index, (out, sample) in enumerate(zip(forwards, samples, strict=True))
             ]
         weights = self._loss.reliability_weights(outcomes)
@@ -482,7 +516,9 @@ class JointTrainer:
             batched = model.batched_forward(
                 windows, [s.source_centres for s in samples], [s.target_centres for s in samples]
             )
-            total, outcomes = self._loss.batched(batched, samples)  # (B,) for backward + per-pair diagnostics
+            total, outcomes = self._loss.batched(  # (B,) for backward + per-pair diagnostics
+                self._batched_prediction(batched), [self._ground_truth(sample) for sample in samples]
+            )
             draw_weight = torch.tensor([draw.weight for draw, _ in batch], device=device, dtype=total.dtype)
             (draw_weight * total).sum().div(len(batch)).backward()
         nn.utils.clip_grad_norm_(self._trained(model), self.config.optim.grad_clip)
@@ -511,7 +547,7 @@ class JointTrainer:
         velocity = self._velocity.of(model, sample, self._autocast())
         with self._attention(), self._autocast():
             out = model.forward(sample.frame_t, sample.frame_t1, sample.source_centres, sample.target_centres, velocity)
-            return self._loss.per_pair(out, sample)
+            return self._loss.per_pair(self._prediction(out), self._ground_truth(sample))
 
     def _attention(self):
         """Pin SDPA to the math backend — the backbone is always compiled, and inductor needs the clean composite

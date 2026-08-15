@@ -13,6 +13,7 @@ must arrive with its own true width, not a width assumed elsewhere.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import override
 
 from jaxtyping import Float
@@ -20,7 +21,25 @@ from torch import Tensor, nn
 
 from celltrack.losses.info_nce import InfoNCE
 from celltrack.models.contrastive_projection import ContrastiveProjection, ContrastiveProjectionConfig
-from celltrack.training.joint_config import LossCfg
+from celltrack.training.joint_config import ContrastiveSite, LossCfg
+
+
+@dataclass(frozen=True)
+class ContrastiveTermConfig:
+    """The term's own knobs — the softmax temperature, the placement, and the feature width it acts on.
+
+    Filled from the trainer's `LossCfg` (`from_loss`), so the term never sees the whole objective: it carries
+    only the three values that decide what is contrasted and how hard.
+    """
+
+    temperature: float
+    site: ContrastiveSite
+    appearance_dim: int
+
+    @classmethod
+    def from_loss(cls, loss: LossCfg, appearance_dim: int) -> ContrastiveTermConfig:
+        """The term's config this `LossCfg` fills — the trainer builds `ContrastiveTerm` from it."""
+        return cls(temperature=loss.temperature, site=loss.contrastive_site, appearance_dim=appearance_dim)
 
 
 class ContrastiveTerm(nn.Module):
@@ -32,13 +51,13 @@ class ContrastiveTerm(nn.Module):
     and draws nothing from the RNG.
     """
 
-    def __init__(self, loss: LossCfg, appearance_dim: int) -> None:
+    def __init__(self, config: ContrastiveTermConfig) -> None:
         super().__init__()
-        self.appearance_dim = appearance_dim
-        self.temperature = loss.temperature
-        site = loss.contrastive_site
+        self.appearance_dim = config.appearance_dim
+        self.temperature = config.temperature
+        site = config.site
         self.projection = (
-            ContrastiveProjection(ContrastiveProjectionConfig(appearance_dim, stop_gradient=site.stop_gradient))
+            ContrastiveProjection(ContrastiveProjectionConfig(self.appearance_dim, stop_gradient=site.stop_gradient))
             if site.projects
             else None
         )

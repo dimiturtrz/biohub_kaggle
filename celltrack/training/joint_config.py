@@ -24,6 +24,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt
 
 from celltrack.losses.softmax_focal_bce import SOURCE_AXIS, TARGET_AXIS
+from celltrack.losses.tracking_loss import TrackingLossConfig
 from celltrack.models.lora import LoraConfig
 from celltrack.operating_point import TrackerConfig
 
@@ -231,6 +232,26 @@ class LossCfg(BaseModel):
     def link_axes(self) -> tuple[int, ...]:
         """The axes the link loss normalises over — the source axis always, the target axis when asked."""
         return (SOURCE_AXIS, TARGET_AXIS) if self.symmetric_links else (SOURCE_AXIS,)
+
+    def to_tracking_loss_config(self, downsample: tuple[int, int, int]) -> TrackingLossConfig:
+        """The loss's own config this pydantic view fills — the trainer builds `TrackingLoss` from it.
+
+        The reliability weight's crowd gate is the linker's admission radius; it lives in the shipped operating
+        point, not the loss knobs, so it is resolved here rather than being a field the CLI could contradict.
+        """
+        return TrackingLossConfig(
+            link_axes=self.link_axes,
+            balanced_links=self.balanced_links,
+            neg_weight=self.neg_weight,
+            ignore_ambiguous_above=self.ignore_ambiguous_above,
+            det_weight=self.det_weight,
+            contrastive_weight=self.contrastive_weight,
+            hard_negative_weight=self.hard_negative_weight,
+            hard_negatives=self.hard_negatives,
+            reliability_weighting=self.reliability_weighting,
+            downsample=downsample,
+            gate_um=TrackerConfig.shipped().linker.gate_um,
+        )
 
 
 class EvalCfg(BaseModel):

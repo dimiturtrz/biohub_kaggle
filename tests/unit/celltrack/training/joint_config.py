@@ -67,6 +67,16 @@ def test_to_config():
     assert config.scaling() == 4.0
 
 
+def test_to_tracking_loss_config():
+    """LossCfg fills the loss's own decoupled config — its knobs pass through, and the crowd gate is resolved."""
+    config = LossCfg(symmetric_links=True, neg_weight=0.3, det_weight=2.0).to_tracking_loss_config((1, 2, 2))
+    assert config.link_axes == (SOURCE_AXIS, TARGET_AXIS)
+    assert config.neg_weight == 0.3
+    assert config.det_weight == 2.0
+    assert config.downsample == (1, 2, 2)
+    assert config.gate_um == TrackerConfig.shipped().linker.gate_um  # resolved from the shipped point, not a field
+
+
 def test_projects():
     """Only the measured-bad site reads the features directly; both fixed placements interpose a head."""
     assert not ContrastiveSite.FEATURES.projects
