@@ -13,13 +13,14 @@ refuses any value but the pooling it already carries.
 """
 
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 import numpy as np
 import torch
 import zarr
-from jaxtyping import Float
+from jaxtyping import Float, Shaped
 from torch import Tensor
 
 from celltrack.data.normalisation import HIGH_QUANTILE, LOW_QUANTILE, Normalisation, QuantileWindow
@@ -70,6 +71,18 @@ class PooledFrames:
         return cls(store, q_low, q_high, tuple(int(axis) for axis in written))  # type: ignore[arg-type]
 
     @staticmethod
+    @lru_cache(maxsize=None)
+    def _resident(array_path: Path) -> Shaped[np.ndarray, "t z y x"]:
+        """The whole pooled store decoded once and kept in RAM — every later frame read is an in-memory slice.
+
+        A pooled store is a sixteenth of the raw voxels (~32 MB compressed / video, ~6 GB for the corpus), so the
+        whole training set fits resident and the loader stops touching disk after the first epoch — the GPU stops
+        stalling on zarr reads. The RAW pooled integers are cached, not the normalised floats, so a change to the
+        quantile window still re-normalises without re-reading (the synthetic corpus keeps its frames resident the
+        same way, for the same reason)."""
+        return np.asarray(zarr.open_array(array_path)[:])
+
+    @staticmethod
     def directory(processed: Path, downsample: tuple[int, int, int]) -> Path:
         """Where stores for one grid live — the grid is IN THE NAME so two grids cannot be confused.
 
@@ -91,7 +104,7 @@ class PooledFrames:
                 f"{tuple(downsample)}; pool a store at that grid or read the raw video"
             )
             raise ValueError(message)
-        raw = np.asarray(zarr.open_array(self.array_path)[timepoint], dtype=np.float32)
+        raw = np.asarray(self._resident(self.array_path)[timepoint], dtype=np.float32)
         return torch.from_numpy(self.normalisation.apply(raw, self._quantiles()))
 
     def _quantiles(self) -> dict[str, float]:
