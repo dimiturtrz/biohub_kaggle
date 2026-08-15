@@ -12145,6 +12145,12 @@
       "weight": 1
     },
     {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer._model",
+      "target": "celltrack.models.joint_model.JointModel.from_checkpoint",
+      "weight": 1
+    },
+    {
       "kind": "construct",
       "source": "celltrack.training.joint_detector.JointTrainer._model",
       "target": "celltrack.models.temporal_unet_detector.TemporalUNetDetector",
