@@ -133,6 +133,27 @@ def test_batched():
     assert len(outcomes) == 2 and all(isinstance(o, _PairOutcome) for o in outcomes)
 
 
+def test_batched_equals_per_pair():
+    """The vectorised total equals the per-pair total term-for-term — the equivalence the batched path stands on.
+
+    Detection is ON for every pair, which is the ONLY condition the batched loss covers (`gpu_scene_detection`).
+    That the two paths agree here is what lets a generated-scene batch take the fast vectorised loop rather than
+    the reference per-pair loop: a scene under `gpu_scene_detection` is just another detection-on pair.
+    """
+    sources = [torch.tensor([[2, 4, 4]]), torch.tensor([[1, 2, 2]])]
+    targets = [torch.tensor([[2, 4, 4], [1, 2, 2]]), torch.tensor([[3, 5, 5]])]
+    edges = [torch.tensor([[1.0, 0.0]]), torch.tensor([[1.0]])]
+    model = _model().eval()
+    windows = torch.stack([torch.stack([torch.zeros(4, 8, 8), torch.zeros(4, 8, 8)], dim=0) for _ in sources], dim=0)
+    batched = model.batched_forward(windows, sources, targets)
+    grounds = [_ground_truth(s, t, e) for s, t, e in zip(sources, targets, edges, strict=True)]
+
+    per_pair = [_loss().per_pair(_prediction(f), g) for f, g in zip(batched.unpad(), grounds, strict=True)]
+    total, _ = _loss().batched(_batched_prediction(batched), grounds)
+
+    assert torch.allclose(total, torch.stack([o.total for o in per_pair]), atol=1e-5)
+
+
 def test_reliability_weights():
     """Reliabilities normalise to batch-mean 1; a single missing one falls the whole batch back to ones."""
     zero = torch.zeros(())

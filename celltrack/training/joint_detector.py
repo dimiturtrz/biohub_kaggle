@@ -483,13 +483,17 @@ class JointTrainer:
     def _batched_eligible(self, velocities: list[Tensor | None], real_count: int, batch_len: int) -> bool:
         """Whether the batch takes the VECTORISED loss — the pure-default config, and the only one a graph captures.
 
-        The batched loss reads the padded block for the edge and detection terms; anything that needs a per-pair
-        quantity (a generated scene's zeroed detection, a prior-velocity forward, or an optional contrastive /
-        hard-negative / reliability term) routes to the per-pair loop, which stays the reference implementation.
+        The batched loss reads the padded block for the edge and detection terms, both applied to EVERY row. It is
+        therefore equivalent to the per-pair loop exactly when every pair trains detection (`test_batched_equals_
+        per_pair`): real pairs always do, and generated scenes do too when `gpu_scene_detection` is set — so a
+        synth-heavy batch takes the fast loop, not just an all-real one. What still routes to the reference per-pair
+        loop is a per-pair quantity the padded block cannot express: a scene's ZEROED detection (detection off), a
+        prior-velocity forward, or an optional contrastive / hard-negative / reliability term.
         """
         loss = self.config.loss
+        uniform_detection = real_count == batch_len or self.config.data.gpu_scene_detection
         return (
-            real_count == batch_len  # no generated scenes (they zero detection per pair)
+            uniform_detection  # every pair trains detection -> batched == per-pair (else scenes zero it per pair)
             and all(velocity is None for velocity in velocities)
             and loss.contrastive_weight == 0.0
             and loss.hard_negative_weight == 0.0
