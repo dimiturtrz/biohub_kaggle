@@ -71,10 +71,10 @@ from celltrack.training.joint_config import (
     RuntimeCfg,
     ScheduleCfg,
 )
-from celltrack.training.joint_loss import JointLoss, _PairOutcome
 from celltrack.training.pair_split import PairSplit
 from celltrack.training.prior_velocity_source import PriorVelocitySource
 from celltrack.training.run_tracking import RunSetup, TrainingRun
+from celltrack.training.tracking_loss import TrackingLoss, _PairOutcome
 from celltrack.training.tunet_detector import _Optimization
 from core.metrics.edge_auc import EdgeAUC
 from core.obs import Obs
@@ -117,7 +117,7 @@ class JointTrainer:
         # The contrastive term's placement is fixed for the whole run, and the projecting sites carry weights
         # the optimiser must own — so it is built once, here, beside the config that chose it.
         self.contrastive = ContrastiveTerm(config.loss, config.model.out_channels)
-        self._loss = JointLoss(config, self.contrastive)  # every training term; the trainer owns only the step
+        self._loss = TrackingLoss(config, self.contrastive)  # every training term; the trainer owns only the step
 
     def train(self, pairs: PairSplit, evaluator: ModelEvaluator, setup: RunSetup) -> float:
         """Train (or fine-tune) on the GT pairs, saving the best SELECTION score. Returns that best score.

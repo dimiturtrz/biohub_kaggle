@@ -1,6 +1,6 @@
 """The joint run's loss assembly — every training term for a pair, and the padded-batch vectorisation of them.
 
-The trainer owns the STEP (forward, backward, optimiser); `JointLoss` owns the OBJECTIVE. It computes the four
+The trainer owns the STEP (forward, backward, optimiser); `TrackingLoss` owns the OBJECTIVE. It computes the four
 decoupled terms — a detection `BalancedBCE` per frame, a `SoftmaxFocalBCE` over the links, an optional InfoNCE
 over the node features, an optional hard-negative margin — for one pair (`per_pair`) or, for the pure-default
 config, vectorised over the whole padded batch with no per-pair Python loop (`batched`). `_PairOutcome` is the
@@ -81,7 +81,7 @@ class _PairOutcome:
         return 1.0 - float(rows.gather(1, predicted).mean())
 
 
-class JointLoss:
+class TrackingLoss:
     """Every training term for the joint model — per pair, or vectorised over the padded batch. No optimiser here."""
 
     def __init__(self, config: JointTrainConfig, contrastive: ContrastiveTerm) -> None:

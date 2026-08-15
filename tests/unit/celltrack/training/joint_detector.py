@@ -38,9 +38,9 @@ from celltrack.training.joint_config import (
     ScheduleCfg,
 )
 from celltrack.training.joint_detector import JointTrainer
-from celltrack.training.joint_loss import _PairOutcome
 from celltrack.training.pair_split import PairSplit
 from celltrack.training.run_tracking import RunSetup, TrainingSplit
+from celltrack.training.tracking_loss import _PairOutcome
 from core.data.tracks import AnnotatedTracks
 from core.data.video import ImageStatistics
 from core.geometry import Spacing

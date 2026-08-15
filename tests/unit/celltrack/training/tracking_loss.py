@@ -13,7 +13,7 @@ from celltrack.models.joint_model import JointModel
 from celltrack.models.temporal_unet_detector import TemporalUNetDetector
 from celltrack.training.contrastive_term import ContrastiveTerm
 from celltrack.training.joint_config import DataCfg, JointTrainConfig, ModelCfg, RuntimeCfg
-from celltrack.training.joint_loss import JointLoss, _PairOutcome
+from celltrack.training.tracking_loss import TrackingLoss, _PairOutcome
 
 
 def _config() -> JointTrainConfig:
@@ -25,9 +25,9 @@ def _config() -> JointTrainConfig:
     )
 
 
-def _loss() -> JointLoss:
+def _loss() -> TrackingLoss:
     config = _config()
-    return JointLoss(config, ContrastiveTerm(config.loss, config.model.out_channels))
+    return TrackingLoss(config, ContrastiveTerm(config.loss, config.model.out_channels))
 
 
 def _model() -> JointModel:
