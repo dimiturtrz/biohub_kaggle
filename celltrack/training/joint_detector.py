@@ -50,12 +50,8 @@ from celltrack.data.synthetic_scene import SceneConfig
 from celltrack.detectors.tunet import DetectorRecipe
 from celltrack.eval.model_evaluator import EvalResult, ModelEvaluator
 from celltrack.eval.proxy import VALIDATION_MOVIES, TestMovieProxy
-from celltrack.losses.balanced_bce import BalancedBCE
-from celltrack.losses.hard_negative_margin import HardNegativeMargin
-from celltrack.losses.sample_weight import SampleWeight
-from celltrack.losses.softmax_focal_bce import SoftmaxFocalBCE
 from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeTransformerScorer
-from celltrack.models.joint_model import JointForward, JointModel
+from celltrack.models.joint_model import JointModel
 from celltrack.models.lora import LoRA
 from celltrack.models.temporal_unet_detector import TemporalUNetDetector
 from celltrack.operating_point import TrackerConfig
@@ -75,6 +71,7 @@ from celltrack.training.joint_config import (
     RuntimeCfg,
     ScheduleCfg,
 )
+from celltrack.training.joint_loss import JointLoss, _PairOutcome
 from celltrack.training.pair_split import PairSplit
 from celltrack.training.prior_velocity_source import PriorVelocitySource
 from celltrack.training.run_tracking import RunSetup, TrainingRun
@@ -96,60 +93,6 @@ _HIDDEN_DIM, _N_HEADS, _N_BLOCKS = 128, 4, 4
 _POS_FEATURE_DIM = 4 * _POS_EMBED_DIM  # sinusoidal embed of (t, z, y, x)
 # The uniform stream draws no index at all; -1 says so without a `int | None` that every reader must unwrap.
 _UNTRACKED_INDEX = -1
-# The (1,4,4) downsample makes the heads' grid isotropic at the z-spacing, so one downsampled voxel is this many
-# micrometres on every axis — the unit the reliability weight's crowd gate is measured in (see downsample memory).
-_ISOTROPIC_UM = 1.625
-_GATE_UM = TrackerConfig.shipped().linker.gate_um  # the linker's admission gate — a source's competing rivals
-
-
-@dataclass(frozen=True)
-class _PairOutcome:
-    """One pair's forward — the loss total that is stepped, each term on its own scale, and the edge tensors.
-
-    The edge logits and the annotated matrix ride along because the difficulty estimate the sampler feeds on is
-    read off exactly them, and they are free here: the training step already computed both.
-    """
-
-    total: Tensor
-    edge: Tensor
-    detection: Tensor
-    contrastive: Tensor
-    hard_negative: Tensor
-    edge_logits: Tensor
-    edge_matrix: Tensor
-    ignored_fraction: float | None = None
-    reliability: Tensor | None = None  # the pair's raw SNR/(1+crowd) weight, batch-normalised by the step
-
-    def logged(self) -> dict[str, float]:
-        """The detached per-term floats under the names the run tracks — a summed number hides which half moved.
-
-        The masked fraction rides along only when the mask is on, so an unasked run's rows are the rows of
-        yesterday. It is worth a column: it falling toward zero as the detector sharpens IS the self-balancing
-        property — a model whose confident responses are all annotated has nothing left to leave unsupervised.
-        """
-        ambiguous = {} if self.ignored_fraction is None else {"ignored_fraction": self.ignored_fraction}
-        return {
-            "train_loss": float(self.total.detach()),
-            "edge_loss": float(self.edge.detach()),
-            "det_loss": float(self.detection.detach()),
-            "contrastive_loss": float(self.contrastive.detach()),
-            "hard_negative_loss": float(self.hard_negative.detach()),
-            **ambiguous,
-        }
-
-    def difficulty(self) -> float | None:
-        """Fraction of ANNOTATED sources whose true successor the logits do not rank top-1; `None` if there are none.
-
-        Not the loss: with ~1-2% dense annotation a pair's loss tracks how many edges it happens to carry, so
-        weighting by it would chase label count. This is bounded [0, 1], independent of edge count, and is the
-        defect itself — a mislink is precisely a source whose argmax target is not its annotated successor.
-        """
-        annotated = self.edge_matrix.sum(dim=1) > 0
-        if not bool(annotated.any()):
-            return None
-        rows = self.edge_matrix[annotated]
-        predicted = self.edge_logits[annotated].argmax(dim=1, keepdim=True)
-        return 1.0 - float(rows.gather(1, predicted).mean())
 
 
 @dataclass(frozen=True)
@@ -174,6 +117,7 @@ class JointTrainer:
         # The contrastive term's placement is fixed for the whole run, and the projecting sites carry weights
         # the optimiser must own — so it is built once, here, beside the config that chose it.
         self.contrastive = ContrastiveTerm(config.loss, config.model.out_channels)
+        self._loss = JointLoss(config, self.contrastive)  # every training term; the trainer owns only the step
 
     def train(self, pairs: PairSplit, evaluator: ModelEvaluator, setup: RunSetup) -> float:
         """Train (or fine-tune) on the GT pairs, saving the best SELECTION score. Returns that best score.
@@ -481,16 +425,18 @@ class JointTrainer:
         scene_detection = self.config.data.gpu_scene_detection
         samples = [pair.to(device) for _, pair in batch]
         velocities = [self._velocity.of(model, sample, self._autocast()) for sample in samples]
+        if self._batched_eligible(velocities, real_count, len(batch)):
+            return self._batched_step(model, optimization, batch, samples)
         windows = torch.stack([torch.stack([s.frame_t, s.frame_t1], dim=0) for s in samples], dim=0)  # (B, 2, Z, Y, X)
         with self._attention(), self._autocast():
             forwards = model.forward_batch(
                 windows, [s.source_centres for s in samples], [s.target_centres for s in samples], velocities
             )
             outcomes = [
-                self._losses_from(out, sample, detection=index < real_count or scene_detection)
+                self._loss.per_pair(out, sample, detection=index < real_count or scene_detection)
                 for index, (out, sample) in enumerate(zip(forwards, samples, strict=True))
             ]
-        weights = self._reliability_weights(outcomes)
+        weights = self._loss.reliability_weights(outcomes)
         terms = [
             draw.weight * weight * out.total for (draw, _), out, weight in zip(batch, outcomes, weights, strict=True)
         ]
@@ -500,19 +446,49 @@ class JointTrainer:
         optimization.zero_grad()
         return outcomes
 
-    def _reliability_weights(self, outcomes: list[_PairOutcome]) -> list[Tensor]:
-        """Per-pair reliability multipliers normalised to batch-mean 1 — redistributes emphasis, no rescale.
+    def _batched_eligible(self, velocities: list[Tensor | None], real_count: int, batch_len: int) -> bool:
+        """Whether the batch takes the VECTORISED loss — the pure-default config, and the only one a graph captures.
 
-        All ones when the weighting is off (any pair carries no reliability), so an unasked run steps exactly
-        yesterday's gradient. Mean-1 normalisation keeps the total loss scale — and therefore the effective
-        learning rate — unchanged, so only the RELATIVE weight of clean vs ambiguous pairs moves.
+        The batched loss reads the padded block for the edge and detection terms; anything that needs a per-pair
+        quantity (a generated scene's zeroed detection, a prior-velocity forward, or an optional contrastive /
+        hard-negative / reliability term) routes to the per-pair loop, which stays the reference implementation.
         """
-        raw = [out.reliability for out in outcomes]
-        device = outcomes[0].total.device
-        if any(weight is None for weight in raw):
-            return [torch.ones((), device=device) for _ in outcomes]
-        stacked = torch.stack([weight for weight in raw if weight is not None])
-        return list(stacked / stacked.mean().clamp(min=1e-6))
+        loss = self.config.loss
+        return (
+            real_count == batch_len  # no generated scenes (they zero detection per pair)
+            and all(velocity is None for velocity in velocities)
+            and loss.contrastive_weight == 0.0
+            and loss.hard_negative_weight == 0.0
+            and not loss.reliability_weighting
+        )
+
+    def _batched_step(
+        self,
+        model: JointModel,
+        optimization: _Optimization,
+        batch: list[tuple[PairDraw, PairSample]],
+        samples: list[PairSample],
+    ) -> list[_PairOutcome]:
+        """One step with the loss VECTORISED over the padded batch — no per-pair Python loop over ragged logits.
+
+        The edge and detection terms read the padded `(B, _MAX_NODES, ...)` block directly (`SoftmaxFocalBCE.
+        batched`, `BalancedBCE.per_frame`), so the whole GPU forward-and-loss is batched tensor ops the compiler
+        can graph. The per-pair outcomes returned for the sampler and the logs are packaged from the padded
+        result AFTER the step — detached diagnostics, off the gradient path.
+        """
+        device = self.config.runtime.device
+        windows = torch.stack([torch.stack([s.frame_t, s.frame_t1], dim=0) for s in samples], dim=0)
+        with self._attention(), self._autocast():
+            batched = model.batched_forward(
+                windows, [s.source_centres for s in samples], [s.target_centres for s in samples]
+            )
+            total, outcomes = self._loss.batched(batched, samples)  # (B,) for backward + per-pair diagnostics
+            draw_weight = torch.tensor([draw.weight for draw, _ in batch], device=device, dtype=total.dtype)
+            (draw_weight * total).sum().div(len(batch)).backward()
+        nn.utils.clip_grad_norm_(self._trained(model), self.config.optim.grad_clip)
+        optimization.step()
+        optimization.zero_grad()
+        return outcomes
 
     def _gpu_batch(self, count: int) -> list[tuple[PairDraw, PairSample]]:
         """`count` FRESH GPU-generated hard scene-pairs — untracked (they shape the gradient, not the feedback).
@@ -535,71 +511,16 @@ class JointTrainer:
         velocity = self._velocity.of(model, sample, self._autocast())
         with self._attention(), self._autocast():
             out = model.forward(sample.frame_t, sample.frame_t1, sample.source_centres, sample.target_centres, velocity)
-            return self._losses_from(out, sample)
+            return self._loss.per_pair(out, sample)
 
     def _attention(self):
         """Pin SDPA to the math backend — the backbone is always compiled, and inductor needs the clean composite
         backward (the efficient SDPA backward has a broken compiled meta-kernel)."""
         return sdpa_kernel(SDPBackend.MATH)
 
-    def _losses_from(self, out: JointForward, sample: PairSample, *, detection: bool = True) -> _PairOutcome:
-        """Every loss term for one pair from its already-computed forward (GT centres divided to the heads' grid).
-
-        `detection=False` (generated hard scenes) zeroes the detection term: their blob appearance would corrupt
-        a detector saturated on real data, while the association terms they carry teach the appearance-agnostic
-        motion rule. The backbone still sees them through the edge gradient, which is ~30x smaller than det here.
-        """
-        loss_config = self.config.loss
-        source_centres, target_centres, edge_matrix = sample.source_centres, sample.target_centres, sample.edge_matrix
-        downsample = torch.tensor(self.config.data.downsample, dtype=torch.float32, device=str(out.edge_logits.device))
-        centres_t_grid = (source_centres.to(torch.float32) / downsample).round().long()
-        centres_t1_grid = (target_centres.to(torch.float32) / downsample).round().long()
-        edge = SoftmaxFocalBCE.of(
-            out.edge_logits, edge_matrix, loss_config.link_axes, balanced=loss_config.balanced_links
-        )
-        ignore = loss_config.ignore_ambiguous_above
-        det = (
-            BalancedBCE.of(out.detection_t.unsqueeze(0), [centres_t_grid], loss_config.neg_weight, ignore)
-            + BalancedBCE.of(out.detection_t1.unsqueeze(0), [centres_t1_grid], loss_config.neg_weight, ignore)
-            if detection
-            else torch.zeros((), device=str(out.edge_logits.device))
-        )
-        contrastive = self.contrastive.forward(out.source_features, out.target_features, edge_matrix)
-        decoys = HardNegativeMargin.mine(source_centres, target_centres, edge_matrix, loss_config.hard_negatives)
-        hard_negative = HardNegativeMargin.of(out.edge_logits, edge_matrix, decoys)
-        loss = (
-            edge
-            + loss_config.det_weight * det
-            + loss_config.contrastive_weight * contrastive
-            + loss_config.hard_negative_weight * hard_negative
-        )
-        ignored = self._ignored((out.detection_t, centres_t_grid), (out.detection_t1, centres_t1_grid))
-        reliability = (
-            SampleWeight.of(
-                sample.frame_t,
-                centres_t_grid,
-                centres_t1_grid.to(torch.float32) * _ISOTROPIC_UM,  # isotropic µm on the heads' own grid
-                centres_t_grid.to(torch.float32) * _ISOTROPIC_UM,
-                _GATE_UM,
-            )
-            if loss_config.reliability_weighting
-            else None
-        )
-        return _PairOutcome(
-            loss, edge, det, contrastive, hard_negative, out.edge_logits, edge_matrix, ignored, reliability
-        )
-
     def _autocast(self) -> torch.autocast:
         """The run's precision context — bf16 on CUDA, a no-op elsewhere; one definition for every forward here."""
         return torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=self.config.runtime.device == "cuda")
-
-    def _ignored(self, *frames: tuple[Tensor, Tensor]) -> float | None:
-        """The pair's mean unsupervised fraction, or `None` when nothing is masked — a sigmoid, no backward."""
-        above = self.config.loss.ignore_ambiguous_above
-        if above is None:
-            return None
-        shares = [BalancedBCE.ignored_fraction(logits.unsqueeze(0), [centres], above) for logits, centres in frames]
-        return sum(shares) / len(shares)
 
     def _evaluate(self, model: JointModel, evaluator: ModelEvaluator, val_targets: list[PairTarget]) -> _EvalResult:
         """Both trained heads through the shipped tracker on the proxy, plus their edge ranking on the val pairs."""

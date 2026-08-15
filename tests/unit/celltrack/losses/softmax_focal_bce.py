@@ -8,6 +8,47 @@ from celltrack.losses.softmax_focal_bce import SOURCE_AXIS, TARGET_AXIS, Softmax
 _BOTH = (SOURCE_AXIS, TARGET_AXIS)
 
 
+def _padded(pairs: list[tuple[torch.Tensor, torch.Tensor]]):
+    """Pad a ragged list of (logits, target) pairs to one (B, maxS, maxT) block with the source/target masks."""
+    max_s = max(logits.shape[0] for logits, _ in pairs)
+    max_t = max(logits.shape[1] for logits, _ in pairs)
+    logits = torch.zeros(len(pairs), max_s, max_t)
+    target = torch.zeros(len(pairs), max_s, max_t)
+    source_mask = torch.zeros(len(pairs), max_s, dtype=torch.bool)
+    target_mask = torch.zeros(len(pairs), max_t, dtype=torch.bool)
+    for i, (pair_logits, pair_target) in enumerate(pairs):
+        s, t = pair_logits.shape
+        logits[i, :s, :t] = pair_logits
+        target[i, :s, :t] = pair_target
+        source_mask[i, :s] = True
+        target_mask[i, :t] = True
+    return logits, target, source_mask, target_mask
+
+
+@pytest.mark.parametrize("axes", [(SOURCE_AXIS,), (TARGET_AXIS,), _BOTH])
+@pytest.mark.parametrize("balanced", [False, True])
+def test_batched(axes: tuple[int, ...], balanced: bool):
+    """The padded batched loss returns each pair's scalar IDENTICAL to `of` on its unpadded matrix.
+
+    Covers the equivalence classes that make the padding non-trivial: a lone source (the source axis constrains
+    nothing, and over the source axis alone the whole pair reads zero), a wide contested target, and uneven
+    node counts padded to a common block — the case the per-pair loop never had to get right.
+    """
+    torch.manual_seed(0)
+    pairs = [
+        (torch.randn(1, 3), torch.tensor([[1.0, 0.0, 0.0]])),  # lone source
+        (torch.randn(4, 2), torch.tensor([[1.0, 0.0], [0.0, 0.0], [0.0, 1.0], [0.0, 0.0]])),  # contested
+        (torch.randn(2, 3), torch.tensor([[0.0, 1.0, 0.0], [0.0, 0.0, 0.0]])),  # uneven
+    ]
+    logits, target, source_mask, target_mask = _padded(pairs)
+
+    batched = SoftmaxFocalBCE.batched(logits, target, (source_mask, target_mask), axes, balanced=balanced)
+
+    for i, (pair_logits, pair_target) in enumerate(pairs):
+        expected = SoftmaxFocalBCE.of(pair_logits, pair_target, axes, balanced=balanced)
+        assert torch.allclose(batched[i], expected, atol=1e-5), f"pair {i}: {batched[i].item()} != {expected.item()}"
+
+
 def test_softmax_focal_b_c_e_of():
     """A confident-correct link scores below a confident-wrong one; finite + differentiable; empty target is zero."""
     target = torch.tensor([[1.0, 0.0], [0.0, 0.0]])  # source 0 is the parent of target 0

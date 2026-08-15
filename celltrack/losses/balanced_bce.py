@@ -45,10 +45,25 @@ class BalancedBCE:
         pipeline's own inference operating point, `TrackerConfig.threshold` (0.97) — the response at which the
         shipped tracker would already have called the voxel a cell — never from a sweep of this loss.
         """
+        return BalancedBCE.per_frame(logits, centres, neg_weight, ignore_above).mean()
+
+    @staticmethod
+    def per_frame(
+        logits: Float[Tensor, "b z y x"],
+        centres: list[Int[Tensor, "n 3"]],
+        neg_weight: float,
+        ignore_above: float | None = None,
+    ) -> Float[Tensor, " b"]:
+        """Each frame's balanced BCE, ONE scalar per frame — what `of` means over.
+
+        The batched training step weights each pair (its draw weight, its reliability multiplier) before summing,
+        so it needs the per-frame vector rather than the batch mean; `of` is exactly this averaged. Same weights,
+        same masking, same numbers — only the final reduction differs (sum-per-frame here, mean there).
+        """
         target = BalancedBCE._positives(logits, centres)
         supervised = BalancedBCE._supervised(logits, target, ignore_above)
         weight = BalancedBCE._weights(target, supervised, neg_weight)
-        return F.binary_cross_entropy_with_logits(logits, target, weight=weight, reduction="sum") / logits.shape[0]
+        return F.binary_cross_entropy_with_logits(logits, target, weight=weight, reduction="none").sum(dim=(1, 2, 3))
 
     @staticmethod
     def ignored_fraction(

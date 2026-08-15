@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import override
 
 import torch
-from jaxtyping import Float, Int
+from jaxtyping import Bool, Float, Int
 from torch import Tensor, nn
 from torch.nn.utils.rnn import pad_sequence
 
@@ -24,6 +24,12 @@ from celltrack.models.temporal_unet_detector import TemporalUNetDetector
 
 # The published head's shape, which a checkpoint's weights were trained in and must be rebuilt at.
 _HIDDEN_DIM, _N_HEADS, _N_BLOCKS = 128, 4, 4
+# The fixed node count the batched training forward pads every pair to, so the whole GPU forward is ONE static
+# shape (the prerequisite for the batched masked loss to read a padded block, and for a graph to capture it).
+# Sized from the corpora: GT-annotated pairs max 33 nodes, the shipped-detector gated corpus maxed 102 — 256
+# clears both with margin, and attention over 256 nodes is microseconds beside the 64^3 backbone. A pair beyond
+# it RAISES rather than truncating (dropping a node would drop a real candidate from the matching).
+_MAX_NODES = 256
 
 
 @dataclass(frozen=True)
@@ -40,6 +46,39 @@ class JointForward:
     edge_logits: Float[Tensor, "s u"]
     source_features: Float[Tensor, "s d"]
     target_features: Float[Tensor, "u d"]
+
+
+@dataclass(frozen=True)
+class BatchedForward:
+    """The batched forward as PADDED tensors on one `_MAX_NODES` shape — plus the masks and each pair's real length.
+
+    The batched masked loss reads this block directly (no per-pair Python loop over ragged logits); `unpad`
+    recovers the ragged per-pair `JointForward` list the eval, the difficulty sampler and per-term logging still
+    consume. Keeping both means the gradient path is one static shape while the diagnostics stay per pair.
+    """
+
+    detect_t: Float[Tensor, "b z y x"]
+    detect_t1: Float[Tensor, "b z y x"]
+    logits: Float[Tensor, "b max max"]
+    source_features: Float[Tensor, "b max d"]
+    target_features: Float[Tensor, "b max d"]
+    source_mask: Bool[Tensor, "b max"]
+    target_mask: Bool[Tensor, "b max"]
+    source_lengths: tuple[int, ...]
+    target_lengths: tuple[int, ...]
+
+    def unpad(self) -> list["JointForward"]:
+        """Each pair's `[:s, :u]` block as a `JointForward` — identical to what a per-pair forward would return."""
+        return [
+            JointForward(
+                self.detect_t[i],
+                self.detect_t1[i],
+                self.logits[i, :s, :t],
+                self.source_features[i, :s],
+                self.target_features[i, :t],
+            )
+            for i, (s, t) in enumerate(zip(self.source_lengths, self.target_lengths, strict=True))
+        ]
 
 
 class JointModel(nn.Module):
@@ -134,61 +173,74 @@ class JointModel(nn.Module):
         tens of nodes), so the result is a list, one `JointForward` per pair. `forward` is exactly the `B = 1`
         case, so a batched run computes the identical thing a per-pair run does, one optimiser step later.
         """
-        features = self.detector.unet(windows.unsqueeze(2))  # (B, 2, C, Z, Y', X')
         # Generated scenes route per-pair to the compiled uniform-N head; a run carrying prior velocity also stays
         # per-pair (the batched gather does not thread velocity). Otherwise everything is batched.
         if self._scene_transformer is not None or any(velocity is not None for velocity in source_velocities):
+            features = self.detector.unet(windows.unsqueeze(2))  # (B, 2, C, Z, Y', X')
             return [
                 self._heads(features[i], source_positions[i], target_positions[i], source_velocities[i])
                 for i in range(features.shape[0])
             ]
-        return self._batched_heads(features, source_positions, target_positions)
+        return self.batched_forward(windows, source_positions, target_positions).unpad()
 
-    def _batched_heads(
+    def batched_forward(
         self,
-        features: Float[Tensor, "b two c z y x"],
+        windows: Float[Tensor, "b two z y x"],
         source_positions: list[Int[Tensor, "s 3"]],
         target_positions: list[Int[Tensor, "u 3"]],
-    ) -> list[JointForward]:
-        """Both detection maps for every pair, then ONE batched gather and ONE batched transformer call.
+    ) -> BatchedForward:
+        """The batched forward as ONE padded block — backbone, detection heads, node gather, transformer.
 
         The heads used to run once per pair — tens of tiny attention kernels, plus a per-pair feature gather —
-        leaving the GPU idle between launches. Everything here is batched: detection is a plain batched conv,
-        the node features are gathered for all pairs at once (`batched_node_features`), and the transformer
-        takes a padded `(B, N, D)` batch with a key-padding mask so the pad nodes are inert. Each pair's
-        `[:s, :u]` block is identical to its unbatched forward. The velocity path (rare, and never in the
-        detected-corpus runs this speeds) is routed to the per-pair loop by `forward_batch`, so it is absent here.
+        leaving the GPU idle between launches. Everything here is batched: detection is a plain batched conv, the
+        node features are gathered for all pairs at once, and the transformer takes a padded `(B, _MAX_NODES, D)`
+        batch with a key-padding mask so the pad nodes are inert. Returns the padded tensors so the loss can read
+        the block directly; `BatchedForward.unpad` recovers the per-pair `[:s, :u]` views for the diagnostics.
         """
-        device = str(features.device)
+        features = self.detector.unet(windows.unsqueeze(2))  # (B, 2, C, Z, Y', X')
         detect_t = self.detector.detect_head(features[:, 0])[:, 0]  # (B, Z, Y', X')
         detect_t1 = self.detector.detect_head(features[:, 1])[:, 0]
+        device = str(features.device)
         spatial = torch.tensor(features.shape[3:], dtype=torch.float32, device=device)
         downsample = torch.tensor(self.downsample, dtype=torch.float32, device=device)
-        # Zero-pad each pair's nodes to the BATCH max (pad_sequence) — the pad rows index voxel 0 and the mask
-        # makes them inert, so each pair's [:s, :u] block is identical to its unbatched forward.
-        source_voxels = pad_sequence([p.to(torch.float32) for p in source_positions], batch_first=True)  # (B, S, 3)
-        target_voxels = pad_sequence([p.to(torch.float32) for p in target_positions], batch_first=True)  # (B, U, 3)
-        source_lengths = torch.tensor([p.shape[0] for p in source_positions], device=device)
-        target_lengths = torch.tensor([p.shape[0] for p in target_positions], device=device)
+        source_voxels = self._pad_fixed(source_positions)  # (B, _MAX_NODES, 3)
+        target_voxels = self._pad_fixed(target_positions)
+        source_lengths = tuple(p.shape[0] for p in source_positions)
+        target_lengths = tuple(p.shape[0] for p in target_positions)
         feat_source = EdgeTransformerScorer.batched_node_features(
             features[:, 0], source_voxels / downsample, NodeWindowSlot(spatial, 0.0, device)
         )
         feat_target = EdgeTransformerScorer.batched_node_features(
             features[:, 1], target_voxels / downsample, NodeWindowSlot(spatial, 1.0, device)
         )
-        mask_source = torch.arange(source_voxels.shape[1], device=device)[None, :] < source_lengths[:, None]
-        mask_target = torch.arange(target_voxels.shape[1], device=device)[None, :] < target_lengths[:, None]
+        index = torch.arange(_MAX_NODES, device=features.device)
+        mask_source = index[None, :] < torch.tensor(source_lengths, device=features.device)[:, None]
+        mask_target = index[None, :] < torch.tensor(target_lengths, device=features.device)[:, None]
         logits = self.transformer(feat_source, feat_target, source_voxels, target_voxels, mask_source, mask_target)
-        return [
-            JointForward(
-                detect_t[i],
-                detect_t1[i],
-                logits[i, : source_lengths[i], : target_lengths[i]],
-                feat_source[i, : source_lengths[i]],
-                feat_target[i, : target_lengths[i]],
-            )
-            for i in range(features.shape[0])
-        ]
+        return BatchedForward(
+            detect_t,
+            detect_t1,
+            logits,
+            feat_source,
+            feat_target,
+            mask_source,
+            mask_target,
+            source_lengths,
+            target_lengths,
+        )
+
+    @staticmethod
+    def _pad_fixed(positions: list[Int[Tensor, "n 3"]]) -> Float[Tensor, "b max 3"]:
+        """Every pair's positions zero-padded to the FIXED `_MAX_NODES` (positions already on the model device).
+
+        pad_sequence reaches the batch max; the second pad reaches the constant `_MAX_NODES` so the forward is one
+        shape every step. A pair above it raises rather than truncating — dropping a node would drop a real
+        candidate from the matching and silently change the score. The pad rows index voxel 0 and are masked out.
+        """
+        padded = pad_sequence([position.to(torch.float32) for position in positions], batch_first=True)
+        if padded.shape[1] > _MAX_NODES:
+            raise ValueError(f"a pair carries {padded.shape[1]} nodes, above _MAX_NODES {_MAX_NODES} — raise it")
+        return torch.nn.functional.pad(padded, (0, 0, 0, _MAX_NODES - padded.shape[1]))
 
     def _heads(
         self,

@@ -37,7 +37,8 @@ from celltrack.training.joint_config import (
     RuntimeCfg,
     ScheduleCfg,
 )
-from celltrack.training.joint_detector import JointTrainer, _PairOutcome
+from celltrack.training.joint_detector import JointTrainer
+from celltrack.training.joint_loss import _PairOutcome
 from celltrack.training.pair_split import PairSplit
 from celltrack.training.run_tracking import RunSetup, TrainingSplit
 from core.data.tracks import AnnotatedTracks
@@ -62,40 +63,9 @@ def test_schedule_spans_the_resolved_step_count():
 
 
 def _outcome(edge_logits: torch.Tensor, edge_matrix: torch.Tensor) -> _PairOutcome:
-    """A pair outcome whose loss terms are placeholders — these tests are about the edge tensors beside them."""
-    return _PairOutcome(
-        total=torch.tensor(3.0, requires_grad=True),
-        edge=torch.tensor(1.0),
-        detection=torch.tensor(2.0),
-        contrastive=torch.tensor(0.5),
-        hard_negative=torch.tensor(0.25),
-        edge_logits=edge_logits,
-        edge_matrix=edge_matrix,
-    )
-
-
-def test_logged():
-    """Every term reaches the run's metric table under its own name, detached from the graph."""
-    outcome = _outcome(torch.zeros(1, 1), torch.zeros(1, 1))
-    assert outcome.logged() == {
-        "train_loss": 3.0,
-        "edge_loss": 1.0,
-        "det_loss": 2.0,
-        "contrastive_loss": 0.5,
-        "hard_negative_loss": 0.25,
-    }
-
-
-def test_difficulty():
-    """Hand-computed: of the two ANNOTATED sources one is ranked top-1 and one is not, so the defect is 1 - 1/2."""
-    edge_matrix = torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 0.0]])
-    edge_logits = torch.tensor([[2.0, 1.0, 0.0], [0.0, 1.0, 5.0], [9.0, 0.0, 0.0]])  # row 2 is unannotated, ignored
-    assert _outcome(edge_logits, edge_matrix).difficulty() == 0.5
-
-
-def test_difficulty_is_none_without_annotated_sources():
-    """A pair whose annotation links nothing has no defect to report, so the sampler is told to keep what it stored."""
-    assert _outcome(torch.rand(2, 2), torch.zeros(2, 2)).difficulty() is None
+    """A pair outcome whose loss terms are placeholders — `test_observe` reads only its edge tensors."""
+    zero = torch.zeros(())
+    return _PairOutcome(torch.tensor(3.0), zero, zero, zero, zero, edge_logits, edge_matrix)
 
 
 def _cpu_config() -> JointTrainConfig:

@@ -10,7 +10,7 @@ from pathlib import Path
 import torch
 
 from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeTransformerScorer
-from celltrack.models.joint_model import JointModel
+from celltrack.models.joint_model import _MAX_NODES, JointModel
 from celltrack.models.prior_velocity import PriorVelocity
 from celltrack.models.temporal_unet_detector import TemporalUNetDetector
 
@@ -61,6 +61,38 @@ def test_forward_batch():
         assert torch.allclose(single.edge_logits, batch.edge_logits, atol=1e-4)
         assert torch.allclose(single.detection_t, batch.detection_t, atol=1e-4)
         assert torch.allclose(single.source_features, batch.source_features, atol=1e-4)
+
+
+def test_batched_forward():
+    """The padded batched forward carries every pair on ONE `_MAX_NODES` shape, with the real-length masks."""
+    torch.manual_seed(0)
+    model = _joint_model().eval()
+    frames = [(torch.randn(4, 8, 8), torch.randn(4, 8, 8)) for _ in range(2)]
+    sources = [torch.tensor([[2, 4, 4]]), torch.tensor([[1, 2, 2]])]
+    targets = [torch.tensor([[2, 4, 4], [1, 2, 2]]), torch.tensor([[3, 5, 5]])]
+    windows = torch.stack([torch.stack([ft, ft1], dim=0) for ft, ft1 in frames], dim=0)
+
+    with torch.no_grad():
+        batched = model.batched_forward(windows, sources, targets)
+
+    assert batched.logits.shape == (2, _MAX_NODES, _MAX_NODES)  # padded to the fixed shape
+    assert batched.source_lengths == (1, 1) and batched.target_lengths == (2, 1)
+    assert batched.source_mask[:, :2].tolist() == [[True, False], [True, False]]  # real then pad
+
+
+def test_unpad():
+    """`BatchedForward.unpad` slices each pair's [:s, :u] block back out — equal to the per-pair forward."""
+    torch.manual_seed(0)
+    model = _joint_model().eval()
+    frames = [(torch.randn(4, 8, 8), torch.randn(4, 8, 8)) for _ in range(2)]
+    sources = [torch.tensor([[2, 4, 4]]), torch.tensor([[1, 2, 2]])]
+    targets = [torch.tensor([[2, 4, 4], [1, 2, 2]]), torch.tensor([[3, 5, 5]])]
+    windows = torch.stack([torch.stack([ft, ft1], dim=0) for ft, ft1 in frames], dim=0)
+
+    with torch.no_grad():
+        unpadded = model.batched_forward(windows, sources, targets).unpad()
+
+    assert [f.edge_logits.shape for f in unpadded] == [(1, 2), (1, 1)]  # each pair's real (s, u)
 
 
 def test_compile_scene_head():

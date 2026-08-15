@@ -39,6 +39,16 @@ def _high_response_frame() -> tuple[Tensor, list[Tensor], Tensor]:
     return logits, [torch.tensor([[0, 0, 0]])], supervised
 
 
+def test_per_frame():
+    """The per-frame vector holds one scalar per frame and averages to exactly `of` — same weights, same masking."""
+    torch.manual_seed(0)
+    logits = torch.randn(3, 4, 4, 4)
+    centres = [torch.tensor([[1, 1, 1]]), torch.tensor([[2, 2, 2], [0, 0, 0]]), torch.empty((0, 3), dtype=torch.long)]
+    per_frame = BalancedBCE.per_frame(logits, centres, _NEG_WEIGHT)
+    assert per_frame.shape == (3,)
+    assert torch.allclose(per_frame.mean(), BalancedBCE.of(logits, centres, _NEG_WEIGHT), atol=1e-6)
+
+
 def test_balanced_b_c_e_of():
     """A confident-correct map scores below the inverse; finite + differentiable; out-of-bounds/empty are defined."""
     logits = torch.zeros((1, 4, 4, 4), requires_grad=True)

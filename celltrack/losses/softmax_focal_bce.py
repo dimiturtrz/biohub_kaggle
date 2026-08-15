@@ -82,11 +82,93 @@ class SoftmaxFocalBCE:
             return torch.stack(terms).sum() / len(axes)
 
     @staticmethod
+    def batched(
+        logits: Float[Tensor, "b s t"],
+        target: Float[Tensor, "b s t"],
+        masks: tuple[Bool[Tensor, "b s"], Bool[Tensor, "b t"]],
+        axes: Sequence[int] = (SOURCE_AXIS,),
+        *,
+        balanced: bool = False,
+    ) -> Float[Tensor, " b"]:
+        """Per-pair focal BCE over a PADDED batch — element `b` equals `of` on that pair's unpadded `(s, t)`.
+
+        The batched forward emits one padded `(B, _MAX_NODES, _MAX_NODES)` logit block so the whole GPU forward
+        is a single static shape; this reads it without the per-pair Python loop that block replaced. The masks
+        carry each pair's real node counts, and the reduction reproduces `of` exactly: a pad node contributes
+        nothing (excluded from the active cells, and `-inf` before the softmax so it takes no probability), an
+        axis with ONE real candidate contributes nothing to the numerator but still counts in the `/ len(axes)`
+        divisor, and a pair with no constraining axis reads zero. The per-pair weighting (the draw weight, the
+        reliability multiplier) is applied by the caller to this vector, exactly as it was to the loop's scalars.
+        """
+        source_mask, target_mask = masks
+        valid = source_mask[:, :, None] & target_mask[:, None, :]  # (B, S, T) real cells
+        touched = target * valid.float()
+        active = ((touched.sum(dim=2) > 0)[:, :, None] | (touched.sum(dim=1) > 0)[:, None, :]) & valid
+        real_along = {SOURCE_AXIS: source_mask.sum(dim=1), TARGET_AXIS: target_mask.sum(dim=1)}  # per-pair counts
+        reduce = SoftmaxFocalBCE._balanced_along_batched if balanced else SoftmaxFocalBCE._along_batched
+        with torch.autocast(device_type=logits.device.type, enabled=False):
+            scores, truth = logits.float(), target.float()
+            total = scores.new_zeros(scores.shape[0])
+            for axis in axes:
+                keep = real_along[axis] > _ONE_CANDIDATE  # (B,) — a 1-candidate axis constrains nothing
+                axis_mask = source_mask if axis == SOURCE_AXIS else target_mask
+                term = reduce(scores, truth, active, axis, axis_mask)
+                total = total + term * keep.float()
+            return total / len(axes)
+
+    @staticmethod
     def _along(
         scores: Float[Tensor, "s t"], truth: Float[Tensor, "s t"], active: Bool[Tensor, "s t"], axis: int
     ) -> Float[Tensor, ""]:
         """Focal BCE over the softmax along one axis, averaged over the active cells."""
         return SoftmaxFocalBCE._focal(scores, truth, axis)[active].mean()
+
+    @staticmethod
+    def _along_batched(
+        scores: Float[Tensor, "b s t"],
+        truth: Float[Tensor, "b s t"],
+        active: Bool[Tensor, "b s t"],
+        axis: int,
+        axis_mask: Bool[Tensor, "b n"],
+    ) -> Float[Tensor, " b"]:
+        """Per-pair mean of the focal BCE over the active cells — the batched `_along`."""
+        focal = SoftmaxFocalBCE._focal_batched(scores, truth, axis, axis_mask)
+        active_f = active.float()
+        return (focal * active_f).sum(dim=(1, 2)) / active_f.sum(dim=(1, 2)).clamp(min=1)
+
+    @staticmethod
+    def _balanced_along_batched(
+        scores: Float[Tensor, "b s t"],
+        truth: Float[Tensor, "b s t"],
+        active: Bool[Tensor, "b s t"],
+        axis: int,
+        axis_mask: Bool[Tensor, "b n"],
+    ) -> Float[Tensor, " b"]:
+        """Per-pair, per-decision class-balanced mean — the batched `_balanced_along`."""
+        focal = SoftmaxFocalBCE._focal_batched(scores, truth, axis, axis_mask)
+        over = axis + 1  # (B, S, T): SOURCE_AXIS reduces dim 1, TARGET_AXIS dim 2
+        positive = SoftmaxFocalBCE._class_mean(focal, (truth > 0) & active, over)
+        negative = SoftmaxFocalBCE._class_mean(focal, (truth == 0) & active, over)
+        decided = active.any(dim=over)  # (B, D)
+        per_decision = ((positive + negative) * decided.float()).sum(dim=1)
+        return per_decision / decided.float().sum(dim=1).clamp(min=1)
+
+    @staticmethod
+    def _focal_batched(
+        scores: Float[Tensor, "b s t"], truth: Float[Tensor, "b s t"], axis: int, axis_mask: Bool[Tensor, "b n"]
+    ) -> Float[Tensor, "b s t"]:
+        """Per-cell focal BCE over the masked softmax along `axis` — pad nodes on that axis take no probability.
+
+        Only the NORMALISED axis is masked to `-inf`, not every invalid cell: masking the whole valid block would
+        make a pad-target column all `-inf` and its softmax `nan`. Masking the axis alone leaves each real column
+        a distribution over the real sources (and each real row over the real targets), which is what `of` sees.
+        """
+        over = axis + 1
+        along_pad = ~axis_mask[:, :, None] if axis == SOURCE_AXIS else ~axis_mask[:, None, :]
+        probability = torch.softmax(scores.masked_fill(along_pad, float("-inf")), dim=over)
+        bce = F.binary_cross_entropy(probability, truth, reduction="none")
+        p_t = probability * truth + (1 - probability) * (1 - truth)
+        return ((1 - p_t) ** _FOCAL_POWER) * bce
 
     @staticmethod
     def _balanced_along(
