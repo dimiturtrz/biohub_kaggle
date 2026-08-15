@@ -58,6 +58,8 @@ node_modules/
 /kaggle/kit/
 /kaggle/kit_staging/
 kaggle/**/*.pt
+# Vendored third-party CC0 dataset weights (pilkwang association ranker, 20KB, not reproducible in-repo).
+!kaggle/datasets/**/*.pt
 kaggle/**/*.whl
 .venv-repro/
 

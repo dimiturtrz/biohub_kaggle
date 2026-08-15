@@ -36,6 +36,14 @@ kaggle kernels output dimiturnt/celltrack-pilktunet-motion-stlf -p /tmp/out   # 
 # submit the completed kernel version on the competition's "Submit" page (code-competition flow)
 ```
 
+## Datasets
+
+Kaggle-dataset staging trees live under `datasets/<slug>/` (each holds its own `dataset-metadata.json` +
+`README.md`; upload with `kaggle datasets version -p datasets/<slug>`).
+
+- `datasets/biohub-association-ranker` — vendored CC0 local-association-ranker weights (third-party
+  pilkwang asset, re-hosted as `dimiturnt/biohub-association-ranker`). See its README for provenance.
+
 ## Kernels
 
 Named for the method, `celltrack-<detector>-<linker>` — a different detector or linker is a different
