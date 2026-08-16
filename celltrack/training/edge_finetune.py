@@ -136,6 +136,7 @@ class EdgeFinetuneConfig:
     learning_rate: float = 1.0e-4
     hard_negatives: int = 4
     hard_negative_weight: float = 1.0
+    objective: str = "absolute"
     train_stems: tuple[str, ...] = _TRAIN_STEMS
     save_to: Path = field(default=Path("edge_predictor_zni.pth"))
 
@@ -171,11 +172,19 @@ class EdgeHardNegativeFinetuner:
         target = torch.as_tensor(gap.gt_matrix, device=self._config.device)
         loss = SoftmaxFocalBCE.of(logits, target)
         if len(gap.hard_negatives):
-            probability = torch.softmax(logits, dim=0)
-            rows = torch.as_tensor(gap.hard_negatives[:, 0], device=self._config.device)
-            columns = torch.as_tensor(gap.hard_negatives[:, 1], device=self._config.device)
-            loss = loss + self._config.hard_negative_weight * probability[rows, columns].mean()
+            loss = loss + self._config.hard_negative_weight * self._hard_negative_penalty(logits, target, gap)
         return loss
+
+    def _hard_negative_penalty(
+        self, logits: Float[torch.Tensor, "s t"], target: Float[torch.Tensor, "s t"], gap: GapSupervision
+    ) -> Float[torch.Tensor, ""]:
+        """The mined-decoy penalty. `absolute` deflates the decoy probability (refuted: flattens `P_true` too);
+        `margin` reads only `logit_decoy - logit_true`, so a row-wide depression cancels and only re-ranking pays."""
+        decoys = torch.as_tensor(gap.hard_negatives, device=self._config.device)
+        if self._config.objective == "margin":
+            return HardNegativeMargin.of(logits, target, decoys)
+        probability = torch.softmax(logits, dim=0)
+        return probability[decoys[:, 0], decoys[:, 1]].mean()
 
     # CLI orchestration of the zni probe: mount the training proxy + tracker, mine gaps, report the read-out.
     @staticmethod
@@ -229,6 +238,7 @@ def main() -> None:
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--steps", type=int, default=400)
     parser.add_argument("--hard-negative-weight", type=float, default=1.0)
+    parser.add_argument("--objective", choices=("absolute", "margin"), default="absolute")
     parser.add_argument("--save-to", type=Path, default=Path("edge_predictor_zni.pth"))
     parsed = parser.parse_args()
 
@@ -236,6 +246,7 @@ def main() -> None:
         device=parsed.device,
         steps=parsed.steps,
         hard_negative_weight=parsed.hard_negative_weight,
+        objective=parsed.objective,
         save_to=parsed.save_to,
     )
     root = DataRoot.from_config(parsed.config)
