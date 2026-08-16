@@ -61,6 +61,8 @@ kaggle/**/*.pt
 # Vendored third-party CC0 dataset weights (pilkwang association ranker, 20KB, not reproducible in-repo).
 !kaggle/datasets/**/*.pt
 kaggle/**/*.whl
+# Kernel run outputs (submission.csv etc are reproducible artifacts, never committed).
+kaggle/kernels/**/out/
 .venv-repro/
 
 # ephemeral agent worktrees (isolated; not part of tracked tree)
