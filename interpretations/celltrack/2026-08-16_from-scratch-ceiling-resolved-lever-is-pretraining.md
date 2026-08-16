@@ -1,4 +1,8 @@
-# The from-scratch ceiling is resolved: every objective/data/norm lever caps, the gap is pretraining
+# The from-scratch ceiling is resolved: every knob caps, the gap is supervised training budget on all data
+
+<!-- Filename says "pretraining"; the original conclusion was WRONG. See the CORRECTION section below:
+     the frontier uses no pretraining — it is supervised joint training for 50 epochs on all 199 movies. -->
+
 
 *2026-08-16 — closes the fork the two 2026-08-15 docs left open. Reconciles their disagreement and records
 the outcome of the augmentation / group-norm / longer-training arms they proposed.*
@@ -40,21 +44,37 @@ into over-detection (ratio +0.16) without raising the clamped proxy. **The ceili
 is loss-invariant, norm-invariant, aug-invariant, threshold-invariant, and step-budget-invariant
 (4k→40k identical).**
 
-## What is actually left: pretraining, the warm-start's only real edge
+## What is actually left: training budget on all data, not "pretraining" (CORRECTION 2026-08-16)
 
-Both docs converge on the mechanism: warm-start is the **same TemporalUNet3D architecture** (layers
-32/64/128) and reads the recoverable cells correctly from the same pixels — so the gap is **not capacity, not
-loss, not calibration, not augmentable diversity over 12 movies.** It is the *representation* the pilkwang
-weights carry from **broader pretraining**. Warm reads 0.986 node R / 0.847 proxy; from-scratch same-arch
-caps 0.93 / 0.76.
+**An earlier version of this section claimed the frontier's edge is reconstructive self-supervised
+backbone pretraining. That is false and is retracted.** Reading the downloaded frontier source settles it:
+`external/kaggle-cell-tracking-competition/` (README + `scripts/train_unet_transformer.py`) trains the
+released public-baseline weights with **plain supervised joint end-to-end** learning — focal-BCE edge loss
++ BCE detection loss, the edge loss flowing back into the UNet — for `--epochs 50` on **all 199 movies**.
+No masked-voxel, no denoising, no contrastive, no SSL of any kind. Every `mask` reference in that repo is a
+padding / active-node mask. There is no pretraining to replicate.
 
-Bigger architecture will not help (the existing arch already suffices when pretrained). The one honest
-from-scratch lever — the SOTA replicate-then-build move, not borrowing pilkwang's weights — is to
-**replicate the pretraining**: self-supervised pretraining of the backbone on the unlabeled microscopy
-frames (masked-voxel reconstruction / denoising), then fine-tune the detection head on the 191 annotated
-train movies. Contrastive pretraining is already refuted (Doc A's *contrastive* arm was actively harmful —
-representation shift into the shared trunk corrupts detection), so the objective must be reconstructive, not
-contrastive.
+The real difference is **training budget × data**, on the same supervised objective:
+
+| axis | frontier (warm weights) | our from-scratch joint |
+|---|---|---|
+| objective | supervised joint (edge+det) | same |
+| epochs | 50, to usable convergence | **`joint_pt_finetune`: 0.44 epoch, early-stopped** |
+| data | all 199 movies | our train subset |
+| best proxy | 0.847 (warm eval) | **0.7121** |
+
+We *did* run joint-from-scratch — it is not an untried fork. `joint_pt_finetune` (the model the differential
+test used as "from-scratch") early-stopped at **0.44 epochs / best proxy 0.7121** — undertrained by ~100×
+against the frontier's 50. The two contrastive joint arms confirm the objective must stay plain supervised:
+`joint_pt_contrastive` (NCE) capped ~0.69, and `joint_dim_ctrl` (NCE+HN) **collapsed to proxy 0.000 / node R
+0.000** — representation shift into the shared trunk corrupts detection. So the SOTA replicate-then-build move
+is not "pretrain the backbone" — it is **train the same supervised joint model to the frontier's budget
+(50 epochs × all199)** and measure whether that alone closes the ~0.93→0.986 node-R gap. That is the honest,
+non-warm-start lever, and it is untested at budget (we only ever ran fractions of an epoch).
+
+Warm-start is the **same TemporalUNet3D architecture** (layers 32/64/128) reading the recoverable cells
+correctly from the same pixels — so the gap is **not capacity, not the objective, not calibration.** It is
+what 50 epochs on all data buys the representation that <0.5 epoch does not.
 
 ## Standing state
 
@@ -63,10 +83,11 @@ contrastive.
   detector (nudges only still-unmoved track-starts by the frame's own common-mode of confident tight matches;
   no field, no tuned constant, no dual-seed). Score pending (LB lag).
 - **From-scratch deliverable ceiling:** ~0.757 LB, an honest portfolio artifact. The frontier warm pipeline
-  (LB 0.892–0.899) remains the reference ceiling; its edge is external pretraining, legitimately labelled.
-- **Next lever (not yet built):** reconstructive self-supervised backbone pretraining on unlabeled frames.
-  This is the only remaining mechanism that could move the representation floor; it is a multi-hour build,
-  not a knob, and is the correct next investment if the from-scratch score is to be pushed further.
+  (LB 0.892–0.899) remains the reference ceiling; its edge is supervised training budget (50 epochs × all199),
+  not pretraining.
+- **Next lever (not yet built):** train the same supervised joint model (edge+det, no contrastive) to the
+  frontier's budget — 50 epochs on all 199 movies — from scratch, and measure the node-R gap. Every arm so
+  far ran <0.5 epoch; the budget itself is the untested variable. Multi-hour build, not a knob.
 
 ## Reproduce
 
