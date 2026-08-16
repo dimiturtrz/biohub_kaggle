@@ -638,6 +638,18 @@
     },
     {
       "kind": "import",
+      "source": "celltrack.data.synthetic_scene",
+      "target": "celltrack.data.joint_dataset",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.data.synthetic_scene",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "celltrack.data.targets",
       "target": "core.geometry",
       "weight": 1
@@ -1581,6 +1593,12 @@
     {
       "kind": "import",
       "source": "celltrack.models.temporal_unet_detector",
+      "target": "celltrack.models.temporal_position_attention",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.models.temporal_unet_detector",
       "target": "core.data.video",
       "weight": 1
     },
@@ -2157,6 +2175,12 @@
     {
       "kind": "import",
       "source": "celltrack.training.pair_split",
+      "target": "celltrack.data.candidate_density",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.pair_split",
       "target": "celltrack.data.detection_pairs",
       "weight": 1
     },
@@ -2176,6 +2200,12 @@
       "kind": "import",
       "source": "celltrack.training.pair_split",
       "target": "celltrack.data.synthetic_pairs",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.pair_split",
+      "target": "celltrack.data.synthetic_scene",
       "weight": 1
     },
     {
@@ -9022,6 +9052,12 @@
       "kind": "calls",
       "source": "celltrack.linkers.motion_linking.MotionHungarianLinker._match",
       "target": "celltrack.linkers.motion_linking.MotionHungarianLinker._blended_cost",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.linkers.motion_linking.MotionHungarianLinker._match",
+      "target": "celltrack.linkers.motion_linking.MotionHungarianLinker._estimate_drift",
       "weight": 1
     },
     {
@@ -21540,6 +21576,14 @@
       "descendants": 0,
       "id": "celltrack.linkers.motion_linking.MotionHungarianLinker._blended_cost",
       "label": "_blended_cost",
+      "level": "method",
+      "parent": "celltrack.linkers.motion_linking.MotionHungarianLinker",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.linkers.motion_linking.MotionHungarianLinker._estimate_drift",
+      "label": "_estimate_drift",
       "level": "method",
       "parent": "celltrack.linkers.motion_linking.MotionHungarianLinker",
       "role": null
