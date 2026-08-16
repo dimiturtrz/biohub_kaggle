@@ -27,6 +27,10 @@ from core.geometry import Spacing
 
 _BEYOND_GATE = 1.0e9
 
+# A per-frame drift estimated from too few committed pairs is dominated by those cells' own motion rather than
+# the shared tissue shift, so the median is trusted only once enough tight links agree on a common-mode.
+_MIN_DRIFT_SAMPLES = 3
+
 
 # The successor is predicted half a step ahead, not a full one: a full-velocity extrapolation overshoots a
 # cell that is decelerating or turning, and cells here move smoothly rather than ballistically, so a damped
@@ -52,6 +56,15 @@ class MotionHungarianLinker:
     loose_gate_um: float
     affinity: EdgeAffinity | None = None
     affinity_bonus: float = 0.0
+    # Correct a track START for whole-frame tissue drift, self-estimated per gap from that gap's own tight-pass
+    # matches. Whole-frame drift is 61-92% of the mean annotated step here; a track's measured `velocity` already
+    # carries it once the track has one committed link, so the ONLY place a drift-blind prediction pays for it is
+    # a track start, where velocity is still zero. The tight pass commits the confident links first; the drift is
+    # then the common-mode of those committed displacements (each cell's own motion is roughly zero-mean across a
+    # frame, so the median displacement is the shared tissue shift), and it is added to the prediction of the
+    # still-unmoved sources for the loose pass alone. No precomputed field, no tuned constant — the offset is the
+    # frame's own measured drift, applied where and only where velocity has not yet supplied it. Off by default.
+    use_drift: bool = False
     # Off by default: a further cost term carrying the CC0 local-association re-ranker's probability
     # (`RankerBonus`), subtracted after the forward affinity's discount exactly as on `AssignmentLinker`. This
     # is the pairing the re-ranker was trained under — its features read a motion-predicted distance and gain,
@@ -88,8 +101,28 @@ class MotionHungarianLinker:
         cost = self._blended_cost(timepoint, cdist(predicted, positions_um[targets]))
         displacement = cdist(positions_um[sources], positions_um[targets])
         tight = self._assign(cost, displacement <= self.tight_gate_um)
+        if self.use_drift:
+            drift = self._estimate_drift(tight, sources, targets, positions_um)
+            if drift is not None:
+                unmoved = ~velocity[sources].any(axis=1)
+                predicted[unmoved] = predicted[unmoved] + drift
+                cost = self._blended_cost(timepoint, cdist(predicted, positions_um[targets]))
         loose = self._assign(cost, displacement <= self.loose_gate_um, taken=tight)
         return [(int(sources[s]), int(targets[t])) for s, t in tight + loose]
+
+    def _estimate_drift(
+        self,
+        tight: list[tuple[int, int]],
+        sources: Int[np.ndarray, "s"],
+        targets: Int[np.ndarray, "t"],
+        positions_um: Float[np.ndarray, "n 3"],
+    ) -> Float[np.ndarray, "3"] | None:
+        """The frame's common-mode tissue shift: the median displacement over the tight-committed pairs, or None."""
+        if len(tight) < _MIN_DRIFT_SAMPLES:
+            return None
+        src = sources[[s for s, _ in tight]]
+        tgt = targets[[t for _, t in tight]]
+        return np.median(positions_um[tgt] - positions_um[src], axis=0)
 
     def _blended_cost(self, timepoint: int, distance: Float[np.ndarray, "s t"]) -> Float[np.ndarray, "s t"]:
         """The distance cost minus each learned-association term wired for this gap — forward, then re-ranker."""

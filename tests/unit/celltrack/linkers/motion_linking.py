@@ -59,3 +59,46 @@ def test_link_learned_bonus_flips_the_assignment_to_the_favoured_but_farther_can
     affinity = _FixedAffinity(np.array([[1.0, 0.0]]))  # reward the farther target (column 0)
     blended = MotionHungarianLinker(_SPACING, 6.0, 10.0, affinity=affinity, affinity_bonus=5.0)
     assert edges_of(blended.link(graph)) == {(0, 1)}  # bonus pulls the assignment onto the favoured target
+
+
+# Three confident movers (nodes 0-2) each step +6 in x within the tight gate; node 3 is a track start whose true
+# successor drifted out of the tight gate, with a decoy nearer its undrifted position. Voters commit in the tight
+# pass and their common-mode +6 is the drift estimate; the track start rides it in the loose pass.
+_DRIFT_GRAPH = [
+    (0, 0, 0, 0),
+    (0, 0, 50, 0),
+    (0, 0, 100, 0),
+    (0, 0, 200, 20),  # sources: 3 voters + a track start
+    (1, 0, 0, 6),
+    (1, 0, 50, 6),
+    (1, 0, 100, 6),  # the voters' +6 successors
+    (1, 0, 200, 13),
+    (1, 0, 200, 28),  # node 7 = near decoy, node 8 = drifted true
+]
+
+
+def test_self_estimated_drift_pulls_a_track_start_onto_the_drifted_successor():
+    """The tight pass's common-mode step, estimated per gap, shifts a still-unmoved source onto its drifted target."""
+    graph = a_graph(_DRIFT_GRAPH)
+    assert (3, 7) in edges_of(LINKER.link(graph))  # driftless: the track start takes its raw-nearer decoy
+    drifted = MotionHungarianLinker(_SPACING, 6.0, 10.0, use_drift=True)
+    present = edges_of(drifted.link(graph))
+    assert (3, 8) in present  # predicted x=26 (20 + estimated +6) now sits nearest the drifted successor
+    assert (3, 7) not in present
+
+
+def test_drift_needs_a_quorum_of_tight_matches_to_be_trusted():
+    """Below the sample floor the per-gap estimate is dominated by own-motion, so no drift is applied."""
+    two_voters = [
+        (0, 0, 0, 0),
+        (0, 0, 50, 0),
+        (0, 0, 200, 20),  # only 2 voters — under the quorum
+        (1, 0, 0, 6),
+        (1, 0, 50, 6),
+        (1, 0, 200, 13),
+        (1, 0, 200, 28),
+    ]
+    graph = a_graph(two_voters)
+    drifted = MotionHungarianLinker(_SPACING, 6.0, 10.0, use_drift=True)
+    assert (2, 5) in edges_of(drifted.link(graph))  # no quorum → behaves as driftless, takes the decoy
+    assert (2, 6) not in edges_of(drifted.link(graph))
