@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import logging
 import math
+import os
 import time
 from collections.abc import Iterator
 from dataclasses import dataclass, replace
@@ -630,6 +631,12 @@ class JointTrainer:
 
 
 def main() -> None:
+    # Defragment the CUDA caching allocator before the first allocation: the proxy-eval tracker's large
+    # transient tensors on big validation movies otherwise fragment the default allocator into a >32GB
+    # footprint that spills to host RAM. Expandable segments return freed blocks, holding the same pipeline
+    # under ~21GB. setdefault so an explicit env override still wins; read lazily at first CUDA alloc.
+    os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+
     args = JointCli.build_parser().parse_args()
 
     # The flat flags fan out into the concern each one belongs to — the CLI is the interface, this is the model.
