@@ -12237,19 +12237,13 @@
     {
       "kind": "calls",
       "source": "celltrack.training.joint_detector.JointTrainer._pairs",
-      "target": "celltrack.data.joint_dataset.PairDataset.pair",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.training.joint_detector.JointTrainer._pairs",
       "target": "celltrack.data.joint_dataset.PairDataset.stream",
       "weight": 1
     },
     {
       "kind": "calls",
       "source": "celltrack.training.joint_detector.JointTrainer._pairs",
-      "target": "celltrack.data.pair_curriculum.PairCurriculum.step",
+      "target": "celltrack.data.pair_curriculum.PairCurriculum.read_ahead",
       "weight": 1
     },
     {
@@ -12259,9 +12253,27 @@
       "weight": 1
     },
     {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer._pairs",
+      "target": "celltrack.training.joint_detector.JointTrainer._prefetched",
+      "weight": 1
+    },
+    {
       "kind": "construct",
       "source": "celltrack.training.joint_detector.JointTrainer._prediction",
       "target": "celltrack.losses.tracking_loss.PairPrediction",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer._prefetched",
+      "target": "celltrack.data.joint_dataset.PairDataset.pair",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer._prefetched",
+      "target": "celltrack.data.pair_curriculum.PairCurriculum.step",
       "weight": 1
     },
     {
@@ -12759,18 +12771,24 @@
     {
       "kind": "calls",
       "source": "celltrack.training.prior_velocity_source.PriorVelocitySource.of",
-      "target": "celltrack.models.joint_model.JointModel.forward",
+      "target": "celltrack.training.prior_velocity_source.PriorVelocitySource.of_batch",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.prior_velocity_source.PriorVelocitySource.of_batch",
+      "target": "celltrack.models.joint_model.JointModel.forward_batch",
       "weight": 1
     },
     {
       "kind": "construct",
-      "source": "celltrack.training.prior_velocity_source.PriorVelocitySource.of",
+      "source": "celltrack.training.prior_velocity_source.PriorVelocitySource.of_batch",
       "target": "celltrack.models.prior_velocity.GapHistory",
       "weight": 1
     },
     {
       "kind": "calls",
-      "source": "celltrack.training.prior_velocity_source.PriorVelocitySource.of",
+      "source": "celltrack.training.prior_velocity_source.PriorVelocitySource.of_batch",
       "target": "celltrack.models.prior_velocity.GapHistory.velocity",
       "weight": 1
     },
@@ -19166,6 +19184,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.data.difficulty_sampler.DifficultySampler.read_ahead",
+      "label": "read_ahead",
+      "level": "method",
+      "parent": "celltrack.data.difficulty_sampler.DifficultySampler",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.data.difficulty_sampler.DifficultySampler.selection_weight",
       "label": "selection_weight",
       "level": "method",
@@ -19470,6 +19496,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.data.pair_curriculum.FixedMixture.read_ahead",
+      "label": "read_ahead",
+      "level": "method",
+      "parent": "celltrack.data.pair_curriculum.FixedMixture",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.data.pair_curriculum.FixedMixture.selection_weight",
       "label": "selection_weight",
       "level": "method",
@@ -19526,6 +19560,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.data.pair_curriculum.PacedMixture.read_ahead",
+      "label": "read_ahead",
+      "level": "method",
+      "parent": "celltrack.data.pair_curriculum.PacedMixture",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.data.pair_curriculum.PacedMixture.selection_weight",
       "label": "selection_weight",
       "level": "method",
@@ -19560,6 +19602,14 @@
       "descendants": 0,
       "id": "celltrack.data.pair_curriculum.PairCurriculum.observe",
       "label": "observe",
+      "level": "method",
+      "parent": "celltrack.data.pair_curriculum.PairCurriculum",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.pair_curriculum.PairCurriculum.read_ahead",
+      "label": "read_ahead",
       "level": "method",
       "parent": "celltrack.data.pair_curriculum.PairCurriculum",
       "role": null
@@ -23782,6 +23832,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.training.joint_detector.JointTrainer._prefetched",
+      "label": "_prefetched",
+      "level": "method",
+      "parent": "celltrack.training.joint_detector.JointTrainer",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.training.joint_detector.JointTrainer._prepare",
       "label": "_prepare",
       "level": "method",
@@ -23904,6 +23962,14 @@
       "descendants": 0,
       "id": "celltrack.training.prior_velocity_source.PriorVelocitySource.of",
       "label": "of",
+      "level": "method",
+      "parent": "celltrack.training.prior_velocity_source.PriorVelocitySource",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.prior_velocity_source.PriorVelocitySource.of_batch",
+      "label": "of_batch",
       "level": "method",
       "parent": "celltrack.training.prior_velocity_source.PriorVelocitySource",
       "role": null
