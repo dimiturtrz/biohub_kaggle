@@ -5696,6 +5696,12 @@
     },
     {
       "kind": "calls",
+      "source": "celltrack.data.gpu_scene.GpuScenes._render",
+      "target": "celltrack.data.gpu_scene.GpuScenes._corrupt",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
       "source": "celltrack.data.gpu_scene.GpuScenes.batch",
       "target": "celltrack.data.gpu_scene.GpuScenes._render",
       "weight": 1
@@ -5908,6 +5914,12 @@
       "kind": "references",
       "source": "celltrack.data.synthetic_scene.Scene",
       "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.synthetic_scene.Scene._render",
+      "target": "celltrack.data.synthetic_scene.Scene._corrupt",
       "weight": 1
     },
     {
@@ -19258,6 +19270,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.data.gpu_scene.GpuScenes._corrupt",
+      "label": "_corrupt",
+      "level": "method",
+      "parent": "celltrack.data.gpu_scene.GpuScenes",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.data.gpu_scene.GpuScenes._render",
       "label": "_render",
       "level": "method",
@@ -19630,6 +19650,14 @@
       "label": "sequences",
       "level": "method",
       "parent": "celltrack.data.synthetic_pairs.SyntheticPairs",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.synthetic_scene.Scene._corrupt",
+      "label": "_corrupt",
+      "level": "method",
+      "parent": "celltrack.data.synthetic_scene.Scene",
       "role": null
     },
     {
