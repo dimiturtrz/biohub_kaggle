@@ -23,7 +23,6 @@ module only manufactures the cases.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 
 import numpy as np
@@ -65,6 +64,18 @@ class SceneConfig:
     speed_um_std: float = 6.0  # the fast-mover tail — where the true successor lands far
     turn_std_rad: float = 0.8  # per-frame heading change; the constant-velocity prior fails when this is large
     margin_vox: float = 3.0  # keep centres off the volume face so a blob is not clipped
+    # APPEARANCE DIVERSITY. The blob above is one identical, noise-free shape — trivially detectable, so a
+    # detector trained on it never has to learn the real signal and does not transfer. These break that: real
+    # nuclei vary in brightness, the microscope PSF is z-anisotropic, and the frame carries background + noise.
+    # Values live on the quantile-normalised [0, 1] scale the frames are read at (q0.001/q0.999 window). All
+    # default to the identical-blob regime (off) so an existing run is unchanged; an appearance-diverse run
+    # turns them on. Per-cell SIZE variation is intentionally absent — it breaks the separable-blur that keeps
+    # the GPU path at conv3d speed; brightness + anisotropy + noise are the free, high-value knobs.
+    intensity_log_std: float = 0.0  # per-cell peak = peak_intensity * exp(N(0, s)); nucleus brightness spread
+    sigma_z_ratio: float = 1.0  # z sigma = blob_sigma_vox * ratio; microscope PSF blurs z more than x/y
+    background_level: float = 0.0  # additive constant baseline before noise
+    noise_read_std: float = 0.0  # additive Gaussian read noise std (post-blur, [0, 1] scale)
+    noise_shot_photons: float = 0.0  # Poisson shot noise; photons at unit signal (0 = off, higher = cleaner)
 
 
 @dataclass(frozen=True)
@@ -100,6 +111,10 @@ class Scene:
             current = np.clip(current + velocity, lo, hi)  # a cell that would leave stays at the face
             positions.append(current)
 
+        # A cell keeps its brightness across the sequence (a nucleus does not flicker), so the per-cell peak is
+        # drawn once here and indexed by cell in every frame's render.
+        intensities = config.peak_intensity * np.exp(rng.normal(0.0, config.intensity_log_std, config.n_cells))
+
         positions_vox = np.concatenate(positions, axis=0)
         timepoints = np.repeat(np.arange(config.n_frames), config.n_cells)
         # Cell c at frame f is row f*n_cells + c; its continuation is the same cell at f+1.
@@ -111,7 +126,7 @@ class Scene:
             ],
             dtype=np.int64,
         )
-        volumes = cls._render(positions, config)
+        volumes = cls._render(positions, config, intensities, rng)
         return cls(volumes=volumes, positions_vox=positions_vox, timepoints=timepoints, edges=edges)
 
     @staticmethod
@@ -130,33 +145,62 @@ class Scene:
         return perturbed / (np.linalg.norm(perturbed, axis=1, keepdims=True) + 1e-9) * speed
 
     @staticmethod
-    def _render(positions: list[Float[np.ndarray, "n 3"]], config: SceneConfig) -> Float[np.ndarray, "t z y x"]:
-        """Paint an isotropic Gaussian blob at every cell centre, per frame — the max over cells, not the sum.
+    def _render(
+        positions: list[Float[np.ndarray, "n 3"]],
+        config: SceneConfig,
+        intensities: Float[np.ndarray, " n"],
+        rng: np.random.Generator,
+    ) -> Float[np.ndarray, "t z y x"]:
+        """Paint a Gaussian blob at every cell centre, per frame — the max over cells, then background + noise.
 
         Overlapping crowded cells are combined by MAXIMUM rather than addition, so two near cells read as two
         peaks of the right height instead of one bright merged blob — the crowding the detector must separate is
-        preserved, and the peak intensity stays calibrated to `peak_intensity` regardless of density.
+        preserved, and each peak stays calibrated to its own `intensities[cell]` regardless of density.
 
         Each blob is computed only inside a `+-radius` window around its centre (the Gaussian is negligible
         beyond ~3 sigma), so the cost is O(cells * window) rather than O(cells * volume) — the difference between
         a generator that can run per training step and one that cannot at the dense density this targets.
+
+        The blob is z-anisotropic (`sigma_z_ratio`) to mimic the microscope PSF, and once every cell is painted
+        the frame gets a constant `background_level` and Poisson-then-Gaussian noise — so the detector sees the
+        real signal (a peak over a noisy floor), not a trivially separable noise-free blob.
         """
-        radius = math.ceil(3.0 * config.blob_sigma_vox)
-        two_sigma_sq = 2.0 * config.blob_sigma_vox**2
+        sigma_axis = np.asarray(
+            [config.blob_sigma_vox * config.sigma_z_ratio, config.blob_sigma_vox, config.blob_sigma_vox]
+        )
+        two_sigma_sq_axis = 2.0 * sigma_axis**2
+        radius = np.ceil(3.0 * sigma_axis).astype(int)
         shape = config.volume_shape
         volumes = np.zeros((len(positions), *shape), dtype=np.float32)
         for frame, centres in enumerate(positions):
-            for centre in centres:
+            for cell, centre in enumerate(centres):
                 base = np.floor(centre).astype(int)
                 lo = np.maximum(base - radius, 0)
                 hi = np.minimum(base + radius + 1, shape)
                 axes = [np.arange(lo[d], hi[d]) for d in range(3)]
                 offsets = np.meshgrid(*axes, indexing="ij")
-                squared = sum((offsets[d] - centre[d]) ** 2 for d in range(3))
-                blob = (config.peak_intensity * np.exp(-squared / two_sigma_sq)).astype(np.float32)
+                squared = sum((offsets[d] - centre[d]) ** 2 / two_sigma_sq_axis[d] for d in range(3))
+                blob = (intensities[cell] * np.exp(-squared)).astype(np.float32)
                 window = volumes[frame, lo[0] : hi[0], lo[1] : hi[1], lo[2] : hi[2]]
                 np.maximum(window, blob, out=window)
-        return volumes
+        return Scene._corrupt(volumes, config, rng)
+
+    @staticmethod
+    def _corrupt(
+        volumes: Float[np.ndarray, "t z y x"], config: SceneConfig, rng: np.random.Generator
+    ) -> Float[np.ndarray, "t z y x"]:
+        """Add a constant background then camera noise — Poisson shot noise, then Gaussian read noise.
+
+        Shot noise scales with signal (variance = mean / photons at unit intensity), so bright cell cores are
+        noisier in absolute terms but cleaner in SNR — the real camera behaviour. Read noise is a flat Gaussian
+        floor. Both are off at their zero defaults, leaving the clean blob unchanged.
+        """
+        out = volumes + config.background_level
+        if config.noise_shot_photons > 0.0:
+            out = rng.poisson(np.clip(out, 0.0, None) * config.noise_shot_photons) / config.noise_shot_photons
+        if config.noise_read_std > 0.0:
+            out = out + rng.normal(0.0, config.noise_read_std, out.shape)
+        return np.clip(out, 0.0, None).astype(np.float32)
 
     def hard_fraction(self, gate_um: float, spacing_um: float) -> float:
         """Share of `t -> t+1` edges whose true successor is NOT the nearest next-frame cell — the difficulty.

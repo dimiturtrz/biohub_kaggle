@@ -51,6 +51,47 @@ def test_blobs_render_at_cell_centres():
         assert frame0[z, y, x] > 0.5  # the centre is bright
 
 
+def _peaks(scene: Scene, n: int) -> np.ndarray:
+    frame = scene.volumes[0]
+    return np.array([frame[tuple(np.round(c).astype(int))] for c in scene.positions_vox[:n]])
+
+
+def test_intensity_diversity():
+    """`intensity_log_std` spreads the per-cell peak — a uniform blob has near-zero peak spread, a diverse one
+    a wide one, so a detector cannot lean on a single fixed brightness."""
+    uniform = Scene.generate(SceneConfig(n_cells=50, n_frames=2, volume_shape=(32, 32, 32)), seed=3)
+    diverse = Scene.generate(
+        SceneConfig(n_cells=50, n_frames=2, volume_shape=(32, 32, 32), intensity_log_std=0.4), seed=3
+    )
+    assert _peaks(diverse, 50).std() > 5.0 * _peaks(uniform, 50).std()
+
+
+def test_background_and_noise_lift_the_floor():
+    """Background + read noise lift empty voxels off zero — the detector sees a peak over a noisy floor, not a
+    trivially separable noise-free blob. A clean scene leaves those voxels at exactly zero."""
+    clean = Scene.generate(SceneConfig(n_cells=8, n_frames=2, volume_shape=(32, 32, 32)), seed=4)
+    noisy = Scene.generate(
+        SceneConfig(n_cells=8, n_frames=2, volume_shape=(32, 32, 32), background_level=0.05, noise_read_std=0.02),
+        seed=4,
+    )
+    corner_clean = clean.volumes[0, :4, :4, :4]  # far from any cell
+    corner_noisy = noisy.volumes[0, :4, :4, :4]
+    assert float(corner_clean.max()) == 0.0
+    assert float(corner_noisy.mean()) > 0.02  # lifted by background + noise
+
+
+def test_anisotropic_psf_elongates_z():
+    """`sigma_z_ratio` > 1 blurs z more than x/y — a lone blob spans more voxels above half-max along z than x."""
+    config = SceneConfig(n_cells=1, n_frames=2, volume_shape=(40, 40, 40), margin_vox=18.0, sigma_z_ratio=2.5)
+    scene = Scene.generate(config, seed=0)
+    z, y, x = np.round(scene.positions_vox[0]).astype(int)
+    frame = scene.volumes[0]
+    half = frame[z, y, x] / 2.0
+    z_span = int((frame[:, y, x] > half).sum())
+    x_span = int((frame[z, y, :] > half).sum())
+    assert z_span > x_span  # z is the anisotropic (blurrier) axis
+
+
 def test_track_graph():
     """The lineage as a TrackGraph with node coordinates LIFTED into the raw grid (y, x by 4) the pipeline reads."""
     scene = Scene.generate(SceneConfig(n_cells=10, n_frames=2, volume_shape=(16, 32, 32)), seed=0)

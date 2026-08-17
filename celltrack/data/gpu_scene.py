@@ -49,8 +49,11 @@ class GpuScenes:
         velocity = direction / direction.norm(dim=2, keepdim=True).clamp_min(1e-9) * speed
         nxt = torch.clamp(start + velocity, low, high)
 
-        first = self._render(start)  # (B, Z, Y, X)
-        second = self._render(nxt)
+        # A cell keeps its brightness across the pair (drawn once, indexed in both frames), like the CPU scene.
+        log = torch.randn(batch_size, cells, generator=generator, device=self.device) * config.intensity_log_std
+        intensities = config.peak_intensity * log.exp()
+        first = self._render(start, intensities, generator)  # (B, Z, Y, X)
+        second = self._render(nxt, intensities, generator)
         lift = torch.tensor([1, *_SCENE_DOWNSAMPLE], dtype=torch.float32, device=self.device)[1:]  # (z, y, x) lift
         eye = torch.eye(cells, device=self.device)
         return [
@@ -64,8 +67,10 @@ class GpuScenes:
             for index in range(batch_size)
         ]
 
-    def _render(self, centres: Float[Tensor, "b n 3"]) -> Float[Tensor, "b z y x"]:
-        """Scatter a unit peak at every cell centre, then a separable Gaussian blur — blobs at `conv3d` speed."""
+    def _render(
+        self, centres: Float[Tensor, "b n 3"], intensities: Float[Tensor, "b n"], generator: torch.Generator
+    ) -> Float[Tensor, "b z y x"]:
+        """Scatter each cell's peak, a separable Gaussian blur, then background + noise — blobs at `conv3d` speed."""
         batch_size, cells = centres.shape[:2]
         z, y, x = self.config.volume_shape
         volume = torch.zeros(batch_size, 1, z, y, x, device=self.device)
@@ -79,19 +84,39 @@ class GpuScenes:
         )
         flat = (voxel[..., 0] * y * x + voxel[..., 1] * x + voxel[..., 2]).reshape(batch_size, cells)
         peaks = volume.reshape(batch_size, 1, -1)
-        peaks.scatter_(2, flat.unsqueeze(1), self.config.peak_intensity)  # one peak per occupied voxel
-        return self._blur(peaks.reshape(batch_size, 1, z, y, x))[:, 0]
+        # Reduce by amax so colliding cells read as one peak of the right height, matching the CPU scene's max.
+        peaks.scatter_reduce_(2, flat.unsqueeze(1), intensities.unsqueeze(1), reduce="amax", include_self=True)
+        blurred = self._blur(peaks.reshape(batch_size, 1, z, y, x))[:, 0]
+        return self._corrupt(blurred, generator)
 
     def _blur(self, volume: Float[Tensor, "b c z y x"]) -> Float[Tensor, "b c z y x"]:
-        """Separable 3D Gaussian — one 1D convolution per axis, so the cost is O(K) not O(K^3) per voxel."""
-        radius = math.ceil(3.0 * self.config.blob_sigma_vox)
-        offsets = torch.arange(-radius, radius + 1, dtype=torch.float32, device=self.device)
-        kernel = torch.exp(-(offsets**2) / (2.0 * self.config.blob_sigma_vox**2))
-        kernel = kernel / kernel.max()  # peak-normalised so a lone cell reads `peak_intensity`, not area-normalised
+        """Separable 3D Gaussian, z-anisotropic — one 1D convolution per axis, so cost is O(K) not O(K^3)."""
+        sigma_axis = (
+            self.config.blob_sigma_vox * self.config.sigma_z_ratio,
+            self.config.blob_sigma_vox,
+            self.config.blob_sigma_vox,
+        )
         for axis in range(2, 5):
+            sigma = sigma_axis[axis - 2]
+            radius = math.ceil(3.0 * sigma)
+            offsets = torch.arange(-radius, radius + 1, dtype=torch.float32, device=self.device)
+            kernel = torch.exp(-(offsets**2) / (2.0 * sigma**2))
+            kernel = kernel / kernel.max()  # peak-normalised so a lone cell reads its own peak, not area-normalised
             shape = [1, 1, 1, 1, 1]
             shape[axis] = kernel.numel()
             padding = [0, 0, 0]
             padding[axis - 2] = radius
             volume = torch.nn.functional.conv3d(volume, kernel.reshape(shape), padding=tuple(padding))
         return volume
+
+    def _corrupt(self, volume: Float[Tensor, "b z y x"], generator: torch.Generator) -> Float[Tensor, "b z y x"]:
+        """Constant background then Poisson shot + Gaussian read noise — the torch twin of the CPU scene's."""
+        config = self.config
+        out = volume + config.background_level
+        if config.noise_shot_photons > 0.0:
+            rate = out.clamp_min(0.0) * config.noise_shot_photons
+            out = torch.poisson(rate, generator=generator) / config.noise_shot_photons
+        if config.noise_read_std > 0.0:
+            noise = torch.randn(out.shape, generator=generator, device=self.device) * config.noise_read_std
+            out = out + noise
+        return out.clamp_min(0.0)
