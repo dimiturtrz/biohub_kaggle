@@ -373,9 +373,19 @@ def main() -> None:
     parser.add_argument("--eval-tta", action="store_true", help="flip-TTA in the eval (4x cost; off=selector)")
     parser.add_argument("--patience", type=int, default=8, help="stop after N non-improving evals (<1 disables)")
     parser.add_argument("--warm-start", action="store_true", help="initialise from the published pilkwang weights")
-    parser.add_argument("--aug-brightness", type=float, default=0.0, help="multiplicative intensity jitter half-range")
+    parser.add_argument(
+        "--aug-brightness",
+        type=float,
+        default=0.1,
+        help="multiplicative intensity jitter half-range (default on: ±10%%, the frontier's brightness_augment)",
+    )
     parser.add_argument("--aug-offset", type=float, default=0.0, help="additive intensity jitter half-range")
-    parser.add_argument("--aug-flip", action="store_true", help="random flips along y and x (the in-plane axes)")
+    parser.add_argument(
+        "--aug-flip",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="random flips along y and x (the in-plane axes; on by default, --no-aug-flip to disable)",
+    )
     parser.add_argument("--cosine-lr", action="store_true", help="cosine-decay the learning rate to zero over the run")
     parser.add_argument("--single-frame", action="store_true", help="detection-only T=1 windows (~2x fewer convs, g50)")
     parser.add_argument("--compile-backbone", action="store_true", help="torch.compile the U-Net (static shape)")
