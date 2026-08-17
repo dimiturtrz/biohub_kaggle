@@ -60,6 +60,16 @@ def test_fixed_mixture_rejects_a_share_that_removes_a_population():
             FixedMixture(_REAL, _SYNTHETIC, fraction, seed=0)
 
 
+def test_fixed_mixture_read_ahead():
+    """1 — a fixed share draws each population independently, so the sequence reads a step ahead unchanged."""
+    assert FixedMixture(_REAL, _SYNTHETIC, 0.5, seed=0).read_ahead() == 1
+
+
+def test_paced_mixture_read_ahead():
+    """1 — a difficulty that only `update` moves fixes the draw sequence a step ahead of the consumer."""
+    assert PacedMixture(_REAL, _SYNTHETIC, _WINDOWS, seed=0).read_ahead() == 1
+
+
 def test_paced_mixture_step():
     """The two populations alternate STRUCTURALLY — the whole answer to the sampler that starved."""
     indices = _drawn(PacedMixture(_REAL, _SYNTHETIC, _WINDOWS, seed=0), 200)

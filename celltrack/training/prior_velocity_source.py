@@ -7,7 +7,9 @@ truth edges would be cheaper and wrong — inference has none, and this pipeline
 train/inference asymmetry.
 
 COST: the velocity is one extra backbone forward per step (plus the extra frame decode the dataset does to
-feed it), so a run with it on is roughly 50% slower per step. That is the price of the experiment.
+feed it). `of_batch` forwards the whole step's previous gaps in ONE batched backbone call, so the extra
+forward scales with the step, not the batch — a per-sample loop launched B tiny forwards and left the GPU
+idle between them.
 """
 
 from __future__ import annotations
@@ -50,32 +52,56 @@ class PriorVelocitySource:
     def of(
         self, model: JointModel, sample: PairSample, precision: AbstractContextManager[object]
     ) -> Float[Tensor, "s 3"] | None:
-        """Each source's expected incoming displacement over the `t-1 -> t` gap; `None` while the feature is off.
+        """One pair's velocity — the `B = 1` case of `of_batch`, kept for the single-pair eval/diagnostic paths."""
+        return self.of_batch(model, [sample], precision)[0]
 
-        The previous gap is scored by the model itself, and the raw logits go into a `GapHistory` — the ONE
-        definition of how a scored gap becomes a velocity, shared with the inference scorer, so a trained head
-        is read the way it was trained rather than through a second copy of the same three lines that can drift.
-        It runs under `torch.no_grad`: a step optimises the pair being scored, never a two-gap chain. That
-        forward passes ZERO velocity for its own sources, which both stops the recursion one step back and
-        keeps the head's input width the one the widened projection expects — and it is what
-        `EdgeTransformerScorer._history_after` reproduces at inference.
+    def of_batch(
+        self, model: JointModel, samples: list[PairSample], precision: AbstractContextManager[object]
+    ) -> list[Float[Tensor, "s 3"] | None]:
+        """Each sample's sources' expected incoming displacement over `t-1 -> t`; `None` per sample when off.
+
+        The previous gaps are scored by the model itself in ONE batched backbone forward — the expensive part
+        the per-sample loop launched serially, leaving the GPU idle between tiny pairs — and the raw logits go
+        into a `GapHistory`, the ONE definition of how a scored gap becomes a velocity, shared with the
+        inference scorer, so a trained head is read the way it was trained rather than through a second copy of
+        the same three lines that can drift. It runs under `torch.no_grad`: a step optimises the pair being
+        scored, never a two-gap chain. Each previous-gap forward passes ZERO velocity for its own sources,
+        which both stops the recursion one step back and keeps the head's input width the one the widened
+        projection expects (so it stays on `forward_batch`'s per-pair-head branch, not the velocity-blind
+        fully-padded path) — and it is what `EdgeTransformerScorer._history_after` reproduces at inference.
 
         A pair with no predecessor — a video's first annotated frame — takes the exact zeros an empty
         `GapHistory` yields, the same value an unmatched node degrades to, so "no history" and "no usable
-        history" reach the head as one case rather than two.
+        history" reach the head as one case rather than two, and never enters the batched forward.
+
+        `forward_batch` over `B = 1` is `model.forward`, so a batched velocity equals the per-pair one it
+        replaces — the equality `test_of_batch` pins.
         """
+        results: list[Float[Tensor, "s 3"] | None] = [None] * len(samples)
         if not self.enabled:
-            return None
-        sources = sample.source_centres.to(torch.float32)
-        if sample.previous_frame is None or sample.previous_centres is None:
-            return GapHistory().velocity(sources)
-        previous = sample.previous_centres.to(torch.float32)
+            return results
+        scored: list[int] = []
+        windows: list[Tensor] = []
+        source_positions: list[Tensor] = []
+        target_positions: list[Tensor] = []
+        velocities: list[Tensor | None] = []
+        for index, sample in enumerate(samples):
+            sources = sample.source_centres.to(torch.float32)
+            if sample.previous_frame is None or sample.previous_centres is None:
+                results[index] = GapHistory().velocity(sources)
+                continue
+            scored.append(index)
+            windows.append(torch.stack([sample.previous_frame, sample.frame_t], dim=0))
+            source_positions.append(sample.previous_centres)
+            target_positions.append(sample.source_centres)
+            velocities.append(torch.zeros_like(sample.previous_centres.to(torch.float32)))
+        if not scored:
+            return results
         with torch.no_grad(), precision:
-            logits = model.forward(
-                sample.previous_frame,
-                sample.frame_t,
-                sample.previous_centres,
-                sample.source_centres,
-                torch.zeros_like(previous),
-            ).edge_logits
-        return GapHistory(previous, logits).velocity(sources)
+            forwards = model.forward_batch(torch.stack(windows, dim=0), source_positions, target_positions, velocities)
+        for forward, index in zip(forwards, scored, strict=True):
+            sample = samples[index]
+            previous = sample.previous_centres.to(torch.float32)  # type: ignore[union-attr]
+            sources = sample.source_centres.to(torch.float32)
+            results[index] = GapHistory(previous, forward.edge_logits).velocity(sources)
+        return results

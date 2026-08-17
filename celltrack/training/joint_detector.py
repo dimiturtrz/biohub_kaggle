@@ -35,7 +35,9 @@ import logging
 import math
 import os
 import time
+from collections import deque
 from collections.abc import Iterator
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -447,9 +449,40 @@ class JointTrainer:
             stream = dataset.stream(runtime.loader_threads, runtime.loader_prefetch)
             yield from ((PairDraw(index=_UNTRACKED_INDEX), pair) for pair in stream)
             return
-        for _ in range(len(dataset)):
-            draw = curriculum.step()
-            yield draw, dataset.pair(draw.index)
+        yield from self._prefetched(dataset, curriculum, curriculum.read_ahead())
+
+    def _prefetched(
+        self, dataset: PairDataset, curriculum: PairCurriculum, depth: int
+    ) -> Iterator[tuple[PairDraw, PairSample]]:
+        """Curriculum draws with up to `depth` NEXT pairs' decode overlapped under the current step's compute.
+
+        The synchronous curriculum path idled the GPU ~one frame-decode per step: a sampler draws the next
+        index from feedback on the previous step, so the uniform stream's read-ahead was disabled to keep that
+        feedback fresh. `read_ahead()` is each policy's own statement of how stale a draw it tolerates — 0 when a
+        per-pair `observe` moves the next draw (`DifficultySampler`), ≥1 for the window-fed mixtures whose draw
+        sequence is byte-identical however far ahead it is read. A single worker per depth keeps at most `depth`
+        pairs in flight, so `dataset.pair` is never called concurrently with itself at depth 1.
+        """
+        steps = len(dataset)
+        if depth < 1:
+            for _ in range(steps):
+                draw = curriculum.step()
+                yield draw, dataset.pair(draw.index)
+            return
+        with ThreadPoolExecutor(max_workers=depth) as pool:
+            pending: deque[tuple[PairDraw, Future[PairSample]]] = deque()
+            drawn = 0
+            while drawn < steps and len(pending) < depth:
+                draw = curriculum.step()
+                drawn += 1
+                pending.append((draw, pool.submit(dataset.pair, draw.index)))
+            while pending:
+                draw, decoded = pending.popleft()
+                if drawn < steps:
+                    ahead = curriculum.step()
+                    drawn += 1
+                    pending.append((ahead, pool.submit(dataset.pair, ahead.index)))
+                yield draw, decoded.result()
 
     def _observe(self, curriculum: PairCurriculum | None, index: int, outcome: _PairOutcome) -> None:
         """Close the per-pair feedback loop — the step's own top-1 defect. A no-op on the uniform path."""
@@ -469,7 +502,7 @@ class JointTrainer:
         device = self.config.runtime.device
         scene_detection = self.config.data.gpu_scene_detection
         samples = [pair.to(device) for _, pair in batch]
-        velocities = [self._velocity.of(model, sample, self._autocast()) for sample in samples]
+        velocities = self._velocity.of_batch(model, samples, self._autocast())
         if self._batched_eligible(velocities, real_count, len(batch)):
             return self._batched_step(model, optimization, batch, samples)
         windows = torch.stack([torch.stack([s.frame_t, s.frame_t1], dim=0) for s in samples], dim=0)  # (B, 2, Z, Y, X)
@@ -479,7 +512,9 @@ class JointTrainer:
             )
             outcomes = [
                 self._loss.per_pair(
-                    self._prediction(out), self._ground_truth(sample), detection=index < real_count or scene_detection
+                    self._prediction(out),
+                    self._ground_truth(sample),
+                    detection=index < real_count or scene_detection,
                 )
                 for index, (out, sample) in enumerate(zip(forwards, samples, strict=True))
             ]

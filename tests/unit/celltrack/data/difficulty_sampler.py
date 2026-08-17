@@ -60,6 +60,11 @@ def test_draw_falls_back_to_uniform_when_every_pair_is_solved():
     assert set(Counter(sampler.draw() for _ in range(400))) == {0, 1, 2, 3}
 
 
+def test_read_ahead():
+    """0 — per-pair difficulty feeds the next draw, so the loader must decode in lock-step, not ahead."""
+    assert DifficultySampler(count=2, seed=0).read_ahead() == 0
+
+
 def test_observe():
     """A pair with no annotated source reports `None`: it counts as covered, but its stored difficulty is untouched."""
     sampler = DifficultySampler(count=2, seed=0)

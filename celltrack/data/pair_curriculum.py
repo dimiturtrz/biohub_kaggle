@@ -74,6 +74,16 @@ class PairCurriculum(Protocol):
         """Record the just-stepped pair's own measured defect; policies that do not read it ignore it."""
         ...
 
+    def read_ahead(self) -> int:
+        """How many draws the loader may take, and decode, before the prior draw is observed.
+
+        The loader hides frame-decode latency by drawing ahead of the consumer, but that is only sound while a
+        draw does not depend on the feedback of the ones still in flight: 0 says a per-pair `observe` moves the
+        next draw (decode stays in lock-step), ≥1 says the draw sequence is fixed by state only a window closes,
+        so it may be read that far ahead with no change to what is drawn.
+        """
+        ...
+
     def update(self, score: float) -> None:
         """Close the window-level loop with the model's eval score; a policy without feedback ignores it."""
         ...
@@ -143,6 +153,10 @@ class FixedMixture:
     def observe(self, index: int, difficulty: float | None) -> None:
         """Per-pair defect is not this family's feedback channel — the eval score is (see `update`)."""
 
+    def read_ahead(self) -> int:
+        """1 — a fixed share draws each population independently, so the sequence is fixed and reads ahead cleanly."""
+        return 1
+
     def update(self, score: float) -> None:
         """A fixed diet has no feedback loop to close; the score changes nothing here."""
 
@@ -175,6 +189,10 @@ class PacedMixture:
 
     def observe(self, index: int, difficulty: float | None) -> None:
         """Per-pair defect is not this policy's channel: it paces on the model's own eval score, once a window."""
+
+    def read_ahead(self) -> int:
+        """1 — structural alternation and a difficulty that only `update` moves fix the draw sequence a step ahead."""
+        return 1
 
     def update(self, score: float) -> None:
         """Fold this window's verdict into the difficulty: it improved on the run's best, or it did not.

@@ -112,6 +112,33 @@ def test_of(video_store: Path):
     assert velocity.tolist() == [[-1.0, -2.0, -2.0], [0.0, 1.0, 1.0]]
 
 
+def test_of_batch(video_store: Path):
+    """`of_batch` returns, per pair, exactly what the single-pair `of` returns — the speed-up changes no number.
+
+    Two pairs WITH a predecessor put `B = 2` through the batched previous-gap forward; the third, WITHOUT one,
+    exercises the no-history skip that must land its zeros at the right index rather than shifting the batch. A
+    padded forward that leaked a neighbour's nodes, or a scatter that misaligned, would break an equality here.
+    """
+    model = _model(feat_dim=_WIDENED)
+    source = PriorVelocitySource(enabled=True)
+    samples = [
+        _sample(video_store, previous=True),
+        _sample(video_store, previous=True),
+        _sample(video_store, previous=False),
+    ]
+    precision = torch.autocast("cpu", enabled=False)
+
+    batched = source.of_batch(model, samples, precision)
+    per_pair = [source.of(model, sample, precision) for sample in samples]
+
+    assert len(batched) == len(samples)
+    for got, want in zip(batched, per_pair, strict=True):
+        assert (got is None) == (want is None)
+        if want is not None:
+            assert got is not None
+            assert torch.equal(got, want)
+
+
 def _same_nodes() -> TrackGraph:
     """The `_sample` pair's nodes as a detection graph: `previous_centres` at t=0, `source_centres` at t=1.
 

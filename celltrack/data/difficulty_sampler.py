@@ -82,6 +82,11 @@ class DifficultySampler:
         """One drawn pair at unit weight — this policy expresses difficulty as a draw, never as a weight."""
         return PairDraw(index=self.draw())
 
+    def read_ahead(self) -> int:
+        """0 — each draw is proportional to difficulties that the prior draw's `observe` has just revised, so the
+        loader cannot read ahead without drawing against a staler distribution than the run itself is on."""
+        return 0
+
     def update(self, score: float) -> None:
         """No window-level channel: this sampler's feedback arrives per pair, through `observe`."""
 

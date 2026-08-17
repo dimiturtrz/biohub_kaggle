@@ -165,6 +165,20 @@ def test_pairs_draws_through_the_sampler(video_store: Path):
         assert torch.equal(pair.edge_matrix, dataset.pair(draw.index).edge_matrix)
 
 
+def test_pairs_prefetches_without_changing_the_draw_sequence(video_store: Path):
+    """A window-fed policy (read_ahead >= 1) walks the SAME indices, decoded a step ahead, as in lock-step."""
+    dataset = PairDataset(_pairs(video_store), steps=6, downsample=(1, 1, 1), seed=0)
+    mixture = FixedMixture(1, 1, 0.5, seed=0)
+    reference = FixedMixture(1, 1, 0.5, seed=0)
+
+    walked = list(JointTrainer(_cpu_config())._pairs(dataset, mixture))
+
+    assert mixture.read_ahead() >= 1
+    assert [draw.index for draw, _ in walked] == [reference.step().index for _ in range(6)]
+    for draw, pair in walked:
+        assert torch.equal(pair.edge_matrix, dataset.pair(draw.index).edge_matrix)
+
+
 def test_observe(video_store: Path):
     """The step's own top-1 defect reaches the sampler; with no sampler the feedback call is a no-op."""
     sampler = DifficultySampler(count=2, seed=0)
@@ -353,26 +367,32 @@ def test_prepare_widens_the_head_before_building_the_optimizer(video_store: Path
 
 
 def test_losses_hands_the_velocity_to_the_model(video_store: Path, monkeypatch: pytest.MonkeyPatch):
-    """A pair WITH a predecessor reaches `JointModel.forward` carrying a real, non-zero prior displacement."""
+    """The scored pair reaches `JointModel.forward` carrying a real, non-zero prior displacement; the batched
+    no-grad pass that produced it forwards ZERO velocity for its own sources (one step back, no recursion)."""
     trainer = JointTrainer(_velocity_config())
     model, _ = trainer._prepare(warm_start=False)
     sample = PairDataset(_pairs(video_store), 1, (1, 1, 1), 0, with_previous=True).pair(1)
-    seen: list[torch.Tensor | None] = []
-    forward = JointModel.forward
+    scored: list[torch.Tensor | None] = []
+    gap_velocities: list[torch.Tensor] = []
+    forward, forward_batch = JointModel.forward, JointModel.forward_batch
 
     def _recording(self: JointModel, *args: object, **kwargs: object) -> object:
-        seen.append(cast(torch.Tensor | None, args[4] if len(args) > 4 else kwargs.get("source_velocity")))
+        scored.append(cast(torch.Tensor | None, args[4] if len(args) > 4 else kwargs.get("source_velocity")))
         return forward(self, *args, **kwargs)  # pyrefly: ignore[bad-argument-type]
 
+    def _recording_batch(self: JointModel, *args: object, **kwargs: object) -> object:
+        gap_velocities.extend(cast(list[torch.Tensor], args[3] if len(args) > 3 else kwargs["velocities"]))
+        return forward_batch(self, *args, **kwargs)  # pyrefly: ignore[bad-argument-type]
+
     monkeypatch.setattr(JointModel, "forward", _recording)
+    monkeypatch.setattr(JointModel, "forward_batch", _recording_batch)
 
     trainer._losses(model, sample)
 
-    assert len(seen) == 2  # the no-grad forward on the previous gap, then the scored pair
-    assert seen[0] is not None and not seen[0].any()  # the previous gap carries no history of its own
-    velocity = seen[1]
-    assert velocity is not None
-    assert velocity.abs().sum() > 0
+    assert len(scored) == 1  # only the scored pair reaches JointModel.forward — the gap pass is batched
+    velocity = scored[0]
+    assert velocity is not None and velocity.abs().sum() > 0  # the scored pair carries the prior displacement
+    assert gap_velocities and all(not v.any() for v in gap_velocities)  # the previous gap carries no history
 
 
 def test_train_prior_velocity_off_is_byte_identical(
