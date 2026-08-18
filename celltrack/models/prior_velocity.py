@@ -103,8 +103,17 @@ class GapHistory:
     logits: Float[Tensor, "p n"] | None = None
 
     def velocity(self, coordinates: Float[Tensor, "n 3"]) -> Float[Tensor, "n 3"]:
-        """The expected incoming displacement of the nodes at `coordinates` — exact zeros without a previous gap."""
+        """The expected incoming displacement of the nodes at `coordinates` — exact zeros without a previous gap.
+
+        A carried history is only usable when its TARGET axis is this gap's source nodes — the previous gap's
+        late frame IS this gap's early frame. When the two gaps are not temporally contiguous (a frame the
+        detector left empty breaks the chain, common while a from-scratch detector is still sparse), the stored
+        logits are over a different node set, so the history degrades to the same exact zeros an unmatched node
+        takes rather than being force-broadcast onto a mismatched node count.
+        """
         if self.coordinates is None or self.logits is None:
+            return PriorVelocity.expected_incoming(coordinates)
+        if self.logits.shape[1] != coordinates.shape[0]:
             return PriorVelocity.expected_incoming(coordinates)
         weights = torch.softmax(self.logits.float(), dim=0)
         return PriorVelocity.expected_incoming(coordinates, self.coordinates, weights)

@@ -163,10 +163,14 @@ class EdgeTransformerScorer(nn.Module):
         history, never runs the extra pass, and computes exactly the matrices it computed before this existed.
         """
         history = GapHistory()
+        previous_timepoint: int | None = None
         by_timepoint: dict[int, Float[np.ndarray, "s t"]] = {}
         for gap in EdgeGap.over(path, detections, device):
+            if previous_timepoint is not None and gap.timepoint != previous_timepoint + 1:
+                history = GapHistory()  # a skipped frame breaks the chain; the carried history is over other nodes
             logits, history = self._seed_logits(gap, history)
             by_timepoint[gap.timepoint] = torch.softmax(logits, dim=0).cpu().numpy()
+            previous_timepoint = gap.timepoint
         return PrecomputedEdgeAffinity(by_timepoint)
 
     def _seed_logits(self, gap: EdgeGap, history: GapHistory) -> tuple[Float[Tensor, "s t"], GapHistory]:
