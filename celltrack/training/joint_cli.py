@@ -104,8 +104,8 @@ class JointCli:
         parser.add_argument(
             "--batch-size",
             type=int,
-            default=1,
-            help="pairs forwarded together in one backbone pass, averaged into one step (1 = per-pair)",
+            default=16,
+            help="pairs forwarded together in one backbone pass, averaged into one step (1 = per-pair reference)",
         )
         parser.add_argument("--cosine-lr", action="store_true", help="decay the rate to zero over the run")
         parser.add_argument(

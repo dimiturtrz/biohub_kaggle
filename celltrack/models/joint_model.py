@@ -242,6 +242,16 @@ class JointModel(nn.Module):
         )
 
     @staticmethod
+    def fits_batched(source_len: int, target_len: int) -> bool:
+        """Whether a pair's node counts fit the padded batched block — beyond it `_pad_fixed` would raise.
+
+        The batched path pads to the fixed `_MAX_NODES`; a pair above it must take the ragged per-pair loop
+        instead. The eligibility check asks this so a raised default batch size can never route an oversized
+        pair into a pad it overflows — the guard lives beside the pad it protects.
+        """
+        return source_len <= _MAX_NODES and target_len <= _MAX_NODES
+
+    @staticmethod
     def _pad_fixed(positions: list[Int[Tensor, "n 3"]]) -> Float[Tensor, "b max 3"]:
         """Every pair's positions zero-padded to the FIXED `_MAX_NODES` (positions already on the model device).
 

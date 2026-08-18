@@ -80,6 +80,17 @@ def test_batched_forward():
     assert batched.source_mask[:, :2].tolist() == [[True, False], [True, False]]  # real then pad
 
 
+def test_fits_batched():
+    """A pair fits the padded path iff BOTH its node counts are within `_MAX_NODES` — the boundary `_pad_fixed` guards.
+
+    This is the eligibility guard behind a raised default batch size: an oversized pair (either axis) must fall
+    back to the ragged per-pair loop rather than reach the pad that would raise, so the two are the same boundary.
+    """
+    assert JointModel.fits_batched(_MAX_NODES, _MAX_NODES)  # exactly at the pad is still one block
+    assert not JointModel.fits_batched(_MAX_NODES + 1, 1)  # sources overflow
+    assert not JointModel.fits_batched(1, _MAX_NODES + 1)  # targets overflow
+
+
 def test_unpad():
     """`BatchedForward.unpad` slices each pair's [:s, :u] block back out — equal to the per-pair forward."""
     torch.manual_seed(0)

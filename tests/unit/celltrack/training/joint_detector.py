@@ -315,13 +315,18 @@ def test_train_off_is_byte_identical(video_store: Path, in_bounds_tracks: Annota
     assert _trained_bytes(explicit_off, video_store, in_bounds_tracks, tmp_path / "off") == default
 
 
-def test_train_accumulate_one_leaves_the_weights_untouched(
+def test_train_batched_default_is_not_the_per_pair_path(
     video_store: Path, in_bounds_tracks: AnnotatedTracks, tmp_path: Path
 ):
-    """Accumulating over one pair IS the per-pair step, so every arm measured before it stays comparable."""
+    """The batched default actually ENGAGES batching — its weights differ from the explicit per-pair (batch 1) run.
+
+    A default that silently fell back to per-pair would train identically to `batch_size=1` and the utilisation
+    win would be a lie. Reading the resume snapshot (not the best-checkpoint, which `save_best` fills with the
+    INIT when no window improves) makes a byte difference here a real difference in what the loop trained.
+    """
     default = _trained_weights(_cpu_config(), video_store, in_bounds_tracks, tmp_path / "default")
-    explicit = _cpu_config().model_copy(update={"optim": OptimCfg(lr=1e-4, batch_size=1)})
-    assert _trained_weights(explicit, video_store, in_bounds_tracks, tmp_path / "one") == default
+    per_pair = _cpu_config().model_copy(update={"optim": OptimCfg(lr=1e-4, batch_size=1)})
+    assert _trained_weights(per_pair, video_store, in_bounds_tracks, tmp_path / "one") != default
 
 
 def test_train_accumulate_averages_instead_of_stepping(
@@ -329,15 +334,17 @@ def test_train_accumulate_averages_instead_of_stepping(
 ):
     """Accumulating changes the weights the run TRAINS — the pairs are averaged into one update, not applied singly.
 
-    Read off the resume snapshot rather than the best-checkpoint, and that choice is the point: `save_best`
-    writes the INIT whenever no window beats it, so two arms that both fail to improve produce identical files
-    whatever they did to the weights. A byte-identity assertion over the best-checkpoint can therefore pass by
-    comparing one untrained model with another — it proves the knob is inert exactly as loudly as it proves the
-    run never saved. The snapshot holds the trained weights unconditionally, so a difference here is a real one.
+    Anchored on two EXPLICIT batch sizes rather than the default, so the invariant (a larger batch averages into
+    a different update) is independent of whatever the default happens to be. Read off the resume snapshot rather
+    than the best-checkpoint, and that choice is the point: `save_best` writes the INIT whenever no window beats
+    it, so two arms that both fail to improve produce identical files whatever they did to the weights. A
+    byte-identity assertion over the best-checkpoint can therefore pass by comparing one untrained model with
+    another. The snapshot holds the trained weights unconditionally, so a difference here is a real one.
     """
-    default = _trained_weights(_cpu_config(), video_store, in_bounds_tracks, tmp_path / "single")
+    single = _cpu_config().model_copy(update={"optim": OptimCfg(lr=1e-4, batch_size=1)})
     batched = _cpu_config().model_copy(update={"optim": OptimCfg(lr=1e-4, batch_size=2)})
-    assert _trained_weights(batched, video_store, in_bounds_tracks, tmp_path / "batched") != default
+    trained_single = _trained_weights(single, video_store, in_bounds_tracks, tmp_path / "single")
+    assert _trained_weights(batched, video_store, in_bounds_tracks, tmp_path / "batched") != trained_single
 
 
 def _velocity_config() -> JointTrainConfig:

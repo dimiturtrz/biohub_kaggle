@@ -167,11 +167,15 @@ class OptimCfg(BaseModel):
     grad_clip: float = Field(1.0, gt=0)
     # Pairs FORWARDED TOGETHER in one backbone pass and averaged into one optimiser step. A pair's target counts
     # are ragged, so the HEADS run per pair, but the backbone — the GPU cost — takes any batch dimension, so
-    # stacking B pairs' windows fills the device where a per-pair forward left it ~40% idle for the whole
-    # campaign. The gradient is the mean over the batch, so `lr` keeps its meaning across sizes. 1 reproduces the
-    # per-pair update exactly (mean of one, step on every pair), so the old single-pair arms stay comparable; a
-    # larger value both averages the update (steadier than one pair's noise) and uses the card.
-    batch_size: PositiveInt = 1
+    # stacking B pairs' windows fills the device where a per-pair forward left it ~40% idle (GPU ~4% util,
+    # Python-latency-bound) for the whole campaign. The gradient is the MEAN over the batch, so `lr` keeps its
+    # meaning across sizes — no rescale when this moves. 16 is the DEFAULT because the batched backbone is
+    # compute-bound by ~16 (throughput flat to ~48, a VRAM cliff past it): the smallest batch that saturates the
+    # card, so it takes the full throughput at the least activation memory and the least departure from the
+    # per-pair reference's gradient. 1 restores the exact per-pair update (mean of one, step on every pair) for a
+    # run that must stay bitwise-comparable to the old single-pair arms; a batch-eligible config auto-falls back
+    # to that same per-pair loop whenever a pair overflows the pad (`JointModel.fits_batched`), so 16 is safe.
+    batch_size: PositiveInt = 16
     # Decay the rate to zero over the run (cosine). Warm-starting a CONVERGED model is exactly the case a
     # schedule is for: a flat rate keeps taking full-size steps away from an optimum the weights already sit
     # in, while an annealed one explores early and settles.

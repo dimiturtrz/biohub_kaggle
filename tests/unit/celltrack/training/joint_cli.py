@@ -7,7 +7,7 @@ def test_build_parser():
 
     args = parser.parse_args([])
     assert args.steps == 1500
-    assert args.batch_size == 1  # per-pair by default; raised for utilisation
+    assert args.batch_size == 16  # batched by default (smallest batch that saturates the backbone); 1 = per-pair
     assert args.gpu_scene_fraction == 0.0  # generation off unless asked
     assert args.gpu_scene_detection is True  # honest full labels by default
 

@@ -42,6 +42,9 @@ def test_defaults_are_the_measured_recipe():
     assert config.data.downsample == (1, 4, 4)
     assert (config.data.difficulty_sampling, config.data.prior_velocity) == (False, False)
     assert (config.optim.lr, config.optim.grad_clip, config.optim.cosine_lr) == (1e-4, 1.0, False)
+    # 16, not 1: the batched backbone is compute-bound by ~16 (throughput flat to ~48), so it is the smallest
+    # batch that saturates the card. The loss is the batch MEAN, so this moves no other default (lr unchanged).
+    assert config.optim.batch_size == 16
     assert (config.loss.det_weight, config.loss.neg_weight) == (1.0, 1e-2)
     assert (config.loss.contrastive_weight, config.loss.temperature) == (0.0, 0.07)
     # The measured-bad placement stays the default BECAUSE the weight is zero: an unasked run is yesterday's.
