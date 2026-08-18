@@ -60,6 +60,16 @@ def test_group_norm_rejects_a_warm_start():
         trainer._model(warm_start=True)
 
 
+def test_fresh_build_threads_the_group_norm():
+    """A from-scratch build carries the configured norm into the detector it constructs — the GPU arm's backbone.
+
+    The warm path is barred (previous test); this is the path the from-scratch run actually takes, so the
+    `--norm group` flag must reach the built detector rather than defaulting the published BN backbone back in.
+    """
+    trainer = JointTrainer(JointTrainConfig(model=ModelCfg(out_channels=2, layers=(2, 4), norm="group")))
+    assert trainer._model(warm_start=False).detector.norm == "group"
+
+
 def test_schedule_spans_the_resolved_step_count():
     """The cosine horizon is built from the RESOLVED budget — resolving epochs late must not leave it stale."""
     config = JointTrainConfig(schedule=ScheduleCfg(steps=10, epochs=2.0), optim=OptimCfg(cosine_lr=True)).resolved(
