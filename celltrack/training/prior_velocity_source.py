@@ -32,6 +32,19 @@ class PriorVelocitySource:
     """The sources' prior displacement for one training pair, and the head widening that lets it be read."""
 
     enabled: bool
+    # Steps to bootstrap the velocity off GROUND-TRUTH `t-1 -> t` links before handing back to the model's own
+    # affinity. Zero = off (the model-derived velocity is used unchanged from step 0). The from-scratch model's
+    # prev-gap affinity is confident-WRONG early, so the velocity it derives points at the wrong cell and cannot
+    # break the confusor it exists to fix — a chicken-egg. GT links carry the real motion while the head learns
+    # to READ velocity; a linear anneal α = 1 − step/warmup hands the input distribution back to the
+    # self-derived one it must match at inference, so no train/inference asymmetry survives past the warmup.
+    gt_warmup_steps: int = 0
+
+    def _gt_alpha(self, step: int | None) -> float:
+        """The GT velocity's blend weight at `step`: 1 at step 0, linearly to 0 at `gt_warmup_steps`, then off."""
+        if step is None or self.gt_warmup_steps <= 0 or step >= self.gt_warmup_steps:
+            return 0.0
+        return 1.0 - step / self.gt_warmup_steps
 
     def widen(self, model: JointModel) -> None:
         """Append the velocity's columns to the head's input projection — a no-op while the feature is off.
@@ -56,7 +69,11 @@ class PriorVelocitySource:
         return self.of_batch(model, [sample], precision)[0]
 
     def of_batch(
-        self, model: JointModel, samples: list[PairSample], precision: AbstractContextManager[object]
+        self,
+        model: JointModel,
+        samples: list[PairSample],
+        precision: AbstractContextManager[object],
+        step: int | None = None,
     ) -> list[Float[Tensor, "s 3"] | None]:
         """Each sample's sources' expected incoming displacement over `t-1 -> t`; `None` per sample when off.
 
@@ -99,9 +116,32 @@ class PriorVelocitySource:
             return results
         with torch.no_grad(), precision:
             forwards = model.forward_batch(torch.stack(windows, dim=0), source_positions, target_positions, velocities)
+        alpha = self._gt_alpha(step)
         for forward, index in zip(forwards, scored, strict=True):
             sample = samples[index]
             previous = sample.previous_centres.to(torch.float32)  # type: ignore[union-attr]
             sources = sample.source_centres.to(torch.float32)
-            results[index] = GapHistory(previous, forward.edge_logits).velocity(sources)
+            model_velocity = GapHistory(previous, forward.edge_logits).velocity(sources)
+            results[index] = self._blend(model_velocity, sample, previous, sources, alpha)
         return results
+
+    @staticmethod
+    def _blend(
+        model_velocity: Float[Tensor, "s 3"],
+        sample: PairSample,
+        previous: Float[Tensor, "p 3"],
+        sources: Float[Tensor, "s 3"],
+        alpha: float,
+    ) -> Float[Tensor, "s 3"]:
+        """Mix the GT-link velocity into the model's by `alpha` — the model's own value untouched when `alpha == 0`.
+
+        The GT term goes straight through `expected_incoming` WITHOUT a softmax: the link matrix is already a
+        valid incoming-mass column (one parent → mass 1, no parent → mass 0), so an unparented source degrades
+        to the exact zero velocity it should, where a softmax would spread full mass over every candidate and
+        manufacture a confident wrong direction — the very failure the warmup exists to avoid.
+        """
+        if alpha <= 0.0 or sample.previous_edge_matrix is None:
+            return model_velocity
+        links = sample.previous_edge_matrix.to(sources.dtype)
+        gt_velocity = PriorVelocity.expected_incoming(sources, previous, links)
+        return alpha * gt_velocity + (1.0 - alpha) * model_velocity

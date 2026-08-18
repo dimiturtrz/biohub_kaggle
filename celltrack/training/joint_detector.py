@@ -38,7 +38,7 @@ import time
 from collections import deque
 from collections.abc import Iterator
 from concurrent.futures import Future, ThreadPoolExecutor
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 
 import torch
@@ -64,22 +64,14 @@ from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeTransformerSco
 from celltrack.models.joint_model import BatchedForward, JointForward, JointModel
 from celltrack.models.lora import LoRA
 from celltrack.models.temporal_unet_detector import TemporalUNetDetector
-from celltrack.operating_point import TrackerConfig
 from celltrack.training.contrastive_term import ContrastiveTerm, ContrastiveTermConfig
 from celltrack.training.early_stop import EarlyStop
 from celltrack.training.joint_checkpoint import RESUME_SUFFIX, JointCheckpoint, RunProgress
 from celltrack.training.joint_cli import JointCli
 from celltrack.training.joint_config import (
     WARM_PACKS,
-    DataCfg,
-    EvalCfg,
     JointTrainConfig,
     LoraCfg,
-    LossCfg,
-    ModelCfg,
-    OptimCfg,
-    RuntimeCfg,
-    ScheduleCfg,
 )
 from celltrack.training.pair_split import PairSplit
 from celltrack.training.prior_velocity_source import PriorVelocitySource
@@ -192,7 +184,7 @@ class JointTrainer:
                 self.config.runtime.seed + done,
                 with_previous=self.config.data.prior_velocity,
             )
-            losses = self._run_window(model, optimization, dataset, curriculum)
+            losses = self._run_window(model, optimization, dataset, curriculum, step_base=done)
             done += window
             result = self._evaluate(model, evaluator, pairs.val)
             pipeline = result.pipeline
@@ -349,7 +341,9 @@ class JointTrainer:
     @property
     def _velocity(self) -> PriorVelocitySource:
         """The run's history feed, reading the flag live — `train` re-resolves the config before the model exists."""
-        return PriorVelocitySource(enabled=self.config.data.prior_velocity)
+        return PriorVelocitySource(
+            enabled=self.config.data.prior_velocity, gt_warmup_steps=self.config.data.velocity_gt_warmup_steps
+        )
 
     @property
     def _lora(self) -> LoraCfg:
@@ -410,8 +404,13 @@ class JointTrainer:
         optimization: _Optimization,
         dataset: PairDataset,
         curriculum: PairCurriculum | None = None,
+        step_base: int = 0,
     ) -> dict[str, float]:
-        """Train one optimiser step per pair of `dataset`; returns each term's window mean plus `it_per_s`."""
+        """Train one optimiser step per pair of `dataset`; returns each term's window mean plus `it_per_s`.
+
+        `step_base` is the global step this window starts at — added to the window-local count so a step-scheduled
+        feature (the velocity GT warmup) sees the run's true progress, not a per-window counter that resets.
+        """
         model.train()
         steps = len(dataset)
         batch_size = self.config.optim.batch_size
@@ -427,7 +426,9 @@ class JointTrainer:
             # Each batch is `real_count` real pairs plus `gpu_count` FRESH GPU-generated hard scenes, forwarded
             # together. Only the real pairs are logged and fed back — the generated ones shape the gradient but
             # are not the run's measured population — so the loss row stays comparable to a no-generation run.
-            outcomes = self._step_batch(model, optimization, batch + self._gpu_batch(gpu_count), len(batch))
+            outcomes = self._step_batch(
+                model, optimization, batch + self._gpu_batch(gpu_count), len(batch), step=step_base + done
+            )
             for (draw, _), outcome in zip(batch, outcomes[: len(batch)], strict=True):
                 for name, value in outcome.logged().items():
                     sums[name] = sums.get(name, 0.0) + value
@@ -491,7 +492,12 @@ class JointTrainer:
         curriculum.observe(index, outcome.difficulty())
 
     def _step_batch(
-        self, model: JointModel, optimization: _Optimization, batch: list[tuple[PairDraw, PairSample]], real_count: int
+        self,
+        model: JointModel,
+        optimization: _Optimization,
+        batch: list[tuple[PairDraw, PairSample]],
+        real_count: int,
+        step: int = 0,
     ) -> list[_PairOutcome]:
         """One step over a batch — backbone forwarded ONCE over stacked windows, gradient the batch MEAN.
 
@@ -502,7 +508,7 @@ class JointTrainer:
         device = self.config.runtime.device
         scene_detection = self.config.data.gpu_scene_detection
         samples = [pair.to(device) for _, pair in batch]
-        velocities = self._velocity.of_batch(model, samples, self._autocast())
+        velocities = self._velocity.of_batch(model, samples, self._autocast(), step=step)
         if self._batched_eligible(velocities, real_count, len(batch)):
             return self._batched_step(model, optimization, batch, samples)
         windows = torch.stack([torch.stack([s.frame_t, s.frame_t1], dim=0) for s in samples], dim=0)  # (B, 2, Z, Y, X)
@@ -673,56 +679,7 @@ def main() -> None:
     os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
     args = JointCli.build_parser().parse_args()
-
-    # The flat flags fan out into the concern each one belongs to — the CLI is the interface, this is the model.
-    config = JointTrainConfig(
-        model=ModelCfg(
-            warm_pack=WARM_PACKS[args.warm_pack],
-            temporal_position=args.temporal_position,
-            lora=LoraCfg(
-                enabled=args.lora, rank=args.lora_rank, alpha=args.lora_alpha, targets=tuple(args.lora_targets)
-            ),
-        ),
-        data=DataCfg(
-            detected_videos=args.detected_videos,
-            difficulty_sampling=args.difficulty_sampling,
-            prior_velocity=args.prior_velocity,
-            synthetic_fraction=args.synthetic_fraction,
-            synthetic_sequences=args.synthetic_sequences,
-            synthetic_scenes=args.synthetic_scenes,
-            gpu_scene_fraction=args.gpu_scene_fraction,
-            gpu_scene_detection=args.gpu_scene_detection,
-            paced_curriculum=args.paced_curriculum,
-            include_test_in_train=args.include_test_in_train,
-        ),
-        optim=OptimCfg(lr=args.lr, cosine_lr=args.cosine_lr, batch_size=args.batch_size),
-        loss=LossCfg(
-            det_weight=args.det_weight,
-            contrastive_weight=args.contrastive_weight,
-            contrastive_site=args.contrastive_site,
-            temperature=args.temperature,
-            hard_negative_weight=args.hard_negative_weight,
-            hard_negatives=args.hard_negatives,
-            ignore_ambiguous_above=args.ignore_ambiguous_above,
-            symmetric_links=args.symmetric_links,
-            balanced_links=args.balanced_links,
-            reliability_weighting=args.reliability_weighting,
-        ),
-        eval=EvalCfg(tracker=replace(TrackerConfig.shipped(), threshold=args.eval_threshold)),
-        schedule=ScheduleCfg(
-            steps=args.steps,
-            eval_every=args.eval_every,
-            patience=args.patience,
-            epochs=args.epochs,
-            evals_per_epoch=args.evals_per_epoch,
-            patience_epochs=args.patience_epochs,
-        ),
-        runtime=RuntimeCfg(
-            device=args.device,
-            loader_threads=args.loader_threads,
-            loader_prefetch=args.loader_prefetch,
-        ),
-    )
+    config = JointTrainConfig.from_args(args)
     root = DataRoot.from_config(_CONFIG)
     proc = root.processed(_DATASET)
     save_to = proc / args.weights

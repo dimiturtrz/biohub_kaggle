@@ -17,7 +17,9 @@ what this file ships.
 
 from __future__ import annotations
 
+import argparse
 import logging
+from dataclasses import replace
 from enum import StrEnum
 from pathlib import Path
 
@@ -106,6 +108,11 @@ class DataCfg(BaseModel):
     # distance and the learned probability pick the near-wrong cell). Off by default and byte-identical off.
     # COSTS ~50% more wall-clock per step: an extra frame decode plus one extra no-grad backbone forward.
     prior_velocity: bool = False
+    # Steps to bootstrap the velocity off GROUND-TRUTH `t-1 -> t` links before the model's own affinity takes
+    # over (linear anneal). Breaks the from-scratch chicken-egg: the model's early prev-gap affinity is
+    # confident-wrong, so a self-derived velocity points at the wrong cell and cannot fix the confusor it exists
+    # for. Only meaningful with `prior_velocity`; 0 = off and byte-identical off (pure model-derived from step 0).
+    velocity_gt_warmup_steps: int = Field(0, ge=0)
     # Share of steps drawn from the FULLY-LABELLED synthetic corpus (`celltrack.data.synthetic_pairs`), whose
     # candidate set is complete by construction — the property our own annotation cannot have, and the one the
     # measured association failure turns on (all 38 dense mislinks chose an UNANNOTATED partner). 0.0 keeps the
@@ -371,6 +378,59 @@ class JointTrainConfig(BaseModel):
     eval: EvalCfg = Field(default_factory=EvalCfg)
     schedule: ScheduleCfg = Field(default_factory=ScheduleCfg)
     runtime: RuntimeCfg = Field(default_factory=RuntimeCfg)
+
+    @classmethod
+    def from_args(cls, args: argparse.Namespace) -> JointTrainConfig:
+        """Fan the CLI's flat flags out into the six concern groups — the parser is the interface, this the model."""
+        return cls(
+            model=ModelCfg(
+                warm_pack=WARM_PACKS[args.warm_pack],
+                temporal_position=args.temporal_position,
+                lora=LoraCfg(
+                    enabled=args.lora, rank=args.lora_rank, alpha=args.lora_alpha, targets=tuple(args.lora_targets)
+                ),
+            ),
+            data=DataCfg(
+                detected_videos=args.detected_videos,
+                difficulty_sampling=args.difficulty_sampling,
+                prior_velocity=args.prior_velocity,
+                velocity_gt_warmup_steps=args.velocity_gt_warmup_steps,
+                synthetic_fraction=args.synthetic_fraction,
+                synthetic_sequences=args.synthetic_sequences,
+                synthetic_scenes=args.synthetic_scenes,
+                gpu_scene_fraction=args.gpu_scene_fraction,
+                gpu_scene_detection=args.gpu_scene_detection,
+                paced_curriculum=args.paced_curriculum,
+                include_test_in_train=args.include_test_in_train,
+            ),
+            optim=OptimCfg(lr=args.lr, cosine_lr=args.cosine_lr, batch_size=args.batch_size),
+            loss=LossCfg(
+                det_weight=args.det_weight,
+                contrastive_weight=args.contrastive_weight,
+                contrastive_site=args.contrastive_site,
+                temperature=args.temperature,
+                hard_negative_weight=args.hard_negative_weight,
+                hard_negatives=args.hard_negatives,
+                ignore_ambiguous_above=args.ignore_ambiguous_above,
+                symmetric_links=args.symmetric_links,
+                balanced_links=args.balanced_links,
+                reliability_weighting=args.reliability_weighting,
+            ),
+            eval=EvalCfg(tracker=replace(TrackerConfig.shipped(), threshold=args.eval_threshold)),
+            schedule=ScheduleCfg(
+                steps=args.steps,
+                eval_every=args.eval_every,
+                patience=args.patience,
+                epochs=args.epochs,
+                evals_per_epoch=args.evals_per_epoch,
+                patience_epochs=args.patience_epochs,
+            ),
+            runtime=RuntimeCfg(
+                device=args.device,
+                loader_threads=args.loader_threads,
+                loader_prefetch=args.loader_prefetch,
+            ),
+        )
 
     def resolved(self, steps_per_epoch: int) -> JointTrainConfig:
         """The same run with its schedule in steps — resolved once, the moment the pair count is known."""

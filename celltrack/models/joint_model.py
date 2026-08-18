@@ -26,10 +26,12 @@ from celltrack.models.temporal_unet_detector import TemporalUNetDetector
 _HIDDEN_DIM, _N_HEADS, _N_BLOCKS = 128, 4, 4
 # The fixed node count the batched training forward pads every pair to, so the whole GPU forward is ONE static
 # shape (the prerequisite for the batched masked loss to read a padded block, and for a graph to capture it).
-# Sized from the corpora: GT-annotated pairs max 33 nodes, the shipped-detector gated corpus maxed 102 — 256
-# clears both with margin, and attention over 256 nodes is microseconds beside the 64^3 backbone. A pair beyond
-# it RAISES rather than truncating (dropping a node would drop a real candidate from the matching).
-_MAX_NODES = 256
+# Sized from the corpora AND the synthetic generator: real pairs max 33 (GT) / 102 (gated) nodes, but a
+# synthetic training scene carries up to `SyntheticSceneConfig.n_cells` (700) per frame, and with velocity OFF
+# a dense pair routes through the batched path (which pads to this fixed block) rather than the ragged per-pair
+# loop. 768 clears the 700-cell generator with margin; attention over it is still microseconds beside the 64^3
+# backbone. A pair beyond it RAISES rather than truncating (dropping a node would drop a real candidate).
+_MAX_NODES = 768
 
 
 @dataclass(frozen=True)
@@ -126,13 +128,23 @@ class JointModel(nn.Module):
             n_heads=_N_HEADS,
             n_blocks=_N_BLOCKS,
         )
-        # A run saved under torch.compile prefixes its keys with `_orig_mod.`; strip it so a compiled run's
-        # checkpoint loads into the plain module (the weights are identical — compile only wraps the forward).
-        detector_state = {key.replace("._orig_mod.", "."): value for key, value in state["detector_state"].items()}
-        detector.load_state_dict(detector_state)
-        transformer.load_state_dict(state["transformer_state"])
+        detector.load_state_dict(cls._align_state_to(detector, state["detector_state"]))
+        transformer.load_state_dict(cls._align_state_to(transformer, state["transformer_state"]))
         model = cls(detector, transformer, tuple(config["downsample"]))
         return model.to(device).eval()
+
+    @staticmethod
+    def _align_state_to(module: nn.Module, state: dict[str, Tensor]) -> dict[str, Tensor]:
+        """Remap a saved head's keys onto whatever `torch.compile` wrapping the LIVE module currently carries.
+
+        `torch.compile` prefixes a wrapped submodule's keys with `_orig_mod.`; the weights are identical (compile
+        wraps the forward, not the parameters), only the names differ. A snapshot saved compiled and reloaded into
+        an eager module — or the reverse, when triton is missing on one run and present on the next — otherwise
+        fails `load_state_dict` on names alone. Canonicalise the checkpoint to plain keys, then map each onto the
+        target module's OWN key, which carries `_orig_mod.` exactly where the target is compiled and nowhere else.
+        """
+        plain_to_target = {key.replace("._orig_mod.", "."): key for key in module.state_dict()}
+        return {plain_to_target.get(key.replace("._orig_mod.", "."), key): value for key, value in state.items()}
 
     @override
     def forward(

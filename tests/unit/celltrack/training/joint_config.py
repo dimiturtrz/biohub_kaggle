@@ -11,6 +11,7 @@ from pydantic import ValidationError
 
 from celltrack.losses.softmax_focal_bce import SOURCE_AXIS, TARGET_AXIS
 from celltrack.operating_point import TrackerConfig
+from celltrack.training.joint_cli import JointCli
 from celltrack.training.joint_config import (
     WARM_PACKS,
     ContrastiveSite,
@@ -56,6 +57,25 @@ def test_defaults_are_the_measured_recipe():
     assert config.schedule.es_min_delta == 0.0
     assert (config.schedule.epochs, config.schedule.evals_per_epoch, config.schedule.patience_epochs) == (None,) * 3
     assert (config.runtime.device, config.runtime.seed) == ("cuda", 0)
+
+
+def test_from_args():
+    """The parser's flat flags fan out into the concern each one belongs to — one override per group proven.
+
+    `from_args` is the CLI-to-model seam: a flag lands in exactly one group and nowhere else. Overriding one
+    flag per group and reading it back where it belongs catches a mis-wire (a flag routed to the wrong Cfg)
+    that byte-identical defaults would hide.
+    """
+    args = JointCli.build_parser().parse_args(
+        ["--lr", "0.005", "--velocity-gt-warmup-steps", "300", "--det-weight", "7.0", "--steps", "42"]
+    )
+    config = JointTrainConfig.from_args(args)
+    assert config.optim.lr == 0.005
+    assert config.data.velocity_gt_warmup_steps == 300
+    assert config.loss.det_weight == 7.0
+    assert config.schedule.steps == 42
+    assert config.eval.tracker.threshold == args.eval_threshold  # tracked off the shipped operating point
+    assert config.model.warm_pack == WARM_PACKS[args.warm_pack]
 
 
 def test_to_config():

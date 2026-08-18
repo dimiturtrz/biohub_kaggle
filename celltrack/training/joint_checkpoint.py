@@ -95,8 +95,13 @@ class JointCheckpoint:
     ) -> RunProgress:
         """Load a snapshot into both heads, the projection and the optimiser, returning how far it had got."""
         state = torch.load(path, map_location=self.device, weights_only=False)
-        model.detector.load_state_dict(state["detector_state"])
-        model.transformer.load_state_dict(state["transformer_state"])
+        # `restore` runs AFTER `_prepare` has already compiled the backbone, so the live module may carry
+        # `_orig_mod.` keys the snapshot lacks (or vice-versa when a prior run saved compiled and this one is
+        # eager). `align_state_to` remaps the snapshot onto whatever wrapping the target now has — the fix is
+        # direction-agnostic, unlike a blind strip which only served an eager target.
+        align = JointModel._align_state_to  # noqa: SLF001 — the pack's own key-remap, shared with from_checkpoint
+        model.detector.load_state_dict(align(model.detector, state["detector_state"]))
+        model.transformer.load_state_dict(align(model.transformer, state["transformer_state"]))
         # A snapshot written before the contrastive head existed carries no entry; its optimiser state has
         # no slot for one either, so a run resuming such a file is by construction one that projects nothing.
         stored = state.get("contrastive")

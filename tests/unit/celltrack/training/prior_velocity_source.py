@@ -52,6 +52,27 @@ def _sample(video_store: Path, *, previous: bool) -> PairSample:
     return PairDataset([target], 1, _DOWNSAMPLE, seed=0, with_previous=True).pair(0)
 
 
+def _sample_with_gt_links(video_store: Path) -> PairSample:
+    """The `previous=True` pair, plus a GT `t-1 -> t` matrix: previous node parents source 0, not source 1.
+
+    A single previous node p=1 over sources s=2. The `[[1, 0]]` matrix makes source 0's incoming mass 1 (its GT
+    displacement is exact) and source 1's mass 0 (unparented → zero velocity), the two classes the warmup blend
+    must keep apart from the model's own degenerate all-ones softmax, which would hand source 1 a full-mass guess.
+    """
+    statistics = cast(ImageStatistics, zarr.open_group(video_store, mode="r").attrs["image_statistics"])
+    quantiles = statistics["quantiles"]
+    target = PairTarget(
+        frames=ZarrFrames(video_store, float(quantiles["0.001"]), float(quantiles["0.999"])),
+        timepoint=1,
+        source_centres=np.array([[0, 0, 0], [1, 3, 3]], dtype=np.int64),
+        target_centres=np.array([[1, 3, 3]], dtype=np.int64),
+        edge_matrix=np.array([[0.0], [1.0]], dtype=np.float32),
+        previous_centres=np.array([[1, 2, 2]], dtype=np.int64),
+        previous_edge_matrix=np.array([[1.0, 0.0]], dtype=np.float32),
+    )
+    return PairDataset([target], 1, _DOWNSAMPLE, seed=0, with_previous=True).pair(0)
+
+
 def test_widen_is_a_no_op_while_the_feature_is_off():
     """Off, the head keeps the exact projection object it was built with — the run of yesterday, untouched."""
     model = _model()
@@ -137,6 +158,57 @@ def test_of_batch(video_store: Path):
         if want is not None:
             assert got is not None
             assert torch.equal(got, want)
+
+
+def test_gt_warmup_off_is_the_model_velocity(video_store: Path):
+    """`gt_warmup_steps=0` (default), and any step past the window, both hand back the model's own velocity.
+
+    Byte-identical off: the GT matrix rides on the sample but is never read, so source 1 keeps the model's
+    degenerate `[0, 1, 1]` rather than the zero its unparented column would force.
+    """
+    model = _model(feat_dim=_WIDENED)
+    sample = _sample_with_gt_links(video_store)
+    precision = torch.autocast("cpu", enabled=False)
+
+    off = PriorVelocitySource(enabled=True, gt_warmup_steps=0).of_batch(model, [sample], precision, step=0)[0]
+    past = PriorVelocitySource(enabled=True, gt_warmup_steps=100).of_batch(model, [sample], precision, step=100)[0]
+
+    assert off is not None and past is not None
+    assert off.tolist() == [[-1.0, -2.0, -2.0], [0.0, 1.0, 1.0]]
+    assert torch.equal(off, past)
+
+
+def test_gt_warmup_full_is_the_ground_truth_velocity(video_store: Path):
+    """At step 0 of the warmup, alpha=1: the velocity is the GT-link displacement, softmax-free.
+
+    Source 0's parented column gives its exact `c0 - c_prev = [-1, -2, -2]`; source 1's empty column gives the
+    zero its incoming mass earns — NOT the model's full-mass `[0, 1, 1]`, the confident-wrong direction the
+    warmup exists to keep out of the head while the model's own affinity is still garbage.
+    """
+    model = _model(feat_dim=_WIDENED)
+    source = PriorVelocitySource(enabled=True, gt_warmup_steps=100)
+
+    samples = [_sample_with_gt_links(video_store)]
+    velocity = source.of_batch(model, samples, torch.autocast("cpu", enabled=False), step=0)[0]
+
+    assert velocity is not None
+    assert velocity.tolist() == [[-1.0, -2.0, -2.0], [0.0, 0.0, 0.0]]
+
+
+def test_gt_warmup_anneals_linearly_between_gt_and_model(video_store: Path):
+    """Halfway through the warmup, alpha=0.5: the velocity is the midpoint of the GT and model vectors.
+
+    Source 0 agrees in both regimes; source 1 is GT `[0,0,0]` vs model `[0,1,1]`, so the blend lands exactly
+    halfway at `[0, 0.5, 0.5]` — the linear hand-back the head's input distribution rides to the self-derived one.
+    """
+    model = _model(feat_dim=_WIDENED)
+    source = PriorVelocitySource(enabled=True, gt_warmup_steps=100)
+
+    samples = [_sample_with_gt_links(video_store)]
+    velocity = source.of_batch(model, samples, torch.autocast("cpu", enabled=False), step=50)[0]
+
+    assert velocity is not None
+    assert velocity.tolist() == [[-1.0, -2.0, -2.0], [0.0, 0.5, 0.5]]
 
 
 def _same_nodes() -> TrackGraph:

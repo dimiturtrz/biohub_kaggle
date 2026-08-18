@@ -53,6 +53,11 @@ class PairTarget:
     # The annotated centres at `t - 1`, or None when this is the video's first annotated frame — the prior
     # gap the sources' velocity is read off. `None` is the explicit "no history" case, not an empty array.
     previous_centres: Int[np.ndarray, "p 3"] | None = None
+    # The GT `t-1 -> t` links (`[p, s] = 1` when previous node p is the annotated parent of source s), or None
+    # in lockstep with `previous_centres`. A velocity WARMUP reads the exact incoming displacement off these
+    # one-hot columns while the model's own affinity is still garbage from-scratch; a column with no parent
+    # sums to zero and degrades to zero velocity, the same "no history" value an unmatched node takes.
+    previous_edge_matrix: Float[np.ndarray, "p s"] | None = None
 
     @classmethod
     def enumerate(cls, graph: TrackGraph, frames: FrameSource) -> list["PairTarget"]:
@@ -84,6 +89,9 @@ class PairTarget:
                     target_centres=positions[target_rows].astype(np.int64),
                     edge_matrix=cls._edge_matrix(edge_rows, source_rows, target_rows),
                     previous_centres=positions[previous_rows].astype(np.int64) if len(previous_rows) else None,
+                    previous_edge_matrix=(
+                        cls._edge_matrix(edge_rows, previous_rows, source_rows) if len(previous_rows) else None
+                    ),
                 )
             )
         return targets
@@ -118,6 +126,7 @@ class PairSample:
     edge_matrix: Float[Tensor, "s u"]
     previous_frame: Float[Tensor, "z y x"] | None = None
     previous_centres: Int[Tensor, "p 3"] | None = None
+    previous_edge_matrix: Float[Tensor, "p s"] | None = None
 
     @property
     def has_previous(self) -> bool:
@@ -165,6 +174,11 @@ class PairDataset(Dataset[PairSample]):
         """One SPECIFIC pair by corpus index: both normalised frames, both centre sets, and the edge matrix."""
         target = self._targets[target_index]
         previous_frame, previous_centres = self._previous(target)
+        previous_edges = (
+            torch.from_numpy(target.previous_edge_matrix)
+            if previous_centres is not None and target.previous_edge_matrix is not None
+            else None
+        )
         return PairSample(
             frame_t=target.frames.frame(target.timepoint, self._downsample),
             frame_t1=target.frames.frame(target.timepoint + 1, self._downsample),
@@ -173,6 +187,7 @@ class PairDataset(Dataset[PairSample]):
             edge_matrix=torch.from_numpy(target.edge_matrix),
             previous_frame=previous_frame,
             previous_centres=previous_centres,
+            previous_edge_matrix=previous_edges,
         )
 
     def _previous(self, target: PairTarget) -> tuple[Float[Tensor, "z y x"] | None, Int[Tensor, "p 3"] | None]:

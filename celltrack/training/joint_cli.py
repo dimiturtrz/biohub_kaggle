@@ -167,6 +167,13 @@ class JointCli:
             action="store_true",
             help="feed each source its t-1 -> t displacement as head input (~50%% slower per step)",
         )
+        parser.add_argument(
+            "--velocity-gt-warmup-steps",
+            type=int,
+            default=0,
+            help="bootstrap velocity off GT t-1 -> t links for N steps (linear anneal), breaking the from-scratch"
+            " chicken-egg; needs --prior-velocity; 0 = off",
+        )
         parser.add_argument("--temporal-position", action="store_true", help="frame-position embedding (motion sight)")
         # LoRA: freeze the pilkwang base, train low-rank adapters on the association locus. Detection is anchored
         # by the frozen base; the adapters give association the feature reshape the frozen backbone cannot.
