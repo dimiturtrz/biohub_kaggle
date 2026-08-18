@@ -14,7 +14,7 @@ import torch
 import zarr
 
 from celltrack.data.frame_source import ZarrFrames
-from celltrack.data.joint_dataset import PairDataset, PairSample, PairTarget
+from celltrack.data.joint_dataset import PairDataset, PairOptions, PairSample, PairTarget
 from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeGap, EdgeTransformerScorer
 from celltrack.models.joint_model import JointModel
 from celltrack.models.prior_velocity import GapHistory, PriorVelocity
@@ -49,7 +49,7 @@ def _sample(video_store: Path, *, previous: bool) -> PairSample:
         edge_matrix=np.array([[0.0], [1.0]], dtype=np.float32),
         previous_centres=np.array([[1, 2, 2]], dtype=np.int64) if previous else None,
     )
-    return PairDataset([target], 1, _DOWNSAMPLE, seed=0, with_previous=True).pair(0)
+    return PairDataset([target], 1, _DOWNSAMPLE, seed=0, options=PairOptions(with_previous=True)).pair(0)
 
 
 def _sample_with_gt_links(video_store: Path) -> PairSample:
@@ -70,7 +70,7 @@ def _sample_with_gt_links(video_store: Path) -> PairSample:
         previous_centres=np.array([[1, 2, 2]], dtype=np.int64),
         previous_edge_matrix=np.array([[1.0, 0.0]], dtype=np.float32),
     )
-    return PairDataset([target], 1, _DOWNSAMPLE, seed=0, with_previous=True).pair(0)
+    return PairDataset([target], 1, _DOWNSAMPLE, seed=0, options=PairOptions(with_previous=True)).pair(0)
 
 
 def test_widen_is_a_no_op_while_the_feature_is_off():

@@ -33,6 +33,7 @@ from jaxtyping import Float, Int
 from torch import Tensor
 from torch.utils.data import Dataset
 
+from celltrack.data.augmentation import _NO_AUGMENTATION, Augmentation, FrameTransform
 from celltrack.data.frame_source import FrameSource
 from core.data.tracks import TrackGraph
 
@@ -139,6 +140,21 @@ class PairSample:
         return replace(self, **moved)
 
 
+@dataclass(frozen=True)
+class PairOptions:
+    """What a stream wants beyond the base pair: the predecessor frame (velocity) and the augmentation policy.
+
+    Both are training-run toggles orthogonal to the sampling knobs, so they travel together rather than swelling
+    the constructor — a non-training reader takes the default (no predecessor, no augmentation = yesterday's pair).
+    """
+
+    with_previous: bool = False
+    augmentation: Augmentation = _NO_AUGMENTATION
+
+
+_DEFAULT_OPTIONS = PairOptions()
+
+
 class PairDataset(Dataset[PairSample]):
     """A stream of `steps` GT pairs sampled uniformly, both frames read lazily per access.
 
@@ -146,20 +162,24 @@ class PairDataset(Dataset[PairSample]):
     wants (a difficulty sampler picks the index, the dataset still owns how a pair becomes tensors).
     """
 
+    # Aug draws off an INDEPENDENT stream from the target-selection rng: the same salted seed at line-level, so a
+    # window's augmentation is reproducible per step yet uncorrelated with which target each step happened to draw.
+    _AUGMENT_SALT = 0x5EED
+
     def __init__(
         self,
         targets: list[PairTarget],
         steps: int,
         downsample: tuple[int, int, int],
         seed: int,
-        *,
-        with_previous: bool = False,
+        options: PairOptions = _DEFAULT_OPTIONS,
     ) -> None:
         self._targets = targets
         self._steps = steps
         self._downsample = downsample
         self._seed = seed
-        self._with_previous = with_previous
+        self._with_previous = options.with_previous
+        self._augmentation = options.augmentation
 
     def __len__(self) -> int:
         return self._steps
@@ -168,38 +188,59 @@ class PairDataset(Dataset[PairSample]):
     def __getitem__(self, index: int) -> PairSample:
         """Sample one pair (seeded by index): both normalised frames, both centre sets, and the edge matrix."""
         rng = np.random.default_rng(self._seed + index)
-        return self.pair(int(rng.integers(len(self._targets))))
+        return self.pair(int(rng.integers(len(self._targets))), augment_step=index)
 
-    def pair(self, target_index: int) -> PairSample:
-        """One SPECIFIC pair by corpus index: both normalised frames, both centre sets, and the edge matrix."""
+    def pair(self, target_index: int, *, augment_step: int | None = None) -> PairSample:
+        """One SPECIFIC pair by corpus index: both normalised frames, both centre sets, and the edge matrix.
+
+        `augment_step` seeds this pair's shared augmentation; `None` (a diagnostic or sanity read) takes the
+        un-augmented frames verbatim, as does an identity policy — so a non-training caller sees yesterday's pair.
+        """
         target = self._targets[target_index]
-        previous_frame, previous_centres = self._previous(target)
+        transform = self._transform(augment_step)
+        previous_frame, previous_centres = self._previous(target, transform)
         previous_edges = (
             torch.from_numpy(target.previous_edge_matrix)
             if previous_centres is not None and target.previous_edge_matrix is not None
             else None
         )
+        frame_t = target.frames.frame(target.timepoint, self._downsample)
+        frame_t1 = target.frames.frame(target.timepoint + 1, self._downsample)
+        source_centres = torch.from_numpy(target.source_centres)
+        target_centres = torch.from_numpy(target.target_centres)
         return PairSample(
-            frame_t=target.frames.frame(target.timepoint, self._downsample),
-            frame_t1=target.frames.frame(target.timepoint + 1, self._downsample),
-            source_centres=torch.from_numpy(target.source_centres),
-            target_centres=torch.from_numpy(target.target_centres),
+            frame_t=transform.frame(frame_t),
+            frame_t1=transform.frame(frame_t1),
+            source_centres=transform.coords(source_centres, frame_t.shape),
+            target_centres=transform.coords(target_centres, frame_t1.shape),
             edge_matrix=torch.from_numpy(target.edge_matrix),
             previous_frame=previous_frame,
             previous_centres=previous_centres,
             previous_edge_matrix=previous_edges,
         )
 
-    def _previous(self, target: PairTarget) -> tuple[Float[Tensor, "z y x"] | None, Int[Tensor, "p 3"] | None]:
-        """Frame `t - 1` and its annotated centres — `(None, None)` when unasked for, or when there is no `t - 1`.
+    def _transform(self, augment_step: int | None) -> FrameTransform:
+        """The ONE transform this pair's frames share — identity when unasked, off, or a genuine no-op draw."""
+        if augment_step is None:
+            return FrameTransform(gain=1.0, bias=0.0, flips=())
+        return self._augmentation.for_pair(np.random.default_rng([self._seed + augment_step, self._AUGMENT_SALT]))
+
+    def _previous(
+        self, target: PairTarget, transform: FrameTransform
+    ) -> tuple[Float[Tensor, "z y x"] | None, Int[Tensor, "p 3"] | None]:
+        """Frame `t - 1` and its annotated centres under the pair's SHARED transform — `(None, None)` when absent.
 
         The extra frame read is a third of this item's decode cost, so it happens only for a run that consumes
         it; a pair whose predecessor carries no annotation is indistinguishable here from one that has no
-        predecessor at all, and both degrade to the same zero velocity downstream.
+        predecessor at all, and both degrade to the same zero velocity downstream. The predecessor takes the
+        SAME flips and jitter as `t`/`t+1`, or the velocity gap it feeds would be read off a differently-oriented
+        frame than the sources it is compared against.
         """
         if not self._with_previous or target.previous_centres is None:
             return None, None
-        return target.frames.frame(target.timepoint - 1, self._downsample), torch.from_numpy(target.previous_centres)
+        frame = target.frames.frame(target.timepoint - 1, self._downsample)
+        centres = torch.from_numpy(target.previous_centres)
+        return transform.frame(frame), transform.coords(centres, frame.shape)
 
     def stream(self, threads: int = 1, prefetch: int = 0) -> Iterator[PairSample]:
         """Yield every pair once, in index order — reproducible; batching is the trainer's job (ragged matrices).

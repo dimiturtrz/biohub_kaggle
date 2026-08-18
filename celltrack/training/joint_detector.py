@@ -47,7 +47,7 @@ from torch.nn.attention import SDPBackend, sdpa_kernel
 
 from celltrack.data.difficulty_sampler import DifficultySampler
 from celltrack.data.gpu_scene import GpuScenes
-from celltrack.data.joint_dataset import PairDataset, PairSample, PairTarget
+from celltrack.data.joint_dataset import PairDataset, PairOptions, PairSample, PairTarget
 from celltrack.data.pair_curriculum import FixedMixture, PacedMixture, PairCurriculum, PairDraw
 from celltrack.data.synthetic_scene import SceneConfig
 from celltrack.detectors.tunet import DetectorRecipe
@@ -182,7 +182,7 @@ class JointTrainer:
                 window,
                 self.config.data.downsample,
                 self.config.runtime.seed + done,
-                with_previous=self.config.data.prior_velocity,
+                PairOptions(with_previous=self.config.data.prior_velocity, augmentation=self.config.augmentation()),
             )
             losses = self._run_window(model, optimization, dataset, curriculum, step_base=done)
             done += window
@@ -466,23 +466,23 @@ class JointTrainer:
         """
         steps = len(dataset)
         if depth < 1:
-            for _ in range(steps):
+            for step in range(steps):
                 draw = curriculum.step()
-                yield draw, dataset.pair(draw.index)
+                yield draw, dataset.pair(draw.index, augment_step=step)
             return
         with ThreadPoolExecutor(max_workers=depth) as pool:
             pending: deque[tuple[PairDraw, Future[PairSample]]] = deque()
             drawn = 0
             while drawn < steps and len(pending) < depth:
                 draw = curriculum.step()
+                pending.append((draw, pool.submit(dataset.pair, draw.index, augment_step=drawn)))
                 drawn += 1
-                pending.append((draw, pool.submit(dataset.pair, draw.index)))
             while pending:
                 draw, decoded = pending.popleft()
                 if drawn < steps:
                     ahead = curriculum.step()
+                    pending.append((ahead, pool.submit(dataset.pair, ahead.index, augment_step=drawn)))
                     drawn += 1
-                    pending.append((ahead, pool.submit(dataset.pair, ahead.index)))
                 yield draw, decoded.result()
 
     def _observe(self, curriculum: PairCurriculum | None, index: int, outcome: _PairOutcome) -> None:
@@ -638,7 +638,7 @@ class JointTrainer:
         scored: list[float] = []
         for target in val_targets:
             corpus = PairDataset(
-                [target], 1, data.downsample, self.config.runtime.seed, with_previous=data.prior_velocity
+                [target], 1, data.downsample, self.config.runtime.seed, PairOptions(with_previous=data.prior_velocity)
             )
             sample = corpus.pair(0).to(device)
             velocity = self._velocity.of(model, sample, self._autocast())

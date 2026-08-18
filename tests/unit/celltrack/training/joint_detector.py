@@ -16,7 +16,7 @@ from torch import nn
 
 from celltrack.data.difficulty_sampler import DifficultySampler
 from celltrack.data.frame_source import ZarrFrames
-from celltrack.data.joint_dataset import PairDataset, PairTarget
+from celltrack.data.joint_dataset import PairDataset, PairOptions, PairTarget
 from celltrack.data.pair_curriculum import FixedMixture, PacedMixture
 from celltrack.detectors.tunet import DetectorRecipe
 from celltrack.edges.blended_edge_scoring import BlendedEdgeTransformerScorer
@@ -371,7 +371,7 @@ def test_losses_hands_the_velocity_to_the_model(video_store: Path, monkeypatch: 
     no-grad pass that produced it forwards ZERO velocity for its own sources (one step back, no recursion)."""
     trainer = JointTrainer(_velocity_config())
     model, _ = trainer._prepare(warm_start=False)
-    sample = PairDataset(_pairs(video_store), 1, (1, 1, 1), 0, with_previous=True).pair(1)
+    sample = PairDataset(_pairs(video_store), 1, (1, 1, 1), 0, PairOptions(with_previous=True)).pair(1)
     scored: list[torch.Tensor | None] = []
     gap_velocities: list[torch.Tensor] = []
     forward, forward_batch = JointModel.forward, JointModel.forward_batch

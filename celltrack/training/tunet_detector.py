@@ -35,7 +35,8 @@ from jaxtyping import Float, Int
 from torch import Tensor, nn
 from torch.nn.attention import SDPBackend, sdpa_kernel
 
-from celltrack.data.tunet_dataset import Augmentation, FrameDataset, FrameTarget
+from celltrack.data.augmentation import Augmentation
+from celltrack.data.tunet_dataset import FrameDataset, FrameTarget
 from celltrack.detectors.tunet import DetectorRecipe, TemporalUNetDetector
 from celltrack.eval.model_evaluator import EvalResult, ModelEvaluator
 from celltrack.eval.proxy import TEST_MOVIES, VALIDATION_MOVIES, TestMovieProxy

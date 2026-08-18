@@ -174,6 +174,22 @@ class JointCli:
             help="bootstrap velocity off GT t-1 -> t links for N steps (linear anneal), breaking the from-scratch"
             " chicken-egg; needs --prior-velocity; 0 = off",
         )
+        # Label-preserving detection augmentation (the pilkwang recipe's, absent from every from-scratch joint run):
+        # intensity jitter + axis flips break the from-scratch intensity/orientation dependence that leaves it
+        # missing cells warm weights recover from identical pixels. A pair shares one draw across t-1/t/t+1.
+        parser.add_argument(
+            "--aug-brightness", type=float, default=0.0, help="multiplicative intensity jitter half-range; 0 = off"
+        )
+        parser.add_argument(
+            "--aug-offset", type=float, default=0.0, help="additive intensity jitter half-range; 0 = off"
+        )
+        parser.add_argument(
+            "--aug-flip-axes",
+            nargs="*",
+            type=int,
+            default=[],
+            help="frame axes (0=z 1=y 2=x) each flipped with p=0.5, centres mirrored to match; empty = off",
+        )
         parser.add_argument("--temporal-position", action="store_true", help="frame-position embedding (motion sight)")
         # LoRA: freeze the pilkwang base, train low-rank adapters on the association locus. Detection is anchored
         # by the frozen base; the adapters give association the feature reshape the frozen backbone cannot.

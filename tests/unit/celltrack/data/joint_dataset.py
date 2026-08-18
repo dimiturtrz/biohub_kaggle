@@ -7,8 +7,9 @@ import numpy as np
 import torch
 import zarr
 
+from celltrack.data.augmentation import Augmentation
 from celltrack.data.frame_source import ZarrFrames
-from celltrack.data.joint_dataset import PairDataset, PairTarget
+from celltrack.data.joint_dataset import PairDataset, PairOptions, PairTarget
 from core.data.tracks import TrackGraph
 from core.data.video import ImageStatistics
 
@@ -85,7 +86,7 @@ def test_getitem(video_store: Path):
 def test_has_previous(video_store: Path):
     """A pair at t=1 whose t=0 is annotated serves that frame and its centres — the prior gap the velocity needs."""
     target = _target(video_store, timepoint=1, previous=np.array([[0, 1, 1]], dtype=np.int64))
-    dataset = PairDataset([target], steps=1, downsample=(1, 1, 1), seed=0, with_previous=True)
+    dataset = PairDataset([target], steps=1, downsample=(1, 1, 1), seed=0, options=PairOptions(with_previous=True))
 
     sample = dataset.pair(0)
 
@@ -99,7 +100,9 @@ def test_has_previous(video_store: Path):
 
 def test_pair_has_no_predecessor_for_a_videos_first_pair(video_store: Path):
     """Asked for history a first pair does not have, the sample is explicitly empty rather than silently zeroed."""
-    dataset = PairDataset([_target(video_store)], steps=1, downsample=(1, 1, 1), seed=0, with_previous=True)
+    dataset = PairDataset(
+        [_target(video_store)], steps=1, downsample=(1, 1, 1), seed=0, options=PairOptions(with_previous=True)
+    )
 
     sample = dataset.pair(0)
 
@@ -120,6 +123,39 @@ def test_pair(video_store: Path):
     chosen, drawn = dataset.pair(0), dataset[0]
     assert torch.equal(chosen.frame_t, drawn.frame_t)
     assert torch.equal(chosen.edge_matrix, drawn.edge_matrix)
+
+
+def test_pair_off_is_byte_identical_and_augment_shares_one_transform(video_store: Path):
+    """Off is yesterday's pair; on, ONE flip lands identically on t-1, t and t+1 with their centres mirrored.
+
+    The load-bearing joint property: a per-frame flip would desynchronise the edge matrix and the velocity gap,
+    so the pair must share a single draw. A `None`/identity step keeps the exact un-augmented frames, and the
+    edge matrix — a node-node correspondence — is invariant to a spatial flip and must come through untouched.
+    """
+    target = _target(video_store, timepoint=1, previous=np.array([[0, 1, 1]], dtype=np.int64))
+    plain = PairDataset([target], steps=1, downsample=(1, 1, 1), seed=0, options=PairOptions(with_previous=True))
+    reference = plain.pair(0)
+    axis = next(a for a in range(3) if reference.frame_t.shape[a] > 1)
+
+    augmented = PairDataset(
+        [target],
+        steps=64,
+        downsample=(1, 1, 1),
+        seed=0,
+        options=PairOptions(with_previous=True, augmentation=Augmentation(flip_axes=(axis,))),
+    )
+    assert torch.equal(augmented.pair(0, augment_step=None).frame_t, reference.frame_t)  # off = identity
+
+    step = next(s for s in range(64) if not torch.equal(augmented.pair(0, augment_step=s).frame_t, reference.frame_t))
+    sample = augmented.pair(0, augment_step=step)
+    assert sample.previous_frame is not None and reference.previous_frame is not None
+    assert torch.equal(sample.frame_t, torch.flip(reference.frame_t, dims=(axis,)))
+    assert torch.equal(sample.frame_t1, torch.flip(reference.frame_t1, dims=(axis,)))
+    assert torch.equal(sample.previous_frame, torch.flip(reference.previous_frame, dims=(axis,)))
+    extent = reference.frame_t.shape[axis]
+    mirrored = [extent - 1 - c for c in reference.source_centres[:, axis].tolist()]
+    assert sample.source_centres[:, axis].tolist() == mirrored
+    assert torch.equal(sample.edge_matrix, reference.edge_matrix)  # correspondence is flip-invariant
 
 
 def test_stream(video_store: Path):

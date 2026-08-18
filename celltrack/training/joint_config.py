@@ -25,6 +25,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt
 
+from celltrack.data.augmentation import Augmentation
 from celltrack.losses.softmax_focal_bce import SOURCE_AXIS, TARGET_AXIS
 from celltrack.losses.tracking_loss import TrackingLossConfig
 from celltrack.models.lora import LoraConfig
@@ -141,6 +142,17 @@ class DataCfg(BaseModel):
     # only the pairs the loop optimises on grow. Legitimate because those movies ARE given and the hidden eval
     # overlaps them; the trap this avoids is SELECTING on them (proxy.py's documented anti-transfer), not training.
     include_test_in_train: bool = False
+    # Label-preserving detection augmentation the pilkwang recipe has and ours lacked — the from-scratch recall
+    # gap is warm weights recovering cells our own miss from IDENTICAL pixels (g8j8), i.e. an intensity/orientation
+    # dependence a from-scratch run never had the variety to break. All three default to the identity, so an
+    # un-augmented run is byte-for-byte yesterday's; a pair shares ONE draw across `t-1`/`t`/`t+1` (joint_dataset).
+    aug_brightness: float = Field(0.0, ge=0.0)  # multiplicative jitter half-range
+    aug_offset: float = Field(0.0, ge=0.0)  # additive jitter half-range
+    aug_flip_axes: tuple[int, ...] = ()  # frame axes (0=z, 1=y, 2=x) each flipped with p=0.5
+
+    def augmentation(self) -> Augmentation:
+        """The augmentation policy these fields describe — identity by default, so an unasked run is unchanged."""
+        return Augmentation(brightness=self.aug_brightness, offset=self.aug_offset, flip_axes=self.aug_flip_axes)
 
 
 class OptimCfg(BaseModel):
@@ -402,6 +414,9 @@ class JointTrainConfig(BaseModel):
                 gpu_scene_detection=args.gpu_scene_detection,
                 paced_curriculum=args.paced_curriculum,
                 include_test_in_train=args.include_test_in_train,
+                aug_brightness=args.aug_brightness,
+                aug_offset=args.aug_offset,
+                aug_flip_axes=tuple(args.aug_flip_axes),
             ),
             optim=OptimCfg(lr=args.lr, cosine_lr=args.cosine_lr, batch_size=args.batch_size),
             loss=LossCfg(
@@ -435,3 +450,7 @@ class JointTrainConfig(BaseModel):
     def resolved(self, steps_per_epoch: int) -> JointTrainConfig:
         """The same run with its schedule in steps — resolved once, the moment the pair count is known."""
         return self.model_copy(update={"schedule": self.schedule.resolved(steps_per_epoch)})
+
+    def augmentation(self) -> Augmentation:
+        """The label-preserving augmentation policy — the trainer asks the run, not its data group."""
+        return self.data.augmentation()

@@ -67,15 +67,44 @@ def test_from_args():
     that byte-identical defaults would hide.
     """
     args = JointCli.build_parser().parse_args(
-        ["--lr", "0.005", "--velocity-gt-warmup-steps", "300", "--det-weight", "7.0", "--steps", "42"]
+        [
+            "--lr",
+            "0.005",
+            "--velocity-gt-warmup-steps",
+            "300",
+            "--det-weight",
+            "7.0",
+            "--steps",
+            "42",
+            "--aug-brightness",
+            "0.2",
+            "--aug-flip-axes",
+            "1",
+            "2",
+        ]
     )
     config = JointTrainConfig.from_args(args)
     assert config.optim.lr == 0.005
     assert config.data.velocity_gt_warmup_steps == 300
+    assert config.data.aug_brightness == 0.2
+    assert config.data.aug_flip_axes == (1, 2)
     assert config.loss.det_weight == 7.0
     assert config.schedule.steps == 42
     assert config.eval.tracker.threshold == args.eval_threshold  # tracked off the shipped operating point
     assert config.model.warm_pack == WARM_PACKS[args.warm_pack]
+
+
+def test_data_cfg_augmentation():
+    """`DataCfg.augmentation()` hands the dataset the policy its fields describe — identity when nothing is asked."""
+    aug = DataCfg(aug_brightness=0.3, aug_offset=1.5, aug_flip_axes=(1, 2)).augmentation()
+    assert (aug.brightness, aug.offset, aug.flip_axes) == (0.3, 1.5, (1, 2))
+    assert DataCfg().augmentation().flip_axes == ()  # un-augmented by default
+
+
+def test_joint_train_config_augmentation():
+    """The run delegates to its data group, so the trainer asks the run and never reaches through it (demeter)."""
+    run = JointTrainConfig(data=DataCfg(aug_flip_axes=(1, 2)))
+    assert run.augmentation().flip_axes == (1, 2)
 
 
 def test_to_config():

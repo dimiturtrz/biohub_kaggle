@@ -7,33 +7,8 @@ import numpy as np
 import torch
 import zarr
 
-from celltrack.data.tunet_dataset import Augmentation, FrameDataset, FrameTarget
+from celltrack.data.tunet_dataset import FrameDataset, FrameTarget
 from core.data.video import ImageStatistics
-
-
-def test_apply():
-    """A flip mirrors both the frame and its centres along the axis; identity draws leave both untouched."""
-    aug = Augmentation(flip_axes=(1,))
-    frame = torch.arange(16, dtype=torch.float32).reshape(2, 2, 4)
-    coords = torch.tensor([[0, 0, 2]])
-    saw_flip = saw_identity = False
-    for seed in range(8):
-        out, out_coords = aug.apply(frame, coords, np.random.default_rng(seed))
-        if torch.equal(out, frame):
-            assert out_coords.tolist() == [[0, 0, 2]]
-            saw_identity = True
-        else:
-            assert torch.equal(out, torch.flip(frame, dims=(1,)))
-            assert out_coords.tolist() == [[0, 1, 2]]  # y=0 mirrors to shape[1]-1-0 = 1
-            saw_flip = True
-    assert saw_flip and saw_identity
-
-
-def test_apply_jitter_clamps_to_non_negative():
-    """Intensity jitter can drive a value below zero; the clamp keeps the frame a valid non-negative input."""
-    aug = Augmentation(brightness=0.5, offset=1.0)
-    out, _coords = aug.apply(torch.zeros(1, 2, 2), torch.tensor([[0, 0, 0]]), np.random.default_rng(3))
-    assert torch.all(out >= 0.0)
 
 
 def test_getitem(video_store: Path):
