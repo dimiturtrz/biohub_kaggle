@@ -32,10 +32,11 @@ from dataclasses import dataclass
 
 import numpy as np
 import torch
-from jaxtyping import Float, Int
+from jaxtyping import Float
 from scipy.spatial.distance import cdist
 
 from celltrack.affinity import EdgeAffinity
+from celltrack.linkers.frame_gap import FrameGap
 from celltrack.linkers.motion_linking import VELOCITY_DAMPING
 from celltrack.models.prior_velocity import PriorVelocity
 
@@ -65,25 +66,12 @@ class MotionPrediction:
     # so an ambiguous history shrinks toward zero (the raw-distance cost) rather than guessing a direction.
     history: int = 1
 
-    def distances(
-        self,
-        timepoint: int,
-        sources: Int[np.ndarray, " s"],
-        targets: Int[np.ndarray, " t"],
-        timepoints: Int[np.ndarray, " n"],
-        positions_um: Float[np.ndarray, "n 3"],
-    ) -> Float[np.ndarray, "s t"]:
+    def distances(self, gap: FrameGap) -> Float[np.ndarray, "s t"]:
         """Every `source → target` distance measured from the source's PREDICTED position, in micrometres."""
-        step = self._velocity(timepoint, sources, timepoints, positions_um)
-        return cdist(positions_um[sources] + VELOCITY_DAMPING * step, positions_um[targets])
+        step = self._velocity(gap)
+        return cdist(gap.positions_um[gap.sources] + VELOCITY_DAMPING * step, gap.positions_um[gap.targets])
 
-    def _velocity(
-        self,
-        timepoint: int,
-        sources: Int[np.ndarray, " s"],
-        timepoints: Int[np.ndarray, " n"],
-        positions_um: Float[np.ndarray, "n 3"],
-    ) -> Float[np.ndarray, "s 3"]:
+    def _velocity(self, gap: FrameGap) -> Float[np.ndarray, "s 3"]:
         """The sources' velocity, averaged over up to `history` past gaps — exact zeros where none is usable.
 
         A `responsibility` matrix carries each source's soft ancestry back one frame per gap: initially each
@@ -91,18 +79,20 @@ class MotionPrediction:
         the step read at an earlier frame is attributed to the sources that most likely descend from it. The
         chain is entirely soft, so it costs one matrix product per gap and never commits a link.
         """
-        velocity = np.zeros((len(sources), 3))
-        responsibility = np.eye(len(sources))
-        current = sources
+        velocity = np.zeros((len(gap.sources), 3))
+        responsibility = np.eye(len(gap.sources))
+        current = gap.sources
         levels = 0
         for step_back in range(self.history):
-            gap = timepoint - 1 - step_back
-            previous = np.flatnonzero(timepoints == gap)
-            probabilities = self.affinity.probabilities(gap) if previous.size else None
+            prev_frame = gap.timepoint - 1 - step_back
+            previous = np.flatnonzero(gap.timepoints == prev_frame)
+            probabilities = self.affinity.probabilities(prev_frame) if previous.size else None
             if probabilities is None:
                 break
             matrix = np.asarray(probabilities, dtype=np.float64)
-            velocity = velocity + responsibility @ self._incoming(positions_um[current], positions_um[previous], matrix)
+            velocity = velocity + responsibility @ self._incoming(
+                gap.positions_um[current], gap.positions_um[previous], matrix
+            )
             responsibility = responsibility @ self._parent_distribution(matrix).T
             current = previous
             levels += 1

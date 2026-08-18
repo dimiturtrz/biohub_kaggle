@@ -1,11 +1,23 @@
 import numpy as np
 
+from celltrack.linkers.frame_gap import FrameGap
 from celltrack.linkers.motion_linking import VELOCITY_DAMPING
 from celltrack.linkers.motion_prediction import MotionPrediction
 
 # Three frames on the x axis: one cell per frame at 0, 4, 8 — a constant +4 um step.
 _TIMEPOINTS = np.array([0, 1, 2], dtype=np.int64)
 _POSITIONS = np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 4.0], [0.0, 0.0, 8.0]], dtype=np.float64)
+
+
+def _gap(timepoint: int, source: int, target: int, timepoints: np.ndarray, positions_um: np.ndarray) -> FrameGap:
+    """One single-source, single-target gap over the given frames — the bundle `MotionPrediction.distances` reads."""
+    return FrameGap(
+        timepoint=timepoint,
+        sources=np.array([source]),
+        targets=np.array([target]),
+        positions_um=positions_um,
+        timepoints=timepoints,
+    )
 
 
 class _Affinity:
@@ -27,7 +39,7 @@ def test_distances():
     """
     term = MotionPrediction(affinity=_Affinity({0: np.array([[1.0]], dtype=np.float64)}))
 
-    predicted = term.distances(1, np.array([1]), np.array([2]), _TIMEPOINTS, _POSITIONS)
+    predicted = term.distances(_gap(1, 1, 2, _TIMEPOINTS, _POSITIONS))
 
     assert predicted.tolist() == [[4.0 - VELOCITY_DAMPING * 4.0]]
 
@@ -41,7 +53,7 @@ def test_distances_shrink_the_step_when_the_previous_gap_was_ambiguous():
     """
     term = MotionPrediction(affinity=_Affinity({0: np.array([[0.5]], dtype=np.float64)}))
 
-    predicted = term.distances(1, np.array([1]), np.array([2]), _TIMEPOINTS, _POSITIONS)
+    predicted = term.distances(_gap(1, 1, 2, _TIMEPOINTS, _POSITIONS))
 
     assert predicted.tolist() == [[4.0 - VELOCITY_DAMPING * 2.0]]
 
@@ -50,14 +62,14 @@ def test_distances_without_a_previous_frame_are_the_raw_ones():
     """The video's first gap has no history, so the prediction is exactly the source's own position."""
     term = MotionPrediction(affinity=_Affinity({0: np.array([[1.0]], dtype=np.float64)}))
 
-    assert term.distances(0, np.array([0]), np.array([1]), _TIMEPOINTS, _POSITIONS).tolist() == [[4.0]]
+    assert term.distances(_gap(0, 0, 1, _TIMEPOINTS, _POSITIONS)).tolist() == [[4.0]]
 
 
 def test_distances_without_a_scored_previous_gap_are_the_raw_ones():
     """A previous frame the affinity does not score leaves the pair on raw distance — no invented velocity."""
     term = MotionPrediction(affinity=_Affinity({}))
 
-    assert term.distances(1, np.array([1]), np.array([2]), _TIMEPOINTS, _POSITIONS).tolist() == [[4.0]]
+    assert term.distances(_gap(1, 1, 2, _TIMEPOINTS, _POSITIONS)).tolist() == [[4.0]]
 
 
 # Four frames on the x axis at 0, 4, 8, 12 — a constant +4 step, one cell per frame linked with probability 1.
@@ -70,7 +82,7 @@ def test_history_one_is_the_single_step_form():
     """History 1 reads only the previous gap — byte-identical to the original single-step velocity."""
     single = MotionPrediction(affinity=_Affinity(_CONFIDENT_CHAIN), history=1)
 
-    predicted = single.distances(2, np.array([2]), np.array([3]), _FOUR_TIMEPOINTS, _FOUR_POSITIONS)
+    predicted = single.distances(_gap(2, 2, 3, _FOUR_TIMEPOINTS, _FOUR_POSITIONS))
 
     assert predicted.tolist() == [[4.0 - VELOCITY_DAMPING * 4.0]]  # one +4 step, same as history absent
 
@@ -84,7 +96,7 @@ def test_history_averages_the_velocity_over_several_gaps():
     """
     multi = MotionPrediction(affinity=_Affinity(_CONFIDENT_CHAIN), history=3)
 
-    predicted = multi.distances(2, np.array([2]), np.array([3]), _FOUR_TIMEPOINTS, _FOUR_POSITIONS)
+    predicted = multi.distances(_gap(2, 2, 3, _FOUR_TIMEPOINTS, _FOUR_POSITIONS))
 
     assert predicted.tolist() == [[4.0 - VELOCITY_DAMPING * 4.0]]  # averaged +4 and +4 → +4, chain arithmetic holds
 
@@ -93,6 +105,6 @@ def test_history_beyond_the_available_frames_uses_what_exists():
     """Asking for more history than the video has does not error — it averages the gaps that exist."""
     multi = MotionPrediction(affinity=_Affinity(_CONFIDENT_CHAIN), history=9)
 
-    predicted = multi.distances(1, np.array([1]), np.array([2]), _FOUR_TIMEPOINTS, _FOUR_POSITIONS)
+    predicted = multi.distances(_gap(1, 1, 2, _FOUR_TIMEPOINTS, _FOUR_POSITIONS))
 
     assert predicted.tolist() == [[4.0 - VELOCITY_DAMPING * 4.0]]  # only one prior gap exists at t=1

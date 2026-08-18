@@ -32,6 +32,7 @@ from celltrack.linkers.agreement_gating import AgreementGate
 from celltrack.linkers.assignment_linking import LINK_REWARD as _LINK_REWARD
 from celltrack.linkers.boundary_prior import BoundaryFactorSource
 from celltrack.linkers.evidence_ramp import EvidenceRamp
+from celltrack.linkers.frame_gap import FrameGap
 from celltrack.linkers.motion_prediction import MotionPrediction
 from celltrack.linkers.mutual_bonus import MutualBonus
 from celltrack.linkers.ranker_bonus import RankerBonus
@@ -148,22 +149,15 @@ class FlowLinker:
     ) -> list[tuple[int, int, int]]:
         """Every in-gate consecutive-frame `(source_row, target_row, integer_cost)` — the linkable transitions."""
         transitions: list[tuple[int, int, int]] = []
-        for timepoint in np.unique(timepoints)[:-1]:
-            sources = np.flatnonzero(timepoints == timepoint)
-            targets = np.flatnonzero(timepoints == timepoint + 1)
-            if len(sources) == 0 or len(targets) == 0:
+        for gap in FrameGap.sweep(positions_um, timepoints):
+            if len(gap.sources) == 0 or len(gap.targets) == 0:
                 continue
-            gap = int(timepoint)
-            distance = cdist(positions_um[sources], positions_um[targets])
-            priced = (
-                distance
-                if self.prediction is None
-                else self.prediction.distances(gap, sources, targets, timepoints, positions_um)
-            )
-            cost = self._gated_cost(gap, distance, priced)
+            distance = cdist(positions_um[gap.sources], positions_um[gap.targets])
+            priced = distance if self.prediction is None else self.prediction.distances(gap)
+            cost = self._gated_cost(gap.timepoint, distance, priced)
             source_local, target_local = np.nonzero(np.isfinite(cost))
             transitions.extend(
-                (int(sources[s]), int(targets[t]), round(float(_COST_SCALE * cost[s, t])))
+                (int(gap.sources[s]), int(gap.targets[t]), round(float(_COST_SCALE * cost[s, t])))
                 for s, t in zip(source_local, target_local, strict=True)
             )
         return transitions

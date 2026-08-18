@@ -16,11 +16,12 @@ link updates the successor's velocity, so the motion estimate propagates along a
 from dataclasses import dataclass
 
 import numpy as np
-from jaxtyping import Bool, Float, Int
+from jaxtyping import Bool, Float
 from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
 
 from celltrack.affinity import EdgeAffinity
+from celltrack.linkers.frame_gap import FrameGap
 from celltrack.linkers.ranker_bonus import RankerBonus
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
@@ -74,55 +75,40 @@ class MotionHungarianLinker:
     def link(self, detections: TrackGraph) -> TrackGraph:
         """Join each cell to its motion-predicted successor, committing tight links before loose ones."""
         positions_um = self.spacing.to_micrometres(detections.positions())
-        timepoints = detections.timepoints()
         velocity = np.zeros_like(positions_um)
         edges: list[tuple[int, int]] = []
-        for timepoint in np.unique(timepoints)[:-1]:
-            sources = np.flatnonzero(timepoints == timepoint)
-            targets = np.flatnonzero(timepoints == timepoint + 1)
-            for source, target in self._match(int(timepoint), sources, targets, positions_um, velocity):
+        for gap in FrameGap.sweep(positions_um, detections.timepoints()):
+            for source, target in self._match(gap, velocity):
                 edges.append((int(detections.node_ids[source]), int(detections.node_ids[target])))
                 velocity[target] = positions_um[target] - positions_um[source]
         stacked = np.array(edges, dtype=np.int64) if edges else np.empty((0, 2), dtype=np.int64)
         return TrackGraph(node_ids=detections.node_ids, coordinates=detections.coordinates, edges=stacked)
 
-    def _match(
-        self,
-        timepoint: int,
-        sources: Int[np.ndarray, "s"],
-        targets: Int[np.ndarray, "t"],
-        positions_um: Float[np.ndarray, "n 3"],
-        velocity: Float[np.ndarray, "n 3"],
-    ) -> list[tuple[int, int]]:
+    def _match(self, gap: FrameGap, velocity: Float[np.ndarray, "n 3"]) -> list[tuple[int, int]]:
         """Source→target row pairs for one frame gap: a tight assignment, then a loose one over the leftovers."""
-        if len(sources) == 0 or len(targets) == 0:
+        if len(gap.sources) == 0 or len(gap.targets) == 0:
             return []
+        positions_um, sources, targets = gap.positions_um, gap.sources, gap.targets
         predicted = positions_um[sources] + VELOCITY_DAMPING * velocity[sources]
-        cost = self._blended_cost(timepoint, cdist(predicted, positions_um[targets]))
+        cost = self._blended_cost(gap.timepoint, cdist(predicted, positions_um[targets]))
         displacement = cdist(positions_um[sources], positions_um[targets])
         tight = self._assign(cost, displacement <= self.tight_gate_um)
         if self.use_drift:
-            drift = self._estimate_drift(tight, sources, targets, positions_um)
+            drift = self._estimate_drift(tight, gap)
             if drift is not None:
                 unmoved = ~velocity[sources].any(axis=1)
                 predicted[unmoved] = predicted[unmoved] + drift
-                cost = self._blended_cost(timepoint, cdist(predicted, positions_um[targets]))
+                cost = self._blended_cost(gap.timepoint, cdist(predicted, positions_um[targets]))
         loose = self._assign(cost, displacement <= self.loose_gate_um, taken=tight)
         return [(int(sources[s]), int(targets[t])) for s, t in tight + loose]
 
-    def _estimate_drift(
-        self,
-        tight: list[tuple[int, int]],
-        sources: Int[np.ndarray, "s"],
-        targets: Int[np.ndarray, "t"],
-        positions_um: Float[np.ndarray, "n 3"],
-    ) -> Float[np.ndarray, "3"] | None:
+    def _estimate_drift(self, tight: list[tuple[int, int]], gap: FrameGap) -> Float[np.ndarray, "3"] | None:
         """The frame's common-mode tissue shift: the median displacement over the tight-committed pairs, or None."""
         if len(tight) < _MIN_DRIFT_SAMPLES:
             return None
-        src = sources[[s for s, _ in tight]]
-        tgt = targets[[t for _, t in tight]]
-        return np.median(positions_um[tgt] - positions_um[src], axis=0)
+        src = gap.sources[[s for s, _ in tight]]
+        tgt = gap.targets[[t for _, t in tight]]
+        return np.median(gap.positions_um[tgt] - gap.positions_um[src], axis=0)
 
     def _blended_cost(self, timepoint: int, distance: Float[np.ndarray, "s t"]) -> Float[np.ndarray, "s t"]:
         """The distance cost minus each learned-association term wired for this gap — forward, then re-ranker."""

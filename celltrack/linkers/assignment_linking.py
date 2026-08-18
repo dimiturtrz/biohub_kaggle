@@ -17,7 +17,7 @@ square cost matrix, which turns "assign or skip" into the plain perfect-matching
 from dataclasses import dataclass
 
 import numpy as np
-from jaxtyping import Float, Int
+from jaxtyping import Float
 from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
 
@@ -25,6 +25,7 @@ from celltrack.affinity import EdgeAffinity
 from celltrack.linkers.admissible_affinity import AdmissibleAffinity
 from celltrack.linkers.agreement_gating import AgreementGate
 from celltrack.linkers.evidence_ramp import EvidenceRamp
+from celltrack.linkers.frame_gap import FrameGap
 from celltrack.linkers.mutual_bonus import MutualBonus
 from celltrack.linkers.ranker_bonus import RankerBonus
 from core.data.tracks import TrackGraph
@@ -81,32 +82,23 @@ class AssignmentLinker:
     def link(self, detections: TrackGraph) -> TrackGraph:
         """Assign each cell to at most one successor, frame pair by frame pair, minimising total edge cost."""
         positions_um = self.spacing.to_micrometres(detections.positions())
-        timepoints = detections.timepoints()
         edges: list[tuple[int, int]] = []
-        for timepoint in np.unique(timepoints)[:-1]:
-            sources = np.flatnonzero(timepoints == timepoint)
-            targets = np.flatnonzero(timepoints == timepoint + 1)
-            for source, target in self._match(int(timepoint), sources, targets, positions_um):
+        for gap in FrameGap.sweep(positions_um, detections.timepoints()):
+            for source, target in self._match(gap):
                 edges.append((int(detections.node_ids[source]), int(detections.node_ids[target])))
         stacked = np.array(edges, dtype=np.int64) if edges else np.empty((0, 2), dtype=np.int64)
         return TrackGraph(node_ids=detections.node_ids, coordinates=detections.coordinates, edges=stacked)
 
-    def _match(
-        self,
-        timepoint: int,
-        sources: Int[np.ndarray, "s"],
-        targets: Int[np.ndarray, "t"],
-        positions_um: Float[np.ndarray, "n 3"],
-    ) -> list[tuple[int, int]]:
+    def _match(self, gap: FrameGap) -> list[tuple[int, int]]:
         """Source→target row pairs for one gap: the min-cost matching that beats every node's zero-cost skip."""
-        if len(sources) == 0 or len(targets) == 0:
+        if len(gap.sources) == 0 or len(gap.targets) == 0:
             return []
-        distance = cdist(positions_um[sources], positions_um[targets])
-        cost = self._gated_cost(timepoint, distance)
+        distance = cdist(gap.positions_um[gap.sources], gap.positions_um[gap.targets])
+        cost = self._gated_cost(gap.timepoint, distance)
         augmented = self._augment_with_skips(cost)
         rows, columns = linear_sum_assignment(augmented)
-        real = (rows < len(sources)) & (columns < len(targets))
-        return [(int(sources[r]), int(targets[c])) for r, c in zip(rows[real], columns[real], strict=True)]
+        real = (rows < len(gap.sources)) & (columns < len(gap.targets))
+        return [(int(gap.sources[r]), int(gap.targets[c])) for r, c in zip(rows[real], columns[real], strict=True)]
 
     def _priced_affinity(self) -> EdgeAffinity | None:
         """The affinity that actually prices the cost, or None when no learned term is in play.
