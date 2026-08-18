@@ -78,6 +78,10 @@ class TUNetTrainConfig:
     downsample: tuple[int, int, int] = (1, 4, 4)
     out_channels: int = 32
     layers: tuple[int, ...] = (32, 64, 128)
+    # Backbone norm: "batch" (published BN, byte-identical) or "group" (GroupNorm, domain-robust, from-scratch
+    # only — BN leaks the train movies' running stats onto val frames across the microscope gap; a warm pack's
+    # BN buffers cannot load a bufferless GroupNorm, so the swap is rejected at build under warm_start).
+    norm: str = "batch"
     device: str = "cuda"
     # Frames are decompressed by a thread pool (blosc frees the GIL), not DataLoader worker processes — those
     # deadlock on this Windows box on repeated spawn. `threads` parallel readers, `prefetch` frames in flight.
@@ -316,11 +320,13 @@ class TUNetDetectorTrainer:
     def _detector(self, *, warm_start: bool) -> TemporalUNetDetector:
         """A detector to train — warm-started from the published pack, or fresh at the configured size."""
         if warm_start:
+            if self.config.norm != "batch":
+                raise ValueError("norm='group' is from-scratch only: a pilkwang BN pack cannot warm-start GroupNorm")
             pack = DataRoot.from_config(_CONFIG).processed(_DATASET) / _PACK_REL
             detector, _ = TemporalUNetDetector.from_pack(pack, map_location=self.config.device)
             logger.info("warm-started from pilkwang pack at %s", pack)
             return detector
-        return TemporalUNetDetector(self.config.out_channels, self.config.layers)
+        return TemporalUNetDetector(self.config.out_channels, self.config.layers, norm=self.config.norm)
 
     def _step(
         self,
@@ -389,6 +395,12 @@ def main() -> None:
     )
     parser.add_argument("--cosine-lr", action="store_true", help="cosine-decay the learning rate to zero over the run")
     parser.add_argument("--single-frame", action="store_true", help="detection-only T=1 windows (~2x fewer convs, g50)")
+    parser.add_argument(
+        "--norm",
+        choices=("batch", "group"),
+        default="batch",
+        help="backbone norm: 'batch' (published BN) or 'group' (domain-robust GroupNorm, from-scratch only)",
+    )
     parser.add_argument("--compile-backbone", action="store_true", help="torch.compile the U-Net (static shape)")
     parser.add_argument("--resume", action="store_true", help="continue from the .resume.pt snapshot")
     parser.add_argument("--weights", type=str, default="detector_tunet_ours.pt")
@@ -415,6 +427,7 @@ def main() -> None:
         cosine_lr=args.cosine_lr,
         single_frame=args.single_frame,
         compile_backbone=args.compile_backbone,
+        norm=args.norm,
     )
     root = DataRoot.from_config(_CONFIG)
     dz, dy, dx = config.downsample

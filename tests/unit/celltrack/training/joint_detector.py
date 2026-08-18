@@ -49,6 +49,17 @@ from tests.unit.celltrack.conftest import RecordingMlflow
 _CORPUS = 18024  # the real GT-pair count: one pair per step, so this is one epoch
 
 
+def test_group_norm_rejects_a_warm_start():
+    """`--norm group` with `--warm-start` fails fast: a pilkwang BN pack cannot load a bufferless GroupNorm.
+
+    The guard fires before any pack is touched, so it needs no data root — a from-scratch-only architecture
+    swap and a warm init are contradictory, and the run says so at build rather than crashing on a key mismatch.
+    """
+    trainer = JointTrainer(JointTrainConfig(model=ModelCfg(norm="group")))
+    with pytest.raises(ValueError, match="from-scratch only"):
+        trainer._model(warm_start=True)
+
+
 def test_schedule_spans_the_resolved_step_count():
     """The cosine horizon is built from the RESOLVED budget — resolving epochs late must not leave it stale."""
     config = JointTrainConfig(schedule=ScheduleCfg(steps=10, epochs=2.0), optim=OptimCfg(cosine_lr=True)).resolved(

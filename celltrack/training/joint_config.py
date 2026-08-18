@@ -22,6 +22,7 @@ import logging
 from dataclasses import replace
 from enum import StrEnum
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt
 
@@ -86,6 +87,12 @@ class ModelCfg(BaseModel):
     # byte. On, the model can represent WHICH frame came first, i.e. a direction; it must LEARN to use it, so
     # this belongs to a long run, not the short warm-start optimum where a zero-initialised input never grows.
     temporal_position: bool = False
+    # BatchNorm3d ("batch", the published backbone byte-for-byte) or GroupNorm ("group"). BN stores the train
+    # movies' running intensity statistics and applies them unchanged to val frames at eval, leaking the source
+    # domain across the 44b6/6bba microscope gap; GroupNorm recomputes per sample and stores no source statistic,
+    # so it is domain-robust. A from-scratch-only swap — a warm-started BN pack has no home for its running
+    # buffers in a GroupNorm backbone, so `norm="group"` with `--warm-start` is rejected at build.
+    norm: Literal["batch", "group"] = "batch"
 
 
 class DataCfg(BaseModel):
@@ -423,6 +430,7 @@ class JointTrainConfig(BaseModel):
             model=ModelCfg(
                 warm_pack=WARM_PACKS[args.warm_pack],
                 temporal_position=args.temporal_position,
+                norm=args.norm,
                 lora=LoraCfg(
                     enabled=args.lora, rank=args.lora_rank, alpha=args.lora_alpha, targets=tuple(args.lora_targets)
                 ),

@@ -9,6 +9,7 @@ it (`tests/unit/celltrack/detectors/tunet.py`).
 import json
 from pathlib import Path
 
+import pytest
 import torch
 from torch import nn
 
@@ -71,6 +72,63 @@ def _tiny_detector() -> TemporalUNetDetector:
     """A minimal detector for exercising the weight/inference contract without the real backbone size."""
     torch.manual_seed(0)
     return TemporalUNetDetector(out_channels=2, layers=(2, 4))
+
+
+def test_norm_defaults_to_batch():
+    """The zero-argument detector keeps the published BatchNorm3d backbone — `norm` opts INTO the swap."""
+    assert TemporalUNetDetector(8, (8, 16)).norm == "batch"
+
+
+def test_invalid_norm_raises():
+    """An unknown norm is a construction error, not a silently-ignored string that ships the wrong backbone."""
+    with pytest.raises(ValueError, match="norm must be one of"):
+        TemporalUNetDetector(8, (8, 16), norm="layer")
+
+
+def test_groupnorm_backbone_swaps_every_batchnorm():
+    """`_groupnorm_backbone` replaces each BatchNorm3d with a same-width GroupNorm at `gcd(width, 8)` groups.
+
+    The stubbed backbone carries no BatchNorm3d (a 1x1x1 conv), so a representative nested tree is assigned
+    onto `detector.unet` — the surgery logic is what is under test, not the third-party module. GroupNorm has
+    affine weight/bias but no running buffers, which is the whole point: no source-domain statistic is stored.
+    """
+    detector = TemporalUNetDetector(8, (8, 16))
+    detector.unet.block = nn.Sequential(
+        nn.Conv3d(1, 32, 1), nn.BatchNorm3d(32), nn.Conv3d(32, 64, 1), nn.BatchNorm3d(64)
+    )
+
+    detector._groupnorm_backbone()
+
+    norms = [m for m in detector.unet.block if isinstance(m, (nn.BatchNorm3d, nn.GroupNorm))]
+    assert all(isinstance(m, nn.GroupNorm) for m in norms)  # no BatchNorm3d survives
+    assert [(m.num_groups, m.num_channels) for m in norms] == [(8, 32), (8, 64)]  # gcd(width, 8) groups
+
+
+def test_group_norm_detector_constructs_and_runs():
+    """A `norm='group'` detector builds and forwards — the from-scratch operating point is reachable end to end."""
+    detector = TemporalUNetDetector(out_channels=2, layers=(2, 4), norm="group").eval()
+    assert detector.norm == "group"
+    assert detector.forward(torch.zeros(4, 8, 8)).shape == (4, 8, 8)
+
+
+def test_checkpoint_round_trips_norm(tmp_path: Path):
+    """The `norm` choice persists so a trained checkpoint rebuilds the same backbone before its weights load."""
+    path = tmp_path / "detector.pt"
+    TemporalUNetDetector(out_channels=2, layers=(2, 4), norm="group").save_checkpoint(path, DetectorRecipe())
+    assert torch.load(path, weights_only=True)["norm"] == "group"
+    restored, _ = TemporalUNetDetector.from_checkpoint(path)
+    assert restored.norm == "group"
+
+
+def test_checkpoint_without_norm_defaults_to_batch(tmp_path: Path):
+    """A checkpoint written before `norm` existed carries none; it rebuilds as the published BN backbone."""
+    path = tmp_path / "old.pt"
+    _tiny_detector().save_checkpoint(path, DetectorRecipe())
+    blob = torch.load(path, weights_only=True)
+    del blob["norm"]
+    torch.save(blob, path)
+    restored, _ = TemporalUNetDetector.from_checkpoint(path)
+    assert restored.norm == "batch"
 
 
 def test_as_config():

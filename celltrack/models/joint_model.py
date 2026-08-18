@@ -119,7 +119,9 @@ class JointModel(nn.Module):
         """
         state = torch.load(path, map_location=device, weights_only=False)
         config = state["config"]
-        detector = TemporalUNetDetector(config["out_channels"], tuple(config["layers"]))
+        detector = TemporalUNetDetector(
+            config["out_channels"], tuple(config["layers"]), norm=config.get("norm", "batch")
+        )
         if config.get("temporal_position"):  # rebuild the position-embedded attention before its weights load
             detector.install_temporal_position()
         transformer = EdgeTransformerScorer._transformer_cls()(  # noqa: SLF001 — the pack's head class, mounted

@@ -56,6 +56,48 @@
     },
     {
       "kind": "import",
+      "source": "celltrack.analysis.boundary_census",
+      "target": "celltrack.eval.proxy",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.analysis.boundary_census",
+      "target": "celltrack.linkers.boundary_prior",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.analysis.boundary_census",
+      "target": "celltrack.operating_point",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.analysis.boundary_census",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.analysis.boundary_census",
+      "target": "core.data.video",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.analysis.boundary_census",
+      "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.analysis.boundary_census",
+      "target": "core.paths",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "celltrack.analysis.drift_field",
       "target": "celltrack.analysis.localisation",
       "weight": 1
@@ -1995,6 +2037,12 @@
     {
       "kind": "import",
       "source": "celltrack.training.joint_config",
+      "target": "celltrack.data.augmentation",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.joint_config",
       "target": "celltrack.losses.softmax_focal_bce",
       "weight": 1
     },
@@ -2092,12 +2140,6 @@
       "kind": "import",
       "source": "celltrack.training.joint_detector",
       "target": "celltrack.models.temporal_unet_detector",
-      "weight": 1
-    },
-    {
-      "kind": "import",
-      "source": "celltrack.training.joint_detector",
-      "target": "celltrack.operating_point",
       "weight": 1
     },
     {
@@ -2302,6 +2344,12 @@
       "kind": "import",
       "source": "celltrack.training.tracked_run",
       "target": "core.tracking",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.tunet_detector",
+      "target": "celltrack.data.augmentation",
       "weight": 1
     },
     {
@@ -2692,6 +2740,72 @@
       "kind": "calls",
       "source": "celltrack.analysis.appearance_identity.RotationGain.of",
       "target": "celltrack.analysis.appearance_identity.RawBoxes.select",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.boundary_census.MovieBoundaries",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.boundary_census.MovieBoundaries",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.boundary_census.MovieBoundaries._interior_depth",
+      "target": "core.geometry.Spacing.as_array",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.boundary_census.MovieBoundaries.band_fraction",
+      "target": "core.geometry.Spacing.as_array",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.analysis.boundary_census.MovieBoundaries.of",
+      "target": "celltrack.linkers.boundary_prior.BoundaryPrior",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.boundary_census.MovieBoundaries.of",
+      "target": "celltrack.linkers.boundary_prior.BoundaryPrior.factors",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.boundary_census.MovieBoundaries.of",
+      "target": "celltrack.operating_point.TrackerConfig.shipped",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.boundary_census.MovieBoundaries.of",
+      "target": "core.data.tracks.Adjacency.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.boundary_census.MovieBoundaries.of",
+      "target": "core.data.tracks.TrackGraph.positions",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.boundary_census.MovieBoundaries.of",
+      "target": "core.data.tracks.TrackGraph.timepoints",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.boundary_census.MovieBoundaries.of",
+      "target": "core.geometry.Spacing.to_micrometres",
       "weight": 1
     },
     {
@@ -5342,6 +5456,24 @@
     },
     {
       "kind": "references",
+      "source": "celltrack.data.augmentation.Augmentation",
+      "target": "celltrack.data.augmentation.FrameTransform",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.augmentation.Augmentation.apply",
+      "target": "celltrack.data.augmentation.Augmentation.for_pair",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.data.augmentation.Augmentation.for_pair",
+      "target": "celltrack.data.augmentation.FrameTransform",
+      "weight": 1
+    },
+    {
+      "kind": "references",
       "source": "celltrack.data.candidate_density.CandidateDensity",
       "target": "celltrack.data.candidate_density.CandidateDensity",
       "weight": 1
@@ -5715,6 +5847,18 @@
     {
       "kind": "references",
       "source": "celltrack.data.joint_dataset.PairDataset",
+      "target": "celltrack.data.augmentation.FrameTransform",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.data.joint_dataset.PairDataset",
+      "target": "celltrack.data.joint_dataset.PairOptions",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.data.joint_dataset.PairDataset",
       "target": "celltrack.data.joint_dataset.PairSample",
       "weight": 1
     },
@@ -5732,14 +5876,44 @@
     },
     {
       "kind": "calls",
+      "source": "celltrack.data.joint_dataset.PairDataset._previous",
+      "target": "celltrack.data.augmentation.FrameTransform.coords",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.joint_dataset.PairDataset._previous",
+      "target": "celltrack.data.augmentation.FrameTransform.frame",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.data.joint_dataset.PairDataset._transform",
+      "target": "celltrack.data.augmentation.FrameTransform",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
       "source": "celltrack.data.joint_dataset.PairDataset.pair",
       "target": "celltrack.data.joint_dataset.PairDataset._previous",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.joint_dataset.PairDataset.pair",
+      "target": "celltrack.data.joint_dataset.PairDataset._transform",
       "weight": 1
     },
     {
       "kind": "construct",
       "source": "celltrack.data.joint_dataset.PairDataset.pair",
       "target": "celltrack.data.joint_dataset.PairSample",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.data.joint_dataset.PairOptions",
+      "target": "celltrack.data.augmentation.Augmentation",
       "weight": 1
     },
     {
@@ -5991,7 +6165,7 @@
     {
       "kind": "holds",
       "source": "celltrack.data.tunet_dataset.FrameDataset",
-      "target": "celltrack.data.tunet_dataset.Augmentation",
+      "target": "celltrack.data.augmentation.Augmentation",
       "weight": 1
     },
     {
@@ -6003,7 +6177,7 @@
     {
       "kind": "calls",
       "source": "celltrack.data.tunet_dataset.FrameDataset.__getitem__",
-      "target": "celltrack.data.tunet_dataset.Augmentation.apply",
+      "target": "celltrack.data.augmentation.Augmentation.apply",
       "weight": 1
     },
     {
@@ -9692,6 +9866,12 @@
     },
     {
       "kind": "calls",
+      "source": "celltrack.models.joint_model.JointModel._padded_velocity",
+      "target": "celltrack.models.joint_model.JointModel._pad_fixed",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
       "source": "celltrack.models.joint_model.JointModel.batched_forward",
       "target": "celltrack.models.edge_transformer.EdgeTransformerScorer.batched_node_features",
       "weight": 1
@@ -9712,6 +9892,12 @@
       "kind": "calls",
       "source": "celltrack.models.joint_model.JointModel.batched_forward",
       "target": "celltrack.models.joint_model.JointModel._pad_fixed",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.models.joint_model.JointModel.batched_forward",
+      "target": "celltrack.models.joint_model.JointModel._padded_velocity",
       "weight": 1
     },
     {
@@ -9880,6 +10066,12 @@
       "kind": "calls",
       "source": "celltrack.models.temporal_unet_detector.TemporalUNetDetector.__init__",
       "target": "celltrack.models.temporal_unet_detector.TemporalUNetDetector._backbone_cls",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.models.temporal_unet_detector.TemporalUNetDetector.__init__",
+      "target": "celltrack.models.temporal_unet_detector.TemporalUNetDetector._groupnorm_backbone",
       "weight": 1
     },
     {
@@ -11665,9 +11857,33 @@
       "weight": 1
     },
     {
+      "kind": "calls",
+      "source": "celltrack.training.joint_cli.JointCli.build_parser",
+      "target": "celltrack.training.joint_cli.JointCli._add_augmentation_args",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.joint_config.DataCfg",
+      "target": "celltrack.data.augmentation.Augmentation",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.joint_config.DataCfg.augmentation",
+      "target": "celltrack.data.augmentation.Augmentation",
+      "weight": 1
+    },
+    {
       "kind": "holds",
       "source": "celltrack.training.joint_config.EvalCfg",
       "target": "celltrack.operating_point.TrackerConfig",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.joint_config.JointTrainConfig",
+      "target": "celltrack.data.augmentation.Augmentation",
       "weight": 1
     },
     {
@@ -11715,6 +11931,72 @@
     {
       "kind": "holds",
       "source": "celltrack.training.joint_config.JointTrainConfig",
+      "target": "celltrack.training.joint_config.ScheduleCfg",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.joint_config.JointTrainConfig._augmentation_from_args",
+      "target": "celltrack.data.augmentation.Augmentation",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_config.JointTrainConfig.augmentation",
+      "target": "celltrack.training.joint_config.DataCfg.augmentation",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_config.JointTrainConfig.from_args",
+      "target": "celltrack.operating_point.TrackerConfig.shipped",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.joint_config.JointTrainConfig.from_args",
+      "target": "celltrack.training.joint_config.DataCfg",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.joint_config.JointTrainConfig.from_args",
+      "target": "celltrack.training.joint_config.EvalCfg",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.joint_config.JointTrainConfig.from_args",
+      "target": "celltrack.training.joint_config.LoraCfg",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.joint_config.JointTrainConfig.from_args",
+      "target": "celltrack.training.joint_config.LossCfg",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.joint_config.JointTrainConfig.from_args",
+      "target": "celltrack.training.joint_config.ModelCfg",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.joint_config.JointTrainConfig.from_args",
+      "target": "celltrack.training.joint_config.OptimCfg",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.joint_config.JointTrainConfig.from_args",
+      "target": "celltrack.training.joint_config.RuntimeCfg",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.joint_config.JointTrainConfig.from_args",
       "target": "celltrack.training.joint_config.ScheduleCfg",
       "weight": 1
     },
@@ -11953,6 +12235,12 @@
       "weight": 1
     },
     {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer._batched_eligible",
+      "target": "celltrack.models.joint_model.JointModel.fits_batched",
+      "weight": 1
+    },
+    {
       "kind": "construct",
       "source": "celltrack.training.joint_detector.JointTrainer._batched_prediction",
       "target": "celltrack.losses.tracking_loss.BatchedPrediction",
@@ -12058,6 +12346,12 @@
       "kind": "calls",
       "source": "celltrack.training.joint_detector.JointTrainer._edge_auc",
       "target": "celltrack.data.joint_dataset.PairDataset.pair",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.joint_detector.JointTrainer._edge_auc",
+      "target": "celltrack.data.joint_dataset.PairOptions",
       "weight": 1
     },
     {
@@ -12441,6 +12735,12 @@
     {
       "kind": "construct",
       "source": "celltrack.training.joint_detector.JointTrainer.train",
+      "target": "celltrack.data.joint_dataset.PairOptions",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.joint_detector.JointTrainer.train",
       "target": "celltrack.training.early_stop.EarlyStop",
       "weight": 1
     },
@@ -12448,6 +12748,12 @@
       "kind": "construct",
       "source": "celltrack.training.joint_detector.JointTrainer.train",
       "target": "celltrack.training.joint_checkpoint.RunProgress",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer.train",
+      "target": "celltrack.training.joint_config.JointTrainConfig.augmentation",
       "weight": 1
     },
     {
@@ -12770,6 +13076,12 @@
     },
     {
       "kind": "calls",
+      "source": "celltrack.training.prior_velocity_source.PriorVelocitySource._blend",
+      "target": "celltrack.models.prior_velocity.PriorVelocity.expected_incoming",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
       "source": "celltrack.training.prior_velocity_source.PriorVelocitySource.of",
       "target": "celltrack.training.prior_velocity_source.PriorVelocitySource.of_batch",
       "weight": 1
@@ -12790,6 +13102,18 @@
       "kind": "calls",
       "source": "celltrack.training.prior_velocity_source.PriorVelocitySource.of_batch",
       "target": "celltrack.models.prior_velocity.GapHistory.velocity",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.prior_velocity_source.PriorVelocitySource.of_batch",
+      "target": "celltrack.training.prior_velocity_source.PriorVelocitySource._blend",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.prior_velocity_source.PriorVelocitySource.of_batch",
+      "target": "celltrack.training.prior_velocity_source.PriorVelocitySource._gt_alpha",
       "weight": 1
     },
     {
@@ -13035,7 +13359,7 @@
     {
       "kind": "holds",
       "source": "celltrack.training.tunet_detector.TUNetTrainConfig",
-      "target": "celltrack.data.tunet_dataset.Augmentation",
+      "target": "celltrack.data.augmentation.Augmentation",
       "weight": 1
     },
     {
@@ -13815,7 +14139,7 @@
   ],
   "nodes": [
     {
-      "descendants": 107,
+      "descendants": 109,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -13831,7 +14155,7 @@
       "role": null
     },
     {
-      "descendants": 10,
+      "descendants": 11,
       "id": "celltrack.analysis",
       "label": "analysis",
       "level": "module",
@@ -13842,6 +14166,14 @@
       "descendants": 0,
       "id": "celltrack.analysis.appearance_identity",
       "label": "appearance_identity",
+      "level": "module",
+      "parent": "celltrack.analysis",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.boundary_census",
+      "label": "boundary_census",
       "level": "module",
       "parent": "celltrack.analysis",
       "role": null
@@ -13919,11 +14251,19 @@
       "role": null
     },
     {
-      "descendants": 13,
+      "descendants": 14,
       "id": "celltrack.data",
       "label": "data",
       "level": "module",
       "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.augmentation",
+      "label": "augmentation",
+      "level": "module",
+      "parent": "celltrack.data",
       "role": null
     },
     {
@@ -14880,6 +15220,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.analysis.boundary_census.MovieBoundaries",
+      "label": "MovieBoundaries",
+      "level": "class",
+      "parent": "celltrack.analysis.boundary_census",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.analysis.drift_field.AnnotatedResidual",
       "label": "AnnotatedResidual",
       "level": "class",
@@ -15328,6 +15676,22 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.data.augmentation.Augmentation",
+      "label": "Augmentation",
+      "level": "class",
+      "parent": "celltrack.data.augmentation",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.augmentation.FrameTransform",
+      "label": "FrameTransform",
+      "level": "class",
+      "parent": "celltrack.data.augmentation",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.data.candidate_density.CandidateDensity",
       "label": "CandidateDensity",
       "level": "class",
@@ -15405,6 +15769,14 @@
       "level": "class",
       "parent": "celltrack.data.joint_dataset",
       "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.joint_dataset.PairOptions",
+      "label": "PairOptions",
+      "level": "class",
+      "parent": "celltrack.data.joint_dataset",
+      "role": "satellite"
     },
     {
       "descendants": 0,
@@ -15564,14 +15936,6 @@
       "label": "DetectionTarget",
       "level": "class",
       "parent": "celltrack.data.targets",
-      "role": "satellite"
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.data.tunet_dataset.Augmentation",
-      "label": "Augmentation",
-      "level": "class",
-      "parent": "celltrack.data.tunet_dataset",
       "role": "satellite"
     },
     {
@@ -17376,6 +17740,46 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.analysis.boundary_census.MovieBoundaries._interior_depth",
+      "label": "_interior_depth",
+      "level": "method",
+      "parent": "celltrack.analysis.boundary_census.MovieBoundaries",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.boundary_census.MovieBoundaries._share",
+      "label": "_share",
+      "level": "method",
+      "parent": "celltrack.analysis.boundary_census.MovieBoundaries",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.boundary_census.MovieBoundaries.band_fraction",
+      "label": "band_fraction",
+      "level": "method",
+      "parent": "celltrack.analysis.boundary_census.MovieBoundaries",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.boundary_census.MovieBoundaries.of",
+      "label": "of",
+      "level": "method",
+      "parent": "celltrack.analysis.boundary_census.MovieBoundaries",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.boundary_census.MovieBoundaries.report",
+      "label": "report",
+      "level": "method",
+      "parent": "celltrack.analysis.boundary_census.MovieBoundaries",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.analysis.drift_field.AnnotatedResidual.explained",
       "label": "explained",
       "level": "method",
@@ -18952,6 +19356,46 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.data.augmentation.Augmentation.apply",
+      "label": "apply",
+      "level": "method",
+      "parent": "celltrack.data.augmentation.Augmentation",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.augmentation.Augmentation.for_pair",
+      "label": "for_pair",
+      "level": "method",
+      "parent": "celltrack.data.augmentation.Augmentation",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.augmentation.FrameTransform.coords",
+      "label": "coords",
+      "level": "method",
+      "parent": "celltrack.data.augmentation.FrameTransform",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.augmentation.FrameTransform.frame",
+      "label": "frame",
+      "level": "method",
+      "parent": "celltrack.data.augmentation.FrameTransform",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.augmentation.FrameTransform.is_identity",
+      "label": "is_identity",
+      "level": "method",
+      "parent": "celltrack.data.augmentation.FrameTransform",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.data.candidate_density.CandidateDensity._in_gate",
       "label": "_in_gate",
       "level": "method",
@@ -19346,6 +19790,14 @@
       "descendants": 0,
       "id": "celltrack.data.joint_dataset.PairDataset._previous",
       "label": "_previous",
+      "level": "method",
+      "parent": "celltrack.data.joint_dataset.PairDataset",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.data.joint_dataset.PairDataset._transform",
+      "label": "_transform",
       "level": "method",
       "parent": "celltrack.data.joint_dataset.PairDataset",
       "role": null
@@ -19804,14 +20256,6 @@
       "label": "supervised_fraction",
       "level": "method",
       "parent": "celltrack.data.targets.DetectionTarget",
-      "role": null
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.data.tunet_dataset.Augmentation.apply",
-      "label": "apply",
-      "level": "method",
-      "parent": "celltrack.data.tunet_dataset.Augmentation",
       "role": null
     },
     {
@@ -22192,6 +22636,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.models.joint_model.JointModel._align_state_to",
+      "label": "_align_state_to",
+      "level": "method",
+      "parent": "celltrack.models.joint_model.JointModel",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.models.joint_model.JointModel._heads",
       "label": "_heads",
       "level": "method",
@@ -22208,6 +22660,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.models.joint_model.JointModel._padded_velocity",
+      "label": "_padded_velocity",
+      "level": "method",
+      "parent": "celltrack.models.joint_model.JointModel",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.models.joint_model.JointModel.batched_forward",
       "label": "batched_forward",
       "level": "method",
@@ -22218,6 +22678,14 @@
       "descendants": 0,
       "id": "celltrack.models.joint_model.JointModel.compile_scene_head",
       "label": "compile_scene_head",
+      "level": "method",
+      "parent": "celltrack.models.joint_model.JointModel",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.joint_model.JointModel.fits_batched",
+      "label": "fits_batched",
       "level": "method",
       "parent": "celltrack.models.joint_model.JointModel",
       "role": null
@@ -22522,6 +22990,14 @@
       "descendants": 0,
       "id": "celltrack.models.temporal_unet_detector.TemporalUNetDetector._backbone_cls",
       "label": "_backbone_cls",
+      "level": "method",
+      "parent": "celltrack.models.temporal_unet_detector.TemporalUNetDetector",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.temporal_unet_detector.TemporalUNetDetector._groupnorm_backbone",
+      "label": "_groupnorm_backbone",
       "level": "method",
       "parent": "celltrack.models.temporal_unet_detector.TemporalUNetDetector",
       "role": null
@@ -23584,6 +24060,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.training.joint_cli.JointCli._add_augmentation_args",
+      "label": "_add_augmentation_args",
+      "level": "method",
+      "parent": "celltrack.training.joint_cli.JointCli",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.training.joint_cli.JointCli.build_parser",
       "label": "build_parser",
       "level": "method",
@@ -23604,6 +24088,38 @@
       "label": "stop_gradient",
       "level": "method",
       "parent": "celltrack.training.joint_config.ContrastiveSite",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.joint_config.DataCfg.augmentation",
+      "label": "augmentation",
+      "level": "method",
+      "parent": "celltrack.training.joint_config.DataCfg",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.joint_config.JointTrainConfig._augmentation_from_args",
+      "label": "_augmentation_from_args",
+      "level": "method",
+      "parent": "celltrack.training.joint_config.JointTrainConfig",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.joint_config.JointTrainConfig.augmentation",
+      "label": "augmentation",
+      "level": "method",
+      "parent": "celltrack.training.joint_config.JointTrainConfig",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.joint_config.JointTrainConfig.from_args",
+      "label": "from_args",
+      "level": "method",
+      "parent": "celltrack.training.joint_config.JointTrainConfig",
       "role": null
     },
     {
@@ -23956,6 +24472,22 @@
       "label": "of_video",
       "level": "method",
       "parent": "celltrack.training.pair_split.PairSplit",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.prior_velocity_source.PriorVelocitySource._blend",
+      "label": "_blend",
+      "level": "method",
+      "parent": "celltrack.training.prior_velocity_source.PriorVelocitySource",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.prior_velocity_source.PriorVelocitySource._gt_alpha",
+      "label": "_gt_alpha",
+      "level": "method",
+      "parent": "celltrack.training.prior_velocity_source.PriorVelocitySource",
       "role": null
     },
     {

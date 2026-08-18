@@ -47,6 +47,7 @@ def test_payload():
         "layers": [2, 4],
         "downsample": [1, 4, 4],
         "temporal_position": False,
+        "norm": "batch",
     }
 
 

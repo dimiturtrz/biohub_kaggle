@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import sys
 from dataclasses import dataclass
+from math import gcd
 from pathlib import Path
 from typing import Self, cast, override
 
@@ -30,6 +31,11 @@ from core.data.video import ImageStatistics, Multiscale
 
 _EXT_SRC = Path(__file__).parents[2] / "external" / "kaggle-cell-tracking-competition" / "src"
 _SPATIAL_AXES = 3
+# Target group count for the GroupNorm swap — the same value the center-prior detector settled on
+# (`center_prior._POOL_MULTIPLE`). A channel width takes `gcd(width, 8)` groups so the count always divides
+# it (8 for the 32/64/128 stage widths, a safe divisor for any other), never the raise `GroupNorm(8, 20)` is.
+_NORM_GROUPS = 8
+NORMS = ("batch", "group")
 
 
 @dataclass(frozen=True)
@@ -133,11 +139,22 @@ class _VideoSource:
 class TemporalUNetDetector(nn.Module):
     """A `TemporalUNet3D` backbone plus a detection head — the pilkwang detector, ours to train and run."""
 
-    def __init__(self, out_channels: int = 32, layers: tuple[int, ...] = (32, 64, 128)) -> None:
+    def __init__(self, out_channels: int = 32, layers: tuple[int, ...] = (32, 64, 128), norm: str = "batch") -> None:
         super().__init__()
+        if norm not in NORMS:
+            raise ValueError(f"norm must be one of {NORMS}, got {norm!r}")
         self.out_channels = out_channels
         self.layers = list(layers)
+        # "batch" keeps the published BatchNorm3d backbone byte-identical (a warm-started pilkwang pack carries
+        # BN running stats, so its weights only load into a BN backbone). "group" swaps every BatchNorm3d for a
+        # GroupNorm, whose per-sample stats store no source-domain running mean/var and so do not leak the train
+        # microscope's intensity distribution across the domain gap at eval — a from-scratch-only swap (random
+        # init licenses it; there is no BN checkpoint to honour). Persisted so a trained checkpoint rebuilds the
+        # same norm before its weights load.
+        self.norm = norm
         self.unet = self._backbone_cls()(in_channels=1, out_channels=out_channels, layers=list(layers))
+        if norm == "group":
+            self._groupnorm_backbone()
         self.detect_head = nn.Conv3d(out_channels, 1, kernel_size=1)
         # Whether the backbone's per-voxel time attention carries a frame-position embedding (motion sight).
         # False = the published order-blind backbone. `install_temporal_position` flips it and rewrites the
@@ -161,6 +178,22 @@ class TemporalUNetDetector(nn.Module):
             if hasattr(block, "attn"):  # a real _TemporalAttention (Identity, the skipped stage, has none)
                 blocks[index] = TemporalPositionAttention(block, max_positions=max_positions)
         self.temporal_position = True
+
+    def _groupnorm_backbone(self) -> None:
+        """Replace every BatchNorm3d in the backbone with a same-width GroupNorm — the domain-robust swap.
+
+        Module surgery on OUR wrapper, never the pinned external backbone. The published conv block normalises
+        with BatchNorm3d, whose stored running mean/var are the TRAIN movies' intensity statistics, applied
+        unchanged to val frames — the leak across the 44b6/6bba microscope gap. GroupNorm recomputes per sample
+        at train and test alike, so no source-domain statistic is carried. Each width takes `gcd(width, groups)`
+        groups so the count always divides it. Affine weight/bias survive (GroupNorm has them too); only the BN
+        running buffers vanish, which is why the swap is from-scratch only — there is no BN checkpoint to honour.
+        """
+        for module in list(self.unet.modules()):
+            for child_name, child in list(module.named_children()):
+                if isinstance(child, nn.BatchNorm3d):
+                    width = child.num_features
+                    setattr(module, child_name, nn.GroupNorm(gcd(width, _NORM_GROUPS), width))
 
     @staticmethod
     def _backbone_cls() -> type[nn.Module]:
@@ -223,7 +256,7 @@ class TemporalUNetDetector(nn.Module):
     def from_checkpoint(cls, path: Path, map_location: str = "cpu") -> tuple[Self, DetectorRecipe]:
         """Rebuild a detector we trained: our checkpoint carries both the weights and the recipe."""
         blob = torch.load(path, map_location=map_location, weights_only=True)
-        detector = cls(int(blob["out_channels"]), tuple(blob["layers"]))
+        detector = cls(int(blob["out_channels"]), tuple(blob["layers"]), norm=blob.get("norm", "batch"))
         detector.load_state_dict(cls._uncompiled(blob["state_dict"]))
         return detector, DetectorRecipe.from_config(blob["recipe"])
 
@@ -239,6 +272,7 @@ class TemporalUNetDetector(nn.Module):
                 "state_dict": self._uncompiled(self.state_dict()),
                 "out_channels": self.out_channels,
                 "layers": self.layers,
+                "norm": self.norm,
                 "recipe": recipe.as_config(),
             },
             path,

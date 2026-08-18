@@ -39,6 +39,7 @@ def test_defaults_are_the_measured_recipe():
     config = JointTrainConfig()
     assert (config.model.out_channels, config.model.layers) == (32, (32, 64, 128))
     assert config.model.warm_pack == WARM_PACKS["seed1"]
+    assert config.model.norm == "batch"  # the published BN backbone; "group" is the from-scratch opt-in
     assert config.data.downsample == (1, 4, 4)
     assert (config.data.difficulty_sampling, config.data.prior_velocity) == (False, False)
     assert (config.optim.lr, config.optim.grad_clip, config.optim.cosine_lr) == (1e-4, 1.0, False)
@@ -97,6 +98,12 @@ def test_from_args():
     assert config.schedule.steps == 42
     assert config.eval.tracker.threshold == args.eval_threshold  # tracked off the shipped operating point
     assert config.model.warm_pack == WARM_PACKS[args.warm_pack]
+
+
+def test_from_args_norm_reaches_the_model_group():
+    """`--norm group` lands in the model group — the from-scratch GroupNorm backbone the trainer builds fresh."""
+    config = JointTrainConfig.from_args(JointCli.build_parser().parse_args(["--norm", "group"]))
+    assert config.model.norm == "group"
 
 
 def test_from_args_augments_by_default():

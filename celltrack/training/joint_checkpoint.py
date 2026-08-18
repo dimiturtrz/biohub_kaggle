@@ -63,6 +63,7 @@ class JointCheckpoint:
                 "layers": list(self.layers),
                 "downsample": list(self.downsample),
                 "temporal_position": getattr(model.detector, "temporal_position", False),
+                "norm": getattr(model.detector, "norm", "batch"),
             },
         }
 

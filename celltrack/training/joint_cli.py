@@ -176,6 +176,12 @@ class JointCli:
         )
         JointCli._add_augmentation_args(parser)
         parser.add_argument("--temporal-position", action="store_true", help="frame-position embedding (motion sight)")
+        parser.add_argument(
+            "--norm",
+            choices=("batch", "group"),
+            default="batch",
+            help="backbone norm: 'batch' (published BN) or 'group' (domain-robust GroupNorm, from-scratch only)",
+        )
         # LoRA: freeze the pilkwang base, train low-rank adapters on the association locus. Detection is anchored
         # by the frozen base; the adapters give association the feature reshape the frozen backbone cannot.
         parser.add_argument("--lora", action="store_true", help="freeze the base, train low-rank adapters only")
