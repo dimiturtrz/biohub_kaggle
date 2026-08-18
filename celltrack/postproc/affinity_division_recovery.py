@@ -111,6 +111,19 @@ class ForkCandidate:
     kept_frames: int
     child_frames: int
 
+    @classmethod
+    def at_gap(cls, parent: int, kept: int, child: int, probability: float, gap: "_Gap") -> "ForkCandidate":
+        """One proposed triangle over a gap, its daughters' futures read from the linked graph's frame counts."""
+        return cls(
+            parent=parent,
+            kept=kept,
+            child=child,
+            probability=probability,
+            positions_um=gap.positions_um,
+            kept_frames=int(gap.frames_ahead[kept]),
+            child_frames=int(gap.frames_ahead[child]),
+        )
+
     def parent_distance_um(self) -> float:
         """Mother to the proposed new daughter."""
         return self._distance(self.parent, self.child)
@@ -245,20 +258,77 @@ class SurvivingDaughterRanking:
 
 
 @dataclass(frozen=True)
+class RunnerUpCandidacy:
+    """Today's candidacy: the head's runner-up target, proposed only when its top target IS the kept child.
+
+    The literal "a division is a parent whose two top targets are both children" reading — head-gated, so a
+    speculative primary link earns no second daughter, and the one orphan proposed is the head's own second
+    choice. `min_kept_prob` floors the confidence of the kept link, `min_second_prob` the runner-up's; both
+    are admission floors, never the sort key (that is the ranking's).
+    """
+
+    min_kept_prob: float = 0.0
+    min_second_prob: float = 0.0
+
+    def candidates(
+        self, parent: int, kept: int, probabilities: Float[np.ndarray, "t"], gap: _Gap
+    ) -> list[ForkCandidate]:
+        order = np.argsort(-probabilities)
+        if gap.targets[order[_TOP_TARGET]] != kept or probabilities[order[_TOP_TARGET]] < self.min_kept_prob:
+            return []
+        if len(order) <= _RUNNER_UP:
+            return []
+        runner_up = order[_RUNNER_UP]
+        child = int(gap.targets[runner_up])
+        if float(probabilities[runner_up]) < self.min_second_prob or not gap.orphan[runner_up] or child == kept:
+            return []
+        return [ForkCandidate.at_gap(parent, kept, child, float(probabilities[runner_up]), gap)]
+
+
+@dataclass(frozen=True)
+class GeometricCandidacy:
+    """The public frontier's candidacy: EVERY unparented target of a single-child parent, head opinion aside.
+
+    `DivisionAwareLinker` joins any orphan geometrically near a single-child mother, no learned verifier at
+    candidacy time; the gates then keep only physical triangles and the ranking + budget pick among them.
+    Where `RunnerUpCandidacy` proposes only the daughter the head ranks second, this proposes them all — so a
+    true sister the dense-tissue softmax-over-sources buried below a false one is still reachable, which is
+    exactly the case the module docstring measures the probability RANKING cannot recover once it is proposed.
+    """
+
+    def candidates(
+        self, parent: int, kept: int, probabilities: Float[np.ndarray, "t"], gap: _Gap
+    ) -> list[ForkCandidate]:
+        return [
+            ForkCandidate.at_gap(parent, kept, int(target), float(probabilities[index]), gap)
+            for index, target in enumerate(gap.targets.tolist())
+            if gap.orphan[index] and target != kept
+        ]
+
+
+# Which of a single-child parent's t+1 targets get PROPOSED as its second daughter, before the gates. Candidacy
+# is orthogonal to ranking: it decides the set the ranking then orders. The two choices differ only in whether the
+# learned head is consulted — `RunnerUpCandidacy` reads it, `GeometricCandidacy` does not — and both hand the
+# survivors to the same gates and the same budget. A closed union, not a `Protocol`: two candidacies exist and a
+# third extends this list explicitly (one Protocol subject already lives here — `ForkRanking`).
+ForkCandidacy = RunnerUpCandidacy | GeometricCandidacy
+
+
+@dataclass(frozen=True)
 class AffinityDivisionRecovery:
     """Add the second daughter the edge head proposes and the chosen ranking prefers, under gates and a budget."""
 
     spacing: Spacing
     affinity: EdgeAffinity
     ranking: ForkRanking
-    min_second_prob: float
     parent_gate_um: float
     sister_gate_um: float
     existing_child_gate_um: float
     max_added_forks: int | None
-    # The parent's kept child must be its top target at this probability or above, so a fork is only proposed
-    # off a link the head itself is confident in — a speculative primary link does not get a second daughter.
-    min_kept_prob: float = 0.0
+    # Which orphan targets are proposed off a single-child parent — the head's runner-up (default, head-gated)
+    # or every unparented target (frontier-geometric). The admission floors live on the candidacy that reads
+    # them, so a candidacy that does not consult the head carries no floor it would ignore.
+    candidacy: ForkCandidacy = RunnerUpCandidacy()
 
     def transform(self, graph: TrackGraph) -> TrackGraph:
         """Return the graph with edge-head-proposed, geometry-ranked division edges added."""
@@ -360,52 +430,18 @@ class AffinityDivisionRecovery:
         adjacency: Adjacency,
         gap: _Gap,
     ) -> list[ForkCandidate]:
-        """Candidate forks across one gap: a confident single-child parent's orphan runner-up target."""
+        """Candidate forks across one gap: the candidacy's proposed daughters off each single-child parent, gated."""
         found: list[ForkCandidate] = []
         for source_index, parent in enumerate(sources.tolist()):
             if adjacency.out_degrees[parent] != _SINGLE_CHILD:
                 continue
-            kept = adjacency.successors[parent][_TOP_TARGET]
-            probabilities = probability[source_index]
-            order = np.argsort(-probabilities)
-            if gap.targets[order[_TOP_TARGET]] != kept or probabilities[order[_TOP_TARGET]] < self.min_kept_prob:
-                continue
-            candidate = self._runner_up(order, probabilities, parent, kept, gap)
-            if candidate is not None:
-                found.append(candidate)
+            kept = int(adjacency.successors[parent][_TOP_TARGET])
+            found.extend(
+                candidate
+                for candidate in self.candidacy.candidates(parent, kept, probability[source_index], gap)
+                if self._within_gates(candidate)
+            )
         return found
-
-    def _runner_up(
-        self,
-        order: Int[np.ndarray, "t"],
-        probabilities: Float[np.ndarray, "t"],
-        parent: int,
-        kept: int,
-        gap: _Gap,
-    ) -> ForkCandidate | None:
-        """The parent's second-choice target, if it is an unparented cell clearing the floor and every gate.
-
-        The literal "a division is a parent whose two top targets are both children" reading: the kept child
-        is the top target (checked by the caller) and this is the runner-up, so a fork is proposed only when
-        the head's first *two* choices agree — not any target that merely clears a probability floor. The
-        floor is admission only; which of the admitted forks survives the budget is the ranking's decision.
-        """
-        if len(order) <= _RUNNER_UP:
-            return None
-        runner_up = order[_RUNNER_UP]
-        child = int(gap.targets[runner_up])
-        if float(probabilities[runner_up]) < self.min_second_prob or not gap.orphan[runner_up] or child == kept:
-            return None
-        candidate = ForkCandidate(
-            parent=parent,
-            kept=kept,
-            child=child,
-            probability=float(probabilities[runner_up]),
-            positions_um=gap.positions_um,
-            kept_frames=int(gap.frames_ahead[kept]),
-            child_frames=int(gap.frames_ahead[child]),
-        )
-        return candidate if self._within_gates(candidate) else None
 
     def _within_gates(self, candidate: ForkCandidate) -> bool:
         """Whether the proposed triangle is physically a division: the mother, her new daughter, her old one."""
@@ -420,6 +456,13 @@ FORK_RANKINGS: dict[str, Callable[["AffinityDivisionConfig", float], ForkRanking
     "probability": lambda _, __: ProbabilityRanking(),
     "geometry": lambda config, _: GeometryRanking(sister_weight=config.sister_weight),
     "symmetry": lambda config, gate_um: SplitSymmetryRanking(parent_gate_um=config.parent_gate(gate_um)),
+}
+
+FORK_CANDIDACIES: dict[str, Callable[["AffinityDivisionConfig"], ForkCandidacy]] = {
+    "runner_up": lambda config: RunnerUpCandidacy(
+        min_kept_prob=config.min_kept_prob, min_second_prob=config.min_second_prob
+    ),
+    "geometric": lambda _: GeometricCandidacy(),
 }
 
 
@@ -441,6 +484,11 @@ class AffinityDivisionConfig(BaseModel):
     # so leaving it as the default meant every diagnostic that switched divisions on without an override got a
     # stage measured to find nothing, while the submission got one measured to pay.
     ranking: str = "symmetry"
+    # Head-gated by default (the runner-up target of a confident single-child parent), which is what every LB
+    # arbitration of this stage ran under. `geometric` proposes every unparented target instead — the public
+    # frontier's `DivisionAwareLinker` candidacy — so a true sister the dense softmax ranks below a false one is
+    # still proposed for the gates and ranking to judge. The floors below only bind the head-gated candidacy.
+    candidacy: str = "runner_up"
     # OFF. A probability floor is a SECOND bound on speculation, and the budget is already the first — derived
     # from the measured division rate, so it admits exactly as many forks as there are divisions to find. The
     # one measurement we have of the floor is that it EXCLUDED the true case: at 0.5 the one recoverable
@@ -503,15 +551,18 @@ class AffinityDivisionConfig(BaseModel):
         """
         if self.ranking not in FORK_RANKINGS:
             raise ValueError(f"unknown division ranking {self.ranking!r}, expected one of {sorted(FORK_RANKINGS)}")
+        if self.candidacy not in FORK_CANDIDACIES:
+            raise ValueError(
+                f"unknown division candidacy {self.candidacy!r}, expected one of {sorted(FORK_CANDIDACIES)}"
+            )
         ranking = FORK_RANKINGS[self.ranking](self, gate_um)
         return AffinityDivisionRecovery(
             spacing=spacing,
             affinity=affinity,
             ranking=SurvivingDaughterRanking(ranking, min_track_length) if self.require_persistence else ranking,
-            min_second_prob=self.min_second_prob,
+            candidacy=FORK_CANDIDACIES[self.candidacy](self),
             parent_gate_um=self.parent_gate(gate_um),
             sister_gate_um=self.sister_gate(gate_um),
             existing_child_gate_um=self.existing_child_gate(),
             max_added_forks=self.max_added_forks,
-            min_kept_prob=self.min_kept_prob,
         )

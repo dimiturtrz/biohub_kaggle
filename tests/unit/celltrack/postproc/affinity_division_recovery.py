@@ -10,10 +10,13 @@ from celltrack.postproc.affinity_division_recovery import (
     AffinityDivisionConfig,
     AffinityDivisionRecovery,
     ForkCandidate,
+    GeometricCandidacy,
     GeometryRanking,
     ProbabilityRanking,
+    RunnerUpCandidacy,
     SplitSymmetryRanking,
     SurvivingDaughterRanking,
+    _Gap,
 )
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
@@ -40,12 +43,11 @@ def graph(coordinates: list[list[int]], edges: list[list[int]]) -> TrackGraph:
 def recovery(matrix: list[list[float]], **overrides: object) -> AffinityDivisionRecovery:
     settings: dict[str, object] = {
         "ranking": ProbabilityRanking(),
-        "min_second_prob": 0.1,
+        "candidacy": RunnerUpCandidacy(min_kept_prob=0.5, min_second_prob=0.1),
         "parent_gate_um": 5.0,
         "sister_gate_um": 5.0,
         "existing_child_gate_um": math.inf,
         "max_added_forks": 1000,
-        "min_kept_prob": 0.5,
     }
     return AffinityDivisionRecovery(
         spacing=Spacing(z=1.0, y=1.0, x=1.0),
@@ -81,7 +83,8 @@ def test_build():
 
     assert isinstance(stage, AffinityDivisionRecovery)
     assert stage.affinity is affinity  # the video's edge-head probabilities are threaded through
-    assert (stage.min_second_prob, stage.parent_gate_um) == (0.6, 4.0)
+    assert stage.candidacy == RunnerUpCandidacy(min_kept_prob=0.0, min_second_prob=0.6)  # the floor rides the candidacy
+    assert stage.parent_gate_um == 4.0
 
 
 def test_parent_gate():
@@ -130,7 +133,7 @@ def test_rejects_when_kept_child_is_not_the_top_target():
 
 def test_rejects_when_kept_child_probability_is_low():
     """A parent whose own primary link the head is unsure of does not earn a second daughter."""
-    low_kept = recovery([[0.4, 0.35]], min_kept_prob=0.5)
+    low_kept = recovery([[0.4, 0.35]])  # helper's runner-up candidacy floors the kept link at 0.5
     assert low_kept.transform(graph(_MITOSIS, [[0, 1]])).edges.tolist() == [[0, 10]]
 
 
@@ -276,7 +279,7 @@ def test_geometry_ranking_survives_the_cap_a_probability_ranking_evicts():
     ]
     edges = [[0, 1], [3, 4]]
     matrix = [[0.9, 0.2, 0.0, 0.0], [0.0, 0.0, 0.8, 0.7]]
-    one_fork = {"max_added_forks": 1, "min_second_prob": 0.1}
+    one_fork = {"max_added_forks": 1}  # helper candidacy already floors the runner-up at 0.1
 
     by_probability = recovery(matrix, **one_fork).transform(graph(coordinates, edges))
     by_geometry = recovery(matrix, ranking=GeometryRanking(sister_weight=0.15), **one_fork)
@@ -309,6 +312,77 @@ def test_rejects_an_unknown_ranking():
     affinity = cast(EdgeAffinity, FakeAffinity({}))
     with pytest.raises(ValueError, match="nearest"):
         AffinityDivisionConfig(ranking="nearest").build(Spacing(z=1.0, y=1.0, x=1.0), affinity, 6, 10.0)
+
+
+def test_rejects_an_unknown_candidacy():
+    """A misspelled `--set division.candidacy=…` is a typo, not a silent fallback to the head-gated default."""
+    affinity = cast(EdgeAffinity, FakeAffinity({}))
+    with pytest.raises(ValueError, match="unknown division candidacy"):
+        AffinityDivisionConfig(candidacy="head").build(Spacing(z=1.0, y=1.0, x=1.0), affinity, 6, 10.0)
+
+
+def test_geometric_candidacy_recovers_a_sister_the_head_ranks_below_a_false_orphan():
+    """The candidacy difference that motivates the arm: a true sister buried below a false orphan by the head.
+
+    Row 1 is the kept child, row 2 a FALSE orphan the head ranks second but which sits beyond the parent gate,
+    row 3 the TRUE sister the head ranks third but which is within every gate. Head-gated `RunnerUpCandidacy`
+    proposes only the head's second choice (row 2), which the gate then rejects — no fork. `GeometricCandidacy`
+    proposes every orphan, so the true sister reaches the gates and is recovered.
+    """
+    coordinates = [[0, 0, 0, 0], [1, 0, 0, 1], [1, 0, 0, 9], [1, 0, 0, 2]]
+    head = [[0.7, 0.2, 0.1]]
+    head_gated = recovery(head).transform(graph(coordinates, [[0, 1]]))
+    assert head_gated.edges.tolist() == [[0, 10]]
+    geometric = recovery(head, candidacy=GeometricCandidacy()).transform(graph(coordinates, [[0, 1]]))
+    assert geometric.edges.tolist() == [[0, 10], [0, 30]]
+
+
+def _one_gap() -> _Gap:
+    """A single frame gap: parent row 0, its kept child row 1, one orphan row 2, one parented non-child row 3."""
+    return _Gap(
+        targets=np.array([1, 2, 3]),
+        orphan=np.array([False, True, False]),
+        positions_um=np.zeros((4, 3)),
+        frames_ahead=np.array([9, 8, 7, 6]),
+    )
+
+
+def test_runner_up_candidacy_candidates():
+    """Head-gated: the top target must be the kept child, and only its orphan runner-up is proposed."""
+    gap = _one_gap()
+    probabilities = np.array([0.9, 0.5, 0.1])  # top=kept (row1), runner-up=orphan row2, row3 last
+
+    proposed = RunnerUpCandidacy().candidates(parent=0, kept=1, probabilities=probabilities, gap=gap)
+
+    assert [(candidate.parent, candidate.child) for candidate in proposed] == [(0, 2)]
+
+
+def test_runner_up_candidacy_candidates_declines_when_top_is_not_the_kept_child():
+    """If the head's most confident target is not the kept child, this is no division — nothing is proposed."""
+    gap = _one_gap()
+    probabilities = np.array([0.3, 0.9, 0.1])  # top target is row2, not the kept child row1
+
+    assert RunnerUpCandidacy().candidates(parent=0, kept=1, probabilities=probabilities, gap=gap) == []
+
+
+def test_geometric_candidacy_candidates():
+    """Geometric: every unparented target that is not the kept child is proposed, head opinion aside."""
+    gap = _one_gap()
+    probabilities = np.array([0.3, 0.9, 0.1])  # order is irrelevant to geometric candidacy
+
+    proposed = GeometricCandidacy().candidates(parent=0, kept=1, probabilities=probabilities, gap=gap)
+
+    assert [(candidate.parent, candidate.child) for candidate in proposed] == [(0, 2)]
+
+
+def test_at_gap():
+    """The fork factory reads each daughter's surviving-frame count out of the gap it is built over."""
+    gap = _one_gap()
+
+    fork = ForkCandidate.at_gap(parent=0, kept=1, child=2, probability=0.5, gap=gap)
+
+    assert (fork.parent, fork.kept, fork.child) == (0, 1, 2)
+    assert (fork.kept_frames, fork.child_frames) == (8, 7)  # frames_ahead[1], frames_ahead[2]
 
 
 def test_budget_derives_the_ceiling_from_the_measured_division_rate():
