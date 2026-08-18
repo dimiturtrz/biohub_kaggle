@@ -3,6 +3,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from celltrack.linkers.motion_linking import MotionHungarianLinker
+from celltrack.linkers.product_of_experts import MotionDiffusionPrior
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
 
@@ -59,6 +60,27 @@ def test_link_learned_bonus_flips_the_assignment_to_the_favoured_but_farther_can
     affinity = _FixedAffinity(np.array([[1.0, 0.0]]))  # reward the farther target (column 0)
     blended = MotionHungarianLinker(_SPACING, 6.0, 10.0, affinity=affinity, affinity_bonus=5.0)
     assert edges_of(blended.link(graph)) == {(0, 1)}  # bonus pulls the assignment onto the favoured target
+
+
+def test_blended_cost_fuses_as_a_product_of_experts_when_a_prior_is_set():
+    """With a prior the cost is `distance^2 / 2sigma^2 - log P`, not the linear blend — the fusion actually lands."""
+    affinity = _FixedAffinity(np.array([[0.8, 0.4]]))
+    linker = MotionHungarianLinker(_SPACING, 6.0, 10.0, affinity=affinity, prior=MotionDiffusionPrior(sigma_um=2.0))
+    distance = np.array([[3.0, 5.0]])
+
+    cost = linker._blended_cost(0, distance)
+
+    expected = distance**2 / (2.0 * 2.0**2) - np.log(np.array([[0.8, 0.4]]))
+    np.testing.assert_allclose(cost, expected)
+
+
+def test_product_of_experts_flips_the_assignment_on_appearance_like_the_linear_bonus():
+    """A confident appearance overrides the raw-nearest geometry through the fused cost, with no fitted bonus."""
+    graph = a_graph([(0, 0, 0, 0), (1, 0, 0, 5), (1, 0, 0, 3)])  # target 1 = far, target 2 = near decoy
+    # A wide prior makes motion near-flat, so appearance decides; strong P for the farther target (column 0).
+    affinity = _FixedAffinity(np.array([[1.0, 0.0]]))
+    fused = MotionHungarianLinker(_SPACING, 6.0, 10.0, affinity=affinity, prior=MotionDiffusionPrior(sigma_um=100.0))
+    assert edges_of(fused.link(graph)) == {(0, 1)}  # the product of experts pulls onto the favoured target
 
 
 # Three confident movers (nodes 0-2) each step +6 in x within the tight gate; node 3 is a track start whose true

@@ -22,6 +22,7 @@ from scipy.spatial.distance import cdist
 
 from celltrack.affinity import EdgeAffinity
 from celltrack.linkers.frame_gap import FrameGap
+from celltrack.linkers.product_of_experts import MotionDiffusionPrior, ProductOfExperts
 from celltrack.linkers.ranker_bonus import RankerBonus
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
@@ -50,6 +51,11 @@ class MotionHungarianLinker:
     competes on is `distance - affinity_bonus * probability`, so geometry and learned appearance jointly
     pick the successor. A high-confidence learned link wins a tie the raw distance would have mis-broken —
     the crowding-mislink the dense movies pay. Left unset it is exactly the pure-geometry linker.
+
+    Setting `prior` swaps the linear blend for a PRODUCT OF EXPERTS: distance and probability are read as the
+    log-likelihoods of one assignment and summed (`cost = distance^2 / 2*sigma^2 - log P`), so the fitted
+    `affinity_bonus` vanishes and the fusion sharpens only where an expert is confident — the ambiguous dense
+    crowd stays soft. Left unset the cost is the linear `distance - affinity_bonus * P` unchanged.
     """
 
     spacing: Spacing
@@ -57,6 +63,10 @@ class MotionHungarianLinker:
     loose_gate_um: float
     affinity: EdgeAffinity | None = None
     affinity_bonus: float = 0.0
+    # The motion expert's diffusion width for the product-of-experts cost. Set it to fuse distance and
+    # probability as log-likelihoods instead of the linear blend; left None the cost is the linear one and the
+    # gate/prediction path is untouched. sigma derives from the persistent-random-walk fit, not a tuned constant.
+    prior: MotionDiffusionPrior | None = None
     # Correct a track START for whole-frame tissue drift, self-estimated per gap from that gap's own tight-pass
     # matches. Whole-frame drift is 61-92% of the mean annotated step here; a track's measured `velocity` already
     # carries it once the track has one committed link, so the ONLY place a drift-blind prediction pays for it is
@@ -111,15 +121,36 @@ class MotionHungarianLinker:
         return np.median(gap.positions_um[tgt] - gap.positions_um[src], axis=0)
 
     def _blended_cost(self, timepoint: int, distance: Float[np.ndarray, "s t"]) -> Float[np.ndarray, "s t"]:
-        """The distance cost minus each learned-association term wired for this gap — forward, then re-ranker."""
+        """The distance cost fused with each learned-association term for this gap — appearance, then re-ranker."""
+        cost = self._appearance_cost(timepoint, distance)
+        if self.ranker is not None:
+            cost = self.ranker.discount(timepoint, cost)
+        return cost
+
+    def _appearance_cost(self, timepoint: int, distance: Float[np.ndarray, "s t"]) -> Float[np.ndarray, "s t"]:
+        """Fuse motion distance with appearance — a product of experts when `prior` is set, else the linear blend."""
+        if self.prior is None:
+            return self._linear_cost(timepoint, distance)
+        log_appearance = self._log_appearance(timepoint, distance.shape)
+        return ProductOfExperts().cost(log_appearance, self.prior.log_likelihood(distance))
+
+    def _linear_cost(self, timepoint: int, distance: Float[np.ndarray, "s t"]) -> Float[np.ndarray, "s t"]:
+        """`distance - affinity_bonus * P` — the incommensurate terms coupled by the fitted bonus."""
         cost = distance
         if self.affinity is not None and self.affinity_bonus != 0.0:
             probability = self.affinity.probabilities(timepoint)
             if probability is not None:
                 cost = cost - self.affinity_bonus * probability
-        if self.ranker is not None:
-            cost = self.ranker.discount(timepoint, cost)
         return cost
+
+    def _log_appearance(self, timepoint: int, shape: tuple[int, int]) -> Float[np.ndarray, "s t"]:
+        """The appearance expert's log-probability, flat (zero) where no association is scored for the gap."""
+        if self.affinity is None:
+            return np.zeros(shape)
+        probability = self.affinity.probabilities(timepoint)
+        if probability is None:
+            return np.zeros(shape)
+        return ProductOfExperts().as_log_probability(probability)
 
     def _assign(
         self,
