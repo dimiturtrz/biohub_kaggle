@@ -20,6 +20,13 @@ dependencies = [
     "motile>=1.0.1",
     "networkx",    # the global min-cost-flow linker (celltrack/flow_linking.py) solves via network simplex
     "tqdm",        # progress bars in core/obs.py
+    # torch.compile's inductor BACKEND. The joint trainer compiles the backbone UNCONDITIONALLY
+    # (joint_detector.py: "a crash is a bug to fix at its root, not a reason to run eager"), so Triton is a
+    # HARD runtime dep, not opt-in — a plain `uv sync` that dropped it crashed every joint run (bd lpkr).
+    # PINNED (not floating) so it can't drift to a bleeding-edge release that breaks a sync — the reason it was
+    # opt-in before. OS-markered: Windows pulls the maintained fork, Linux/Kaggle stock triton (torch vendors it).
+    "triton-windows==3.7.1.post27 ; sys_platform == 'win32'",
+    "triton ; sys_platform == 'linux'",
 ]
 
 [project.optional-dependencies]
@@ -33,16 +40,6 @@ submit = ["kaggle"]
 # `devtools` (`python -m devtools.graph.fitness …`); grimp/networkx arrive transitively. ast-grep/jscpd configs are
 # located from the install via `python -m devtools.tools.config`. Pin lives in .copier-answers.yml (devtools_ref).
 devtools = ["sdlc-devtools @ git+https://github.com/dimiturtrz/sdlc-scaffold.git@v1.26.0#subdirectory=sdlc-devtools"]
-# torch.compile's inductor backend needs Triton. Opt-in (NOT base deps) so a bleeding-edge Triton can't break a
-# plain `uv sync`. OS-markered so each platform auto-selects: Windows pulls the maintained triton-windows fork,
-# Linux/Kaggle the stock triton (which torch already vendors there, so this is mostly explicitness). The Triton
-# version must track what your torch expects; sm_120 (RTX 5090) codegen support is the open question — validate
-# the trainer's `--compile-backbone` flag after `uv sync --extra compile`.
-compile = [
-    "triton-windows ; sys_platform == 'win32'",
-    "triton ; sys_platform == 'linux'",
-]
-
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
