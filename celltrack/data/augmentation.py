@@ -77,3 +77,10 @@ class Augmentation:
 
 
 _NO_AUGMENTATION = Augmentation()  # frozen identity default; a module singleton avoids a call in arg defaults
+
+# The preset a joint run augments with unless it asks not to: moderate intensity jitter plus in-plane (y, x)
+# flips. z is left un-flipped on purpose — these volumes are anisotropic and few-sliced along z, so a depth
+# mirror is not a label-preserving view of the same cell. Standalone this trades association proxy DOWN for
+# detection recall UP (the extra recall feeds the confusor); it earns its default by being the detection
+# regulariser the velocity recipe needs, holding node recall off the from-scratch mid-run overfit collapse.
+DEFAULT_AUGMENTATION = Augmentation(brightness=0.1, offset=0.1, flip_axes=(1, 2))

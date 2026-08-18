@@ -172,24 +172,9 @@ class JointCli:
             type=int,
             default=0,
             help="bootstrap velocity off GT t-1 -> t links for N steps (linear anneal), breaking the from-scratch"
-            " chicken-egg; needs --prior-velocity; 0 = off",
+            " chicken-egg; N > 0 IMPLIES --prior-velocity (warmup 0 is the refuted from-scratch dead-end); 0 = off",
         )
-        # Label-preserving detection augmentation (the pilkwang recipe's, absent from every from-scratch joint run):
-        # intensity jitter + axis flips break the from-scratch intensity/orientation dependence that leaves it
-        # missing cells warm weights recover from identical pixels. A pair shares one draw across t-1/t/t+1.
-        parser.add_argument(
-            "--aug-brightness", type=float, default=0.0, help="multiplicative intensity jitter half-range; 0 = off"
-        )
-        parser.add_argument(
-            "--aug-offset", type=float, default=0.0, help="additive intensity jitter half-range; 0 = off"
-        )
-        parser.add_argument(
-            "--aug-flip-axes",
-            nargs="*",
-            type=int,
-            default=[],
-            help="frame axes (0=z 1=y 2=x) each flipped with p=0.5, centres mirrored to match; empty = off",
-        )
+        JointCli._add_augmentation_args(parser)
         parser.add_argument("--temporal-position", action="store_true", help="frame-position embedding (motion sight)")
         # LoRA: freeze the pilkwang base, train low-rank adapters on the association locus. Detection is anchored
         # by the frozen base; the adapters give association the feature reshape the frozen backbone cannot.
@@ -225,3 +210,33 @@ class JointCli:
         parser.add_argument("--resume", action="store_true", help="continue from the .resume.pt snapshot")
         parser.add_argument("--weights", type=str, default="joint_tunet_ours.pt")
         return parser
+
+    @staticmethod
+    def _add_augmentation_args(parser: argparse.ArgumentParser) -> None:
+        """The label-preserving augmentation flags — one on/off decision plus per-component overrides.
+
+        The pilkwang recipe augments (intensity jitter + axis flips) and every from-scratch joint run did not,
+        which is the from-scratch recall gap: warm weights recover cells our own weights miss from identical
+        pixels. A pair shares one draw across t-1/t/t+1. ON by default at the moderate xy preset
+        (`DEFAULT_AUGMENTATION`); `--no-augment` is the byte-identical un-augmented baseline. Each `--aug-*` flag
+        overrides one preset component (an unset one keeps the preset's value).
+        """
+        parser.add_argument(
+            "--augment",
+            action=argparse.BooleanOptionalAction,
+            default=True,
+            help="augment with the moderate xy preset; --no-augment restores the byte-identical un-augmented baseline",
+        )
+        parser.add_argument(
+            "--aug-brightness", type=float, default=None, help="override the preset multiplicative jitter half-range"
+        )
+        parser.add_argument(
+            "--aug-offset", type=float, default=None, help="override the preset additive jitter half-range"
+        )
+        parser.add_argument(
+            "--aug-flip-axes",
+            nargs="*",
+            type=int,
+            default=None,
+            help="override the preset flip axes (0=z 1=y 2=x), each flipped with p=0.5, centres mirrored to match",
+        )

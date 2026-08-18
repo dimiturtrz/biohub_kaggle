@@ -89,12 +89,39 @@ def test_from_args():
     config = JointTrainConfig.from_args(args)
     assert config.optim.lr == 0.005
     assert config.data.velocity_gt_warmup_steps == 300
-    assert config.data.aug_brightness == 0.2
+    assert config.data.prior_velocity  # a warmup > 0 turns the feature on — the two flags are one decision
+    assert config.data.aug_brightness == 0.2  # the explicit override
+    assert config.data.aug_offset == 0.1  # unset -> the preset's, since --augment is on by default
     assert config.data.aug_flip_axes == (1, 2)
     assert config.loss.det_weight == 7.0
     assert config.schedule.steps == 42
     assert config.eval.tracker.threshold == args.eval_threshold  # tracked off the shipped operating point
     assert config.model.warm_pack == WARM_PACKS[args.warm_pack]
+
+
+def test_from_args_augments_by_default():
+    """A bare joint run augments with the recipe preset — the CLI opts in even though the config field defaults off."""
+    config = JointTrainConfig.from_args(JointCli.build_parser().parse_args([]))
+    assert (config.data.aug_brightness, config.data.aug_offset, config.data.aug_flip_axes) == (0.1, 0.1, (1, 2))
+
+
+def test_from_args_no_augment_is_the_identity_baseline():
+    """`--no-augment` restores the byte-identical un-augmented run — every aug field back to the identity."""
+    config = JointTrainConfig.from_args(JointCli.build_parser().parse_args(["--no-augment"]))
+    assert (config.data.aug_brightness, config.data.aug_offset, config.data.aug_flip_axes) == (0.0, 0.0, ())
+
+
+def test_from_args_aug_flag_overrides_only_its_own_component():
+    """An explicit `--aug-offset` overrides that field alone; the untouched components keep the preset's values."""
+    config = JointTrainConfig.from_args(JointCli.build_parser().parse_args(["--aug-offset", "0.3"]))
+    assert config.data.aug_offset == 0.3  # the override
+    assert (config.data.aug_brightness, config.data.aug_flip_axes) == (0.1, (1, 2))  # preset, untouched
+
+
+def test_from_args_prior_velocity_alone_keeps_warmup_off():
+    """`--prior-velocity` with no warmup is the warm-start case — the feature on, the GT bootstrap at zero."""
+    config = JointTrainConfig.from_args(JointCli.build_parser().parse_args(["--prior-velocity"]))
+    assert config.data.prior_velocity and config.data.velocity_gt_warmup_steps == 0
 
 
 def test_data_cfg_augmentation():

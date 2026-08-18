@@ -25,7 +25,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt
 
-from celltrack.data.augmentation import Augmentation
+from celltrack.data.augmentation import DEFAULT_AUGMENTATION, Augmentation
 from celltrack.losses.softmax_focal_bce import SOURCE_AXIS, TARGET_AXIS
 from celltrack.losses.tracking_loss import TrackingLossConfig
 from celltrack.models.lora import LoraConfig
@@ -113,6 +113,8 @@ class DataCfg(BaseModel):
     # over (linear anneal). Breaks the from-scratch chicken-egg: the model's early prev-gap affinity is
     # confident-wrong, so a self-derived velocity points at the wrong cell and cannot fix the confusor it exists
     # for. Only meaningful with `prior_velocity`; 0 = off and byte-identical off (pure model-derived from step 0).
+    # The CLI collapses the two into one decision: `--velocity-gt-warmup-steps N` (N > 0) turns `prior_velocity`
+    # ON, so the from-scratch case is one flag and the warmup-0 dead-end cannot be reached by forgetting a flag.
     velocity_gt_warmup_steps: int = Field(0, ge=0)
     # Share of steps drawn from the FULLY-LABELLED synthetic corpus (`celltrack.data.synthetic_pairs`), whose
     # candidate set is complete by construction — the property our own annotation cannot have, and the one the
@@ -144,8 +146,10 @@ class DataCfg(BaseModel):
     include_test_in_train: bool = False
     # Label-preserving detection augmentation the pilkwang recipe has and ours lacked — the from-scratch recall
     # gap is warm weights recovering cells our own miss from IDENTICAL pixels (g8j8), i.e. an intensity/orientation
-    # dependence a from-scratch run never had the variety to break. All three default to the identity, so an
-    # un-augmented run is byte-for-byte yesterday's; a pair shares ONE draw across `t-1`/`t`/`t+1` (joint_dataset).
+    # dependence a from-scratch run never had the variety to break. These CONFIG fields default to the identity, so
+    # a programmatically-built config is byte-for-byte the un-augmented baseline; the CLI opts in for the recipe
+    # (`--augment`, DEFAULT_AUGMENTATION) and `--no-augment` restores this identity. A pair shares ONE draw across
+    # `t-1`/`t`/`t+1` (joint_dataset).
     aug_brightness: float = Field(0.0, ge=0.0)  # multiplicative jitter half-range
     aug_offset: float = Field(0.0, ge=0.0)  # additive jitter half-range
     aug_flip_axes: tuple[int, ...] = ()  # frame axes (0=z, 1=y, 2=x) each flipped with p=0.5
@@ -395,9 +399,26 @@ class JointTrainConfig(BaseModel):
     schedule: ScheduleCfg = Field(default_factory=ScheduleCfg)
     runtime: RuntimeCfg = Field(default_factory=RuntimeCfg)
 
+    @staticmethod
+    def _augmentation_from_args(args: argparse.Namespace) -> Augmentation:
+        """Resolve the CLI's aug decision: the preset when on, the identity on `--no-augment`, with per-field overrides.
+
+        The CLI turns augmentation on by default (the recipe wants it); an `--aug-*` flag left unset takes the
+        preset's value, an explicit one overrides only that field. `--no-augment` is the byte-identical baseline.
+        """
+        if not args.augment:
+            return Augmentation()
+        preset = DEFAULT_AUGMENTATION
+        return Augmentation(
+            brightness=preset.brightness if args.aug_brightness is None else args.aug_brightness,
+            offset=preset.offset if args.aug_offset is None else args.aug_offset,
+            flip_axes=preset.flip_axes if args.aug_flip_axes is None else tuple(args.aug_flip_axes),
+        )
+
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> JointTrainConfig:
         """Fan the CLI's flat flags out into the six concern groups — the parser is the interface, this the model."""
+        augmentation = cls._augmentation_from_args(args)
         return cls(
             model=ModelCfg(
                 warm_pack=WARM_PACKS[args.warm_pack],
@@ -409,7 +430,7 @@ class JointTrainConfig(BaseModel):
             data=DataCfg(
                 detected_videos=args.detected_videos,
                 difficulty_sampling=args.difficulty_sampling,
-                prior_velocity=args.prior_velocity,
+                prior_velocity=args.prior_velocity or args.velocity_gt_warmup_steps > 0,
                 velocity_gt_warmup_steps=args.velocity_gt_warmup_steps,
                 synthetic_fraction=args.synthetic_fraction,
                 synthetic_sequences=args.synthetic_sequences,
@@ -418,9 +439,9 @@ class JointTrainConfig(BaseModel):
                 gpu_scene_detection=args.gpu_scene_detection,
                 paced_curriculum=args.paced_curriculum,
                 include_test_in_train=args.include_test_in_train,
-                aug_brightness=args.aug_brightness,
-                aug_offset=args.aug_offset,
-                aug_flip_axes=tuple(args.aug_flip_axes),
+                aug_brightness=augmentation.brightness,
+                aug_offset=augmentation.offset,
+                aug_flip_axes=augmentation.flip_axes,
             ),
             optim=OptimCfg(lr=args.lr, cosine_lr=args.cosine_lr, batch_size=args.batch_size),
             loss=LossCfg(
