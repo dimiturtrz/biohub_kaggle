@@ -34,6 +34,7 @@ def test_of():
     assert census.births == 3  # the three in_degree-0 nodes; the child (n1) is not a birth
     assert census.birth_explained == 2 / 3  # first-frame + face; the interior one is charged full
     assert census.birth_first_frame == 1 / 3  # only the t=0 node
+    assert census.birth_interior_depth == (49.0 - 10.0) / 10.0  # sole interior birth at (50,50,50): 49 um from a face
 
     fork = _graph([[0, 50, 50, 50], [1, 50, 50, 50], [1, 51, 50, 50]], [[0, 1], [0, 2]])
     divided = MovieBoundaries.of("m", fork, _SPACING, _VOLUME)
@@ -51,6 +52,14 @@ def test_report(caplog: pytest.LogCaptureFixture):
     logged = "\n".join(record.getMessage() for record in caplog.records)
     assert "movie-x" in logged
     assert "births" in logged and "deaths" in logged
+
+
+def test_band_fraction():
+    """The discounted shell is a union over faces, and a volume thinner than two margins is discounted whole."""
+    band = MovieBoundaries.band_fraction(_SPACING, 10.0, _VOLUME)  # 99 um cube, 10 um margin each side
+    assert band == pytest.approx(1.0 - (79.0 / 99.0) ** 3)
+    thin = MovieBoundaries.band_fraction(_SPACING, 10.0, (10, 100, 100))  # 9 um z < 2*margin -> no interior in z
+    assert thin == 1.0
 
 
 def test_share_of_an_empty_set_is_nan_not_zero():

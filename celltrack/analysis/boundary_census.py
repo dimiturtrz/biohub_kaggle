@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Self
 
 import numpy as np
+from jaxtyping import Float
 
 from celltrack.eval.proxy import CV_MOVIES, TestMovieProxy
 from celltrack.linkers.boundary_prior import BoundaryPrior
@@ -60,6 +61,7 @@ class MovieBoundaries:
     birth_first_frame: float
     death_explained: float
     death_last_frame: float
+    birth_interior_depth: float
 
     @classmethod
     def of(cls, stem: str, graph: TrackGraph, spacing: Spacing, volume_shape: tuple[int, int, int]) -> Self:
@@ -72,6 +74,7 @@ class MovieBoundaries:
 
         births = np.flatnonzero(adjacency.in_degrees == 0)
         deaths = np.flatnonzero(adjacency.out_degrees == 0)
+        interior = births[factors.appearance[births] >= _EXPLAINED_BELOW]
         return cls(
             stem=stem,
             births=int(births.size),
@@ -80,22 +83,58 @@ class MovieBoundaries:
             birth_first_frame=cls._share(timepoints[births] == timepoints.min()),
             death_explained=cls._share(factors.disappearance[deaths] < _EXPLAINED_BELOW),
             death_last_frame=cls._share(timepoints[deaths] == timepoints.max()),
+            birth_interior_depth=cls._interior_depth(spacing, margin_um, volume_shape, positions_um[interior]),
         )
+
+    @staticmethod
+    def _interior_depth(
+        spacing: Spacing,
+        margin_um: float,
+        volume_shape: tuple[int, int, int],
+        interior_positions_um: Float[np.ndarray, "n 3"],
+    ) -> float:
+        """Median depth of the interior births past the boundary band, in gate-units (nan when there are none).
+
+        A birth the prior charges full sits beyond `margin_um` of every face. How FAR beyond decides whether the
+        charge is robust: a birth a fraction of a gate past the band is a near-face entry the exact margin barely
+        missed, while one a whole gate-step deeper genuinely materialised in open space and no boundary discount
+        should ever reach it. Reported in gate-units so it reads against the one radius the prior is built on.
+        """
+        if interior_positions_um.size == 0:
+            return float("nan")
+        extent_um = (np.asarray(volume_shape, dtype=np.float64) - 1.0) * spacing.as_array()
+        to_nearest_face = np.minimum(interior_positions_um, extent_um - interior_positions_um).min(axis=1)
+        return float(np.median((to_nearest_face - margin_um) / margin_um))
 
     @staticmethod
     def _share(mask: "np.ndarray") -> float:
         """The fraction of a boundary set a mask selects — nan when the set is empty, so an absent movie reads so."""
         return float(mask.mean()) if mask.size else float("nan")
 
+    @staticmethod
+    def band_fraction(spacing: Spacing, margin_um: float, volume_shape: tuple[int, int, int]) -> float:
+        """Share of the imaged volume the prior discounts — the width of the shell within `margin_um` of any face.
+
+        This is the prior's SELECTIVITY, and the geometric cost of tying the boundary margin to the linking gate:
+        a birth anywhere in this shell appears for free. On ground-truth tracks that is correct (real entries do
+        cluster at the faces), but at inference it is also the fraction of the volume in which a linker's SPURIOUS
+        break — a fragmented track's phantom birth — is subsidised rather than charged. A shell near 1 is a prior
+        with no teeth; the smaller it is, the more the discount is confined to where cells genuinely enter.
+        """
+        extent_um = (np.asarray(volume_shape, dtype=np.float64) - 1.0) * spacing.as_array()
+        interior_extent = np.maximum(extent_um - 2.0 * margin_um, 0.0)
+        return float(1.0 - np.prod(interior_extent) / np.prod(extent_um))
+
     def report(self) -> None:
         """Log the census, stake first: how much of each boundary set the prior reclassifies as cheap."""
         logger.info(
-            "  %-16s births %4d  explained %5.1f%% (first-frame %4.1f%%)  interior %5.1f%%",
+            "  %-16s births %4d  explained %5.1f%% (first-frame %4.1f%%)  interior %5.1f%% (median %+.2f gate deep)",
             self.stem,
             self.births,
             100 * self.birth_explained,
             100 * self.birth_first_frame,
             100 * (1 - self.birth_explained),
+            self.birth_interior_depth,
         )
         logger.info(
             "  %-16s deaths %4d  explained %5.1f%% (last-frame  %4.1f%%)  interior %5.1f%%",
@@ -116,9 +155,12 @@ def main() -> None:
 
     root = DataRoot.from_config(args.config)
     proxy = TestMovieProxy.load(root, CV_MOVIES)
+    margin_um = TrackerConfig.shipped().linker.gate_um
     logger.info("track-boundary census over %d annotated movies (explained = the prior frees it)", len(proxy.paths))
     for path, truth in zip(proxy.paths, proxy.truths, strict=True):
         volume_shape = CellVideo.from_ome_zarr(path).volume_shape
+        band = MovieBoundaries.band_fraction(proxy.spacing, margin_um, volume_shape)
+        logger.info("  %-16s boundary band = %4.1f%% of the volume (margin %.0f um)", path.stem, 100 * band, margin_um)
         MovieBoundaries.of(path.stem, truth.graph, proxy.spacing, volume_shape).report()
 
 
