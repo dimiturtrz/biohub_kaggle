@@ -333,6 +333,7 @@ class EdgeTransformerScorer(nn.Module):
         feature_maps: Float[Tensor, "b c z y x"],
         grid_positions: Float[Tensor, "b n 3"],
         slot: NodeWindowSlot,
+        prior_velocity: Float[Tensor, "b n 3"] | None = None,
     ) -> Float[Tensor, "b n d"]:
         """`node_features` over a PADDED batch — one gather and one embed for every pair at once, no Python loop.
 
@@ -340,14 +341,20 @@ class EdgeTransformerScorer(nn.Module):
         of tiny kernels, and the loop's launch overhead is the residual GPU idle after the transformer itself is
         batched. This gathers `feature_maps[b, :, z, y, x]` for every pair with a single advanced index and
         embeds the whole `(b, n, 3)` grid at once, so `[b, :len]` equals the unbatched `node_features` for pair b.
-        Pad rows index voxel 0 (clamped) and are masked out by the transformer; velocity is omitted (the batched
-        training path does not carry it).
+        Pad rows index voxel 0 (clamped) and are masked out by the transformer.
+
+        `prior_velocity` is the padded `(b, n, 3)` velocity block — appended RAW and scaled exactly as the per-pair
+        `node_features` appends its column, so a batched velocity forward equals the per-pair one. `None` omits it
+        (the widen-free path), the exact tensor this built before velocity was carried.
         """
         clamped = torch.minimum(grid_positions.round().long().clamp(min=0), (slot.spatial - 1).long())
         batch, nodes = grid_positions.shape[0], grid_positions.shape[1]
         rows = torch.arange(batch, device=feature_maps.device)[:, None].expand(batch, nodes)
         gathered = feature_maps[rows, :, clamped[..., 0], clamped[..., 1], clamped[..., 2]]  # (b, n, c)
-        return torch.cat([gathered, EdgeTransformerScorer._batched_position_embedding(grid_positions, slot)], dim=-1)
+        columns = [gathered, EdgeTransformerScorer._batched_position_embedding(grid_positions, slot)]
+        if prior_velocity is not None:
+            columns.append(prior_velocity / PriorVelocity.SCALE)
+        return torch.cat(columns, dim=-1)
 
     @staticmethod
     def _batched_position_embedding(

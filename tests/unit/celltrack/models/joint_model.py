@@ -138,6 +138,31 @@ def test_forward_prior_velocity():
     assert out.edge_logits.shape == (1, 2)
 
 
+def test_forward_batch_prior_velocity():
+    """A batched forward carrying per-source velocities equals the per-pair velocity forward — the +3 velocity
+    columns thread through the padded path the same way the base features do, so the 2x-batched velocity arm
+    trains on the same quantities the per-pair one did (the property `celltrack-decisive-arm-speed-floor` needs).
+    """
+    torch.manual_seed(0)
+    model = _joint_model(extra_features=PriorVelocity.DIM).eval()
+    frames = [(torch.randn(4, 8, 8), torch.randn(4, 8, 8)) for _ in range(2)]
+    sources = [torch.tensor([[2, 4, 4]]), torch.tensor([[1, 2, 2]])]
+    targets = [torch.tensor([[2, 4, 4], [1, 2, 2]]), torch.tensor([[3, 5, 5]])]
+    velocities = [torch.tensor([[0.0, 100.0, -100.0]]), torch.tensor([[50.0, 0.0, 25.0]])]
+
+    with torch.no_grad():
+        singles = [
+            model.forward(ft, ft1, s, t, v)
+            for (ft, ft1), s, t, v in zip(frames, sources, targets, velocities, strict=True)
+        ]
+        windows = torch.stack([torch.stack([ft, ft1], dim=0) for ft, ft1 in frames], dim=0)
+        batched = model.forward_batch(windows, sources, targets, velocities)
+
+    for single, batch in zip(singles, batched, strict=True):
+        assert torch.allclose(single.edge_logits, batch.edge_logits, atol=1e-4)
+        assert torch.allclose(single.source_features, batch.source_features, atol=1e-4)
+
+
 def test_from_checkpoint(tmp_path: Path):
     """A checkpoint written by the trainer rebuilds both heads at the shape its weights were trained in."""
     out_channels = 2

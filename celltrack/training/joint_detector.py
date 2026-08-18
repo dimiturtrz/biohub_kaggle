@@ -509,8 +509,8 @@ class JointTrainer:
         scene_detection = self.config.data.gpu_scene_detection
         samples = [pair.to(device) for _, pair in batch]
         velocities = self._velocity.of_batch(model, samples, self._autocast(), step=step)
-        if self._batched_eligible(samples, velocities, real_count, len(batch)):
-            return self._batched_step(model, optimization, batch, samples)
+        if self._batched_eligible(samples, real_count, len(batch)):
+            return self._batched_step(model, optimization, batch, samples, velocities)
         windows = torch.stack([torch.stack([s.frame_t, s.frame_t1], dim=0) for s in samples], dim=0)  # (B, 2, Z, Y, X)
         with self._attention(), self._autocast():
             forwards = model.forward_batch(
@@ -534,14 +534,14 @@ class JointTrainer:
         optimization.zero_grad()
         return outcomes
 
-    def _batched_eligible(
-        self, samples: list[PairSample], velocities: list[Tensor | None], real_count: int, batch_len: int
-    ) -> bool:
+    def _batched_eligible(self, samples: list[PairSample], real_count: int, batch_len: int) -> bool:
         """Whether the batch takes the VECTORISED loss — the pure-default config, and the only one a graph captures.
 
         The batched loss reads the padded block for the edge and detection terms; anything that needs a per-pair
-        quantity (a generated scene's zeroed detection, a prior-velocity forward, or an optional contrastive /
-        hard-negative / reliability term) routes to the per-pair loop, which stays the reference implementation.
+        quantity (a generated scene's zeroed detection, or an optional contrastive / hard-negative / reliability
+        term) routes to the per-pair loop, which stays the reference implementation. Prior velocity now rides the
+        batched block too — `batched_forward` threads the padded step through, so a velocity run is no longer forced
+        onto the per-pair loop.
 
         Generated scenes stay on the per-pair loop even under `gpu_scene_detection` (where the loss WOULD equal the
         batched sum, `test_batched_equals_per_pair`): a crowded scene carries far more nodes than `_MAX_NODES`, and
@@ -552,7 +552,6 @@ class JointTrainer:
         loss = self.config.loss
         return (
             real_count == batch_len  # no generated scenes (batched pads to _MAX_NODES; a crowded scene overflows it)
-            and all(velocity is None for velocity in velocities)
             and all(JointModel.fits_batched(s.source_centres.shape[0], s.target_centres.shape[0]) for s in samples)
             and loss.contrastive_weight == 0.0
             and loss.hard_negative_weight == 0.0
@@ -565,6 +564,7 @@ class JointTrainer:
         optimization: _Optimization,
         batch: list[tuple[PairDraw, PairSample]],
         samples: list[PairSample],
+        velocities: list[Tensor | None],
     ) -> list[_PairOutcome]:
         """One step with the loss VECTORISED over the padded batch — no per-pair Python loop over ragged logits.
 
@@ -577,7 +577,7 @@ class JointTrainer:
         windows = torch.stack([torch.stack([s.frame_t, s.frame_t1], dim=0) for s in samples], dim=0)
         with self._attention(), self._autocast():
             batched = model.batched_forward(
-                windows, [s.source_centres for s in samples], [s.target_centres for s in samples]
+                windows, [s.source_centres for s in samples], [s.target_centres for s in samples], velocities
             )
             total, outcomes = self._loss.batched(  # (B,) for backward + per-pair diagnostics
                 self._batched_prediction(batched), [self._ground_truth(sample) for sample in samples]

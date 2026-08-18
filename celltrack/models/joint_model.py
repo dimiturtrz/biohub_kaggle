@@ -185,21 +185,22 @@ class JointModel(nn.Module):
         tens of nodes), so the result is a list, one `JointForward` per pair. `forward` is exactly the `B = 1`
         case, so a batched run computes the identical thing a per-pair run does, one optimiser step later.
         """
-        # Generated scenes route per-pair to the compiled uniform-N head; a run carrying prior velocity also stays
-        # per-pair (the batched gather does not thread velocity). Otherwise everything is batched.
-        if self._scene_transformer is not None or any(velocity is not None for velocity in source_velocities):
+        # Generated scenes route per-pair to the compiled uniform-N head; everything else — prior velocity now
+        # included — takes the fully padded batched block.
+        if self._scene_transformer is not None:
             features = self.detector.unet(windows.unsqueeze(2))  # (B, 2, C, Z, Y', X')
             return [
                 self._heads(features[i], source_positions[i], target_positions[i], source_velocities[i])
                 for i in range(features.shape[0])
             ]
-        return self.batched_forward(windows, source_positions, target_positions).unpad()
+        return self.batched_forward(windows, source_positions, target_positions, source_velocities).unpad()
 
     def batched_forward(
         self,
         windows: Float[Tensor, "b two z y x"],
         source_positions: list[Int[Tensor, "s 3"]],
         target_positions: list[Int[Tensor, "u 3"]],
+        source_velocities: list[Float[Tensor, "s 3"] | None] | None = None,
     ) -> BatchedForward:
         """The batched forward as ONE padded block — backbone, detection heads, node gather, transformer.
 
@@ -208,6 +209,11 @@ class JointModel(nn.Module):
         node features are gathered for all pairs at once, and the transformer takes a padded `(B, _MAX_NODES, D)`
         batch with a key-padding mask so the pad nodes are inert. Returns the padded tensors so the loss can read
         the block directly; `BatchedForward.unpad` recovers the per-pair `[:s, :u]` views for the diagnostics.
+
+        `source_velocities` carries the prior-velocity feature through the SAME padded block rather than the
+        per-pair head loop `forward_batch` used to fall back to — the sources' step padded to `(B, _MAX_NODES, 3)`
+        and divided into the feature grid's space exactly as `_heads` does, the targets' a zero block. `None`
+        (the widen-free run) omits the columns, the exact forward this computed before velocity was batched.
         """
         features = self.detector.unet(windows.unsqueeze(2))  # (B, 2, C, Z, Y', X')
         detect_t = self.detector.detect_head(features[:, 0])[:, 0]  # (B, Z, Y', X')
@@ -219,11 +225,12 @@ class JointModel(nn.Module):
         target_voxels = self._pad_fixed(target_positions)
         source_lengths = tuple(p.shape[0] for p in source_positions)
         target_lengths = tuple(p.shape[0] for p in target_positions)
+        source_step, target_step = self._padded_velocity(source_velocities, source_positions, downsample, device)
         feat_source = EdgeTransformerScorer.batched_node_features(
-            features[:, 0], source_voxels / downsample, NodeWindowSlot(spatial, 0.0, device)
+            features[:, 0], source_voxels / downsample, NodeWindowSlot(spatial, 0.0, device), source_step
         )
         feat_target = EdgeTransformerScorer.batched_node_features(
-            features[:, 1], target_voxels / downsample, NodeWindowSlot(spatial, 1.0, device)
+            features[:, 1], target_voxels / downsample, NodeWindowSlot(spatial, 1.0, device), target_step
         )
         index = torch.arange(_MAX_NODES, device=features.device)
         mask_source = index[None, :] < torch.tensor(source_lengths, device=features.device)[:, None]
@@ -263,6 +270,30 @@ class JointModel(nn.Module):
         if padded.shape[1] > _MAX_NODES:
             raise ValueError(f"a pair carries {padded.shape[1]} nodes, above _MAX_NODES {_MAX_NODES} — raise it")
         return torch.nn.functional.pad(padded, (0, 0, 0, _MAX_NODES - padded.shape[1]))
+
+    @staticmethod
+    def _padded_velocity(
+        source_velocities: list[Float[Tensor, "s 3"] | None] | None,
+        source_positions: list[Int[Tensor, "s 3"]],
+        downsample: Float[Tensor, "3"],
+        device: str,
+    ) -> tuple[Float[Tensor, "b max 3"] | None, Float[Tensor, "b max 3"] | None]:
+        """The sources' padded prior step (grid space) and the targets' zero step — `(None, None)` when off.
+
+        Mirrors `_heads`: the source velocity is divided by the downsample into the grid the features live on, then
+        `batched_node_features` scales it by `PriorVelocity.SCALE`; the target slot carries zeros. A pair whose entry
+        is `None` (no history) takes zeros of its own source length, so padding aligns with `source_voxels`.
+        """
+        if source_velocities is None or all(velocity is None for velocity in source_velocities):
+            return None, None
+
+        def _step(velocity: Tensor | None, source: Tensor) -> Tensor:
+            present = velocity.to(torch.float32) if velocity is not None else source.new_zeros((source.shape[0], 3))
+            return present / downsample
+
+        steps = [_step(v, s) for v, s in zip(source_velocities, source_positions, strict=True)]
+        source_step = JointModel._pad_fixed(steps)
+        return source_step, torch.zeros_like(source_step)
 
     def _heads(
         self,
