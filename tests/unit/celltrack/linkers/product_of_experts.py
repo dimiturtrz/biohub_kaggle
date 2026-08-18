@@ -22,6 +22,15 @@ def test_log_likelihood():
     assert likelihood[0, 2] < likelihood[0, 1] < 0.0  # farther residual, lower log-likelihood
 
 
+def test_from_one_step_msd():
+    """sigma is derived as sqrt(MSD at lag 1) — the fitted one-step spread, no tuned constant."""
+    prior = MotionDiffusionPrior.from_one_step_msd(9.0)
+
+    assert prior.sigma_um == 3.0  # sqrt(9)
+    # a residual one sigma out costs exactly -1/2 (the Gaussian half-width), tying width to the fit
+    np.testing.assert_allclose(prior.log_likelihood(np.array([[3.0]])), -0.5)
+
+
 def test_as_log_probability():
     """Appearance turns to log-space, with a zero floored to a finite cost rather than -inf (priced by motion)."""
     poe = ProductOfExperts()

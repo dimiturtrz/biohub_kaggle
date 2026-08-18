@@ -44,10 +44,25 @@ class MotionDiffusionPrior:
     in micrometres — the spread the diffusion prior allows around the prediction. It is a MEASURED quantity: a
     persistent-random-walk fit (`celltrack.analysis.motion_statistics`) reports the localisation noise and the
     unpredicted step variance whose sum is this residual scale, so the prior's width is derived from how these
-    cells actually move rather than chosen. `from_walk` (to follow) will construct it from that fit directly.
+    cells actually move rather than chosen. `from_one_step_msd` constructs it from that fit's `MSD(1)` directly.
     """
 
     sigma_um: float
+
+    @classmethod
+    def from_one_step_msd(cls, one_step_msd_um2: float) -> "MotionDiffusionPrior":
+        """Derive the prior width from a fitted persistent-random-walk — `sigma = sqrt(MSD at lag 1)`, no constant.
+
+        The caller passes the walk's mean squared displacement at a single frame gap
+        (`PersistentRandomWalk.predict(1, speed, tau, noise)` in `celltrack.analysis.motion_statistics`): the
+        localisation floor plus one step of true motion. That is the residual scale for a pair the motion model
+        CANNOT predict — an unscored history, where `MotionPrediction` degrades to a zero velocity and the
+        residual IS the whole step — and a conservative UPPER bound where it CAN: a well-predicted residual is
+        smaller, so this prior is never sharper than the evidence warrants and the fusion leans on appearance
+        rather than over-trusting motion. Passing `MSD(1)` rather than the walk keeps this primitive free of a
+        dependency on the analysis layer. A tighter per-pair sigma scaled by prediction support is the refinement.
+        """
+        return cls(sigma_um=float(np.sqrt(one_step_msd_um2)))
 
     def log_likelihood(self, distances_um: Float[np.ndarray, "s t"]) -> Float[np.ndarray, "s t"]:
         """`-||residual||^2 / (2*sigma^2)` for each pair — the Gaussian log-density up to a constant.
