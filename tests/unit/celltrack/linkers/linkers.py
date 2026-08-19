@@ -71,6 +71,14 @@ def test_effective_bonus():
     assert LinkerConfig(name="assignment", gate_um=14.0).build(SPACING).affinity_bonus == 28.0
 
 
+def test_prior():
+    """`None` = no motion expert (the linear blend stands); a set MSD(1) builds the diffusion prior, sigma=sqrt(MSD)."""
+    assert LinkerConfig(name="motion", gate_um=9.0).prior() is None
+    prior = LinkerConfig(name="motion", gate_um=9.0, prior_one_step_msd_um2=6.25).prior()
+    assert prior is not None
+    assert prior.sigma_um == pytest.approx(2.5)  # sqrt(6.25)
+
+
 def test_build_wires_ilp_and_division_gates():
     """The ILP and division rows pass their radii through to the concrete linkers."""
     assert ILPLinker(spacing=SPACING, max_distance_um=10.0) == LinkerConfig(name="ilp").build(SPACING)

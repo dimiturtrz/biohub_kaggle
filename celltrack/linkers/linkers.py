@@ -35,6 +35,7 @@ from celltrack.linkers.linking import Linker, NearestNeighbourLinker
 from celltrack.linkers.motion_linking import MotionHungarianLinker
 from celltrack.linkers.motion_prediction import MotionPrediction
 from celltrack.linkers.mutual_bonus import MutualBonus
+from celltrack.linkers.product_of_experts import MotionDiffusionPrior
 from celltrack.linkers.ranker_bonus import RankerBonus
 from core.geometry import Spacing
 
@@ -151,6 +152,20 @@ class LinkerConfig(BaseModel):
     # absorbed by `affinity_bonus`, which scales the same term; the UNEVENNESS cannot be, and it is worst on the
     # crowded targets where the mislinks live. Off ships the cost unchanged.
     admissible_affinity: bool = False
+    # None = OFF, so the shipped linear `priced - affinity_bonus*P` cost is byte-identical. Set to the fitted
+    # one-step MSD (um^2) from the persistent-random-walk fit (celltrack.analysis.motion_statistics) to price the
+    # transition as a PRODUCT OF EXPERTS: distance and probability fused as the log-likelihoods of one assignment
+    # (`priced^2 / 2*sigma^2 - log P`, sigma = sqrt(MSD(1))), so the fitted bonus vanishes and the fusion sharpens
+    # only where an expert is confident. Read by `motion` — the assignment linker whose per-gap min-cost matching
+    # consumes a proper log-likelihood cost natively; refused elsewhere as a knob the pipeline would silently drop
+    # (`flow` is a circulation that links only via negative arc costs, so a >= 0 PoE cost links nothing there).
+    prior_one_step_msd_um2: float | None = Field(None, gt=0)
+
+    def prior(self) -> "MotionDiffusionPrior | None":
+        """The motion-diffusion expert this config prices with, or None for the linear blend — sigma from MSD(1)."""
+        if self.prior_one_step_msd_um2 is None:
+            return None
+        return MotionDiffusionPrior.from_one_step_msd(self.prior_one_step_msd_um2)
 
     @property
     def effective_bonus(self) -> float:
@@ -438,6 +453,12 @@ _MUTUAL_READERS = frozenset({"assignment", "flow"})
 # would need a second, chosen constant. The two linkers with one gate and one raw distance carry it.
 _RAMP_READERS = frozenset({"assignment", "flow"})
 
+# Which linkers can fuse distance and probability as a product of experts (the `prior`). Only `motion`: it
+# solves each gap as an assignment (min-cost matching), so a proper log-likelihood cost (always >= 0) reads
+# natively. `flow` is a min-cost circulation that links only via NEGATIVE arc costs — a >= 0 PoE cost leaves the
+# empty circulation optimal and it links nothing; its boundary is um-denominated, incommensurate with nats.
+_PRIOR_READERS = frozenset({"motion"})
+
 # The learned-evidence knobs, each against the readers of THAT knob — what `_affinity_knobs_are_readable` walks.
 _KNOB_READERS: dict[str, frozenset[str]] = {
     "affinity_bonus": _BONUS_READERS,
@@ -446,6 +467,7 @@ _KNOB_READERS: dict[str, frozenset[str]] = {
     "ranker_bonus": _RANKER_READERS,
     "evidence_ramp": _RAMP_READERS,
     "admissible_affinity": _RAMP_READERS,
+    "prior_one_step_msd_um2": _PRIOR_READERS,
 }
 
 # Which linkers price a track boundary per node. Only the flow linker charges appearance and disappearance at all,
@@ -485,6 +507,7 @@ _BUILDERS: dict[str, _Builder] = {
         loose_gate_um=config.gate_um,
         affinity=affinity,
         affinity_bonus=config.effective_bonus,
+        prior=config.prior(),
         ranker=parts.ranker,
     ),
     "ilp": lambda config, spacing, affinity, parts: ILPLinker(spacing=spacing, max_distance_um=config.gate_um),
