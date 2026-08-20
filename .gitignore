@@ -72,3 +72,7 @@ kaggle/_*/
 
 # ephemeral agent worktrees (isolated; not part of tracked tree)
 .claude/worktrees/
+
+# Cross-agent mailbox: inbox/ dir is tracked (.gitkeep), the dropped messages are transient.
+/inbox/*
+!/inbox/.gitkeep
