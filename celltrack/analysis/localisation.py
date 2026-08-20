@@ -28,6 +28,7 @@ from typing import Self
 import numpy as np
 from jaxtyping import Float, Int
 
+from celltrack.analysis.annotated_motion import AnnotatedStepByFate, AnnotatedTurnByFate
 from celltrack.eval.dense_diagnosis import DENSE_MOVIE, DenseDiagnosis, DenseFateDiagnosis, Fate
 from celltrack.eval.proxy import TestMovieProxy
 from celltrack.eval.proxy_eval import ConfigOverride
@@ -48,6 +49,10 @@ _ROUNDING_SLACK = 1e-9
 # The metric's own matching radius: inside it a neighbour is a candidate the assignment could have taken
 # instead, which is exactly the condition under which a measured offset may be a swap rather than an error.
 _CROWDING_RADIUS_UM = 7.0
+# A turn cosine below this is an out-and-back reversal (the annotated successor sits back toward the cell's
+# predecessor) — the label-swap signature; above +this is a smooth continuation, a genuine fast mover.
+_REVERSAL_COS = -0.5
+_ALIGNED_COS = 0.5
 
 
 @dataclass(frozen=True)
@@ -409,34 +414,6 @@ class RivalDistanceGap:
 
 
 @dataclass(frozen=True)
-class AnnotatedStepByFate:
-    """How far the ANNOTATION says each edge's cell travelled, cut by whether we reproduced that edge.
-
-    THE ARBITER between two readings of the elevated endpoint error. The mislinked edges are described as fast
-    movers, but that description is taken from DETECTED positions — and if both endpoints are mislocalised by
-    ~3.5 um in uncorrelated directions, the step between them inherits about sqrt(2) times that, which is the
-    same size as the displacement being called fast. The apparent motion could therefore be manufactured by our
-    own read-out rather than observed.
-
-    This measures the step between ANNOTATED centres, which no detection touches. If the mislinked edges are
-    long here too, the cells genuinely move fast and the endpoint error is a separate problem riding along. If
-    they are ordinary here while long in the detections, the fast mover is our artefact, and the association
-    failure is a localisation failure wearing a motion costume.
-    """
-
-    mislinked_um: Float[np.ndarray, "m"]
-    correct_um: Float[np.ndarray, "c"]
-
-    @classmethod
-    def of(cls, truth: TrackGraph, prediction: TrackGraph, matching: NodeMatching, spacing: Spacing) -> Self:
-        """Annotated per-edge displacement, split by the fate the tracker gave that edge."""
-        fates = DenseFateDiagnosis.of(prediction, truth, matching).fates
-        steps = truth.link_displacements(spacing)
-        mislinked = (fates == Fate.MISLINK_CONFLICT) | (fates == Fate.MISLINK_FREE)
-        return cls(mislinked_um=steps[mislinked], correct_um=steps[fates == Fate.CORRECT])
-
-
-@dataclass(frozen=True)
 class EndpointSides:
     """A candidate triple's localisation error split by WHICH END it sits on — the confound separator.
 
@@ -509,6 +486,7 @@ class LocalisationDiagnosis:
         logger.info("mislinked annotated edges=%d  distinct endpoints=%d", endpoints.edge_count, len(endpoints.rows))
         logger.info("crowded (>1 detection within 7 um of the annotated cell) = %d nodes", len(crowded.rows))
         self._annotated_steps(AnnotatedStepByFate.of(self.truth, self.prediction, self.matching, self.spacing))
+        self._annotated_turns(AnnotatedTurnByFate.of(self.truth, self.prediction, self.matching, self.spacing))
         for label, cut in (
             ("all matched", offsets),
             ("crowded control", offsets.select(crowded.rows)),
@@ -553,6 +531,24 @@ class LocalisationDiagnosis:
                 quartiles[0],
                 quartiles[2],
                 float(values.max()),
+            )
+
+    @staticmethod
+    def _annotated_turns(turns: AnnotatedTurnByFate) -> None:
+        """Log the incoming-to-outgoing turn cosine per fate — reversal share is the label-swap rate on the tail."""
+        for label, values in (("mislinked", turns.mislinked_cos), ("correct", turns.correct_cos)):
+            if not len(values):
+                logger.info("annotated turn (%s): n=0", label)
+                continue
+            logger.info(
+                "annotated turn (%-9s) n=%4d  median cos=%+.3f  reversal(<%+.1f)=%.1f%%  aligned(>%+.1f)=%.1f%%",
+                label,
+                len(values),
+                float(np.median(values)),
+                _REVERSAL_COS,
+                100.0 * float(np.mean(values < _REVERSAL_COS)),
+                _ALIGNED_COS,
+                100.0 * float(np.mean(values > _ALIGNED_COS)),
             )
 
     def _sides(self, label: str, sides: EndpointSides) -> None:

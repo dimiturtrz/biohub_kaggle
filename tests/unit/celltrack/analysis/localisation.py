@@ -2,7 +2,6 @@ import numpy as np
 import pytest
 
 from celltrack.analysis.localisation import (
-    AnnotatedStepByFate,
     CandidatePairs,
     CrowdedNodes,
     DeltaCollisions,
@@ -296,21 +295,3 @@ def test_endpoint_sides_of() -> None:
     assert (sides.true_target.count, sides.true_target.median_um) == (1, 3.0)
     assert sides.rival.count == 0
     assert np.isnan(sides.rival.median_um)
-
-
-def test_annotated_step_by_fate_of() -> None:
-    """The step between ANNOTATED centres, split by fate — the quantity no detection touches.
-
-    This is the arbiter for whether a mislinked edge's cell really travelled far, or whether the apparent
-    distance was manufactured by two mislocalised endpoints. Measuring it off the annotation is what makes it
-    independent of the read-out, so the fixture puts the annotated source and target 40 voxels apart while the
-    tracker links elsewhere.
-    """
-    truth = _graph([[0, 0, 0, 0], [1, 0, 0, 40], [1, 0, 0, 4], [0, 0, 80, 0], [1, 0, 80, 4]], [[0, 1], [3, 4]])
-    prediction = _graph([[0, 0, 0, 0], [1, 0, 0, 40], [1, 0, 0, 4], [0, 0, 80, 0], [1, 0, 80, 4]], [[0, 2], [3, 4]])
-    matching = NodeMatching(gt_rows=np.array([0, 1, 2, 3, 4], dtype=np.int64))
-
-    steps = AnnotatedStepByFate.of(truth, prediction, matching, _SPACING)
-
-    assert steps.mislinked_um == pytest.approx([40 * 0.40625])
-    assert steps.correct_um == pytest.approx([4 * 0.40625])
