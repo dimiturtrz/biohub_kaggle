@@ -1617,7 +1617,25 @@
     {
       "kind": "import",
       "source": "celltrack.models.joint_model",
+      "target": "celltrack.models.relative_position_bias",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.models.joint_model",
+      "target": "celltrack.models.relative_position_transformer",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.models.joint_model",
       "target": "celltrack.models.temporal_unet_detector",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.models.joint_model",
+      "target": "core.geometry",
       "weight": 1
     },
     {
@@ -2121,6 +2139,12 @@
     {
       "kind": "import",
       "source": "celltrack.training.joint_detector",
+      "target": "celltrack.losses.association_objective",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.joint_detector",
       "target": "celltrack.losses.tracking_loss",
       "weight": 1
     },
@@ -2145,7 +2169,25 @@
     {
       "kind": "import",
       "source": "celltrack.training.joint_detector",
+      "target": "celltrack.models.relative_position_bias",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.joint_detector",
+      "target": "celltrack.models.relative_position_transformer",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.joint_detector",
       "target": "celltrack.models.temporal_unet_detector",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.joint_detector",
+      "target": "celltrack.operating_point",
       "weight": 1
     },
     {
@@ -2200,6 +2242,12 @@
       "kind": "import",
       "source": "celltrack.training.joint_detector",
       "target": "celltrack.training.tunet_detector",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.joint_detector",
+      "target": "core.geometry",
       "weight": 1
     },
     {
@@ -2296,6 +2344,12 @@
       "kind": "import",
       "source": "celltrack.training.pair_split",
       "target": "core.data.video",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.training.pair_split",
+      "target": "core.geometry",
       "weight": 1
     },
     {
@@ -10045,9 +10099,21 @@
       "weight": 1
     },
     {
+      "kind": "references",
+      "source": "celltrack.models.joint_model.JointModel",
+      "target": "celltrack.models.relative_position_bias.RelativePositionConfig",
+      "weight": 1
+    },
+    {
       "kind": "holds",
       "source": "celltrack.models.joint_model.JointModel",
       "target": "celltrack.models.temporal_unet_detector.TemporalUNetDetector",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.models.joint_model.JointModel",
+      "target": "core.geometry.Spacing",
       "weight": 1
     },
     {
@@ -10072,6 +10138,18 @@
       "kind": "calls",
       "source": "celltrack.models.joint_model.JointModel._padded_velocity",
       "target": "celltrack.models.joint_model.JointModel._pad_fixed",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.models.joint_model.JointModel._relative_config",
+      "target": "celltrack.models.relative_position_bias.RelativePositionConfig",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.models.joint_model.JointModel._relative_config",
+      "target": "core.geometry.Spacing",
       "weight": 1
     },
     {
@@ -10131,6 +10209,12 @@
     {
       "kind": "construct",
       "source": "celltrack.models.joint_model.JointModel.from_checkpoint",
+      "target": "celltrack.models.relative_position_transformer.RelativePositionEdgeTransformer",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.models.joint_model.JointModel.from_checkpoint",
       "target": "celltrack.models.temporal_unet_detector.TemporalUNetDetector",
       "weight": 1
     },
@@ -10138,6 +10222,18 @@
       "kind": "calls",
       "source": "celltrack.models.joint_model.JointModel.from_checkpoint",
       "target": "celltrack.models.temporal_unet_detector.TemporalUNetDetector.install_temporal_position",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.models.joint_model.JointModel.install_relative_position",
+      "target": "celltrack.models.relative_position_bias.RelativePositionConfig",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.models.joint_model.JointModel.install_relative_position",
+      "target": "celltrack.models.relative_position_transformer.RelativePositionEdgeTransformer",
       "weight": 1
     },
     {
@@ -12062,6 +12158,12 @@
     },
     {
       "kind": "calls",
+      "source": "celltrack.training.joint_checkpoint.JointCheckpoint.payload",
+      "target": "celltrack.models.joint_model.JointModel.relative_position_config",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
       "source": "celltrack.training.joint_checkpoint.JointCheckpoint.restore",
       "target": "celltrack.training.joint_checkpoint.OptimizationState.load_state_dict",
       "weight": 1
@@ -12463,6 +12565,12 @@
       "weight": 1
     },
     {
+      "kind": "references",
+      "source": "celltrack.training.joint_detector.JointTrainer",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
       "kind": "calls",
       "source": "celltrack.training.joint_detector.JointTrainer.__init__",
       "target": "celltrack.losses.association_objective.AssociationObjective.from_config",
@@ -12837,6 +12945,12 @@
     {
       "kind": "calls",
       "source": "celltrack.training.joint_detector.JointTrainer._prepare",
+      "target": "celltrack.operating_point.TrackerConfig.shipped",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer._prepare",
       "target": "celltrack.training.joint_detector.JointTrainer._model",
       "weight": 1
     },
@@ -13132,6 +13246,12 @@
       "kind": "references",
       "source": "celltrack.training.pair_split.PairSplit",
       "target": "core.data.tracks.AnnotatedTracks",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.training.pair_split.PairSplit",
+      "target": "core.geometry.Spacing",
       "weight": 1
     },
     {
@@ -23186,6 +23306,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.models.joint_model.JointModel._relative_config",
+      "label": "_relative_config",
+      "level": "method",
+      "parent": "celltrack.models.joint_model.JointModel",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.models.joint_model.JointModel.batched_forward",
       "label": "batched_forward",
       "level": "method",
@@ -23228,6 +23356,22 @@
       "descendants": 0,
       "id": "celltrack.models.joint_model.JointModel.from_checkpoint",
       "label": "from_checkpoint",
+      "level": "method",
+      "parent": "celltrack.models.joint_model.JointModel",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.joint_model.JointModel.install_relative_position",
+      "label": "install_relative_position",
+      "level": "method",
+      "parent": "celltrack.models.joint_model.JointModel",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.joint_model.JointModel.relative_position_config",
+      "label": "relative_position_config",
       "level": "method",
       "parent": "celltrack.models.joint_model.JointModel",
       "role": null
