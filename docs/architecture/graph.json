@@ -2,6 +2,30 @@
   "edges": [
     {
       "kind": "import",
+      "source": "celltrack.analysis.annotated_motion",
+      "target": "celltrack.eval.dense_diagnosis",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.analysis.annotated_motion",
+      "target": "core.data.tracks",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.analysis.annotated_motion",
+      "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.analysis.annotated_motion",
+      "target": "core.metrics.matching",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "celltrack.analysis.appearance_identity",
       "target": "celltrack.analysis.drift_field",
       "weight": 1
@@ -2582,6 +2606,84 @@
     },
     {
       "kind": "references",
+      "source": "celltrack.analysis.annotated_motion.AnnotatedStepByFate",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.annotated_motion.AnnotatedStepByFate",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.annotated_motion.AnnotatedStepByFate",
+      "target": "core.metrics.matching.NodeMatching",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.annotated_motion.AnnotatedStepByFate.of",
+      "target": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.annotated_motion.AnnotatedStepByFate.of",
+      "target": "core.data.tracks.TrackGraph.link_displacements",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.annotated_motion.AnnotatedTurnByFate",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.annotated_motion.AnnotatedTurnByFate",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.annotated_motion.AnnotatedTurnByFate",
+      "target": "core.metrics.matching.NodeMatching",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.annotated_motion.AnnotatedTurnByFate.of",
+      "target": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.annotated_motion.AnnotatedTurnByFate.of",
+      "target": "core.data.tracks.Adjacency.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.annotated_motion.AnnotatedTurnByFate.of",
+      "target": "core.data.tracks.TrackGraph.edge_rows",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.annotated_motion.AnnotatedTurnByFate.of",
+      "target": "core.data.tracks.TrackGraph.positions",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.annotated_motion.AnnotatedTurnByFate.of",
+      "target": "core.geometry.Spacing.to_micrometres",
+      "weight": 1
+    },
+    {
+      "kind": "references",
       "source": "celltrack.analysis.appearance_identity.IdentityDiagnosis",
       "target": "celltrack.analysis.appearance_identity.IdentitySimilarity",
       "weight": 1
@@ -3278,36 +3380,6 @@
     },
     {
       "kind": "references",
-      "source": "celltrack.analysis.localisation.AnnotatedStepByFate",
-      "target": "core.data.tracks.TrackGraph",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.analysis.localisation.AnnotatedStepByFate",
-      "target": "core.geometry.Spacing",
-      "weight": 1
-    },
-    {
-      "kind": "references",
-      "source": "celltrack.analysis.localisation.AnnotatedStepByFate",
-      "target": "core.metrics.matching.NodeMatching",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.analysis.localisation.AnnotatedStepByFate.of",
-      "target": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis.of",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.analysis.localisation.AnnotatedStepByFate.of",
-      "target": "core.data.tracks.TrackGraph.link_displacements",
-      "weight": 1
-    },
-    {
-      "kind": "references",
       "source": "celltrack.analysis.localisation.CandidatePairs",
       "target": "core.data.tracks.TrackGraph",
       "weight": 1
@@ -3483,7 +3555,13 @@
     {
       "kind": "references",
       "source": "celltrack.analysis.localisation.LocalisationDiagnosis",
-      "target": "celltrack.analysis.localisation.AnnotatedStepByFate",
+      "target": "celltrack.analysis.annotated_motion.AnnotatedStepByFate",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.localisation.LocalisationDiagnosis",
+      "target": "celltrack.analysis.annotated_motion.AnnotatedTurnByFate",
       "weight": 1
     },
     {
@@ -3681,7 +3759,13 @@
     {
       "kind": "calls",
       "source": "celltrack.analysis.localisation.LocalisationDiagnosis._report",
-      "target": "celltrack.analysis.localisation.AnnotatedStepByFate.of",
+      "target": "celltrack.analysis.annotated_motion.AnnotatedStepByFate.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.localisation.LocalisationDiagnosis._report",
+      "target": "celltrack.analysis.annotated_motion.AnnotatedTurnByFate.of",
       "weight": 1
     },
     {
@@ -3694,6 +3778,12 @@
       "kind": "calls",
       "source": "celltrack.analysis.localisation.LocalisationDiagnosis._report",
       "target": "celltrack.analysis.localisation.LocalisationDiagnosis._annotated_steps",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.localisation.LocalisationDiagnosis._report",
+      "target": "celltrack.analysis.localisation.LocalisationDiagnosis._annotated_turns",
       "weight": 1
     },
     {
@@ -14613,7 +14703,7 @@
   ],
   "nodes": [
     {
-      "descendants": 112,
+      "descendants": 113,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -14629,11 +14719,19 @@
       "role": null
     },
     {
-      "descendants": 11,
+      "descendants": 12,
       "id": "celltrack.analysis",
       "label": "analysis",
       "level": "module",
       "parent": "celltrack",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.annotated_motion",
+      "label": "annotated_motion",
+      "level": "module",
+      "parent": "celltrack.analysis",
       "role": null
     },
     {
@@ -15678,6 +15776,22 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.analysis.annotated_motion.AnnotatedStepByFate",
+      "label": "AnnotatedStepByFate",
+      "level": "class",
+      "parent": "celltrack.analysis.annotated_motion",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.annotated_motion.AnnotatedTurnByFate",
+      "label": "AnnotatedTurnByFate",
+      "level": "class",
+      "parent": "celltrack.analysis.annotated_motion",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.analysis.appearance_identity.IdentityDiagnosis",
       "label": "IdentityDiagnosis",
       "level": "class",
@@ -15778,14 +15892,6 @@
       "label": "SyntheticRecovery",
       "level": "class",
       "parent": "celltrack.analysis.drift_field",
-      "role": "satellite"
-    },
-    {
-      "descendants": 0,
-      "id": "celltrack.analysis.localisation.AnnotatedStepByFate",
-      "label": "AnnotatedStepByFate",
-      "level": "class",
-      "parent": "celltrack.analysis.localisation",
       "role": "satellite"
     },
     {
@@ -18134,6 +18240,30 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.analysis.annotated_motion.AnnotatedStepByFate.of",
+      "label": "of",
+      "level": "method",
+      "parent": "celltrack.analysis.annotated_motion.AnnotatedStepByFate",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.annotated_motion.AnnotatedTurnByFate._cosines",
+      "label": "_cosines",
+      "level": "method",
+      "parent": "celltrack.analysis.annotated_motion.AnnotatedTurnByFate",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.annotated_motion.AnnotatedTurnByFate.of",
+      "label": "of",
+      "level": "method",
+      "parent": "celltrack.analysis.annotated_motion.AnnotatedTurnByFate",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.analysis.appearance_identity.IdentityDiagnosis._boxes",
       "label": "_boxes",
       "level": "method",
@@ -18566,14 +18696,6 @@
     },
     {
       "descendants": 0,
-      "id": "celltrack.analysis.localisation.AnnotatedStepByFate.of",
-      "label": "of",
-      "level": "method",
-      "parent": "celltrack.analysis.localisation.AnnotatedStepByFate",
-      "role": null
-    },
-    {
-      "descendants": 0,
       "id": "celltrack.analysis.localisation.CandidatePairs._nearest_rival",
       "label": "_nearest_rival",
       "level": "method",
@@ -18656,6 +18778,14 @@
       "descendants": 0,
       "id": "celltrack.analysis.localisation.LocalisationDiagnosis._annotated_steps",
       "label": "_annotated_steps",
+      "level": "method",
+      "parent": "celltrack.analysis.localisation.LocalisationDiagnosis",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.localisation.LocalisationDiagnosis._annotated_turns",
+      "label": "_annotated_turns",
       "level": "method",
       "parent": "celltrack.analysis.localisation.LocalisationDiagnosis",
       "role": null
