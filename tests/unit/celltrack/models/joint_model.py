@@ -8,11 +8,17 @@ in `conftest` stand in with the same shape contracts, so this exercises the join
 from pathlib import Path
 
 import torch
+from torch import nn
 
 from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeTransformerScorer
 from celltrack.models.joint_model import _MAX_NODES, JointModel
 from celltrack.models.prior_velocity import PriorVelocity
+from celltrack.models.relative_position_transformer import RelativePositionEdgeTransformer
 from celltrack.models.temporal_unet_detector import TemporalUNetDetector
+from core.geometry import Spacing
+
+_SPACING = Spacing(z=1.625, y=0.40625, x=0.40625)
+_GATE_UM = 10.0
 
 
 def _joint_model(extra_features: int = 0) -> JointModel:
@@ -21,6 +27,25 @@ def _joint_model(extra_features: int = 0) -> JointModel:
     feat_dim = out_channels + 4 * _POS_EMBED_DIM + extra_features
     transformer = EdgeTransformerScorer._transformer_cls()(feat_dim=feat_dim, hidden_dim=8, n_heads=1, n_blocks=1)
     return JointModel(detector, transformer, downsample=(1, 1, 1))
+
+
+class _StubHead(nn.Module):
+    """The one structure the geometry wrapper reads for its head count — `blocks[0].cross_attn`.
+
+    The suite-wide stub transformer is a bare linear with no attention blocks, so a model whose head must be
+    geometry-wrapped stands one of these in instead (the wrapper's own forward/state fidelity is proven in
+    `relative_position_transformer`; here it is only the model-level install + persistence seam).
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        block = nn.Module()
+        block.cross_attn = nn.MultiheadAttention(8, 2, batch_first=True)
+        self.blocks = nn.ModuleList([block])
+
+
+def _head_model() -> JointModel:
+    return JointModel(TemporalUNetDetector(2, (2, 4)), _StubHead(), downsample=(1, 1, 1))
 
 
 def test_forward():
@@ -182,6 +207,33 @@ def test_forward_batch_prior_velocity():
     for single, batch in zip(singles, batched, strict=True):
         assert torch.allclose(single.edge_logits, batch.edge_logits, atol=1e-4)
         assert torch.allclose(single.source_features, batch.source_features, atol=1e-4)
+
+
+def test_relative_position_config():
+    """A plain head reports no geometry; a wrapped one reports spacing/reach that rebuilds the same config."""
+    assert _head_model().relative_position_config() is None  # plain head persists as before
+
+    model = _head_model()
+    model.install_relative_position(_SPACING, _GATE_UM, "cpu")
+    persisted = model.relative_position_config()
+    assert persisted is not None
+    assert persisted["gate_um"] == _GATE_UM
+    assert list(persisted["spacing"]) == [_SPACING.z, _SPACING.y, _SPACING.x]
+
+    rebuilt = JointModel._relative_config(persisted)
+    assert rebuilt.enabled and rebuilt.gate_um == _GATE_UM
+    assert tuple(rebuilt.spacing.as_array()) == tuple(_SPACING.as_array())
+
+
+def test_install_relative_position():
+    """Installing the geometry wrapper swaps the plain head for a zero-init distance-bias wrapper on the model."""
+    model = _head_model()
+    assert not isinstance(model.transformer, RelativePositionEdgeTransformer)
+
+    model.install_relative_position(_SPACING, _GATE_UM, "cpu")
+
+    assert isinstance(model.transformer, RelativePositionEdgeTransformer)
+    assert model.relative_position_config() is not None  # now reports its geometry to the checkpoint
 
 
 def test_from_checkpoint(tmp_path: Path):

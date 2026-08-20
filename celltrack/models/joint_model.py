@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import override
+from typing import cast, override
 
 import torch
 from jaxtyping import Bool, Float, Int
@@ -20,7 +20,10 @@ from torch import Tensor, nn
 from torch.nn.utils.rnn import pad_sequence
 
 from celltrack.models.edge_transformer import EdgeTransformerScorer, NodeWindowSlot
+from celltrack.models.relative_position_bias import RelativePositionConfig
+from celltrack.models.relative_position_transformer import RelativePositionEdgeTransformer
 from celltrack.models.temporal_unet_detector import TemporalUNetDetector
+from core.geometry import Spacing
 
 # The published head's shape, which a checkpoint's weights were trained in and must be rebuilt at.
 _HIDDEN_DIM, _N_HEADS, _N_BLOCKS = 128, 4, 4
@@ -124,16 +127,60 @@ class JointModel(nn.Module):
         )
         if config.get("temporal_position"):  # rebuild the position-embedded attention before its weights load
             detector.install_temporal_position()
-        transformer = EdgeTransformerScorer._transformer_cls()(  # noqa: SLF001 — the pack's head class, mounted
-            feat_dim=state["transformer_state"]["proj.weight"].shape[1],
+        # The input-projection width sits under the pack key `proj.weight`, or `transformer.proj.weight` once the
+        # head is wrapped for relative position — read whichever the checkpoint carries.
+        transformer_state = state["transformer_state"]
+        proj_key = "proj.weight" if "proj.weight" in transformer_state else "transformer.proj.weight"
+        transformer: nn.Module = EdgeTransformerScorer._transformer_cls()(  # noqa: SLF001 — the pack's head class
+            feat_dim=transformer_state[proj_key].shape[1],
             hidden_dim=_HIDDEN_DIM,
             n_heads=_N_HEADS,
             n_blocks=_N_BLOCKS,
         )
+        relative = config.get("relative_position")
+        if relative:  # rebuild the geometry wrapper before its weights (incl. the bias buffers) load
+            transformer = RelativePositionEdgeTransformer(transformer, cls._relative_config(relative))
         detector.load_state_dict(cls._align_state_to(detector, state["detector_state"]))
-        transformer.load_state_dict(cls._align_state_to(transformer, state["transformer_state"]))
+        transformer.load_state_dict(cls._align_state_to(transformer, transformer_state))
         model = cls(detector, transformer, tuple(config["downsample"]))
         return model.to(device).eval()
+
+    @staticmethod
+    def _relative_config(persisted: dict[str, object]) -> RelativePositionConfig:
+        """Rebuild the geometry config from its persisted geometry — the enabled wrapper the checkpoint was saved at."""
+        spacing = cast(list[float], persisted["spacing"])
+        return RelativePositionConfig(
+            spacing=Spacing(*spacing),
+            gate_um=cast(float, persisted["gate_um"]),
+            basis_count=cast(int, persisted["basis_count"]),
+            enabled=True,
+        )
+
+    def install_relative_position(self, spacing: Spacing, gate_um: float, device: str) -> None:
+        """Wrap the edge head in a zero-init per-head distance bias — geometry sight, like `install_temporal_position`.
+
+        The wrapper adds a learned distance bias to the head's cross-attention; it is zero-init, so the model
+        starts identical to the plain head and the bias earns its keep over training. Call after the proj is
+        widened (the wrap must see the unwrapped `.proj`) and before the optimiser, so `bias.weight` joins
+        `model.parameters()`.
+        """
+        config = RelativePositionConfig(spacing=spacing, gate_um=gate_um, enabled=True)
+        self.transformer = RelativePositionEdgeTransformer(self.transformer, config).to(device)
+
+    def relative_position_config(self) -> dict[str, object] | None:
+        """The persisted geometry of the edge head when it is relative-position wrapped, else `None`.
+
+        The one home the checkpoint reads to know whether — and at what spacing/reach — to rebuild the wrapper
+        before loading. `None` for the plain pack head, so an unwrapped run persists exactly as before.
+        """
+        config = getattr(self.transformer, "config", None)
+        if not isinstance(config, RelativePositionConfig) or not config.enabled:
+            return None
+        return {
+            "spacing": list(config.spacing.as_array()),
+            "gate_um": config.gate_um,
+            "basis_count": config.basis_count,
+        }
 
     @staticmethod
     def _align_state_to(module: nn.Module, state: dict[str, Tensor]) -> dict[str, Tensor]:

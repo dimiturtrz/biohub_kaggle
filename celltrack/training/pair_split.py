@@ -35,6 +35,7 @@ from celltrack.training.joint_config import WARM_PACKS, JointTrainConfig
 from celltrack.training.run_tracking import TrainingSplit
 from core.data.tracks import AnnotatedTracks
 from core.data.video import CellVideo, ImageStatistics
+from core.geometry import Spacing
 from core.obs import Obs
 from core.paths import DataRoot
 
@@ -53,6 +54,10 @@ class PairSplit:
     train: list[PairTarget]
     val: list[PairTarget]
     synthetic: list[PairTarget] = field(default_factory=list)
+    # The corpus's voxel geometry (raw full-res, single-spacing across the acquisitions), carried so a run that
+    # mounts the relative-position edge head can convert its full-res voxel coords to micrometres. `None` when
+    # unset (a fixture never touches it); `assemble` always fills it from the first train video.
+    spacing: Spacing | None = None
 
     def corpus(self) -> list[PairTarget]:
         """The index space a curriculum draws over: the real pairs first, then the synthetic ones."""
@@ -89,8 +94,8 @@ class PairSplit:
         # deployment are compared on the same radius: a corpus whose contested fraction is far from the tracker's
         # is training on a different question (the sparse-acquisition defect hid for thirteen arms because this
         # line was missing). Spacing is any train video's — identical across the acquisitions post-downsample.
+        spacing = CellVideo.from_ome_zarr(train_paths[0]).spacing
         if train_targets:
-            spacing = CellVideo.from_ome_zarr(train_paths[0]).spacing
             CandidateDensity.of_pairs(train_targets, spacing, TrackerConfig.shipped().linker.gate_um).report(
                 "train corpus"
             )
@@ -100,7 +105,7 @@ class PairSplit:
         held = list(zip(proxy.paths, proxy.truths, strict=True))[:val_videos]
         val_targets = [target for video, truth in held for target in cls.of_video(video, truth)]
         logger.info("%d val pairs over %d validation movies", len(val_targets), len(held))
-        return cls(train_targets, val_targets, cls.of_synthetic(root, config, log)), split
+        return cls(train_targets, val_targets, cls.of_synthetic(root, config, log), spacing=spacing), split
 
     @staticmethod
     def of_video(video: Path, annotation: AnnotatedTracks) -> list[PairTarget]:

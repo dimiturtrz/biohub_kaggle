@@ -101,6 +101,12 @@ class ModelCfg(BaseModel):
     # uses the stored stats in BOTH phases; the affine weight/bias still train. Warm-start only (GroupNorm has
     # no running stats to freeze; a from-scratch BN has none worth keeping).
     freeze_backbone_norm: bool = False
+    # Add a learned per-head distance bias to the edge transformer's CROSS-ATTENTION — a zero-initialised
+    # `DistanceAttentionBias` over the pair's separation in micrometres (see relative_position_transformer). Off =
+    # the pack head byte for byte; on, geometry enters every attention layer the pack otherwise decides on
+    # appearance alone (the dense-confusor axis). Zero-init keeps a warm start identical at step 0; the spacing is
+    # threaded from the corpus and the reach is the linker's own gate, so no new distance scale is introduced.
+    relative_position: bool = False
 
 
 class DataCfg(BaseModel):
@@ -443,6 +449,7 @@ class JointTrainConfig(BaseModel):
             model=ModelCfg(
                 warm_pack=WARM_PACKS[args.warm_pack],
                 temporal_position=args.temporal_position,
+                relative_position=args.relative_position,
                 norm=args.norm,
                 freeze_backbone_norm=args.freeze_backbone_norm,
                 lora=LoraCfg(

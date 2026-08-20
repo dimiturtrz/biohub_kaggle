@@ -168,6 +168,11 @@ class JointCli:
         JointCli._add_augmentation_args(parser)
         parser.add_argument("--temporal-position", action="store_true", help="frame-position embedding (motion sight)")
         parser.add_argument(
+            "--relative-position",
+            action="store_true",
+            help="add a learned per-head distance bias to the edge transformer's cross-attention (geometry sight)",
+        )
+        parser.add_argument(
             "--norm",
             choices=("batch", "group"),
             default="batch",

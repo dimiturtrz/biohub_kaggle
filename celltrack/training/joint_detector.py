@@ -65,6 +65,7 @@ from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeTransformerSco
 from celltrack.models.joint_model import BatchedForward, JointForward, JointModel
 from celltrack.models.lora import LoRA
 from celltrack.models.temporal_unet_detector import TemporalUNetDetector
+from celltrack.operating_point import TrackerConfig
 from celltrack.training.contrastive_term import ContrastiveTerm, ContrastiveTermConfig
 from celltrack.training.early_stop import EarlyStop
 from celltrack.training.joint_checkpoint import RESUME_SUFFIX, JointCheckpoint, RunProgress
@@ -78,6 +79,7 @@ from celltrack.training.pair_split import PairSplit
 from celltrack.training.prior_velocity_source import PriorVelocitySource
 from celltrack.training.run_tracking import RunSetup, TrainingRun
 from celltrack.training.tunet_detector import _Optimization
+from core.geometry import Spacing
 from core.metrics.edge_auc import EdgeAUC
 from core.obs import Obs
 from core.paths import DataRoot
@@ -172,7 +174,9 @@ class JointTrainer:
         save_to = setup.save_to
         torch.set_float32_matmul_precision("high")  # TF32 on the fp32 matmuls the bf16 autocast leaves alone
         torch.backends.cudnn.benchmark = True  # one static frame shape — cudnn picks the fastest algo once
-        model, optimization = self._prepare(warm_start=setup.warm_start, init_weights=setup.init_weights)
+        model, optimization = self._prepare(
+            warm_start=setup.warm_start, init_weights=setup.init_weights, spacing=pairs.spacing
+        )
 
         run = TrainingRun.open(self.config.model_dump(), setup)
         resume_path = save_to.with_suffix(RESUME_SUFFIX)
@@ -296,18 +300,25 @@ class JointTrainer:
             return None
         return torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.config.schedule.steps)
 
-    def _prepare(self, *, warm_start: bool, init_weights: Path | None = None) -> tuple[JointModel, _Optimization]:
+    def _prepare(
+        self, *, warm_start: bool, init_weights: Path | None = None, spacing: Spacing | None = None
+    ) -> tuple[JointModel, _Optimization]:
         """The run's trained objects, built in the one order that keeps BOTH a warm start and a widened head.
 
         The order is load-bearing. `widen_linear_inputs` REPLACES the head's input projection with a new
         parameter object, so the sequence must be: build at the published width → load the pretrained weights
-        into it → widen → and only then hand `model.parameters()` to the optimiser. An optimiser constructed
-        before the widening would hold the discarded projection and train nothing through it, in silence.
+        into it → widen → wrap for relative position → and only then hand `model.parameters()` to the optimiser.
+        An optimiser built before the widening would hold the discarded projection and train nothing through it,
+        in silence; the geometry wrap sits AFTER the widen (widened proj) and BEFORE the optimiser (bias owned).
         """
         model = self._model(warm_start=warm_start, init_weights=init_weights).to(self.config.runtime.device)
         if self.config.model.temporal_position:  # motion sight; the position table lands on the model's device
             model.detector.install_temporal_position()
         self._velocity.widen(model)
+        if self.config.model.relative_position:  # geometry sight; a zero-init per-head distance bias in the head
+            if spacing is None:
+                raise ValueError("--relative-position needs the corpus spacing; PairSplit.spacing is unset")
+            model.install_relative_position(spacing, TrackerConfig.shipped().linker.gate_um, self.config.runtime.device)
         if self._lora.enabled:  # freeze the base, adapt the association locus; detection is anchored
             adapted = LoRA.inject(model, self._lora.to_config())
             if adapted == 0:
