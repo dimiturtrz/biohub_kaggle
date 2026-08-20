@@ -10,7 +10,8 @@
   "enable_internet": false,
   "dataset_sources": [
     "dimiturnt/celltrack-kit",
-    "dimiturnt/celltrack-joint-dw0"
+    "dimiturnt/celltrack-joint-dw0",
+    "pilkwang/biohub-tracking-support-pack-50ep-v1"
   ],
   "competition_sources": [
     "biohub-cell-tracking-during-development"
