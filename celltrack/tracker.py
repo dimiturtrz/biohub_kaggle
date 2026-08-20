@@ -20,10 +20,12 @@ from typing import Protocol
 from celltrack.affinity import EdgeAffinity
 from celltrack.detectors.pipeline import BlendDetectorScorer
 from celltrack.detectors.response_cache import EphemeralResponseStore, ResponseCache, ResponseStore
-from celltrack.detectors.tunet import TemporalUNetDetector
+from celltrack.detectors.tunet import DetectorRecipe, TemporalUNetDetector
 from celltrack.edges.association_ranker import AssociationRanker
 from celltrack.edges.blended_edge_scoring import BlendedEdgeTransformerScorer
 from celltrack.linkers.linking import Linker
+from celltrack.models.edge_transformer import EdgeTransformerScorer
+from celltrack.models.joint_model import JointModel
 from celltrack.operating_point import TrackerConfig
 from celltrack.postproc.linefit_smoother import LinefitSmoother
 from celltrack.postproc.short_track_filter import ShortTrackFilter
@@ -109,6 +111,28 @@ class CellTracker:
         per-GPU worker can rebuild the identical tracker from them rather than inheriting mounted CUDA models.
         """
         return cls._mounted(pack1, pack2, (EphemeralResponseStore(), EphemeralResponseStore()), device, config)
+
+    @classmethod
+    def from_joint(
+        cls, checkpoint: Path, recipe: DetectorRecipe, device: str, config: TrackerConfig | None = None
+    ) -> "CellTracker":
+        """The shipped tracker with BOTH heads from one jointly-trained checkpoint — no pilkwang packs.
+
+        `ephemeral` mounts pilkwang's edge affinity behind the detector, which discards the association half a
+        joint run trained. This mounts the model's OWN detector and transformer as the one-member logit blend
+        `ModelEvaluator.evaluate_joint` selects on — the identical assembly, so a submission runs the whole
+        trained pipeline the proxy scored. `recipe` is the detector's input pipeline (downsample / TTA) the model
+        was read out under; a joint checkpoint carries no pack to bake it, so the caller states it.
+        """
+        config = config or TrackerConfig.shipped()
+        model = JointModel.from_checkpoint(checkpoint, device)
+        detector = TemporalUNetDetector.of(model.detector)
+        scorer = EdgeTransformerScorer.of(detector, model.transformer, recipe)
+        edge_scorer = BlendedEdgeTransformerScorer(
+            (scorer,), (1.0,), bidirectional=config.bidirectional_edges, options=config.edge_options
+        )
+        blended = BlendDetectorScorer(detectors=((detector, EphemeralResponseStore()),), recipe=recipe, device=device)
+        return cls(detector=blended, edge_scorer=edge_scorer, device=device, config=config)
 
     @classmethod
     def _mounted(

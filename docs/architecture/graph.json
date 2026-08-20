@@ -1887,6 +1887,18 @@
     {
       "kind": "import",
       "source": "celltrack.tracker",
+      "target": "celltrack.models.edge_transformer",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.tracker",
+      "target": "celltrack.models.joint_model",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.tracker",
       "target": "celltrack.operating_point",
       "weight": 1
     },
@@ -11938,6 +11950,48 @@
       "kind": "construct",
       "source": "celltrack.tracker.CellTracker.ephemeral",
       "target": "celltrack.detectors.response_cache.EphemeralResponseStore",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.tracker.CellTracker.from_joint",
+      "target": "celltrack.detectors.pipeline.BlendDetectorScorer",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.tracker.CellTracker.from_joint",
+      "target": "celltrack.detectors.response_cache.EphemeralResponseStore",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.tracker.CellTracker.from_joint",
+      "target": "celltrack.detectors.tunet.TemporalUNetDetector.of",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.tracker.CellTracker.from_joint",
+      "target": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.tracker.CellTracker.from_joint",
+      "target": "celltrack.models.edge_transformer.EdgeTransformerScorer.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.tracker.CellTracker.from_joint",
+      "target": "celltrack.models.joint_model.JointModel.from_checkpoint",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.tracker.CellTracker.from_joint",
+      "target": "celltrack.operating_point.TrackerConfig.shipped",
       "weight": 1
     },
     {
@@ -24730,6 +24784,14 @@
       "descendants": 0,
       "id": "celltrack.tracker.CellTracker.ephemeral",
       "label": "ephemeral",
+      "level": "method",
+      "parent": "celltrack.tracker.CellTracker",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.tracker.CellTracker.from_joint",
+      "label": "from_joint",
       "level": "method",
       "parent": "celltrack.tracker.CellTracker",
       "role": null

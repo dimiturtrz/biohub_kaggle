@@ -1,5 +1,6 @@
 from dataclasses import dataclass, replace
 from pathlib import Path
+from types import SimpleNamespace
 from typing import cast
 
 import numpy as np
@@ -186,6 +187,39 @@ def test_ephemeral(monkeypatch: pytest.MonkeyPatch):
 
     assert tracker.config.threshold == 0.97
     assert [type(store) for _, store in tracker.detector.detectors] == [EphemeralResponseStore] * 2
+
+
+def test_from_joint(monkeypatch: pytest.MonkeyPatch):
+    """`from_joint` mounts both heads from ONE joint checkpoint as the single-seed one-member blend."""
+    model = SimpleNamespace(detector=object(), transformer=object())
+    monkeypatch.setattr(tracker_module.JointModel, "from_checkpoint", classmethod(lambda cls, path, device: model))
+    monkeypatch.setattr(tracker_module.TemporalUNetDetector, "of", classmethod(lambda cls, net: _StubDetector()))
+    monkeypatch.setattr(
+        tracker_module.EdgeTransformerScorer,
+        "of",
+        classmethod(lambda cls, detector, transformer, recipe: object()),
+    )
+    captured: dict[str, object] = {}
+
+    def _blend(
+        members: tuple[object, ...],
+        weights: tuple[float, ...],
+        *,
+        bidirectional: bool,
+        options: EdgeBlendOptions,
+    ) -> _StubEdgeScorer:
+        captured["members"], captured["weights"] = members, weights
+        return _StubEdgeScorer(options)
+
+    monkeypatch.setattr(tracker_module, "BlendedEdgeTransformerScorer", _blend)
+
+    tracker = CellTracker.from_joint(Path("dw0.pt"), DetectorRecipe(), "cpu", TrackerConfig(threshold=0.98))
+
+    assert tracker.config.threshold == 0.98
+    assert isinstance(tracker.detector, BlendDetectorScorer)
+    assert [type(store) for _, store in tracker.detector.detectors] == [EphemeralResponseStore]
+    assert captured["weights"] == (1.0,)
+    assert len(cast(tuple[object, ...], captured["members"])) == 1
 
 
 def test_spacing(monkeypatch: pytest.MonkeyPatch):
