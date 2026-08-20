@@ -3513,6 +3513,12 @@
     {
       "kind": "references",
       "source": "celltrack.analysis.localisation.LocalisationDiagnosis",
+      "target": "celltrack.analysis.localisation.VelocityReferencedGap",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.localisation.LocalisationDiagnosis",
       "target": "celltrack.operating_point.TrackerConfig",
       "weight": 1
     },
@@ -3585,6 +3591,12 @@
     {
       "kind": "calls",
       "source": "celltrack.analysis.localisation.LocalisationDiagnosis._candidates",
+      "target": "celltrack.analysis.localisation.LocalisationDiagnosis._velocity_gap",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.localisation.LocalisationDiagnosis._candidates",
       "target": "celltrack.analysis.localisation.LocalisationOffsets.summary",
       "weight": 1
     },
@@ -3592,6 +3604,12 @@
       "kind": "calls",
       "source": "celltrack.analysis.localisation.LocalisationDiagnosis._candidates",
       "target": "celltrack.analysis.localisation.RivalDistanceGap.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.localisation.LocalisationDiagnosis._candidates",
+      "target": "celltrack.analysis.localisation.VelocityReferencedGap.of",
       "weight": 1
     },
     {
@@ -3706,6 +3724,18 @@
       "kind": "calls",
       "source": "celltrack.analysis.localisation.LocalisationDiagnosis._report",
       "target": "core.data.tracks.TrackGraph.link_displacements",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.localisation.LocalisationDiagnosis._velocity_gap",
+      "target": "celltrack.analysis.localisation.VelocityReferencedGap.coverage",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.localisation.LocalisationDiagnosis._velocity_gap",
+      "target": "celltrack.analysis.localisation.VelocityReferencedGap.rival_nearer",
       "weight": 1
     },
     {
@@ -3831,6 +3861,60 @@
     {
       "kind": "calls",
       "source": "celltrack.analysis.localisation.RivalDistanceGap.of",
+      "target": "core.geometry.Spacing.to_micrometres",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.localisation.VelocityReferencedGap",
+      "target": "celltrack.analysis.localisation.CandidatePairs",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.localisation.VelocityReferencedGap",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.localisation.VelocityReferencedGap",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.localisation.VelocityReferencedGap",
+      "target": "core.metrics.matching.NodeMatching",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.localisation.VelocityReferencedGap._source_velocities",
+      "target": "core.data.tracks.Adjacency.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.localisation.VelocityReferencedGap._source_velocities",
+      "target": "core.data.tracks.TrackGraph.positions",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.localisation.VelocityReferencedGap._source_velocities",
+      "target": "core.geometry.Spacing.to_micrometres",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.localisation.VelocityReferencedGap.of",
+      "target": "core.data.tracks.TrackGraph.positions",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.analysis.localisation.VelocityReferencedGap.of",
       "target": "core.geometry.Spacing.to_micrometres",
       "weight": 1
     },
@@ -15786,6 +15870,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.analysis.localisation.VelocityReferencedGap",
+      "label": "VelocityReferencedGap",
+      "level": "class",
+      "parent": "celltrack.analysis.localisation",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.analysis.mitotic_appearance.AppearanceFeatures",
       "label": "AppearanceFeatures",
       "level": "class",
@@ -18634,6 +18726,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.analysis.localisation.LocalisationDiagnosis._velocity_gap",
+      "label": "_velocity_gap",
+      "level": "method",
+      "parent": "celltrack.analysis.localisation.LocalisationDiagnosis",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.analysis.localisation.LocalisationOffsets.of",
       "label": "of",
       "level": "method",
@@ -18726,6 +18826,38 @@
       "label": "rival_nearer",
       "level": "method",
       "parent": "celltrack.analysis.localisation.RivalDistanceGap",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.localisation.VelocityReferencedGap._source_velocities",
+      "label": "_source_velocities",
+      "level": "method",
+      "parent": "celltrack.analysis.localisation.VelocityReferencedGap",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.localisation.VelocityReferencedGap.coverage",
+      "label": "coverage",
+      "level": "method",
+      "parent": "celltrack.analysis.localisation.VelocityReferencedGap",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.localisation.VelocityReferencedGap.of",
+      "label": "of",
+      "level": "method",
+      "parent": "celltrack.analysis.localisation.VelocityReferencedGap",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.localisation.VelocityReferencedGap.rival_nearer",
+      "label": "rival_nearer",
+      "level": "method",
+      "parent": "celltrack.analysis.localisation.VelocityReferencedGap",
       "role": null
     },
     {
