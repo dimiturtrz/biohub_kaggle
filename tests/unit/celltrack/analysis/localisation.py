@@ -12,6 +12,7 @@ from celltrack.analysis.localisation import (
     MislinkEndpoints,
     OffsetSummary,
     RivalDistanceGap,
+    VelocityReferencedGap,
 )
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
@@ -214,7 +215,7 @@ def test_rival_distance_gap_of() -> None:
     assert gaps.gaps_um[0] == (20 - 8) * 0.40625
 
 
-def test_rival_nearer() -> None:
+def test_rival_distance_gap_rival_nearer() -> None:
     prediction = _graph([[0, 0, 0, 0], [1, 0, 0, 20], [1, 0, 0, 8]], [])
 
     assert RivalDistanceGap.of(prediction, _pairs(true_target=1, rival=2), _SPACING).rival_nearer() == 1.0
@@ -228,6 +229,45 @@ def test_invertible() -> None:
 
     assert gaps.invertible(noise_um=1.0) == 0.0
     assert gaps.invertible(noise_um=10.0) == 1.0
+
+
+def _fast_mover_velocity_gap() -> VelocityReferencedGap:
+    """A source that moved far last step: radial picks the near rival, `source + velocity` picks the true target.
+
+    Prediction rows: 0 = source at x=10, 1 = true successor at x=20 (the motion continues), 2 = a rival at x=12
+    sitting near the source. Radially the rival is nearer (`RivalDistanceGap` returns a positive gap). The
+    source's GROUND-TRUTH incoming step is +10 in x (its annotated predecessor sat at x=0), so the reference
+    `source + velocity` lands on x=20 — exactly the true target — and the velocity-referenced gap goes negative.
+    """
+    prediction = _graph([[1, 0, 0, 10], [2, 0, 0, 20], [2, 0, 0, 12]], [])
+    truth = _graph([[0, 0, 0, 0], [1, 0, 0, 10], [2, 0, 0, 20]], [[0, 1]])
+    matching = NodeMatching(gt_rows=np.array([1, 2, UNMATCHED], dtype=np.int64))
+    assert RivalDistanceGap.of(prediction, _pairs(true_target=1, rival=2), _SPACING).rival_nearer() == 1.0
+    return VelocityReferencedGap.of(prediction, truth, matching, _pairs(true_target=1, rival=2), _SPACING)
+
+
+def test_velocity_referenced_gap_of() -> None:
+    assert _fast_mover_velocity_gap().gaps_um[0] == pytest.approx(-8 * 0.40625)
+
+
+def test_velocity_referenced_gap_rival_nearer() -> None:
+    assert _fast_mover_velocity_gap().rival_nearer() == 0.0
+
+
+def test_coverage() -> None:
+    assert _fast_mover_velocity_gap().coverage() == 1.0
+
+
+def test_velocity_referenced_gap_reports_a_source_without_a_predecessor_as_uncovered() -> None:
+    """A source with no annotated predecessor carries zero velocity, so it is excluded from the rival-nearer share."""
+    prediction = _graph([[1, 0, 0, 10], [2, 0, 0, 20], [2, 0, 0, 12]], [])
+    truth = _graph([[1, 0, 0, 10], [2, 0, 0, 20]], [])
+    matching = NodeMatching(gt_rows=np.array([0, 1, UNMATCHED], dtype=np.int64))
+
+    velocity_gap = VelocityReferencedGap.of(prediction, truth, matching, _pairs(true_target=1, rival=2), _SPACING)
+
+    assert velocity_gap.coverage() == 0.0
+    assert np.isnan(velocity_gap.rival_nearer())
 
 
 def test_mislink_endpoints_of_a_reproduced_edge_is_empty() -> None:

@@ -290,6 +290,66 @@ class CandidatePairs:
 
 
 @dataclass(frozen=True)
+class VelocityReferencedGap:
+    """The rival-distance gap re-measured from where the source is HEADING, not from where it sits.
+
+    `RivalDistanceGap` keys on `d(source, ·)` — a RADIAL cue that the confusor inverts: on the fast-mover
+    mislinks the true successor has moved far along the cell's motion while a slower neighbour sits near the
+    source, so the nearest candidate is the wrong one. This shifts the reference to `source + velocity`, the
+    constant-velocity prediction of the successor's position, where `velocity` is the source's own GROUND-TRUTH
+    incoming displacement (`position(t) - position(t-1)` from the annotated predecessor). If the true successor
+    lies along the motion and the rival does not, the gap flips sign: the true target becomes the nearer of the
+    two from the predicted point. This is the CEILING a velocity-referenced (directional) attention bias could
+    reach — it uses the true motion, so a positive result bounds the mechanism, not any trainable estimate of it.
+
+    A source with no annotated predecessor carries zero velocity, so its reference degrades to the radial one and
+    it is reported as UNCOVERED: the flip is only claimable over the covered share, and the coverage is the
+    denominator that keeps a gap measured on ten sources from being read as a gap over all thirty-seven.
+    """
+
+    gaps_um: Float[np.ndarray, "k"]
+    covered: np.ndarray
+
+    @classmethod
+    def of(
+        cls, prediction: TrackGraph, truth: TrackGraph, matching: NodeMatching, pairs: CandidatePairs, spacing: Spacing
+    ) -> Self:
+        """`d(source+velocity, true) - d(source+velocity, rival)`; velocity is the source's GT incoming step."""
+        positions = spacing.to_micrometres(prediction.positions())
+        velocities, covered = cls._source_velocities(truth, matching, pairs, spacing)
+        reference = positions[pairs.source] + velocities
+        to_true = np.linalg.norm(positions[pairs.true_target] - reference, axis=1)
+        to_rival = np.linalg.norm(positions[pairs.rival] - reference, axis=1)
+        return cls(gaps_um=to_true - to_rival, covered=covered)
+
+    @staticmethod
+    def _source_velocities(
+        truth: TrackGraph, matching: NodeMatching, pairs: CandidatePairs, spacing: Spacing
+    ) -> tuple[Float[np.ndarray, "k 3"], np.ndarray]:
+        """Each source's GT incoming displacement in um, and a mask of which sources had an annotated predecessor."""
+        truth_positions = spacing.to_micrometres(truth.positions())
+        predecessors = Adjacency.of(truth).predecessors
+        velocities = np.zeros((len(pairs.source), 3), dtype=np.float64)
+        covered = np.zeros(len(pairs.source), dtype=bool)
+        for index, source_row in enumerate(pairs.source.tolist()):
+            parents = predecessors.get(int(matching.gt_rows[source_row]), ())
+            if not parents:
+                continue
+            velocities[index] = truth_positions[int(matching.gt_rows[source_row])] - truth_positions[parents[0]]
+            covered[index] = True
+        return velocities, covered
+
+    def rival_nearer(self) -> float:
+        """The share of COVERED sources where the rival is still nearer than the true target from the prediction."""
+        covered_gaps = self.gaps_um[self.covered]
+        return float(np.mean(covered_gaps > 0.0)) if len(covered_gaps) else float("nan")
+
+    def coverage(self) -> float:
+        """The share of sources that had a GT predecessor, so the reference is a real motion and not a zero."""
+        return float(np.mean(self.covered)) if len(self.covered) else float("nan")
+
+
+@dataclass(frozen=True)
 class DeltaCollisions:
     """How far apart the true and rival candidates are in the QUANTISED displacement the head is fed.
 
@@ -473,6 +533,8 @@ class LocalisationDiagnosis:
         ):
             self._collisions(label, DeltaCollisions.of(self.prediction, pairs, self.downsample))
             self._gaps(label, RivalDistanceGap.of(self.prediction, pairs, self.spacing), noise_um)
+            velocity_gap = VelocityReferencedGap.of(self.prediction, self.truth, self.matching, pairs, self.spacing)
+            self._velocity_gap(label, velocity_gap)
             self._sides(label, EndpointSides.of(offsets, pairs))
 
     @staticmethod
@@ -504,6 +566,22 @@ class LocalisationDiagnosis:
                 summary.median_um,
                 "/".join(f"{value:.3f}" for value in summary.axis_median_abs_um),
             )
+
+    @staticmethod
+    def _velocity_gap(label: str, gaps: VelocityReferencedGap) -> None:
+        """Log the rival-nearer share once the reference is `source + GT velocity` — the directional-bias ceiling."""
+        covered = gaps.gaps_um[gaps.covered]
+        if not len(covered):
+            logger.info("%-22s velocity-ref n=0 (no GT predecessors)", label)
+            return
+        logger.info(
+            "%-22s velocity-ref n=%4d  gap median=%+.3f um  rival nearer=%.1f%%  coverage=%.1f%%",
+            label,
+            len(covered),
+            float(np.median(covered)),
+            100.0 * gaps.rival_nearer(),
+            100.0 * gaps.coverage(),
+        )
 
     @staticmethod
     def _gaps(label: str, gaps: RivalDistanceGap, noise_um: float) -> None:
