@@ -187,9 +187,15 @@ class JointModel(nn.Module):
         tens of nodes), so the result is a list, one `JointForward` per pair. `forward` is exactly the `B = 1`
         case, so a batched run computes the identical thing a per-pair run does, one optimiser step later.
         """
-        # Generated scenes route per-pair to the compiled uniform-N head; everything else — prior velocity now
-        # included — takes the fully padded batched block.
-        if self._scene_transformer is not None:
+        # Generated scenes route per-pair to the compiled uniform-N head; a pair whose node set overflows the
+        # fixed `_MAX_NODES` pad takes the same ragged per-pair path (the batched block would raise on it). The
+        # `_heads` loop carries any node count — it is the reference the padded block only shortcuts. Everything
+        # else — prior velocity included — takes the fully padded batched block.
+        oversized = any(
+            source.shape[0] > _MAX_NODES or target.shape[0] > _MAX_NODES
+            for source, target in zip(source_positions, target_positions, strict=True)
+        )
+        if self._scene_transformer is not None or oversized:
             features = self.detector.unet(windows.unsqueeze(2))  # (B, 2, C, Z, Y', X')
             return [
                 self._heads(features[i], source_positions[i], target_positions[i], source_velocities[i])

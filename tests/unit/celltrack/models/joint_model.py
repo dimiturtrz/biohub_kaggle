@@ -91,6 +91,27 @@ def test_fits_batched():
     assert not JointModel.fits_batched(1, _MAX_NODES + 1)  # targets overflow
 
 
+def test_forward_batch_oversized_routes_ragged():
+    """A pair whose node set overflows `_MAX_NODES` routes to the ragged per-pair `_heads` path, not the pad.
+
+    This is the boundary `fits_batched` names from the other side: without the fallback, `batched_forward`'s
+    `_pad_fixed` raises on any pair above the fixed pad (the v1 dense-corpus crash at 769 nodes). The batched
+    block only shortcuts the `_heads` reference, so an oversized pair must still forward — returning its real
+    `(s, u)` block — rather than crash. One oversized pair in the batch pulls the whole batch to the ragged path.
+    """
+    model = _joint_model().eval()
+    frame_t, frame_t1 = torch.zeros(4, 8, 8), torch.zeros(4, 8, 8)
+    windows = torch.stack([torch.stack([frame_t, frame_t1], dim=0)], dim=0)  # (1, 2, Z, Y, X)
+    oversized_sources = [torch.tensor([[2, 4, 4]]).repeat(_MAX_NODES + 1, 1)]  # 769 sources — one over the pad
+    targets = [torch.tensor([[2, 4, 4], [1, 2, 2]])]
+
+    with torch.no_grad():
+        out = model.forward_batch(windows, oversized_sources, targets, [None])  # must not raise on the pad
+
+    assert len(out) == 1
+    assert out[0].edge_logits.shape == (_MAX_NODES + 1, 2)  # the real oversized (s, u), carried ragged
+
+
 def test_unpad():
     """`BatchedForward.unpad` slices each pair's [:s, :u] block back out — equal to the per-pair forward."""
     torch.manual_seed(0)
