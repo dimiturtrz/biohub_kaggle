@@ -101,6 +101,30 @@ def _push_dataset(publisher: Publisher, arguments: argparse.Namespace) -> None:
     print(json.dumps(result, indent=2) if isinstance(result, dict) else str(result))
 
 
+def _create_dataset(publisher: Publisher, arguments: argparse.Namespace) -> None:
+    """Create a brand-new dataset from a directory (createVersion only cuts versions of one that exists)."""
+    owner, slug = arguments.reference.split("/", 1)
+    files = _uploadable(arguments.path, arguments.staging)
+    print(f"creating {arguments.reference} from {len(files)} entries")
+    entries = []
+    for file in files:
+        token = publisher.upload(file)
+        entries.append({"token": token, "path": file.name})
+        print(f"  {file.stat().st_size:>10} bytes  {file.name}")
+    result = publisher.post(
+        "/datasets/create/new",
+        {
+            "title": arguments.title,
+            "slug": slug,
+            "ownerSlug": owner,
+            "licenseName": "CC0-1.0",
+            "isPrivate": True,
+            "files": entries,
+        },
+    )
+    print(json.dumps(result, indent=2) if isinstance(result, dict) else str(result))
+
+
 def _push_kernel(publisher: Publisher, arguments: argparse.Namespace) -> None:
     """Push one kernel directory: its metadata plus the script source, inline."""
     metadata = json.loads((arguments.path / "kernel-metadata.json").read_text(encoding="utf-8"))
@@ -140,6 +164,13 @@ def _parser() -> argparse.ArgumentParser:
     dataset.add_argument("-m", "--message", required=True, help="version notes")
     dataset.add_argument("--staging", type=Path, default=_KIT.parent / "kit_staging", help="where dir zips go")
     dataset.set_defaults(handler=_push_dataset)
+
+    new = subparsers.add_parser("dataset-new", help="create a brand-new dataset from a directory")
+    new.add_argument("--reference", required=True, help="owner/slug of the new dataset")
+    new.add_argument("--title", required=True, help="human-readable dataset title")
+    new.add_argument("--path", type=Path, required=True, help="directory whose entries become the dataset")
+    new.add_argument("--staging", type=Path, default=_KIT.parent / "kit_staging", help="where dir zips go")
+    new.set_defaults(handler=_create_dataset)
 
     kernel = subparsers.add_parser("kernel", help="push a kernel from its directory")
     kernel.add_argument("path", type=Path, help="kernels/<slug> directory")
