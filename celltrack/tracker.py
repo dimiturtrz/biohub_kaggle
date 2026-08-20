@@ -126,6 +126,9 @@ class CellTracker:
         config = config or TrackerConfig.shipped()
         seed1, recipe = TemporalUNetDetector.from_pack(pack1, map_location=device)
         seed2, _ = TemporalUNetDetector.from_pack(pack2, map_location=device)
+        # pair_context is a mount-time knob: the pack bakes it False, so thread the operating point onto the
+        # recipe here (the fingerprint keys on it, so the two arms never share cached logit volumes).
+        recipe = replace(recipe, pair_context=config.pair_context)
         detector = BlendDetectorScorer(
             detectors=((seed1.to(device).eval(), stores[0]), (seed2.to(device).eval(), stores[1])),
             recipe=recipe,

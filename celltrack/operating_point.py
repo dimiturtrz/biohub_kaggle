@@ -34,6 +34,12 @@ class TrackerConfig:
     # The seed-1 fraction of the detector's logit blend; None is the equal mean the frontier ships. The edge
     # blend favours seed 1 (0.8), so the detector blend may too — a value w tilts the two seeds to (w, 1-w).
     detector_blend: float | None = None
+    # Off by default: detect each frame inside its REAL (t, t+1) pair instead of the shipped (t, t) duplicate.
+    # The net was TRAINED on real pairs but ships temporally blind; enable to A/B whether the temporal axis
+    # carries the division / dense-detection signal the sparse proxy cannot see. A MOUNT-time knob (it changes
+    # the detector's cached forward, keyed by the recipe fingerprint's `pc`), so it is threaded at mount, not
+    # re-pointed by `with_config` — a pair_context A/B is two mounts, not two cells of one sweep.
+    pair_context: bool = False
     # Off by default: recovering the edge head's second-daughter fork is a detection-limited lever (the second
     # daughter is often undetected, so the fork cannot be placed). Set it to A/B the division-jaccard term.
     division: AffinityDivisionConfig | None = None

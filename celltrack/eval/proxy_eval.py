@@ -120,11 +120,16 @@ class TrackerProxyEval:
         """
         proc = root.processed("biohub_cell_tracking")
         proxy = TestMovieProxy.load(root, self.stems)
+        # Mount under the resolved base config, not the bare shipped default: mount-time knobs (pair_context)
+        # must land on the detector recipe here, since the per-cell `with_config` sweep reuses this detector and
+        # only re-points the post-detection stages. The swept coordinates are re-applied per cell regardless.
+        base = self.config_at(self.thresholds[0], self.disappearance_costs[0])
         pipeline = CellTracker.from_packs(
             proc / "reference/pilkwang/split_0",
             proc / "reference/pilkwang/seed2/weights/unet_transformer/split_0",
             proc / "cache/responses",
             self.device,
+            base,
         )
         if self.config_at(self.thresholds[0], self.disappearance_costs[0]).linker.needs_ranker:
             pipeline = pipeline.with_ranker(proc / RANKER_ARTIFACT)
