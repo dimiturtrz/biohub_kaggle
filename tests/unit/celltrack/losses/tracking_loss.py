@@ -9,6 +9,7 @@ trainer's own repacking at the call site.
 
 import torch
 
+from celltrack.losses.association_objective import AssociationObjective
 from celltrack.losses.tracking_loss import (
     BatchedPrediction,
     PairGroundTruth,
@@ -35,7 +36,12 @@ def _config() -> JointTrainConfig:
 def _loss() -> TrackingLoss:
     config = _config()
     contrastive = ContrastiveTerm(ContrastiveTermConfig.from_loss(config.loss, config.model.out_channels))
-    return TrackingLoss(config.loss.to_tracking_loss_config(config.data.downsample), contrastive)
+    objective = AssociationObjective.from_config(
+        link_axes=config.loss.link_axes,
+        balanced_links=config.loss.balanced_links,
+        slack_links=config.loss.slack_links,
+    )
+    return TrackingLoss(config.loss.to_tracking_loss_config(config.data.downsample), contrastive, objective)
 
 
 def _model() -> JointModel:

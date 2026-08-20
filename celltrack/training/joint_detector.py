@@ -53,6 +53,7 @@ from celltrack.data.synthetic_scene import SceneConfig
 from celltrack.detectors.tunet import DetectorRecipe
 from celltrack.eval.model_evaluator import EvalResult, ModelEvaluator
 from celltrack.eval.proxy import VALIDATION_MOVIES, TestMovieProxy
+from celltrack.losses.association_objective import AssociationObjective
 from celltrack.losses.tracking_loss import (
     BatchedPrediction,
     PairGroundTruth,
@@ -118,9 +119,18 @@ class JointTrainer:
         # The contrastive term's placement is fixed for the whole run, and the projecting sites carry weights
         # the optimiser must own — so it is built once, here, beside the config that chose it.
         self.contrastive = ContrastiveTerm(ContrastiveTermConfig.from_loss(config.loss, config.model.out_channels))
+        # The link objective's form is fixed for the run and a slack row carries a learned scalar the optimiser
+        # must own, so — like the contrastive term — it is built once here from the config that chose it.
+        self._objective = AssociationObjective.from_config(
+            link_axes=config.loss.link_axes,
+            balanced_links=config.loss.balanced_links,
+            slack_links=config.loss.slack_links,
+        )
         # Every training term; the trainer owns only the step. The loss reads its own config and input structs, so
         # it imports nothing of the model or the dataset — the trainer repacks each forward at the call site.
-        self._loss = TrackingLoss(config.loss.to_tracking_loss_config(config.data.downsample), self.contrastive)
+        self._loss = TrackingLoss(
+            config.loss.to_tracking_loss_config(config.data.downsample), self.contrastive, self._objective
+        )
 
     @staticmethod
     def _prediction(out: JointForward) -> PairPrediction:
@@ -199,7 +209,7 @@ class JointTrainer:
                 best, marker = selected, " *saved"
                 self._checkpoint().save_best(save_to, model)
             progress = RunProgress(done=done, best=best)
-            self._checkpoint().save_snapshot(resume_path, model, self.contrastive, optimization, progress)
+            self._checkpoint().save_snapshot(resume_path, model, self._auxiliary(), optimization, progress)
             run.window(done, {**self._metrics(result, best), **losses})
             rate = losses["it_per_s"]
             eta_hours = (schedule.steps - done) / rate / _SECONDS_PER_HOUR if rate else 0.0
@@ -321,6 +331,7 @@ class JointTrainer:
         if self.config.data.gpu_scene_fraction:  # fuse the uniform-N generated-scene edge head (measured 4x)
             model.compile_scene_head(SceneConfig().n_cells)
         self.contrastive.to(self.config.runtime.device)
+        self._objective.to(self.config.runtime.device)
         optimizer = torch.optim.AdamW(self._trained(model), lr=self.config.optim.lr)
         return model, _Optimization(optimizer, self._schedule(optimizer))
 
@@ -335,8 +346,24 @@ class JointTrainer:
         that moves.
         """
         if self._lora.enabled:
-            return [*LoRA.adapter_parameters(model), *self.contrastive.parameters()]
-        return [*model.parameters(), *self.contrastive.parameters()]
+            return [*LoRA.adapter_parameters(model), *self.contrastive.parameters(), *self._objective.parameters()]
+        return [*model.parameters(), *self.contrastive.parameters(), *self._objective.parameters()]
+
+    def _auxiliary(self) -> dict[str, nn.Module]:
+        """The run's auxiliary trained modules by snapshot key — the contrastive head and the link objective.
+
+        One home for the two names the checkpoint round-trips, so saving and restoring cannot disagree on either.
+        """
+        return {"contrastive": self.contrastive, "objective": self._objective}
+
+    @staticmethod
+    def _freeze_backbone_norm(model: JointModel) -> None:
+        """Put every BatchNorm in the detector into eval mode so it normalises by the warm pack's stored running
+        stats, not the current step's noisy batch stats. The affine weight/bias keep `requires_grad` and still
+        train; only the running-stat update and the batch-stat normalisation are suppressed."""
+        for module in model.detector.modules():
+            if isinstance(module, nn.modules.batchnorm._BatchNorm):  # noqa: SLF001 — no public base spans BN1d/2d/3d+SyncBN
+                module.eval()
 
     @property
     def _velocity(self) -> PriorVelocitySource:
@@ -414,6 +441,8 @@ class JointTrainer:
         feature (the velocity GT warmup) sees the run's true progress, not a per-window counter that resets.
         """
         model.train()
+        if self.config.model.freeze_backbone_norm:  # re-assert after train() flips the whole tree back to train mode
+            self._freeze_backbone_norm(model)
         steps = len(dataset)
         batch_size = self.config.optim.batch_size
         gpu_count = round(batch_size * self.config.data.gpu_scene_fraction)
@@ -664,7 +693,7 @@ class JointTrainer:
         """Load a resume snapshot into both heads and the optimiser, returning (step, best) — (0, None) if fresh."""
         if not (resume and resume_path.exists()):
             return 0, None
-        progress = self._checkpoint().restore(resume_path, model, self.contrastive, optimization)
+        progress = self._checkpoint().restore(resume_path, model, self._auxiliary(), optimization)
         logger.info("resumed from %s at step %d (best %.4f)", resume_path, progress.done, progress.best)
         return progress.done, progress.best
 

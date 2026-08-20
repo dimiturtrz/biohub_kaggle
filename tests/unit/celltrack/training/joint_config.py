@@ -156,7 +156,6 @@ def test_to_config():
 def test_to_tracking_loss_config():
     """LossCfg fills the loss's own decoupled config — its knobs pass through, and the crowd gate is resolved."""
     config = LossCfg(symmetric_links=True, neg_weight=0.3, det_weight=2.0).to_tracking_loss_config((1, 2, 2))
-    assert config.link_axes == (SOURCE_AXIS, TARGET_AXIS)
     assert config.neg_weight == 0.3
     assert config.det_weight == 2.0
     assert config.downsample == (1, 2, 2)

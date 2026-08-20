@@ -21,10 +21,10 @@ import torch
 from jaxtyping import Float, Int
 from torch import Tensor
 
+from celltrack.losses.association_objective import AssociationObjective
 from celltrack.losses.balanced_bce import BalancedBCE
 from celltrack.losses.hard_negative_margin import HardNegativeMargin
 from celltrack.losses.sample_weight import SampleWeight
-from celltrack.losses.softmax_focal_bce import SoftmaxFocalBCE
 
 # The (1,4,4) downsample makes the heads' grid isotropic at the z-spacing, so one downsampled voxel is this many
 # micrometres on every axis — the unit the reliability weight's crowd gate is measured in (see downsample memory).
@@ -36,12 +36,11 @@ class TrackingLossConfig:
     """The objective's own knobs — every value the terms read, and nothing about the model or the run.
 
     Filled from the trainer's `LossCfg` (`LossCfg.to_tracking_loss_config`), so the loss never sees the whole
-    training config: it carries the term weights, the two masking thresholds, the link normalisation axes
-    already resolved, the head grid, and the linker's admission gate the reliability weight measures crowd in.
+    training config: it carries the term weights, the two masking thresholds, the head grid, and the linker's
+    admission gate the reliability weight measures crowd in. The link normalisation lives in the injected
+    `AssociationObjective`, not here — that strategy owns the axes, the balancing, and any slack row.
     """
 
-    link_axes: tuple[int, ...]
-    balanced_links: bool
     neg_weight: float
     ignore_ambiguous_above: float | None
     det_weight: float
@@ -149,9 +148,12 @@ class _PairOutcome:
 class TrackingLoss:
     """Every training term for the joint model — per pair, or vectorised over the padded batch. No optimiser here."""
 
-    def __init__(self, config: TrackingLossConfig, contrastive: ContrastiveObjective) -> None:
+    def __init__(
+        self, config: TrackingLossConfig, contrastive: ContrastiveObjective, objective: AssociationObjective
+    ) -> None:
         self._config = config
         self._contrastive = contrastive
+        self._objective = objective
 
     def per_pair(self, prediction: PairPrediction, target: PairGroundTruth, *, detection: bool = True) -> _PairOutcome:
         """Every loss term for one pair from its already-computed forward (GT centres divided to the heads' grid).
@@ -165,7 +167,7 @@ class TrackingLoss:
         edge_matrix = target.edge_matrix
         centres_t_grid = self._grid(target.source_centres)
         centres_t1_grid = self._grid(target.target_centres)
-        edge = SoftmaxFocalBCE.of(edge_logits, edge_matrix, config.link_axes, balanced=config.balanced_links)
+        edge = self._objective.per_pair(edge_logits, edge_matrix)
         ignore = config.ignore_ambiguous_above
         det = (
             BalancedBCE.of(prediction.detection_t.unsqueeze(0), [centres_t_grid], config.neg_weight, ignore)
@@ -212,13 +214,7 @@ class TrackingLoss:
         """
         config = self._config
         edges = self._padded_edges(targets, prediction.logits.shape[1], prediction.logits.device)
-        edge = SoftmaxFocalBCE.batched(
-            prediction.logits,
-            edges,
-            (prediction.source_mask, prediction.target_mask),
-            config.link_axes,
-            balanced=config.balanced_links,
-        )
+        edge = self._objective.batched(prediction.logits, edges, (prediction.source_mask, prediction.target_mask))
         grids_t = [self._grid(target.source_centres) for target in targets]
         grids_t1 = [self._grid(target.target_centres) for target in targets]
         detection = BalancedBCE.per_frame(

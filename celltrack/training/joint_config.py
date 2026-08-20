@@ -93,6 +93,14 @@ class ModelCfg(BaseModel):
     # so it is domain-robust. A from-scratch-only swap — a warm-started BN pack has no home for its running
     # buffers in a GroupNorm backbone, so `norm="group"` with `--warm-start` is rejected at build.
     norm: Literal["batch", "group"] = "batch"
+    # Hold the warm pack's BatchNorm running stats FROZEN through a warm finetune. `model.train()` puts BN in
+    # train mode, where it normalises by each step's small-batch statistics instead of the published running
+    # mean/var the pretrained weights expect — so a warm detector's train-mode forward diverges from its eval
+    # forward (measured: det loss spikes to ~9.5 vs the warm ~2-3), the shared backbone drifts fighting that
+    # noise, and the association the edge head reads off it degrades (over-links, proxy collapses). Eval-mode BN
+    # uses the stored stats in BOTH phases; the affine weight/bias still train. Warm-start only (GroupNorm has
+    # no running stats to freeze; a from-scratch BN has none worth keeping).
+    freeze_backbone_norm: bool = False
 
 
 class DataCfg(BaseModel):
@@ -266,6 +274,13 @@ class LossCfg(BaseModel):
     # rivals — up to 38 to 1 on the detected corpus (targets/gap mean 8.3, max 39), with only the focal power
     # pushing back and by an amount nobody chose. False keeps the cell mean and every number measured under it.
     balanced_links: bool = False
+    # Whether the link loss appends a learned "no source parents this target" row before the source-axis
+    # softmax (Trackastra's `1 + Σexp`). It gives an unannotated rival's probability mass somewhere to go other
+    # than a real source it does not belong to — the dense confusor — and un-degenerates the single-source pair.
+    # Overrides `symmetric_links` (the slack row is a statement about parents, source-axis only). The slack
+    # logit is one LEARNED scalar calibrated to the mean real logit, not the frontier's constant 0 (our logits
+    # sit near -11). False keeps the plain focal BCE and every number measured under it.
+    slack_links: bool = False
 
     @property
     def link_axes(self) -> tuple[int, ...]:
@@ -279,8 +294,6 @@ class LossCfg(BaseModel):
         point, not the loss knobs, so it is resolved here rather than being a field the CLI could contradict.
         """
         return TrackingLossConfig(
-            link_axes=self.link_axes,
-            balanced_links=self.balanced_links,
             neg_weight=self.neg_weight,
             ignore_ambiguous_above=self.ignore_ambiguous_above,
             det_weight=self.det_weight,
@@ -431,6 +444,7 @@ class JointTrainConfig(BaseModel):
                 warm_pack=WARM_PACKS[args.warm_pack],
                 temporal_position=args.temporal_position,
                 norm=args.norm,
+                freeze_backbone_norm=args.freeze_backbone_norm,
                 lora=LoraCfg(
                     enabled=args.lora, rank=args.lora_rank, alpha=args.lora_alpha, targets=tuple(args.lora_targets)
                 ),
@@ -462,6 +476,7 @@ class JointTrainConfig(BaseModel):
                 ignore_ambiguous_above=args.ignore_ambiguous_above,
                 symmetric_links=args.symmetric_links,
                 balanced_links=args.balanced_links,
+                slack_links=args.slack_links,
                 reliability_weighting=args.reliability_weighting,
             ),
             eval=EvalCfg(tracker=replace(TrackerConfig.shipped(), threshold=args.eval_threshold)),

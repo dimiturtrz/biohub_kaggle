@@ -82,20 +82,11 @@ class JointCli:
         parser.add_argument(
             "--hard-negatives", type=int, default=4, help="nearest wrong targets mined per annotated source"
         )
-        parser.add_argument(
-            "--symmetric-links",
-            action="store_true",
-            help="normalise the link loss across TARGETS too (one child per source), not sources alone",
-        )
+        JointCli._add_link_flags(parser)
         parser.add_argument(
             "--reliability-weighting",
             action="store_true",
             help="weight each pair's loss by SNR/(1+crowd): trust clean supervision, ease off ambiguous cells",
-        )
-        parser.add_argument(
-            "--balanced-links",
-            action="store_true",
-            help="count the link loss once per decision, balancing the true candidate against its rivals",
         )
         # Fine-tuning a CONVERGED model at its original training rate is the classic way to walk off its optimum,
         # which is what 3000 warm-start steps at 1e-4 did (never beat the init). Exposed so the rate is a
@@ -182,6 +173,11 @@ class JointCli:
             default="batch",
             help="backbone norm: 'batch' (published BN) or 'group' (domain-robust GroupNorm, from-scratch only)",
         )
+        parser.add_argument(
+            "--freeze-backbone-norm",
+            action="store_true",
+            help="hold the warm pack's BatchNorm running stats frozen (eval-mode BN through train); warm-start only",
+        )
         # LoRA: freeze the pilkwang base, train low-rank adapters on the association locus. Detection is anchored
         # by the frozen base; the adapters give association the feature reshape the frozen backbone cannot.
         parser.add_argument("--lora", action="store_true", help="freeze the base, train low-rank adapters only")
@@ -216,6 +212,30 @@ class JointCli:
         parser.add_argument("--resume", action="store_true", help="continue from the .resume.pt snapshot")
         parser.add_argument("--weights", type=str, default="joint_tunet_ours.pt")
         return parser
+
+    @staticmethod
+    def _add_link_flags(parser: argparse.ArgumentParser) -> None:
+        """How the link loss normalises — the three interchangeable forms of the association objective.
+
+        Each is off by default, so an unasked run is the frontier's plain source-axis focal BCE. `--symmetric-links`
+        adds the target axis (one child per source); `--balanced-links` counts one decision at a time; `--slack-links`
+        appends the learned no-parent row (parental softmax), which overrides the axes to source-only.
+        """
+        parser.add_argument(
+            "--symmetric-links",
+            action="store_true",
+            help="normalise the link loss across TARGETS too (one child per source), not sources alone",
+        )
+        parser.add_argument(
+            "--balanced-links",
+            action="store_true",
+            help="count the link loss once per decision, balancing the true candidate against its rivals",
+        )
+        parser.add_argument(
+            "--slack-links",
+            action="store_true",
+            help="append a learned no-parent row (parental softmax) so unannotated rivals need no real parent",
+        )
 
     @staticmethod
     def _add_augmentation_args(parser: argparse.ArgumentParser) -> None:

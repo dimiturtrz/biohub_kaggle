@@ -67,7 +67,8 @@ def test_save_snapshot(tmp_path: Path):
     here, and a matched comparison across arms has to be able to read them.
     """
     path = tmp_path / "run.resume.pt"
-    _checkpoint().save_snapshot(path, _model(), nn.Linear(2, 2), _Optimization(), RunProgress(done=250, best=0.8))
+    aux: dict[str, nn.Module] = {"contrastive": nn.Linear(2, 2), "objective": nn.Linear(2, 2)}
+    _checkpoint().save_snapshot(path, _model(), aux, _Optimization(), RunProgress(done=250, best=0.8))
 
     state = torch.load(path, weights_only=False)
     assert {"detector_state", "transformer_state", "config"} <= set(state)
@@ -77,11 +78,13 @@ def test_save_snapshot(tmp_path: Path):
 def test_restore(tmp_path: Path):
     """A snapshot round-trips the heads, the optimiser and the progress it was written at."""
     path = tmp_path / "run.resume.pt"
-    saved, projection, optimization = _model(), nn.Linear(2, 2), _Optimization(value=7.0)
-    _checkpoint().save_snapshot(path, saved, projection, optimization, RunProgress(done=500, best=0.9))
+    saved, optimization = _model(), _Optimization(value=7.0)
+    aux: dict[str, nn.Module] = {"contrastive": nn.Linear(2, 2), "objective": nn.Linear(2, 2)}
+    _checkpoint().save_snapshot(path, saved, aux, optimization, RunProgress(done=500, best=0.9))
 
     restored, into = _model(), _Optimization()
-    progress = _checkpoint().restore(path, restored, nn.Linear(2, 2), into)
+    into_aux: dict[str, nn.Module] = {"contrastive": nn.Linear(2, 2), "objective": nn.Linear(2, 2)}
+    progress = _checkpoint().restore(path, restored, into_aux, into)
 
     assert progress == RunProgress(done=500, best=0.9)
     assert into.value == 7.0

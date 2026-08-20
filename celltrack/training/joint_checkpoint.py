@@ -75,15 +75,19 @@ class JointCheckpoint:
         self,
         path: Path,
         model: JointModel,
-        projection: nn.Module,
+        trained: dict[str, nn.Module],
         optimization: OptimizationState,
         progress: RunProgress,
     ) -> None:
-        """Write the full run state so a killed run can continue — and so a beaten arm stays measurable."""
+        """Write the full run state so a killed run can continue — and so a beaten arm stays measurable.
+
+        `trained` is the run's auxiliary trained modules by name (the contrastive head, the link objective) — each
+        saved under its own key so a form that holds no parameters writes an empty dict and a resume tolerates it.
+        """
         torch.save(
             self.payload(model)
+            | {name: module.state_dict() for name, module in trained.items()}
             | {
-                "contrastive": projection.state_dict(),
                 "optimization": optimization.state_dict(),
                 "done": progress.done,
                 "best": progress.best,
@@ -92,9 +96,9 @@ class JointCheckpoint:
         )
 
     def restore(
-        self, path: Path, model: JointModel, projection: nn.Module, optimization: OptimizationState
+        self, path: Path, model: JointModel, trained: dict[str, nn.Module], optimization: OptimizationState
     ) -> RunProgress:
-        """Load a snapshot into both heads, the projection and the optimiser, returning how far it had got."""
+        """Load a snapshot into both heads, the named auxiliary modules and the optimiser, returning progress."""
         state = torch.load(path, map_location=self.device, weights_only=False)
         # `restore` runs AFTER `_prepare` has already compiled the backbone, so the live module may carry
         # `_orig_mod.` keys the snapshot lacks (or vice-versa when a prior run saved compiled and this one is
@@ -103,10 +107,12 @@ class JointCheckpoint:
         align = JointModel._align_state_to  # noqa: SLF001 — the pack's own key-remap, shared with from_checkpoint
         model.detector.load_state_dict(align(model.detector, state["detector_state"]))
         model.transformer.load_state_dict(align(model.transformer, state["transformer_state"]))
-        # A snapshot written before the contrastive head existed carries no entry; its optimiser state has
-        # no slot for one either, so a run resuming such a file is by construction one that projects nothing.
-        stored = state.get("contrastive")
-        if stored is not None:
-            projection.load_state_dict(stored)
+        # A snapshot written before an auxiliary module existed (the contrastive head, the link objective) or by
+        # a parameter-free form carries no entry or an empty one; a run resuming it keeps that module's own init
+        # — projecting nothing, or a fresh slack scalar that re-calibrates on its first batch.
+        for name, module in trained.items():
+            stored = state.get(name)
+            if stored:
+                module.load_state_dict(stored)
         optimization.load_state_dict(state["optimization"])
         return RunProgress(done=int(state["done"]), best=float(state["best"]))
