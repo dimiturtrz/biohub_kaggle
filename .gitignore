@@ -65,5 +65,10 @@ kaggle/**/*.whl
 kaggle/kernels/**/out/
 .venv-repro/
 
+# Scratch experiment output — underscore-prefixed local scratch dirs, nohup logs, ad-hoc out dirs.
+kaggle/_*/
+*.nohup
+/scratchpad_kaggle_out/
+
 # ephemeral agent worktrees (isolated; not part of tracked tree)
 .claude/worktrees/
