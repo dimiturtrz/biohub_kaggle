@@ -96,11 +96,12 @@ from celltrack.operating_point import TrackerConfig  # noqa: E402
 # lives in the hidden denser annotations' real fast-movers the sparse proxy cannot contain — the same
 # proxy-blindness that hid the threshold lever. Off by default in `shipped()`; turned on here for the one
 # instrument that can see it. A/B against the 0.899 base (same config, motion off).
+# v32: RECALL LEVER. Drop the detection threshold 0.97 -> 0.90 — proxy-blind by construction (line 54 of
+# operating_point: the lower-threshold recall regime leaves more isolated detections to reuse, and the hidden
+# set's denser annotations reward recall the sparse 4-movie proxy cannot see). Motion off, everything else the
+# 0.899 base, so the delta isolates threshold alone.
 _shipped = TrackerConfig.shipped()
-_CONFIG = dataclasses.replace(
-    _shipped,
-    linker=_shipped.linker.model_copy(update={"motion_distance": True, "motion_history": 3}),
-)
+_CONFIG = dataclasses.replace(_shipped, threshold=0.90)
 _SUBMISSION = Path("/kaggle/working/submission.csv")
 
 

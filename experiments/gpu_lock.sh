@@ -20,7 +20,10 @@
 #      mkdir fails, the holder is this very shell, kill -0 says alive, and it sleeps forever.
 set -u
 
-GPU_LOCK="${GPU_LOCK:-D:/personal_projects/.gpu.lock}"
+# Resolve relative to THIS script (both repos sit one level under the shared projects root), never $PWD —
+# a runner invoked from elsewhere must land on the same inode, and no machine-specific absolute path is
+# committed. `$(dirname)/../..` = the projects root from experiments/gpu_lock.sh.
+GPU_LOCK="${GPU_LOCK:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/.gpu.lock}"
 GPU_LOCK_PROJECT="biohub_kaggle"
 GPU_LOCK_WAIT_HEARTBEAT_MINUTES="${GPU_LOCK_WAIT_HEARTBEAT_MINUTES:-5}"
 
