@@ -307,5 +307,7 @@ class HoctEdgeTransformer(nn.Module):
         neighbour = torch.where(torch.cdist(midpoint, midpoint) <= self.neighbour_um, 0.0, _NEG_INF)
         for block in self.edge_blocks:
             edges = block(edges, dline, neighbour)
-        out[src_idx, tgt_idx] = self.edge_logit(edges).squeeze(-1)
+        # out holds float32 _NEG_INF sentinels (from float32 coords); under AMP the head computes in bf16, so
+        # align the scattered logits to the destination dtype — index_put requires source and dest dtypes match.
+        out[src_idx, tgt_idx] = self.edge_logit(edges).squeeze(-1).to(out.dtype)
         return out

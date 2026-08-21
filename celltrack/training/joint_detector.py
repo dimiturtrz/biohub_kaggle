@@ -326,9 +326,9 @@ class JointTrainer:
             logger.info("LoRA: %d layers adapted (rank %d), %d params kept", adapted, self._lora.rank, len(installed))
             model = model.to(self.config.runtime.device)  # the new adapter params default to CPU — move them
         if self.config.runtime.device == "cuda":
-            # channels_last_3d is a lossless layout that measured faster on the feature convs. torch stubs
-            # omit the memory_format overload of Module.to; the call is runtime-valid.
-            model = model.to(memory_format=torch.channels_last_3d)  # type: ignore[no-matching-overload]
+            # channels_last_3d is a conv layout — scoped to `detector` (conv backbone) NOT the whole model: HOCT's
+            # rank-3/4 head tables raise "required rank 5 tensor". Stub omits the memory_format overload; valid.
+            model.detector = model.detector.to(memory_format=torch.channels_last_3d)  # type: ignore[no-matching-overload]
         # Compile the backbone ALWAYS (static 64^3 shape) — not an option: a crash is a bug to fix at its root,
         # not a reason to run eager. Default mode (fusion), not reduce-overhead: CUDA-graphing the backbone ALONE
         # leaves the step-wide launch gaps (heads/loss/optimiser stay eager) untouched, so it did not lift the
