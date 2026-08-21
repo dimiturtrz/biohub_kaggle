@@ -201,10 +201,18 @@ class HoctEdgeTransformer(nn.Module):
         n_blocks: int = 4,
         mlp_ratio: float = 2.0,
         dropout: float = 0.1,
-        neighbour_radius: float = 12.0,
+        neighbour_um: float = 24.0,
+        gate_um: float = 12.0,
+        voxel_um: tuple[float, float, float] = (1.625, 0.40625, 0.40625),
     ) -> None:
         super().__init__()
-        self.neighbour_radius = neighbour_radius
+        self.neighbour_um = neighbour_um
+        self.gate_um = gate_um
+        # Node coords arrive in RAW-grid voxels (z coarse, y/x pooled-fine); the gate, the line-to-line dline
+        # and the neighbour locality are all PHYSICAL, so coords are scaled to micrometres before any distance.
+        # Default = the corpus voxel size (pooled 1.625 µm ÷ POOLED_BY (1,4,4)); a run whose spacing differs
+        # passes its own. A buffer so it follows `.to(device)`.
+        self.register_buffer("voxel_um", torch.tensor(voxel_um, dtype=torch.float32).view(1, _AXES))
         self.proj = nn.Linear(feat_dim, hidden_dim)
         self.norm_in = nn.LayerNorm(hidden_dim)
         self.node_blocks = nn.ModuleList(
@@ -235,7 +243,17 @@ class HoctEdgeTransformer(nn.Module):
         node_t = self._encode_nodes(feat_t, coords_t, mask_t)
         node_t1 = self._encode_nodes(feat_t1, coords_t1, mask_t1)
         logits = torch.stack(
-            [self._edge_logits(node_t[b], node_t1[b], coords_t[b], coords_t1[b]) for b in range(node_t.shape[0])]
+            [
+                self._edge_logits(
+                    node_t[b],
+                    node_t1[b],
+                    coords_t[b],
+                    coords_t1[b],
+                    None if mask_t is None else mask_t[b],
+                    None if mask_t1 is None else mask_t1[b],
+                )
+                for b in range(node_t.shape[0])
+            ]
         )
         return logits.squeeze(0) if unbatched else logits
 
@@ -248,23 +266,46 @@ class HoctEdgeTransformer(nn.Module):
             nodes = block(nodes, coords, mask)
         return self.norm_out(nodes)
 
-    def _edge_logits(
+    def _edge_logits(  # noqa: PLR0913 — two frames' (feature, coord, mask) triples; splitting them hides the pairing
         self,
         node_t: Float[Tensor, "n_t d"],
         node_t1: Float[Tensor, "n_t1 d"],
         coords_t: Float[Tensor, "n_t 3"],
         coords_t1: Float[Tensor, "n_t1 3"],
+        mask_t: Float[Tensor, "n_t"] | None,
+        mask_t1: Float[Tensor, "n_t1"] | None,
     ) -> Float[Tensor, "n_t n_t1"]:
-        """Edge-to-edge stage for one gap: every source→target candidate is a token, scored under the line bias."""
+        """Edge-to-edge stage for one gap over only the IN-GATE candidate edges — the rest stay non-links.
+
+        A dense token per source→target pair is O((N_t·N_t1)²) in the edge-to-edge attention — intractable the
+        moment a frame carries more than ~150 detections (the synthetic corpus carries ~700). The frontier runs
+        the stage over the motion-gated candidate edges only, so this enumerates just the source→target pairs
+        whose PHYSICAL separation is within ``gate_um`` (and whose endpoints are both real, never a pad node),
+        attends over that small set, and scatters each edge's logit back into the dense ``(N_t, N_t1)`` block.
+        Non-candidate cells read ``_NEG_INF`` — a link the gate excludes, exactly the ``softmax`` mass the loss
+        and the inference scorer already deny an out-of-gate pair. The gate is in micrometres (coords scaled by
+        ``voxel_um``) so the anisotropic raw grid gives a spherical physical gate, not a z-elongated voxel one
+        that would sweep every z-layer into the candidate set. ``gate_um`` (12) exceeds the largest true step
+        (max 9.96 µm) with margin, so a real successor is never dropped to a non-link.
+        """
         n_t, n_t1 = node_t.shape[0], node_t1.shape[0]
-        src = node_t.unsqueeze(1).expand(n_t, n_t1, -1)
-        tgt = node_t1.unsqueeze(0).expand(n_t, n_t1, -1)
-        edges = self.edge_in(torch.cat([src, tgt], dim=-1)).reshape(n_t * n_t1, -1)
-        p0 = coords_t.unsqueeze(1).expand(n_t, n_t1, 3).reshape(-1, 3)  # segment start = source
-        p1 = coords_t1.unsqueeze(0).expand(n_t, n_t1, 3).reshape(-1, 3)  # segment end = target
-        dline = self._segment_distance(p0, p1, p0, p1)
+        out = coords_t.new_full((n_t, n_t1), _NEG_INF)
+        voxel_um = cast(Tensor, self.voxel_um)  # a registered buffer is Tensor | Module to the checker
+        phys_t, phys_t1 = coords_t * voxel_um, coords_t1 * voxel_um  # raw voxels → micrometres
+        gate = torch.cdist(phys_t, phys_t1) <= self.gate_um  # (n_t, n_t1) in-gate candidates
+        if mask_t is not None:
+            gate = gate & mask_t.bool().unsqueeze(1)
+        if mask_t1 is not None:
+            gate = gate & mask_t1.bool().unsqueeze(0)
+        src_idx, tgt_idx = gate.nonzero(as_tuple=True)  # (e,), (e,) — the gated candidate edges
+        if src_idx.numel() == 0:
+            return out
+        edges = self.edge_in(torch.cat([node_t[src_idx], node_t1[tgt_idx]], dim=-1))  # (e, hidden)
+        p0, p1 = phys_t[src_idx], phys_t1[tgt_idx]  # segment start = source, end = target, in micrometres
+        dline = self._segment_distance(p0, p1, p0, p1)  # (e, e)
         midpoint = 0.5 * (p0 + p1)
-        neighbour = torch.where(torch.cdist(midpoint, midpoint) <= self.neighbour_radius, 0.0, _NEG_INF)
+        neighbour = torch.where(torch.cdist(midpoint, midpoint) <= self.neighbour_um, 0.0, _NEG_INF)
         for block in self.edge_blocks:
             edges = block(edges, dline, neighbour)
-        return self.edge_logit(edges).reshape(n_t, n_t1)
+        out[src_idx, tgt_idx] = self.edge_logit(edges).squeeze(-1)
+        return out

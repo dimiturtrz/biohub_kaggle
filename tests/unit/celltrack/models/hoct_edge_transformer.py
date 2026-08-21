@@ -19,7 +19,7 @@ from pathlib import Path
 import torch
 
 from celltrack.models.edge_transformer import EdgeTransformerScorer
-from celltrack.models.hoct_edge_transformer import HoctEdgeTransformer
+from celltrack.models.hoct_edge_transformer import _NEG_INF, HoctEdgeTransformer
 from celltrack.models.joint_model import _HIDDEN_DIM, _N_BLOCKS, _N_HEADS, JointModel
 from celltrack.models.temporal_unet_detector import TemporalUNetDetector
 from celltrack.training.joint_checkpoint import JointCheckpoint
@@ -48,6 +48,18 @@ def test_hoct_edge_transformer_forward() -> None:
     assert out.shape == (5, 7)
     batched = head.forward(feat_t.unsqueeze(0), feat_t1.unsqueeze(0), coords_t.unsqueeze(0), coords_t1.unsqueeze(0))
     assert batched.shape == (1, 5, 7)
+
+
+def test_gate_masks_out_of_range_and_keeps_near() -> None:
+    torch.manual_seed(0)
+    head = _head()  # default gate_um=12, voxel_um=(1.625, 0.40625, 0.40625) um/voxel
+    feat_t, feat_t1 = torch.randn(1, _FEAT_DIM), torch.randn(2, _FEAT_DIM)
+    coords_t = torch.tensor([[0.0, 0.0, 0.0]])
+    coords_t1 = torch.tensor([[0.0, 0.0, 10.0], [0.0, 40.0, 0.0]])  # ~4.1 um in-gate, ~16.3 um out
+    out = head.forward(feat_t, feat_t1, coords_t, coords_t1)
+    assert out.shape == (1, 2)
+    assert torch.isfinite(out[0, 0]) and out[0, 0] > _NEG_INF / 2  # in-gate candidate scores a real logit
+    assert out[0, 1] == _NEG_INF  # out-of-gate pair denied — the softmax mass the loss already withholds
 
 
 def test_rope3_d_forward() -> None:
