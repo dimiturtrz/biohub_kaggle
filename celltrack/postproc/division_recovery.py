@@ -33,6 +33,7 @@ from dataclasses import dataclass
 
 import numpy as np
 from jaxtyping import Float, Int
+from pydantic import BaseModel, ConfigDict, Field
 from scipy.spatial import KDTree
 
 from celltrack.detectors.center_prior import CenterConfirmer
@@ -66,6 +67,7 @@ class DivisionRecovery:
     def transform(self, graph: TrackGraph) -> TrackGraph:
         """Return the graph with recovered division edges added."""
         recovered = self._division_edges(graph)
+        logger.info("geometric division recovery: %d single-child forks recovered", len(recovered))
         if not len(recovered):
             return graph
         return TrackGraph(
@@ -171,3 +173,34 @@ class DivisionRecovery:
     def _distance(positions_um: Float[np.ndarray, "n 3"], a: int, b: int) -> float:
         """Euclidean distance in micrometres between two node rows."""
         return float(np.linalg.norm(positions_um[a] - positions_um[b]))
+
+
+class DivisionRecoveryConfig(BaseModel):
+    """The geometry-only single-child division repair as a nested config, composed like a linker or bridge.
+
+    A DIFFERENT mechanism from `AffinityDivisionConfig`, which can only place a fork when BOTH daughters are
+    detected (the failing case). This joins an unparented cell to an already-linked single-child parent, so it
+    recovers the fork the metric scores WITHOUT the second daughter's own detection. Gates default to the
+    frontier's `add_safe_divisions_postlink` constants (parent 4.7, sister 7.2, existing-child 7.8 um), whose
+    three-gate precision is what keeps a false fork — scored twice, against the division term and the edge term
+    — from costing more than the true forks it recovers. Present (non-None) turns the stage on.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    parent_gate_um: float = Field(4.7, gt=0)
+    sister_gate_um: float = Field(7.2, gt=0)
+    existing_child_gate_um: float = Field(7.8, gt=0)
+    max_added_fraction: float = Field(0.05, ge=0)
+    frame_fraction_cap: float = Field(1.0, ge=0)
+
+    def build(self, spacing: Spacing) -> DivisionRecovery:
+        """The division-recovery stage at this video's spacing (geometry only, no centre-prior veto)."""
+        return DivisionRecovery(
+            spacing=spacing,
+            parent_gate_um=self.parent_gate_um,
+            sister_gate_um=self.sister_gate_um,
+            max_added_fraction=self.max_added_fraction,
+            existing_child_gate_um=self.existing_child_gate_um,
+            frame_fraction_cap=self.frame_fraction_cap,
+        )

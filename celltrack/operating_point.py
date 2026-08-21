@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from celltrack.edges.blended_edge_scoring import EdgeBlendOptions
 from celltrack.linkers.linkers import LinkerConfig
 from celltrack.postproc.affinity_division_recovery import AffinityDivisionConfig
+from celltrack.postproc.division_recovery import DivisionRecoveryConfig
 from celltrack.postproc.gap_closer import BridgeConfig, ReuseConfig
 from celltrack.postproc.short_track_filter import ShortTrackRescueConfig
 from celltrack.postproc.topology_repair import TopologyConfig
@@ -43,6 +44,12 @@ class TrackerConfig:
     # Off by default: recovering the edge head's second-daughter fork is a detection-limited lever (the second
     # daughter is often undetected, so the fork cannot be placed). Set it to A/B the division-jaccard term.
     division: AffinityDivisionConfig | None = None
+    # Off by default: the geometry-only single-child division repair (a DIFFERENT mechanism from `division`
+    # above — it joins an unparented cell to a single-child parent, so it does NOT need the second daughter
+    # detected). The affinity fork is detection-limited; this one is placement-side, which the ceiling
+    # diagnostic (CV8: 7/7 recoverable, all parts detected, shipped recovers 0) named as the real gap. Present
+    # (non-None) mounts it as a post-link stage, before the short-track filter.
+    division_recovery: DivisionRecoveryConfig | None = None
     min_track_length: int = 6
     # Off by default: the confidence rescue that keeps a short high-probability, tight-step component the length
     # rule would drop. It reads the edge head, so it needs an affinity; enable it (with an aggressive

@@ -306,6 +306,9 @@ class CellTracker:
             if config.division is not None and affinity is not None
             else ()
         )
+        # Geometry-only single-child division repair — needs no affinity (it reads the linked graph's geometry),
+        # so it runs even where the affinity fork above cannot. Same slot: before the short-track filter.
+        geo_divide = (config.division_recovery.build(spacing),) if config.division_recovery is not None else ()
         # Reuse-bridge runs before the short-track filter so the isolated t+1 nodes it links through survive as
         # part of a bridged track rather than being pruned as length-1 fragments first.
         reuse = (config.reuse.build(spacing),) if config.reuse is not None else ()
@@ -319,7 +322,7 @@ class CellTracker:
         # final — after bridging — so it prunes exactly the nodes the finished edge set leaves unbacked. It is
         # the frontier's output filter; optional because prune-isolated changes the node count the metric reads.
         repair = (config.topology.build(spacing),) if config.topology is not None else ()
-        return (link, *reuse, *divide, short, bridge, *repair, smooth)
+        return (link, *reuse, *divide, *geo_divide, short, bridge, *repair, smooth)
 
     def spacing(self, path: Path) -> Spacing:
         """The video's physical voxel spacing — exposed so a caller can build a matching metric matcher."""

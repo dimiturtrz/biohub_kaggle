@@ -1,7 +1,7 @@
 import numpy as np
 
 from celltrack.detectors.center_prior import CenterConfirmer
-from celltrack.postproc.division_recovery import DivisionRecovery
+from celltrack.postproc.division_recovery import DivisionRecovery, DivisionRecoveryConfig
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
 
@@ -81,3 +81,15 @@ def test_transform_prefers_the_nearer_mother_when_two_compete():
     )
     forked = recovery().transform(contested)
     assert forked.edges.tolist() == [[0, 20], [10, 30], [10, 40]]
+
+
+def test_build():
+    """The config builds a DivisionRecovery carrying its gates and this video's spacing, no centre-prior veto."""
+    spacing = Spacing(z=1.0, y=1.0, x=1.0)
+    stage = DivisionRecoveryConfig(parent_gate_um=4.7, sister_gate_um=7.2, existing_child_gate_um=7.8).build(spacing)
+    assert isinstance(stage, DivisionRecovery)
+    assert stage.parent_gate_um == 4.7
+    assert stage.sister_gate_um == 7.2
+    assert stage.existing_child_gate_um == 7.8
+    assert stage.spacing == spacing
+    assert stage.confirmer is None
