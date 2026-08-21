@@ -10737,6 +10737,12 @@
     {
       "kind": "holds",
       "source": "celltrack.operating_point.TrackerConfig",
+      "target": "celltrack.postproc.division_recovery.DivisionRecoveryConfig",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.operating_point.TrackerConfig",
       "target": "celltrack.postproc.gap_closer.BridgeConfig",
       "weight": 1
     },
@@ -11230,6 +11236,24 @@
       "kind": "construct",
       "source": "celltrack.postproc.division_recovery.DivisionRecovery.transform",
       "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.postproc.division_recovery.DivisionRecoveryConfig",
+      "target": "celltrack.postproc.division_recovery.DivisionRecovery",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.postproc.division_recovery.DivisionRecoveryConfig",
+      "target": "core.geometry.Spacing",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.postproc.division_recovery.DivisionRecoveryConfig.build",
+      "target": "celltrack.postproc.division_recovery.DivisionRecovery",
       "weight": 1
     },
     {
@@ -17584,6 +17608,14 @@
       "descendants": 0,
       "id": "celltrack.postproc.division_recovery.DivisionRecovery",
       "label": "DivisionRecovery",
+      "level": "class",
+      "parent": "celltrack.postproc.division_recovery",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.division_recovery.DivisionRecoveryConfig",
+      "label": "DivisionRecoveryConfig",
       "level": "class",
       "parent": "celltrack.postproc.division_recovery",
       "role": "satellite"
@@ -24450,6 +24482,14 @@
       "label": "transform",
       "level": "method",
       "parent": "celltrack.postproc.division_recovery.DivisionRecovery",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.division_recovery.DivisionRecoveryConfig.build",
+      "label": "build",
+      "level": "method",
+      "parent": "celltrack.postproc.division_recovery.DivisionRecoveryConfig",
       "role": null
     },
     {
