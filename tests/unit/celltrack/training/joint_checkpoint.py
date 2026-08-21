@@ -49,6 +49,7 @@ def test_payload():
         "temporal_position": False,
         "relative_position": None,
         "norm": "batch",
+        "head": "pack",
     }
 
 

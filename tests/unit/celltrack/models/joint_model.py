@@ -236,6 +236,30 @@ def test_install_relative_position():
     assert model.relative_position_config() is not None  # now reports its geometry to the checkpoint
 
 
+def test_serialisable():
+    """The model reports its own checkpoint half in ONE call — both state dicts plus the facts to rebuild the heads.
+
+    This is the seam `JointCheckpoint.payload` reads instead of plucking attributes across the model's internals
+    (the feature-envy fix). A plain head reports `head="pack"`, `norm="batch"` and no relative geometry; once the
+    geometry wrapper is installed the same call reports the geometry, so a checkpoint rebuilds the wrapped head.
+    """
+    model = _head_model()
+    owned = model.serialisable()
+    assert set(owned) >= {
+        "detector_state",
+        "transformer_state",
+        "temporal_position",
+        "relative_position",
+        "norm",
+        "head",
+    }
+    assert owned["head"] == "pack" and owned["norm"] == "batch"
+    assert owned["relative_position"] is None
+
+    model.install_relative_position(_SPACING, _GATE_UM, "cpu")
+    assert model.serialisable()["relative_position"] is not None  # the wrapper's geometry now travels with the payload
+
+
 def test_from_checkpoint(tmp_path: Path):
     """A checkpoint written by the trainer rebuilds both heads at the shape its weights were trained in."""
     out_channels = 2

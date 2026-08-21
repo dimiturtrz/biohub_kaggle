@@ -58,7 +58,7 @@ def test_group_norm_rejects_a_warm_start():
     swap and a warm init are contradictory, and the run says so at build rather than crashing on a key mismatch.
     """
     trainer = JointTrainer(JointTrainConfig(model=ModelCfg(norm="group")))
-    with pytest.raises(ValueError, match="from-scratch only"):
+    with pytest.raises(ValueError, match="from-scratch"):
         trainer._model(warm_start=True)
 
 

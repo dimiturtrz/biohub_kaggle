@@ -26,6 +26,7 @@ import torch
 from jaxtyping import Float
 from torch import Tensor, nn
 
+from celltrack.models.hoct_edge_transformer import HoctEdgeTransformer
 from celltrack.models.prior_velocity import GapHistory, PriorVelocity
 from celltrack.models.temporal_unet_detector import (
     _EXT_SRC,
@@ -129,6 +130,18 @@ class EdgeTransformerScorer(nn.Module):
         except ImportError:
             from biohub_tracking.models import SimpleNodeTransformer  # type: ignore[missing-import]  # noqa: PLC0415
         return SimpleNodeTransformer
+
+    @staticmethod
+    def _head_cls(head: str) -> type[nn.Module]:
+        """The edge-head class for a named architecture — the pack cross-attention head, or the HOCT edge stage.
+
+        Both classes take the same `(feat_dim, hidden_dim, n_heads, n_blocks)` construction and the same forward
+        signature, so a build site swaps one for the other on the config name alone. `HoctEdgeTransformer` carries
+        a `HEAD_NAME` the checkpoint reads back to rebuild the same class; the pack head has none, so it defaults.
+        """
+        if head == HoctEdgeTransformer.HEAD_NAME:
+            return HoctEdgeTransformer
+        return EdgeTransformerScorer._transformer_cls()
 
     @classmethod
     def of(

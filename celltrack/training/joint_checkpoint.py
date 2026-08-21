@@ -54,17 +54,21 @@ class JointCheckpoint:
     device: str
 
     def payload(self, model: JointModel) -> dict[str, object]:
-        """Both heads and the shape needed to rebuild them — the one format every saved file speaks."""
+        """Both heads and the shape needed to rebuild them — the one format every saved file speaks.
+
+        The model reports its own serialisable half (the two state dicts and the shape facts to rebuild the heads);
+        the checkpoint adds the trainer-owned build facts it holds itself. The state dicts sit at the top level and
+        the rebuild facts under `config`, the split `from_checkpoint` reads back.
+        """
+        owned = model.serialisable()
+        config = {key: owned.pop(key) for key in ("temporal_position", "relative_position", "norm", "head")}
         return {
-            "detector_state": model.detector.state_dict(),
-            "transformer_state": model.transformer.state_dict(),
+            **owned,
             "config": {
                 "out_channels": self.out_channels,
                 "layers": list(self.layers),
                 "downsample": list(self.downsample),
-                "temporal_position": getattr(model.detector, "temporal_position", False),
-                "relative_position": model.relative_position_config(),
-                "norm": getattr(model.detector, "norm", "batch"),
+                **config,
             },
         }
 

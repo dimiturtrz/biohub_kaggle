@@ -404,14 +404,14 @@ class JointTrainer:
             logger.info("chained from prior-stage checkpoint at %s", init_weights)
             return JointModel.from_checkpoint(init_weights, self.config.runtime.device)
         if warm_start:
-            if architecture.norm != "batch":
-                raise ValueError("--norm group is from-scratch only: a pilkwang BN pack cannot warm-start GroupNorm")
+            if architecture.norm != "batch" or architecture.head != "pack":
+                raise ValueError("warm-start needs the pilkwang BN pack: --norm group / --head hoct are from-scratch")
             pack = DataRoot.from_config(_CONFIG).processed(_DATASET) / architecture.warm_pack
             scorer = EdgeTransformerScorer.from_pack(pack, self.config.runtime.device)
             logger.info("warm-started from pilkwang pack at %s", pack)
             return JointModel(scorer.detector, scorer.transformer, downsample)
         detector = TemporalUNetDetector(architecture.out_channels, architecture.layers, norm=architecture.norm)
-        transformer = EdgeTransformerScorer._transformer_cls()(  # noqa: SLF001 — the pilkwang head class, mounted
+        transformer = EdgeTransformerScorer._head_cls(architecture.head)(  # noqa: SLF001 — the edge-head class
             feat_dim=architecture.out_channels + _POS_FEATURE_DIM,
             hidden_dim=_HIDDEN_DIM,
             n_heads=_N_HEADS,

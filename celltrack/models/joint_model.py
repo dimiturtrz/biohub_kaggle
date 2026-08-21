@@ -131,7 +131,7 @@ class JointModel(nn.Module):
         # head is wrapped for relative position — read whichever the checkpoint carries.
         transformer_state = state["transformer_state"]
         proj_key = "proj.weight" if "proj.weight" in transformer_state else "transformer.proj.weight"
-        transformer: nn.Module = EdgeTransformerScorer._transformer_cls()(  # noqa: SLF001 — the pack's head class
+        transformer: nn.Module = EdgeTransformerScorer._head_cls(config.get("head", "pack"))(  # noqa: SLF001 — head class
             feat_dim=transformer_state[proj_key].shape[1],
             hidden_dim=_HIDDEN_DIM,
             n_heads=_N_HEADS,
@@ -144,6 +144,23 @@ class JointModel(nn.Module):
         transformer.load_state_dict(cls._align_state_to(transformer, transformer_state))
         model = cls(detector, transformer, tuple(config["downsample"]))
         return model.to(device).eval()
+
+    def serialisable(self) -> dict[str, object]:
+        """The model-owned half of a checkpoint payload — both heads' weights and the shape facts to rebuild them.
+
+        The checkpoint adds only the trainer-owned facts it holds itself (out_channels, layers, downsample); every
+        fact that lives on the model — the two state dicts, whether the detector is temporal-position wrapped, its
+        norm, the relative-position geometry, and which edge head class — is read here, so the writer reaches into
+        the model ONCE rather than plucking a handful of attributes across its internals.
+        """
+        return {
+            "detector_state": self.detector.state_dict(),
+            "transformer_state": self.transformer.state_dict(),
+            "temporal_position": getattr(self.detector, "temporal_position", False),
+            "relative_position": self.relative_position_config(),
+            "norm": getattr(self.detector, "norm", "batch"),
+            "head": getattr(self.transformer, "HEAD_NAME", "pack"),
+        }
 
     @staticmethod
     def _relative_config(persisted: dict[str, object]) -> RelativePositionConfig:

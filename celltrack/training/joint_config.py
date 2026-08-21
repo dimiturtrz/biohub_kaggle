@@ -107,6 +107,12 @@ class ModelCfg(BaseModel):
     # appearance alone (the dense-confusor axis). Zero-init keeps a warm start identical at step 0; the spacing is
     # threaded from the corpus and the reach is the linker's own gate, so no new distance scale is introduced.
     relative_position: bool = False
+    # WHICH edge-head architecture to build from scratch. "pack" is the pilkwang SimpleNodeTransformer (feature
+    # cross-attention, position-blind, first-order pair scoring) byte for byte. "hoct" is the HOCT two-stage head:
+    # 3D-RoPE node self-attention then edge-to-edge self-attention with a line-to-line geometry bias — the
+    # relative-position sight and higher-order edge comparison the pack head structurally cannot represent (the
+    # dense-confusor discrimination axis). From-scratch only: a pack warm start carries no HOCT weights to continue.
+    head: Literal["pack", "hoct"] = "pack"
 
 
 class DataCfg(BaseModel):
