@@ -172,12 +172,7 @@ class JointCli:
             action="store_true",
             help="add a learned per-head distance bias to the edge transformer's cross-attention (geometry sight)",
         )
-        parser.add_argument(
-            "--norm",
-            choices=("batch", "group"),
-            default="batch",
-            help="backbone norm: 'batch' (published BN) or 'group' (domain-robust GroupNorm, from-scratch only)",
-        )
+        JointCli._add_architecture_flags(parser)
         parser.add_argument(
             "--freeze-backbone-norm",
             action="store_true",
@@ -217,6 +212,27 @@ class JointCli:
         parser.add_argument("--resume", action="store_true", help="continue from the .resume.pt snapshot")
         parser.add_argument("--weights", type=str, default="joint_tunet_ours.pt")
         return parser
+
+    @staticmethod
+    def _add_architecture_flags(parser: argparse.ArgumentParser) -> None:
+        """The from-scratch backbone/head selectors — the two axes a warm-start pack cannot vary.
+
+        `--norm` picks the backbone normalisation and `--head` the edge-head architecture; the warm-start guard
+        rejects any non-default here, since the pilkwang pack is BatchNorm + the pack head byte for byte.
+        """
+        parser.add_argument(
+            "--norm",
+            choices=("batch", "group"),
+            default="batch",
+            help="backbone norm: 'batch' (published BN) or 'group' (domain-robust GroupNorm, from-scratch only)",
+        )
+        parser.add_argument(
+            "--head",
+            choices=("pack", "hoct"),
+            default="pack",
+            help="edge-head architecture (from-scratch only): 'pack' (pilkwang SimpleNodeTransformer) or 'hoct'"
+            " (two-stage 3D-RoPE node + line-to-line edge attention)",
+        )
 
     @staticmethod
     def _add_link_flags(parser: argparse.ArgumentParser) -> None:

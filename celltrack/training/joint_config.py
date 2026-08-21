@@ -457,6 +457,7 @@ class JointTrainConfig(BaseModel):
                 temporal_position=args.temporal_position,
                 relative_position=args.relative_position,
                 norm=args.norm,
+                head=args.head,
                 freeze_backbone_norm=args.freeze_backbone_norm,
                 lora=LoraCfg(
                     enabled=args.lora, rank=args.lora_rank, alpha=args.lora_alpha, targets=tuple(args.lora_targets)
