@@ -17,7 +17,7 @@ transformer" by predicate rather than by hand.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 from typing import cast, override
 
@@ -90,11 +90,15 @@ class LoRA:
             return self.base(inputs) + self.scaling * self.up(self.down(inputs))
 
     @staticmethod
-    def inject(module: nn.Module, config: LoraConfig) -> int:
+    def inject(module: nn.Module, config: LoraConfig, keep: Iterable[nn.Parameter] = ()) -> int:
         """Freeze every parameter, then swap each targeted `Linear`/`Conv3d` leaf for its adapted twin in place.
 
         Returns the number of layers adapted, so a caller can assert the predicate actually matched something —
         a `targets` typo that matches nothing would otherwise train zero adapters and read as a silent null.
+
+        `keep` re-enables grad on params installed BEFORE inject (a temporal table, a distance bias, widened
+        velocity columns): the blanket freeze here would otherwise catch them and `adapter_parameters` exclude
+        them, leaving each pinned at its zero init — ON in the config yet a silent no-op.
         """
         module.requires_grad_(requires_grad=False)
         skip = LoRA._attention_internals(module)
@@ -106,6 +110,8 @@ class LoRA:
             if replacement is not None:
                 LoRA._set_submodule(module, name, replacement)
                 adapted += 1
+        for parameter in keep:
+            parameter.requires_grad = True
         return adapted
 
     @staticmethod

@@ -306,12 +306,11 @@ class JointTrainer:
         """The run's trained objects, built in the one order that keeps BOTH a warm start and a widened head.
 
         The order is load-bearing. `widen_linear_inputs` REPLACES the head's input projection with a new
-        parameter object, so the sequence must be: build at the published width → load the pretrained weights
-        into it → widen → wrap for relative position → and only then hand `model.parameters()` to the optimiser.
-        An optimiser built before the widening would hold the discarded projection and train nothing through it,
-        in silence; the geometry wrap sits AFTER the widen (widened proj) and BEFORE the optimiser (bias owned).
+        parameter object, so the sequence is: load the pretrained weights → widen → wrap for relative position →
+        and only then hand `model.parameters()` to the optimiser — built any earlier it holds the discarded proj.
         """
         model = self._model(warm_start=warm_start, init_weights=init_weights).to(self.config.runtime.device)
+        pretrained = {id(parameter) for parameter in model.parameters()}  # the base, BEFORE the feature installs
         if self.config.model.temporal_position:  # motion sight; the position table lands on the model's device
             model.detector.install_temporal_position()
         self._velocity.widen(model)
@@ -320,10 +319,11 @@ class JointTrainer:
                 raise ValueError("--relative-position needs the corpus spacing; PairSplit.spacing is unset")
             model.install_relative_position(spacing, TrackerConfig.shipped().linker.gate_um, self.config.runtime.device)
         if self._lora.enabled:  # freeze the base, adapt the association locus; detection is anchored
-            adapted = LoRA.inject(model, self._lora.to_config())
+            installed = [parameter for parameter in model.parameters() if id(parameter) not in pretrained]
+            adapted = LoRA.inject(model, self._lora.to_config(), keep=installed)
             if adapted == 0:
                 raise ValueError(f"LoRA targets {self._lora.targets} matched no layers")
-            logger.info("LoRA: froze base, adapted %d layers (rank %d)", adapted, self._lora.rank)
+            logger.info("LoRA: %d layers adapted (rank %d), %d params kept", adapted, self._lora.rank, len(installed))
             model = model.to(self.config.runtime.device)  # the new adapter params default to CPU — move them
         if self.config.runtime.device == "cuda":
             # channels_last_3d is a lossless layout that measured faster on the feature convs. torch stubs

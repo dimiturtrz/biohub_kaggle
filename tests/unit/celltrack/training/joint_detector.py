@@ -25,6 +25,7 @@ from celltrack.eval.proxy import TestMovieProxy
 from celltrack.losses.tracking_loss import _PairOutcome
 from celltrack.models.edge_transformer import _POS_EMBED_DIM
 from celltrack.models.joint_model import JointModel
+from celltrack.models.lora import LoRA
 from celltrack.models.prior_velocity import PriorVelocity
 from celltrack.operating_point import TrackerConfig
 from celltrack.training.joint_checkpoint import RESUME_SUFFIX
@@ -32,6 +33,7 @@ from celltrack.training.joint_config import (
     ContrastiveSite,
     DataCfg,
     JointTrainConfig,
+    LoraCfg,
     LossCfg,
     ModelCfg,
     OptimCfg,
@@ -376,6 +378,35 @@ def _velocity_config() -> JointTrainConfig:
 def _sampling_config() -> JointTrainConfig:
     """The tiny CPU config drawing its pairs by difficulty — the only difference from the default run."""
     return _cpu_config().model_copy(update={"data": DataCfg(downsample=(1, 1, 1), difficulty_sampling=True)})
+
+
+def _lora_velocity_config() -> JointTrainConfig:
+    """Velocity ON under a frozen-base LoRA — the combo where the widened columns must survive the base freeze."""
+    return _cpu_config().model_copy(
+        update={
+            "model": ModelCfg(out_channels=2, layers=(2, 4), lora=LoraCfg(enabled=True)),
+            "data": DataCfg(downsample=(1, 1, 1), prior_velocity=True),
+        }
+    )
+
+
+def test_prepare_keeps_the_velocity_columns_trainable_under_lora(video_store: Path):
+    """LoRA freezes the base, but the velocity's widened projection is a zero-init feature INSTALL, not base.
+
+    `LoRA.inject`'s blanket freeze catches the installed columns, and `adapter_parameters` (requires_grad only)
+    then drops them from the optimiser: left so, they sit at their zero init forever and the feature is a silent
+    no-op that still reads ON in the log. `_prepare` thaws them, so the widened projection both trains and rides
+    the optimiser — while its new columns still start at exactly zero, so the warm start is intact at step 0.
+    """
+    trainer = JointTrainer(_lora_velocity_config())
+    model, optimization = trainer._prepare(warm_start=False)
+    proj = model.transformer.proj
+    base = cast(nn.Linear, proj.base if isinstance(proj, LoRA.Linear) else proj)  # LoRA wraps the widened proj
+
+    optimised = {id(parameter) for group in optimization.optimizer.param_groups for parameter in group["params"]}
+    assert base.weight.requires_grad  # thawed — not left frozen by inject's blanket base freeze
+    assert id(base.weight) in optimised  # and the optimiser actually owns it, so the columns train
+    assert not base.weight[:, -PriorVelocity.DIM :].any()  # the velocity columns still start at exactly zero
 
 
 def test_prepare_widens_the_head_before_building_the_optimizer(video_store: Path):
