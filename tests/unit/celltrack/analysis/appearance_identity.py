@@ -160,7 +160,7 @@ def test_in_gate_ranking_of():
     Counting it as a trivial top-1 would inflate the score with cases the linker never had to decide, so the
     measurement runs only where there is a real choice.
     """
-    diagnosis = _RankingStub(
+    stub = _RankingStub(
         positions=np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0, 50.0]]),
         timepoints=np.array([0, 1, 1]),
     )
@@ -168,7 +168,10 @@ def test_in_gate_ranking_of():
 
     pairs = CandidatePairs(source=np.array([0]), true_target=np.array([1]), rival=np.array([2]))
 
-    ranking = InGateRanking.of(diagnosis, pairs, gate_um=10.0, radius_um=2.0)  # type: ignore[arg-type]
+    def _unused_reader(_rows: np.ndarray) -> RawBoxes:  # must never run: nothing to rank
+        raise AssertionError("box reader ran on a source with no real choice")
+
+    ranking = InGateRanking.of(stub.prediction, stub.spacing, _unused_reader, pairs, gate_um=10.0)
 
     assert ranking.count() == 0  # only one candidate within 10 um, so nothing to rank
 

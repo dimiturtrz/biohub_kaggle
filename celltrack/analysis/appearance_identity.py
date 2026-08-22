@@ -35,7 +35,9 @@ from __future__ import annotations
 
 import argparse
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from typing import Self
 
@@ -258,21 +260,28 @@ class InGateRanking:
     @classmethod
     def of(
         cls,
-        diagnosis: "IdentityDiagnosis",
+        prediction: TrackGraph,
+        spacing: Spacing,
+        box_reader: Callable[[Int[np.ndarray, "k"]], RawBoxes],
         pairs: CandidatePairs,
         gate_um: float,
-        radius_um: float,
     ) -> Self:
-        """Rank the true successor by appearance among the source's in-gate candidates, per triple."""
-        positions = diagnosis.spacing.to_micrometres(diagnosis.prediction.positions())
-        timepoints = diagnosis.prediction.timepoints()
+        """Rank the true successor by appearance among the source's in-gate candidates, per triple.
+
+        Takes the prediction graph, its spacing and a box-reader closure rather than the owning
+        `IdentityDiagnosis`, so the ranking depends only on what it reads — the mutual class reference is what a
+        diagnosis is for, not what a ranking needs. The box radius is fixed per call, so it is bound into the
+        reader rather than threaded as an argument.
+        """
+        positions = spacing.to_micrometres(prediction.positions())
+        timepoints = prediction.timepoints()
         ranks: list[int] = []
         counts: list[int] = []
         for source, true_target in zip(pairs.source, pairs.true_target, strict=True):
             candidates = cls._in_gate(positions, timepoints, int(source), gate_um)
             if len(candidates) < _MIN_CONTESTED or int(true_target) not in candidates.tolist():
                 continue
-            ranked = cls._rank(diagnosis, int(source), candidates, radius_um)
+            ranked = cls._rank(box_reader, int(source), candidates)
             if ranked is None:
                 continue
             order = candidates[np.argsort(-ranked)]
@@ -294,14 +303,13 @@ class InGateRanking:
 
     @staticmethod
     def _rank(
-        diagnosis: "IdentityDiagnosis",
+        box_reader: Callable[[Int[np.ndarray, "k"]], RawBoxes],
         source: int,
         candidates: Int[np.ndarray, "c"],
-        radius_um: float,
     ) -> Float[np.ndarray, "c"] | None:
         """Appearance correlation of the source against each candidate, or None if any box left the volume."""
-        source_box = diagnosis._boxes(np.asarray([source]), radius_um)  # noqa: SLF001
-        candidate_boxes = diagnosis._boxes(candidates, radius_um)  # noqa: SLF001
+        source_box = box_reader(np.asarray([source]))
+        candidate_boxes = box_reader(candidates)
         if not len(source_box.boxes) or len(candidate_boxes.boxes) != len(candidates):
             return None
         return np.asarray([IdentitySimilarity.correlate(source_box.boxes[0], box) for box in candidate_boxes.boxes])
@@ -365,7 +373,8 @@ class IdentityDiagnosis:
                     float(np.median(rotation.best_rotated)) if rotation.count() else float("nan"),
                     rotation.median_gain(),
                 )
-            ranking = InGateRanking.of(self, pairs, gate_um, radius_um)
+            read_box = partial(self._boxes, radius_um=radius_um)
+            ranking = InGateRanking.of(self.prediction, self.spacing, read_box, pairs, gate_um)
             logger.info(
                 "%-10s in-gate rank    n=%4d  TOP-1 %.3f (chance %.3f)  mean candidates %.2f  median rank %.1f",
                 label,
