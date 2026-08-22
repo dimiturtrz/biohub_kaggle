@@ -12483,6 +12483,12 @@
     {
       "kind": "calls",
       "source": "celltrack.training.joint_cli.JointCli.build_parser",
+      "target": "celltrack.training.joint_cli.JointCli._add_architecture_flags",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_cli.JointCli.build_parser",
       "target": "celltrack.training.joint_cli.JointCli._add_augmentation_args",
       "weight": 1
     },
@@ -25200,6 +25206,14 @@
       "label": "state_dict",
       "level": "method",
       "parent": "celltrack.training.joint_checkpoint.OptimizationState",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.joint_cli.JointCli._add_architecture_flags",
+      "label": "_add_architecture_flags",
+      "level": "method",
+      "parent": "celltrack.training.joint_cli.JointCli",
       "role": null
     },
     {
