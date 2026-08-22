@@ -50,6 +50,17 @@ def test_config_defaults_to_pilkwangs_recipe():
     assert config.lr == 1e-4
 
 
+def test_arg_parser():
+    """The CLI parser defaults match the config and the re-pool knobs parse into the (z,y,x) tuple / cap."""
+    defaults = TUNetTrainConfig.arg_parser().parse_args([])
+    assert defaults.downsample == (1, 4, 4)  # bare run reproduces the shipped strided read
+    assert defaults.vram_cap is None  # crawl-guard off unless asked
+
+    repool = TUNetTrainConfig.arg_parser().parse_args(["--downsample", "1", "2", "2", "--vram-cap", "0.85"])
+    assert repool.downsample == [1, 2, 2]
+    assert repool.vram_cap == 0.85
+
+
 def _one_param_optimization(*, with_schedule: bool) -> tuple[torch.nn.Parameter, _Optimization]:
     """A single-parameter SGD optimiser, optionally under a cosine schedule, for exercising _Optimization."""
     param = torch.nn.Parameter(torch.tensor([1.0]))

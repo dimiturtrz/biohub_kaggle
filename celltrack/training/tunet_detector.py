@@ -83,6 +83,11 @@ class TUNetTrainConfig:
     # BN buffers cannot load a bufferless GroupNorm, so the swap is rejected at build under warm_start).
     norm: str = "batch"
     device: str = "cuda"
+    # Fraction of total VRAM the allocator may hold. On Windows/WDDM a GPU over-commit does NOT OOM — it pages
+    # over PCIe and CRAWLS while util still reads 100% (power draw is the honest tell). Capping the allocator
+    # turns overshoot into an immediate OOM you can react to instead of a silent half-day. Off by default (the
+    # published recipe fits 32GB); set it for the (1,2,2) re-pool whose per-frame working set is 4x larger.
+    vram_cap: float | None = None
     # Frames are decompressed by a thread pool (blosc frees the GIL), not DataLoader worker processes — those
     # deadlock on this Windows box on repeated spawn. `threads` parallel readers, `prefetch` frames in flight.
     threads: int = 12
@@ -115,6 +120,79 @@ class TUNetTrainConfig:
     single_frame: bool = False
     compile_backbone: bool = False  # torch.compile the U-Net (static 64^3 shape); one-time warmup, then fused kernels
     recipe: DetectorRecipe = field(default_factory=DetectorRecipe)
+
+    @staticmethod
+    def arg_parser() -> argparse.ArgumentParser:
+        """The command-line surface of this config — one place so `main` stays a wiring shim, not a wall of flags."""
+        parser = argparse.ArgumentParser(description="Train the temporal-U-Net detector on the train split.")
+        parser.add_argument("--steps", type=int, default=1500)
+        parser.add_argument("--lr", type=float, default=1e-4)
+        parser.add_argument("--neg-weight", type=float, default=1e-2)
+        # DERIVED, not swept: given bare, the flag takes the pipeline's own inference operating point — the
+        # response at which the shipped tracker already calls the voxel a cell, so the voxels it spares are
+        # exactly the detections our 1-2% annotation cannot adjudicate.
+        parser.add_argument(
+            "--ignore-ambiguous-above",
+            type=float,
+            nargs="?",
+            const=TrackerConfig.shipped().threshold,
+            default=None,
+            help="leave unannotated voxels above this sigmoid response unsupervised (bare = the tracker threshold)",
+        )
+        parser.add_argument("--device", type=str, default="cuda")
+        parser.add_argument(
+            "--vram-cap",
+            type=float,
+            default=None,
+            metavar="FRACTION",
+            help="cap the allocator at this fraction of total VRAM so overshoot OOMs instead of PCIe-crawling (0-1)",
+        )
+        parser.add_argument(
+            "--downsample",
+            type=int,
+            nargs=3,
+            default=(1, 4, 4),
+            metavar=("DZ", "DY", "DX"),
+            help="input strided-read factor (z,y,x); (1,2,2) re-pools y/x to 0.8125um to resolve the 1-voxel confusor",
+        )
+        parser.add_argument("--threads", type=int, default=12, help="parallel frame-decompress threads")
+        parser.add_argument("--batch-size", type=int, default=8, help="frames forwarded per optimiser step (one shape)")
+        parser.add_argument("--eval-every", type=int, default=500)
+        parser.add_argument("--eval-subset", type=int, default=2)
+        parser.add_argument(
+            "--eval-threshold",
+            type=float,
+            default=TrackerConfig.shipped().threshold,
+            help="detection threshold of the selector eval (defaults to the SHIPPED operating point's)",
+        )
+        parser.add_argument("--eval-tta", action="store_true", help="flip-TTA in the eval (4x cost; off=selector)")
+        parser.add_argument("--patience", type=int, default=8, help="stop after N non-improving evals (<1 disables)")
+        parser.add_argument("--warm-start", action="store_true", help="initialise from the published pilkwang weights")
+        parser.add_argument(
+            "--aug-brightness",
+            type=float,
+            default=0.1,
+            help="multiplicative intensity jitter half-range (default on: ±10%%, the frontier's brightness_augment)",
+        )
+        parser.add_argument("--aug-offset", type=float, default=0.0, help="additive intensity jitter half-range")
+        parser.add_argument(
+            "--aug-flip",
+            action=argparse.BooleanOptionalAction,
+            default=True,
+            help="random flips along y and x (the in-plane axes; on by default, --no-aug-flip to disable)",
+        )
+        parser.add_argument("--cosine-lr", action="store_true", help="cosine-decay the learning rate to zero")
+        parser.add_argument("--single-frame", action="store_true", help="detection-only T=1 windows (~2x fewer convs)")
+        parser.add_argument(
+            "--norm",
+            choices=("batch", "group"),
+            default="batch",
+            help="backbone norm: 'batch' (published BN) or 'group' (domain-robust GroupNorm, from-scratch only)",
+        )
+        parser.add_argument("--compile-backbone", action="store_true", help="torch.compile the U-Net (static shape)")
+        parser.add_argument("--resume", action="store_true", help="continue from the .resume.pt snapshot")
+        parser.add_argument("--weights", type=str, default="detector_tunet_ours.pt")
+        return parser
 
 
 @dataclass(frozen=True)
@@ -165,6 +243,8 @@ class TUNetDetectorTrainer:
         torch.backends.cudnn.benchmark = True  # one static frame shape (64^3) — cudnn picks the fastest algo once
         detector = self._detector(warm_start=setup.warm_start).to(self.config.device)
         if self.config.device == "cuda":
+            if self.config.vram_cap is not None:
+                torch.cuda.set_per_process_memory_fraction(self.config.vram_cap, torch.cuda.current_device())
             # channels_last_3d is a lossless layout that measured ~1.2x on the feature convs — always on for CUDA,
             # not a knob. torch stubs omit the memory_format overload of Module.to; the call is runtime-valid.
             detector = detector.to(memory_format=torch.channels_last_3d)  # type: ignore[no-matching-overload]
@@ -351,60 +431,7 @@ class TUNetDetectorTrainer:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Train the temporal-U-Net detector on the non-held-out train videos.")
-    parser.add_argument("--steps", type=int, default=1500)
-    parser.add_argument("--lr", type=float, default=1e-4)
-    parser.add_argument("--neg-weight", type=float, default=1e-2)
-    # DERIVED, not swept: given bare, the flag takes the pipeline's own inference operating point — the
-    # response at which the shipped tracker already calls the voxel a cell, so the voxels it spares are
-    # exactly the detections our 1-2% annotation cannot adjudicate.
-    parser.add_argument(
-        "--ignore-ambiguous-above",
-        type=float,
-        nargs="?",
-        const=TrackerConfig.shipped().threshold,
-        default=None,
-        help="leave unannotated voxels above this sigmoid response unsupervised (bare = the tracker threshold)",
-    )
-    parser.add_argument("--device", type=str, default="cuda")
-    parser.add_argument("--threads", type=int, default=12, help="parallel frame-decompress threads")
-    parser.add_argument("--batch-size", type=int, default=8, help="frames forwarded per optimiser step (one shape)")
-    parser.add_argument("--eval-every", type=int, default=500)
-    parser.add_argument("--eval-subset", type=int, default=2)
-    parser.add_argument(
-        "--eval-threshold",
-        type=float,
-        default=TrackerConfig.shipped().threshold,
-        help="detection threshold of the selector eval (defaults to the SHIPPED operating point's)",
-    )
-    parser.add_argument("--eval-tta", action="store_true", help="flip-TTA in the eval (4x cost; off=selector)")
-    parser.add_argument("--patience", type=int, default=8, help="stop after N non-improving evals (<1 disables)")
-    parser.add_argument("--warm-start", action="store_true", help="initialise from the published pilkwang weights")
-    parser.add_argument(
-        "--aug-brightness",
-        type=float,
-        default=0.1,
-        help="multiplicative intensity jitter half-range (default on: ±10%%, the frontier's brightness_augment)",
-    )
-    parser.add_argument("--aug-offset", type=float, default=0.0, help="additive intensity jitter half-range")
-    parser.add_argument(
-        "--aug-flip",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="random flips along y and x (the in-plane axes; on by default, --no-aug-flip to disable)",
-    )
-    parser.add_argument("--cosine-lr", action="store_true", help="cosine-decay the learning rate to zero over the run")
-    parser.add_argument("--single-frame", action="store_true", help="detection-only T=1 windows (~2x fewer convs, g50)")
-    parser.add_argument(
-        "--norm",
-        choices=("batch", "group"),
-        default="batch",
-        help="backbone norm: 'batch' (published BN) or 'group' (domain-robust GroupNorm, from-scratch only)",
-    )
-    parser.add_argument("--compile-backbone", action="store_true", help="torch.compile the U-Net (static shape)")
-    parser.add_argument("--resume", action="store_true", help="continue from the .resume.pt snapshot")
-    parser.add_argument("--weights", type=str, default="detector_tunet_ours.pt")
-    args = parser.parse_args()
+    args = TUNetTrainConfig.arg_parser().parse_args()
 
     config = TUNetTrainConfig(
         steps=args.steps,
@@ -412,6 +439,7 @@ def main() -> None:
         neg_weight=args.neg_weight,
         ignore_ambiguous_above=args.ignore_ambiguous_above,
         device=args.device,
+        vram_cap=args.vram_cap,
         threads=args.threads,
         batch_size=args.batch_size,
         eval_every=args.eval_every,
@@ -428,6 +456,8 @@ def main() -> None:
         single_frame=args.single_frame,
         compile_backbone=args.compile_backbone,
         norm=args.norm,
+        downsample=tuple(args.downsample),
+        recipe=replace(DetectorRecipe(), downsample=tuple(args.downsample)),
     )
     root = DataRoot.from_config(_CONFIG)
     dz, dy, dx = config.downsample
