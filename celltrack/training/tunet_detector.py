@@ -61,6 +61,7 @@ _PACK_REL = Path("reference") / "pilkwang" / "split_0"
 _PACK2_REL = Path("reference") / "pilkwang" / "seed2" / "weights" / "unet_transformer" / "split_0"
 _HEARTBEAT_UPDATES = 100  # log within-window progress this often, so a long window isn't silent
 _SECONDS_PER_HOUR = 3600.0
+_BYTES_PER_GB = 1024**3
 
 
 @dataclass(frozen=True)
@@ -286,6 +287,7 @@ class TUNetDetectorTrainer:
             window = min(self.config.eval_every, self.config.steps - done)
             loss, rate = self._run_window(detector, optimization, targets, window, done)
             done += window
+            self._log_peak_vram(done, window)
             result = evaluator.evaluate(detector)
             score = result.selection_score
             improved = stop.update(score) if stop is not None else score >= best
@@ -321,6 +323,15 @@ class TUNetDetectorTrainer:
         logger.info("best proxy-pipeline score = %.4f, saved to %s", best, save_to)
         run.close(best)
         return best
+
+    def _log_peak_vram(self, done: int, window: int) -> None:
+        """Log the steady-state VRAM reserve for a fit; reset once after the first window so the compile and
+        construction spikes don't pollute the reading the fit's slope is taken from."""
+        if self.config.device != "cuda":
+            return
+        if done == window:
+            torch.cuda.reset_peak_memory_stats()
+        logger.info("peak VRAM reserved %.2f GB", torch.cuda.max_memory_reserved() / _BYTES_PER_GB)
 
     def _metrics(self, result: EvalResult, best: float) -> dict[str, float]:
         """The eval half of one tracked row — the selected-on score, the best so far, and the node levers."""
