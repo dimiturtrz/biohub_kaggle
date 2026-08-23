@@ -20,7 +20,7 @@ from celltrack.detectors.center_prior import (
     CenterPriorVeto,
     CenterVetoConfig,
 )
-from celltrack.detectors.response_cache import ResponseCache
+from celltrack.detectors.response_cache import EphemeralResponseStore, ResponseCache
 
 
 def _tiny() -> CenterPrior:
@@ -118,7 +118,7 @@ def _pilkwang_state(model: CenterPrior) -> dict[str, object]:
     return nested
 
 
-def test_from_pack(tmp_path: Path):
+def test_center_prior_from_pack(tmp_path: Path):
     """The loader rebuilds the model, flattening the published `.block.` key nesting, and reads config.json."""
     model = _tiny()
     torch.save({"model_state": _pilkwang_state(model), "config": {"base_channels": 2}}, tmp_path / "best.pt")
@@ -128,6 +128,16 @@ def test_from_pack(tmp_path: Path):
     assert torch.equal(model.head.weight, loaded.head.weight)
     original, restored = model.state_dict(), loaded.state_dict()
     assert torch.equal(original["enc1.0.weight"], restored["enc1.0.weight"])  # a re-nested block weight round-trips
+
+
+def test_center_prior_scorer_from_pack(tmp_path: Path):
+    """`CenterPriorScorer.from_pack` mounts the pack on a zero-disk single-pass store, ready to veto."""
+    torch.save({"model_state": _pilkwang_state(_tiny()), "config": {"base_channels": 2}}, tmp_path / "best.pt")
+    (tmp_path / "config.json").write_text(json.dumps({"base_channels": 2, "pool_factor": 4}))
+    scorer = CenterPriorScorer.from_pack(tmp_path)
+    assert isinstance(scorer.cache, EphemeralResponseStore)  # heatmaps never touch disk
+    assert scorer.recipe.pool_factor == 4
+    assert scorer.device == "cpu"
 
 
 def _video(tmp_path: Path) -> Path:

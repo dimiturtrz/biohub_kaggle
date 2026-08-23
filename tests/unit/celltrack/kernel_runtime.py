@@ -61,6 +61,19 @@ def test_pack_source(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     assert KernelRuntime.pack_source() == tmp_path / "repo/src"
 
 
+def test_center_prior_pack(monkeypatch: pytest.MonkeyPatch):
+    """`center_prior_pack` picks the DeepCenter `best.pt` by its dataset token, skipping the detector packs."""
+    found = [
+        "/kaggle/input/seed314159-pack/weights/unet_transformer/split_0/best.pt",
+        "/kaggle/input/biohub-deepcenter-unet3d-center-prior-v1/full_frame_center/best.pt",
+    ]
+    monkeypatch.setattr(kernel_runtime.glob, "glob", lambda pattern, recursive: found)
+    assert KernelRuntime.center_prior_pack() == Path(found[1]).parent
+
+    monkeypatch.setattr(kernel_runtime.glob, "glob", lambda pattern, recursive: found[:1])
+    assert KernelRuntime.center_prior_pack() is None  # detector-only mount -> no confirmed recovery
+
+
 def test_test_videos(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """`test_videos` returns the competition test zarrs as sorted Paths."""
     unsorted = [str(tmp_path / "b.zarr"), str(tmp_path / "a.zarr")]

@@ -15,7 +15,7 @@ import logging
 import time
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from celltrack.affinity import EdgeAffinity
 from celltrack.detectors.pipeline import BlendDetectorScorer
@@ -32,6 +32,12 @@ from celltrack.postproc.short_track_filter import ShortTrackFilter
 from core.data.tracks import TrackGraph
 from core.data.video import CellVideo
 from core.geometry import Spacing
+
+if TYPE_CHECKING:
+    # Type-only: the tracker holds an already-mounted `CenterPriorScorer` and passes its `CenterPriorVeto`
+    # through opaquely to the recovery stage. Construction lives on the scorer (`CenterPriorScorer.from_pack`),
+    # so the centre-prior package is a submission concern the core tracker never imports at runtime.
+    from celltrack.detectors.center_prior import CenterPriorScorer, CenterPriorVeto
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +82,17 @@ class TrackedVideo:
 
 
 @dataclass(frozen=True)
+class StageEvidence:
+    """The optional mounted extras the post-detection stages read: the re-ranker's per-gap probabilities and
+    the centre-prior veto. Each is `None` unless its model is mounted and the config prices it, so bundling
+    them keeps `_stages` a step over per-video linking inputs plus this one evidence object rather than a
+    widening argument list as more mounted heads are added."""
+
+    ranker: EdgeAffinity | None = None
+    veto: CenterPriorVeto | None = None
+
+
+@dataclass(frozen=True)
 class CellTracker:
     """The mounted dual-seed tracker: forward two seeds, score edges, fold the post-proc stages — `run` a video.
 
@@ -89,6 +106,11 @@ class CellTracker:
     device: str
     config: TrackerConfig = field(default_factory=TrackerConfig)
     ranker: AssociationRanker | None = None
+    # The optional DeepCenter centre-prior (`with_center_prior`), mounted like the ranker: the caller hands in
+    # the pack directory it found. Present -> `run_scored` forwards it once per video into a `CenterPriorVeto`
+    # the confirmed-recovery stages (reuse-bridge synthetic insertion) resolve their confirmer from. None keeps
+    # the shipped path byte-identical (no veto is built, every stage resolves its confirmer to None).
+    center_scorer: CenterPriorScorer | None = None
 
     @classmethod
     def from_packs(
@@ -126,6 +148,12 @@ class CellTracker:
         """
         config = config or TrackerConfig.shipped()
         model = JointModel.from_checkpoint(checkpoint, device)
+        if tuple(recipe.downsample) != tuple(model.downsample):
+            raise ValueError(
+                f"recipe downsample {tuple(recipe.downsample)} != checkpoint {tuple(model.downsample)}: the "
+                "detector would decode at a grid the transformer was never trained on — a silent mismatch that "
+                "returns garbage at slot cost. Build the recipe from the checkpoint's own downsample."
+            )
         detector = TemporalUNetDetector.of(model.detector)
         scorer = EdgeTransformerScorer.of(detector, model.transformer, recipe)
         edge_scorer = BlendedEdgeTransformerScorer(
@@ -182,6 +210,7 @@ class CellTracker:
             device=self.device,
             config=config,
             ranker=self.ranker,
+            center_scorer=self.center_scorer,
         )
 
     def with_ranker(self, artifact: Path) -> "CellTracker":
@@ -214,8 +243,11 @@ class CellTracker:
         stages_start = time.perf_counter()
         graph = nodes
         video = CellVideo.from_ome_zarr(path)
-        ranker = self._ranked(video.spacing, nodes, affinity, mutual, video.volume_shape)
-        for stage in self._stages(video.spacing, affinity, mutual, video.volume_shape, ranker):
+        evidence = StageEvidence(
+            ranker=self._ranked(video.spacing, nodes, affinity, mutual, video.volume_shape),
+            veto=self.center_scorer.veto(video_key, path) if self.center_scorer is not None else None,
+        )
+        for stage in self._stages(video.spacing, affinity, mutual, video.volume_shape, evidence):
             graph = stage.transform(graph)
         logger.info(
             "%s: detect %.1fs | affinity %.1fs | link+post %.1fs (%d nodes)",
@@ -284,7 +316,7 @@ class CellTracker:
         affinity: EdgeAffinity | None,
         mutual: EdgeAffinity | None = None,
         volume_shape: tuple[int, int, int] | None = None,
-        ranker: EdgeAffinity | None = None,
+        evidence: StageEvidence | None = None,
     ) -> tuple[GraphStage, ...]:
         """The ordered post-detection passes at this video's spacing — link, drop short tracks, bridge gaps, smooth.
 
@@ -298,7 +330,8 @@ class CellTracker:
         than once per pass — post-processing sees only the final links.
         """
         config = self.config
-        link = LinkerStage(config.linker.build(spacing, affinity, mutual, volume_shape, ranker))
+        evidence = evidence if evidence is not None else StageEvidence()
+        link = LinkerStage(config.linker.build(spacing, affinity, mutual, volume_shape, evidence.ranker))
         # Division recovery reads the edge affinity, so it needs a learned head and runs before the short-track
         # filter (whose division-preserving carve-out can only protect a fork that already exists).
         divide = (
@@ -311,7 +344,7 @@ class CellTracker:
         geo_divide = (config.division_recovery.build(spacing),) if config.division_recovery is not None else ()
         # Reuse-bridge runs before the short-track filter so the isolated t+1 nodes it links through survive as
         # part of a bridged track rather than being pruned as length-1 fragments first.
-        reuse = (config.reuse.build(spacing),) if config.reuse is not None else ()
+        reuse = (config.reuse.build(spacing, evidence.veto),) if config.reuse is not None else ()
         rescue = config.rescue.build(spacing, affinity) if config.rescue is not None and affinity else None
         short = ShortTrackFilter(
             min_length=config.min_track_length, rescue=rescue, keep_boundary=config.keep_boundary_tracks

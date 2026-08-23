@@ -110,6 +110,14 @@ class JointCli:
         # safe fast config must be RE-MEASURED with RSS + commit-charge monitoring (bead) before the default rises.
         parser.add_argument("--loader-threads", type=int, default=4, help="frame-decompression threads (mmap readers)")
         parser.add_argument("--loader-prefetch", type=int, default=8, help="pairs kept in flight ahead of the step")
+        parser.add_argument(
+            "--downsample",
+            type=int,
+            nargs=3,
+            default=(1, 4, 4),
+            metavar=("DZ", "DY", "DX"),
+            help="(z, y, x) pooling grid; the published default is (1, 4, 4). Finer y/x resolves the confusor.",
+        )
         # The corpus whose candidate set is the one the tracker deploys against: 3.86 in-gate candidates per
         # source with 97.1% contested, where the annotated pairs carry 0.99 and 1.9%. These REPLACE the
         # annotated pairs — mixing re-introduces the uncontested rows the corpus exists to escape.
@@ -124,30 +132,7 @@ class JointCli:
             action="store_true",
             help="draw pairs in proportion to their measured top-1 defect instead of uniformly with replacement",
         )
-        # The one property our own corpus cannot have: every cell of a synthetic frame is labelled, so the crowded
-        # near-neighbours enter the edge matrix as TRUE NEGATIVES instead of sitting outside it as unannotated
-        # detections — which is what all 38 of the dense movie's mislinked partners are.
-        parser.add_argument(
-            "--synthetic-fraction",
-            type=float,
-            default=0.0,
-            help="share of steps drawn from the fully-labelled synthetic corpus (0 = the real corpus alone)",
-        )
-        parser.add_argument(
-            "--synthetic-sequences", type=int, default=None, help="synthetic sequences to enumerate (default: all)"
-        )
-        parser.add_argument(
-            "--gpu-scene-fraction", type=float, default=0.0, help="fraction of each batch generated fresh on GPU"
-        )
-        parser.add_argument(
-            "--gpu-scene-detection",
-            action=argparse.BooleanOptionalAction,
-            default=True,
-            help="generated scenes also train detection (honest 100%% labels); --no- for association only",
-        )
-        parser.add_argument(
-            "--synthetic-scenes", type=int, default=0, help="hard scenes to GENERATE dynamically (0 = static npz)"
-        )
+        JointCli._add_synthetic_flags(parser)
         parser.add_argument(
             "--paced-curriculum",
             action="store_true",
@@ -232,6 +217,36 @@ class JointCli:
             default="pack",
             help="edge-head architecture (from-scratch only): 'pack' (pilkwang SimpleNodeTransformer) or 'hoct'"
             " (two-stage 3D-RoPE node + line-to-line edge attention)",
+        )
+
+    @staticmethod
+    def _add_synthetic_flags(parser: argparse.ArgumentParser) -> None:
+        """The fully-labelled synthetic/GPU-scene corpus flags — the source of TRUE-NEGATIVE crowded neighbours.
+
+        The one property our own corpus cannot have: every cell of a synthetic frame is labelled, so the crowded
+        near-neighbours enter the edge matrix as TRUE NEGATIVES instead of sitting outside it as unannotated
+        detections — which is what all 38 of the dense movie's mislinked partners are.
+        """
+        parser.add_argument(
+            "--synthetic-fraction",
+            type=float,
+            default=0.0,
+            help="share of steps drawn from the fully-labelled synthetic corpus (0 = the real corpus alone)",
+        )
+        parser.add_argument(
+            "--synthetic-sequences", type=int, default=None, help="synthetic sequences to enumerate (default: all)"
+        )
+        parser.add_argument(
+            "--gpu-scene-fraction", type=float, default=0.0, help="fraction of each batch generated fresh on GPU"
+        )
+        parser.add_argument(
+            "--gpu-scene-detection",
+            action=argparse.BooleanOptionalAction,
+            default=True,
+            help="generated scenes also train detection (honest 100%% labels); --no- for association only",
+        )
+        parser.add_argument(
+            "--synthetic-scenes", type=int, default=0, help="hard scenes to GENERATE dynamically (0 = static npz)"
         )
 
     @staticmethod

@@ -1,4 +1,9 @@
 {
+  "permissions": {
+    "allow": [
+      "Monitor"
+    ]
+  },
   "hooks": {
     "PreCompact": [
       {

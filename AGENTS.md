@@ -90,6 +90,12 @@ tests — this repo's tests cover only ITS packages. Consumer-specific detector 
 - **Score noise floor** — a proxy or LB difference **below ~0.01–0.02 is noise, not signal**. Don't
   keep/kill a method, ship a default, or claim a win on a sub-0.01 delta; treat it as a tie and decide on
   mechanism (or a bigger, repeated gap). Only differences clearing the floor count as real movement.
+- **Proxy inverts at the ceiling — gate the submission on MECHANISM, not a proxy number that beats 0.900.**
+  The local proxy is FAITHFUL below ~0.89 (monotone, small negative offset) and BLINDS/INVERTS at the
+  saturated top: dw0 scored +0.0267 held-out yet −0.028 on the LB (0.872 vs 0.900). So a held-out win
+  above 0.90 is NOT evidence for the LB. Spend the one submission only on a named mechanism plus a recall
+  axis the champion structurally lacks, or on decorrelation you can measure locally (edge-agreement between
+  trackers) — never on a top-end proxy number alone.
 - **Doc layers** — `learning/<date>_<topic>.md` = the study ramp / general understanding;
   `research/` = external / field synthesis (theirs); `interpretations/<task>/<date>_<topic>.md` =
   sense-making of *our own* results (per task, `converging/` for cross-task). The build log is git history;

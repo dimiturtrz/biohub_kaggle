@@ -33,7 +33,7 @@ from jaxtyping import Float, Int
 from pydantic import BaseModel, ConfigDict, Field
 from torch import Tensor, nn
 
-from celltrack.detectors.response_cache import ResponseCache
+from celltrack.detectors.response_cache import EphemeralResponseStore, ResponseStore
 
 _POOL_MULTIPLE = 8  # three MaxPool3d(2) levels: each spatial dim must divide 8 for the skip-concats to align
 _BLOCK_NEST = ".block."  # pilkwang's per-level `ConvBlock3d.block` nesting, flattened out on load (see from_pack)
@@ -258,8 +258,20 @@ class CenterPriorScorer:
 
     model: CenterPrior
     recipe: CenterPriorRecipe
-    cache: ResponseCache
+    cache: ResponseStore
     device: str
+
+    @classmethod
+    def from_pack(cls, pack: Path, device: str = "cpu") -> "CenterPriorScorer":
+        """Load the centre prior from its pack directory and mount it on a zero-disk single-pass store.
+
+        The construction home for the scorer: loading weights from a pack is the scorer's own concern, not the
+        tracker's — the tracker holds an already-mounted scorer and never learns which package it came from.
+        Single-pass by construction (each video forwarded once, veto read once) -> `EphemeralResponseStore`, so
+        the heatmaps never touch the kernel's bounded `/kaggle/working`, mirroring the ephemeral detector mount.
+        """
+        model, recipe = CenterPrior.from_pack(pack, map_location=device)
+        return cls(model=model.to(device).eval(), recipe=recipe, cache=EphemeralResponseStore(), device=device)
 
     def veto(self, video_key: str, path: Path) -> CenterPriorVeto:
         """This video's heatmaps as a `CenterPriorVeto`, forwarding-and-caching on a first miss."""

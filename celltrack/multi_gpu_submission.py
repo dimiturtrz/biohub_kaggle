@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from multiprocessing.process import BaseProcess
 from multiprocessing.queues import Queue
 from pathlib import Path
@@ -26,6 +26,7 @@ from queue import Empty
 import torch
 import torch.multiprocessing as torch_mp
 
+from celltrack.detectors.center_prior import CenterPriorScorer
 from celltrack.operating_point import TrackerConfig
 from celltrack.tracker import CellTracker
 from core.data.submission import Submission
@@ -72,6 +73,9 @@ class MultiGpuSubmission:
     # model for the same reason the packs are paths: it has to survive the spawn boundary, and where the artifact
     # lives is the caller's fact (a Kaggle dataset mount here, the local data root there).
     ranker_pack: Path | None = None
+    # The DeepCenter centre-prior pack, or None to run without confirmed recovery. A PATH for the same
+    # survives-the-spawn reason as the packs above — the worker mounts it on its own device.
+    center_pack: Path | None = None
 
     def shards(self, videos: list[Path]) -> tuple[VideoShard, ...]:
         """Deal the videos round-robin across the devices — interleaved, so no one worker gets every long movie.
@@ -98,6 +102,8 @@ class MultiGpuSubmission:
         tracker = CellTracker.ephemeral(self.packs[0], self.packs[1], shard.device, self.config)
         if self.ranker_pack is not None:
             tracker = tracker.with_ranker(self.ranker_pack)
+        if self.center_pack is not None:
+            tracker = replace(tracker, center_scorer=CenterPriorScorer.from_pack(self.center_pack, shard.device))
         logger.info("%s: %d videos — %s", shard.device, len(shard.videos), [key for key, _ in shard.videos])
         return {key: tracker.run(key, path) for key, path in shard.videos}
 

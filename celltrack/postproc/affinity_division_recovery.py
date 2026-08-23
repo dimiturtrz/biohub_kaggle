@@ -400,7 +400,7 @@ class AffinityDivisionRecovery:
             for node in np.flatnonzero(timepoints == timepoint).tolist():
                 successors = adjacency.successors[node]
                 if len(successors):
-                    frames[node] = 1 + int(frames[successors].max())
+                    frames[node] = 1 + int(frames[list(successors)].max())
         return frames
 
     def _admitted(self, proposals: list[ForkCandidate], cap: int) -> list[ForkCandidate]:
@@ -433,6 +433,10 @@ class AffinityDivisionRecovery:
         """Candidate forks across one gap: the candidacy's proposed daughters off each single-child parent, gated."""
         found: list[ForkCandidate] = []
         for source_index, parent in enumerate(sources.tolist()):
+            if source_index >= len(probability):
+                # A synthetic node inserted downstream (GapCloser) carries no affinity row — it is appended
+                # after every detection, so it cannot be an affinity-ranked division parent. Skip it.
+                continue
             if adjacency.out_degrees[parent] != _SINGLE_CHILD:
                 continue
             kept = int(adjacency.successors[parent][_TOP_TARGET])

@@ -510,7 +510,12 @@ _BUILDERS: dict[str, _Builder] = {
         prior=config.prior(),
         ranker=parts.ranker,
     ),
-    "ilp": lambda config, spacing, affinity, parts: ILPLinker(spacing=spacing, max_distance_um=config.gate_um),
+    "ilp": lambda config, spacing, affinity, parts: ILPLinker(
+        spacing=spacing,
+        max_distance_um=config.gate_um,
+        affinity=affinity,
+        affinity_bonus=config.effective_bonus,
+    ),
     "division": lambda config, spacing, affinity, parts: DivisionAwareLinker(
         spacing=spacing, max_distance_um=config.gate_um, division_distance_um=config.division_um
     ),

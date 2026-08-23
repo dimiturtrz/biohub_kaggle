@@ -24,7 +24,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
 
-from celltrack.detectors.center_prior import CenterConfirmer
+from celltrack.detectors.center_prior import CenterConfirmer, CenterPriorVeto, CenterVetoConfig
 from core.data.tracks import Adjacency, TrackGraph
 from core.geometry import Spacing
 
@@ -494,9 +494,22 @@ class ReuseConfig(BaseModel):
     gate_um: float = Field(6.0, gt=0)
     radius_um: float = Field(3.2, gt=0)
     max_added_fraction: float = Field(0.05, ge=0)
+    # Present (non-None) mounts the DeepCenter confirmer on the synthetic-insertion half: the second opinion
+    # that lets a wide gap insert a recovered node only where the centre prior sees a cell. Resolved per-video
+    # from the mounted heatmaps at build time; None -> reuse-only (no invented node), the original behaviour.
+    veto: CenterVetoConfig | None = None
+    # Present (non-None) turns on synthetic midpoint insertion where no detection sits near the gap. Its own
+    # cap; a wide span is inserted only under the confirmer above, a short span as close-motion continuation.
+    synthetic: SyntheticGap | None = None
 
-    def build(self, spacing: Spacing) -> GapCloser:
-        """The reuse-bridge stage at this video's spacing."""
+    def build(self, spacing: Spacing, veto: "CenterPriorVeto | None" = None) -> GapCloser:
+        """The reuse-bridge stage at this video's spacing, with the per-video confirmer resolved from `veto`."""
+        confirmer = self.veto.resolve(veto) if self.veto is not None else None
         return GapCloser(
-            spacing=spacing, gate_um=self.gate_um, reuse_um=self.radius_um, max_added_fraction=self.max_added_fraction
+            spacing=spacing,
+            gate_um=self.gate_um,
+            reuse_um=self.radius_um,
+            max_added_fraction=self.max_added_fraction,
+            confirmer=confirmer,
+            synthetic=self.synthetic,
         )

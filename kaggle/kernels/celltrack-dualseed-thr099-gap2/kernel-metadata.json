@@ -1,0 +1,22 @@
+{
+  "id": "dimiturnt/celltrack-dualseed-thr099-gap2",
+  "title": "celltrack-dualseed-thr099-gap2",
+  "code_file": "celltrack-dualseed-thr099-gap2.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": false,
+  "dataset_sources": [
+    "dimiturnt/celltrack-kit",
+    "pilkwang/biohub-tracking-support-pack-50ep-v1",
+    "pilkwang/biohub-temporal-unet3d-seed314159-v1"
+  ],
+  "competition_sources": [
+    "biohub-cell-tracking-during-development"
+  ],
+  "kernel_sources": [],
+  "model_sources": [],
+  "machine_shape": "NvidiaTeslaT4"
+}

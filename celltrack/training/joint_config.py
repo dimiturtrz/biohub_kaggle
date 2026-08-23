@@ -464,6 +464,7 @@ class JointTrainConfig(BaseModel):
                 ),
             ),
             data=DataCfg(
+                downsample=tuple(args.downsample),
                 detected_videos=args.detected_videos,
                 difficulty_sampling=args.difficulty_sampling,
                 prior_velocity=args.prior_velocity or args.velocity_gt_warmup_steps > 0,

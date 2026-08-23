@@ -75,6 +75,23 @@ class KernelRuntime:
         return Path(found[0]).parent if found else None
 
     @staticmethod
+    def center_prior_pack() -> Path | None:
+        """The DeepCenter centre-prior pack directory (`best.pt` + `config.json`), or `None` if not attached.
+
+        Found the way the ranker is — by a file the pack alone carries, so the kernel names a DATASET not a
+        layout. `best.pt` under a path whose dataset token marks the centre prior (`center-prior`/`deepcenter`)
+        distinguishes it from the detector packs, whose checkpoints live under `weights/unet_transformer`. A
+        kernel that does not attach the dataset gets `None` and runs the shipped path with no confirmed recovery.
+        """
+        found = [
+            path
+            for path in glob.glob(f"{_INPUT_GLOB}/best.pt", recursive=True)
+            if "center-prior" in path or "deepcenter" in path
+        ]
+        logger.info("center prior pack: %s", found[:1])
+        return Path(found[0]).parent if found else None
+
+    @staticmethod
     def pack_source() -> Path:
         """The mounted pack's `src/` root, so the kernel imports the `TemporalUNet3D` the weights were trained in."""
         return Path(KernelRuntime.find("repo/src/biohub_tracking/models/__init__.py")).parents[2]
