@@ -54,6 +54,7 @@ class RelativePositionConfig:
     gate_um: float
     basis_count: int = 4
     enabled: bool = False
+    directional: bool = False
 
 
 class DistanceAttentionBias(nn.Module):
@@ -102,3 +103,71 @@ class DistanceAttentionBias(nn.Module):
         centres = cast(Tensor, self.centres_um).to(separation_um.dtype)
         deviation = (separation_um.unsqueeze(-1) - centres) / self.width_um
         return torch.exp(-0.5 * deviation.square())
+
+
+# The six signed unit axes in the anisotropy-corrected (micrometre) frame — a fixed directional anchor set.
+# A pair's unit offset is scored against each by cosine, so a head can learn to prefer any one hemisphere
+# (or, combining anchors, any single preferred direction with a learned width). Six is the minimal set that
+# spans all three axes in both senses; more anchors would refine the angular resolution the confusor does
+# not need (its inversion is a coarse hemisphere effect, not a fine cone).
+_DIRECTION_ANCHORS: tuple[tuple[float, float, float], ...] = (
+    (1.0, 0.0, 0.0),
+    (-1.0, 0.0, 0.0),
+    (0.0, 1.0, 0.0),
+    (0.0, -1.0, 0.0),
+    (0.0, 0.0, 1.0),
+    (0.0, 0.0, -1.0),
+)
+_ZERO_NORM_EPS_UM = 1e-6
+
+
+class DirectionalAttentionBias(DistanceAttentionBias):
+    """The radial bias plus a per-head term over the pair's offset DIRECTION — the axis `.norm()` throws away.
+
+    The dense-movie confusor is a DIRECTIONAL inversion: the true successor is not the nearest node but the one
+    the cell drifts TOWARD, and the field's common-mode drift makes that a consistent lab-frame direction. The
+    radial parent collapses every offset to a scalar separation, so a head can prefer the near set or a ring at
+    one displacement but can never prefer a HEMISPHERE — exactly the discrimination the confusor needs. This adds
+    that: each pair's unit offset (in the anisotropy-corrected micrometre frame, so a physical direction and not a
+    voxel-index one) is scored against `_DIRECTION_ANCHORS` by cosine, and a per-head weight over those six
+    activations is summed into the score alongside the radial term.
+
+    Both weight banks start at exact zero, so the total bias is the zero matrix until training moves it — the same
+    warm-start trade the parent makes, extended to the new directional parameters. A coincident pair has no
+    direction; its unit offset is set to zero, contributing zero to every anchor, so the term is silent exactly
+    where direction is undefined rather than dividing by a vanishing norm.
+    """
+
+    def __init__(self, head_count: int, config: RelativePositionConfig) -> None:
+        super().__init__(head_count, config)
+        anchors = torch.tensor(_DIRECTION_ANCHORS, dtype=torch.float32)
+        self.register_buffer("anchors", anchors)
+        self.direction_weight = nn.Parameter(torch.zeros(head_count, anchors.shape[0]))
+
+    @override
+    def forward(
+        self, coords_q: Float[Tensor, "b nq 3"], coords_kv: Float[Tensor, "b nkv 3"]
+    ) -> Float[Tensor, "bh nq nkv"]:
+        """The radial score bias plus the directional one, flattened to the `(B·heads, Nq, Nkv)` attention takes."""
+        radial = torch.einsum(
+            "hk,bqvk->bhqv", self.weight.to(coords_q.dtype), self.radial_basis(self.separation_um(coords_q, coords_kv))
+        )
+        directional = torch.einsum(
+            "ha,bqva->bhqv", self.direction_weight.to(coords_q.dtype), self.direction_basis(coords_q, coords_kv)
+        )
+        bias = radial + directional
+        return bias.reshape(-1, bias.shape[2], bias.shape[3])
+
+    def direction_basis(
+        self, coords_q: Float[Tensor, "b nq 3"], coords_kv: Float[Tensor, "b nkv 3"]
+    ) -> Float[Tensor, "b nq nkv a"]:
+        """Each pair's unit offset scored against every fixed anchor by cosine — zero where the pair is coincident.
+
+        The offset is taken in micrometres (voxel indices scaled by the anisotropic spacing) so its direction is
+        physical: a raw-index unit vector would point 'more in z' purely because z voxels are four times deeper.
+        """
+        spacing = cast(Tensor, self.spacing_um).to(coords_q.dtype)
+        offset_um = (coords_q.unsqueeze(2) - coords_kv.unsqueeze(1)) * spacing
+        norm = offset_um.norm(dim=-1, keepdim=True)
+        unit = torch.where(norm > _ZERO_NORM_EPS_UM, offset_um / norm.clamp_min(_ZERO_NORM_EPS_UM), 0.0)
+        return torch.einsum("bqvd,ad->bqva", unit, cast(Tensor, self.anchors).to(coords_q.dtype))

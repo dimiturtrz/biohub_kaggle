@@ -171,9 +171,12 @@ class JointModel(nn.Module):
             gate_um=cast(float, persisted["gate_um"]),
             basis_count=cast(int, persisted["basis_count"]),
             enabled=True,
+            directional=bool(persisted.get("directional", False)),
         )
 
-    def install_relative_position(self, spacing: Spacing, gate_um: float, device: str) -> None:
+    def install_relative_position(
+        self, spacing: Spacing, gate_um: float, device: str, *, directional: bool = False
+    ) -> None:
         """Wrap the edge head in a zero-init per-head distance bias — geometry sight, like `install_temporal_position`.
 
         The wrapper adds a learned distance bias to the head's cross-attention; it is zero-init, so the model
@@ -181,7 +184,7 @@ class JointModel(nn.Module):
         widened (the wrap must see the unwrapped `.proj`) and before the optimiser, so `bias.weight` joins
         `model.parameters()`.
         """
-        config = RelativePositionConfig(spacing=spacing, gate_um=gate_um, enabled=True)
+        config = RelativePositionConfig(spacing=spacing, gate_um=gate_um, enabled=True, directional=directional)
         self.transformer = RelativePositionEdgeTransformer(self.transformer, config).to(device)
 
     def relative_position_config(self) -> dict[str, object] | None:
@@ -197,6 +200,7 @@ class JointModel(nn.Module):
             "spacing": list(config.spacing.as_array()),
             "gate_um": config.gate_um,
             "basis_count": config.basis_count,
+            "directional": config.directional,
         }
 
     @staticmethod

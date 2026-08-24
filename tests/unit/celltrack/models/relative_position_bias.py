@@ -7,7 +7,11 @@ to the linker's gate, the campaign's one statement of how far a cell travels acr
 
 import torch
 
-from celltrack.models.relative_position_bias import DistanceAttentionBias, RelativePositionConfig
+from celltrack.models.relative_position_bias import (
+    DirectionalAttentionBias,
+    DistanceAttentionBias,
+    RelativePositionConfig,
+)
 from core.geometry import Spacing
 
 _SPACING = Spacing(z=1.625, y=0.40625, x=0.40625)
@@ -17,6 +21,10 @@ _HEADS = 2
 
 def _config() -> RelativePositionConfig:
     return RelativePositionConfig(spacing=_SPACING, gate_um=_GATE_UM, enabled=True)
+
+
+def _directional_config() -> RelativePositionConfig:
+    return RelativePositionConfig(spacing=_SPACING, gate_um=_GATE_UM, enabled=True, directional=True)
 
 
 def test_forward():
@@ -67,3 +75,64 @@ def test_radial_basis():
     assert at_zero[0, 0, 0, 0] == 1.0  # the first centre is contact, zero separation
     assert at_gate[0, 0, 0, -1] == 1.0  # the last centre is the gate itself
     assert at_zero[0, 0, 0, -1] < at_zero[0, 0, 0, 0]
+
+
+def test_directional_forward_zero_start():
+    """Directional too starts at the exact zero matrix — both weight banks zero, so a warm start cannot move."""
+    bias = DirectionalAttentionBias(_HEADS, _directional_config())
+    geometry = torch.Generator().manual_seed(0)
+    coords_q = torch.rand(2, 3, 3, generator=geometry) * 20.0
+    coords_kv = torch.rand(2, 5, 3, generator=geometry) * 20.0
+
+    scores = bias.forward(coords_q, coords_kv)
+
+    assert scores.shape == (2 * _HEADS, 3, 5)
+    assert torch.equal(scores, torch.zeros_like(scores))
+
+
+def test_directional_separates_hemispheres():
+    """The term the radial parent cannot express: two pairs at the SAME distance, opposite directions, differ."""
+    bias = DirectionalAttentionBias(_HEADS, _directional_config())
+    with torch.no_grad():
+        bias.direction_weight.normal_(std=1.0)
+    coords_q = torch.zeros(1, 1, 3)
+    toward_then_away = torch.tensor([[[0.0, 10.0, 0.0], [0.0, -10.0, 0.0]]])  # same |sep|, +y vs -y
+
+    scores = bias(coords_q, toward_then_away)
+
+    radial = DistanceAttentionBias(_HEADS, _config())
+    with torch.no_grad():
+        radial.weight.normal_(std=1.0)
+    radial_scores = radial(coords_q, toward_then_away)
+
+    assert not torch.isclose(scores[0, 0, 0], scores[0, 0, 1])  # direction splits equal-distance pairs
+    assert torch.isclose(radial_scores[0, 0, 0], radial_scores[0, 0, 1])  # the radial parent cannot
+
+
+def test_direction_basis():
+    """The basis is the offset's cosine against fixed signed axes: reversing the offset negates every anchor."""
+    bias = DirectionalAttentionBias(_HEADS, _directional_config())
+    origin = torch.zeros(1, 1, 3)
+    toward = torch.tensor([[[0.0, 10.0, 0.0]]])  # +y
+    away = torch.tensor([[[0.0, -10.0, 0.0]]])  # -y, same |sep|
+
+    basis_toward = bias.direction_basis(origin, toward)
+    basis_away = bias.direction_basis(origin, away)
+
+    torch.testing.assert_close(basis_away, -basis_toward)  # reversing direction flips every cosine
+    assert basis_toward.abs().max() <= 1.0 + 1e-6  # cosines are bounded by the unit axes
+    torch.testing.assert_close(basis_toward.max(), torch.tensor(1.0))  # one signed axis aligns the offset
+
+
+def test_directional_coincident_is_nan_safe():
+    """A coincident pair has no direction — the unit offset is set to zero, so the term is silent, not a nan."""
+    bias = DirectionalAttentionBias(_HEADS, _directional_config())
+    with torch.no_grad():
+        bias.direction_weight.normal_(std=1.0)
+    origin = torch.zeros(1, 2, 3)
+
+    scores = bias(origin, origin)
+
+    assert torch.isfinite(scores).all()
+    diagonal = scores[:, torch.arange(2), torch.arange(2)]
+    assert torch.equal(diagonal, torch.zeros_like(diagonal))

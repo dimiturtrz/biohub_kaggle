@@ -32,7 +32,11 @@ from torch import Tensor, nn
 from torch.utils.checkpoint import checkpoint as grad_ckpt
 
 from celltrack.models.prior_velocity import PriorVelocity
-from celltrack.models.relative_position_bias import DistanceAttentionBias, RelativePositionConfig
+from celltrack.models.relative_position_bias import (
+    DirectionalAttentionBias,
+    DistanceAttentionBias,
+    RelativePositionConfig,
+)
 
 _UNBATCHED_NDIM = 2
 _MASKED_SCORE = float("-inf")
@@ -58,7 +62,12 @@ class RelativePositionEdgeTransformer(nn.Module):
         super().__init__()
         self.transformer = transformer
         self.config = config
-        self.bias = DistanceAttentionBias(self.head_count(transformer), config) if config.enabled else None
+        self.bias = self._make_bias(config) if config.enabled else None
+
+    def _make_bias(self, config: RelativePositionConfig) -> DistanceAttentionBias:
+        """Radial-only bias, or its directional extension — one geometry term, selected by config not `if` at use."""
+        bias_class = DirectionalAttentionBias if config.directional else DistanceAttentionBias
+        return bias_class(self.head_count(self.transformer), config)
 
     @staticmethod
     def head_count(transformer: nn.Module) -> int:

@@ -108,6 +108,12 @@ class ModelCfg(BaseModel):
     # appearance alone (the dense-confusor axis). Zero-init keeps a warm start identical at step 0; the spacing is
     # threaded from the corpus and the reach is the linker's own gate, so no new distance scale is introduced.
     relative_position: bool = False
+    # Extend the relative-position bias from radial-only (separation magnitude) to DIRECTIONAL — a per-head term
+    # over the pair's offset DIRECTION scored against fixed signed-axis anchors (see DirectionalAttentionBias).
+    # The radial form collapses every offset to `.norm()`, the exact axis the confusor rival wins on (nearer but
+    # wrong-direction); this lets a head prefer the hemisphere the cell drifts toward. Requires `relative_position`;
+    # zero-init on both banks keeps the warm start identical at step 0. Ignored when relative_position is off.
+    relative_position_directional: bool = False
     # WHICH edge-head architecture to build from scratch. "pack" is the pilkwang SimpleNodeTransformer (feature
     # cross-attention, position-blind, first-order pair scoring) byte for byte. "hoct" is the HOCT two-stage head:
     # 3D-RoPE node self-attention then edge-to-edge self-attention with a line-to-line geometry bias — the
@@ -478,6 +484,7 @@ class JointTrainConfig(BaseModel):
                 warm_pack=WARM_PACKS[args.warm_pack],
                 temporal_position=args.temporal_position,
                 relative_position=args.relative_position,
+                relative_position_directional=args.relative_position_directional,
                 norm=args.norm,
                 head=args.head,
                 freeze_backbone_norm=args.freeze_backbone_norm,

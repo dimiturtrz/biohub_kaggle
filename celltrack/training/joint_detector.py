@@ -316,7 +316,12 @@ class JointTrainer:
         if self.config.model.relative_position:  # geometry sight; a zero-init per-head distance bias in the head
             if spacing is None:
                 raise ValueError("--relative-position needs the corpus spacing; PairSplit.spacing is unset")
-            model.install_relative_position(spacing, TrackerConfig.shipped().linker.gate_um, self.config.runtime.device)
+            model.install_relative_position(
+                spacing,
+                TrackerConfig.shipped().linker.gate_um,
+                self.config.runtime.device,
+                directional=self.config.model.relative_position_directional,
+            )
         if self._lora.enabled:  # freeze the base, adapt the association locus; detection is anchored
             installed = [parameter for parameter in model.parameters() if id(parameter) not in pretrained]
             adapted = LoRA.inject(model, self._lora.to_config(), keep=installed)

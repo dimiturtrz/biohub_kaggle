@@ -157,6 +157,11 @@ class JointCli:
             action="store_true",
             help="add a learned per-head distance bias to the edge transformer's cross-attention (geometry sight)",
         )
+        parser.add_argument(
+            "--relative-position-directional",
+            action="store_true",
+            help="extend --relative-position with a per-head offset-DIRECTION term (the confusor's directional axis)",
+        )
         JointCli._add_architecture_flags(parser)
         parser.add_argument(
             "--freeze-backbone-norm",
