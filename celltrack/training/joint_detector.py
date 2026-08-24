@@ -65,6 +65,7 @@ from celltrack.models.joint_model import BatchedForward, JointForward, JointMode
 from celltrack.models.lora import LoRA
 from celltrack.models.temporal_unet_detector import TemporalUNetDetector
 from celltrack.operating_point import TrackerConfig
+from celltrack.training.base_calibration import BaseCalibration
 from celltrack.training.contrastive_term import ContrastiveTerm, ContrastiveTermConfig
 from celltrack.training.early_stop import EarlyStop
 from celltrack.training.joint_checkpoint import RESUME_SUFFIX, JointCheckpoint, RunProgress
@@ -160,12 +161,10 @@ class JointTrainer:
     def train(self, pairs: PairSplit, evaluator: ModelEvaluator, setup: RunSetup) -> float:
         """Train (or fine-tune) on the GT pairs, saving the best SELECTION score. Returns that best score.
 
-        The loop runs in eval-sized windows; each window streams `eval_every` GT pairs (one at a time — node
-        counts are ragged, so there is no batching across pairs). A full resume snapshot (both heads, the
-        optimiser, step, best) is written beside the checkpoint every window; ``setup.resume`` continues it.
-
-        One pair per step makes the corpus itself the epoch, so the schedule is resolved here — the first
-        moment the pair count is known — and every later reader (the scheduler's horizon included) sees steps.
+        The loop runs in eval-sized windows streaming `eval_every` GT pairs one at a time (ragged node counts,
+        no cross-pair batching); a full resume snapshot is written every window and ``setup.resume`` continues it.
+        One pair per step makes the corpus the epoch, so the schedule is resolved here — the first moment the
+        pair count is known — and every later reader sees steps.
         """
         steps_per_epoch = max(1, len(pairs.train))
         self.config = self.config.resolved(steps_per_epoch)
@@ -180,7 +179,7 @@ class JointTrainer:
         run = TrainingRun.open(self.config.model_dump(), setup)
         resume_path = save_to.with_suffix(RESUME_SUFFIX)
         done, restored = self._restore(model, optimization, resume_path, resume=setup.resume)
-        best = restored if restored is not None else self._initial_best(model, evaluator, pairs, run, save_to)
+        best = restored if restored is not None else self._initial_best(model, evaluator, pairs, run, setup)
 
         stop = EarlyStop(schedule.patience, schedule.es_min_delta) if schedule.patience >= 1 else None
         if stop is not None:
@@ -257,9 +256,13 @@ class JointTrainer:
         return best
 
     def _initial_best(
-        self, model: JointModel, evaluator: ModelEvaluator, pairs: PairSplit, run: TrainingRun, save_to: Path
+        self, model: JointModel, evaluator: ModelEvaluator, pairs: PairSplit, run: TrainingRun, setup: RunSetup
     ) -> float:
-        """The score before a single step — the bar a warm start must beat, tracked and checkpointed as window 0."""
+        """The score before a single step — the bar a warm start must beat, tracked and checkpointed as window 0.
+
+        Also the base-calibration gate: a warm/chained run onto a miscalibrated base is aborted here rather
+        than trained onto for the length of the run and read as a false null (v1/v2 chained a +2-ratio base).
+        """
         initial = self._evaluate(model, evaluator, pairs.val)
         logger.info(
             "init proxy %.4f (sel %.4f) | node R %.3f ratio %+.2f | mislinks %d inv %.2f P true %.3f vs chosen %.3f"
@@ -274,8 +277,10 @@ class JointTrainer:
             initial.pipeline.mean_p_chosen,
             initial.edge_auc,
         )
+        expects_calibrated_base = setup.warm_start or setup.init_weights is not None
+        BaseCalibration.gate(initial.pipeline.node_ratio, expects_calibrated_base=expects_calibrated_base)
         run.window(0, self._metrics(initial, initial.pipeline.selection_score))
-        self._checkpoint().save_best(save_to, model)
+        self._checkpoint().save_best(setup.save_to, model)
         return initial.pipeline.selection_score
 
     def _metrics(self, result: _EvalResult, best: float) -> dict[str, float]:
@@ -353,22 +358,17 @@ class JointTrainer:
     def _trained(self, model: JointModel) -> list[nn.Parameter]:
         """Every parameter the optimiser owns and the clip covers — both heads, plus the contrastive head.
 
-        At the `FEATURES` site the contrastive term holds none, so the list IS `model.parameters()` in the
-        same order: an unasked run's optimiser and gradient clip are the ones of yesterday, to the byte.
-
-        Under LoRA the base is frozen, so the optimiser is handed ONLY the adapter deltas — the frozen weights
-        would contribute zero gradient but still be tracked, and the point of the adapters is that they are all
-        that moves.
+        At the `FEATURES` site the contrastive term holds none, so the list IS `model.parameters()` in the same
+        order (an unasked run is byte-identical). Under LoRA the base is frozen, so only the adapter deltas — all
+        that moves — are handed over.
         """
         if self._lora.enabled:
             return [*LoRA.adapter_parameters(model), *self.contrastive.parameters(), *self._objective.parameters()]
         return [*model.parameters(), *self.contrastive.parameters(), *self._objective.parameters()]
 
     def _auxiliary(self) -> dict[str, nn.Module]:
-        """The run's auxiliary trained modules by snapshot key — the contrastive head and the link objective.
-
-        One home for the two names the checkpoint round-trips, so saving and restoring cannot disagree on either.
-        """
+        """The run's auxiliary trained modules by snapshot key (contrastive head, link objective) — one home so
+        saving and restoring cannot disagree on either name."""
         return {"contrastive": self.contrastive, "objective": self._objective}
 
     @staticmethod
@@ -426,10 +426,9 @@ class JointTrainer:
     def _curriculum(self, pairs: PairSplit) -> PairCurriculum | None:
         """The run's ONE policy over (which pair, how much it counts), or None for the uniform stream.
 
-        Built once for the whole run because every policy here carries state across windows — a difficulty
-        estimate, an EMA, a realised share. The three are mutually exclusive by construction: a paced mix
-        needs a synthetic population, a fixed mix needs a share of one, and the per-pair difficulty sampler
-        needs neither.
+        Built once because every policy carries state across windows (a difficulty estimate, an EMA, a share).
+        The three are mutually exclusive: paced needs a synthetic population, fixed a share of one, the sampler
+        neither.
         """
         data, seed = self.config.data, self.config.runtime.seed
         counts = (len(pairs.train), len(pairs.synthetic))
@@ -676,13 +675,10 @@ class JointTrainer:
     def _edge_auc(self, model: JointModel, val_targets: list[PairTarget]) -> float:
         """Mean edge PRC-AUC over the held-out pairs — a COLLAPSE sanity check, not association quality.
 
-        Scores are the pipeline's own: the logits soft-maxed over the sources of each target. Pairs whose
-        annotation carries no link leave the average precision undefined and are skipped, not counted as zero.
-
-        Read it as a floor alarm only. It ranks candidates among GROUND-TRUTH node pairs — where the shipped
-        linker already sits at 0.9947 — so it is ~1.0 trained or not (a from-scratch run measured 0.6823 at
-        random init and 0.9987 half an epoch later, then flat); only a head that stopped ranking moves it. The
-        association number that can FAIL is the mislink inversion `ModelEvaluator` returns from the eval pass.
+        Scores are the pipeline's own (logits soft-maxed over each target's sources); no-link pairs are skipped,
+        not zeroed. Read it as a floor alarm only: it ranks among GROUND-TRUTH node pairs where the linker sits at
+        0.9947, so it is ~1.0 trained or not (0.6823 at random init, 0.9987 half an epoch later, then flat) — only
+        a head that stopped ranking moves it. The number that can FAIL is the mislink inversion from `ModelEvaluator`.
         """
         model.eval()
         device, data = self.config.runtime.device, self.config.data
