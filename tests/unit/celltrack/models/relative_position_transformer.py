@@ -230,6 +230,14 @@ def test_pretrained_state():
     assert not any(key.startswith(("transformer.", "bias.")) for key in state)
 
 
+def test_proj():
+    """The wrapper surfaces the wrapped head's own `proj`, so a velocity-width read sees the pack's structure."""
+    head = _head()
+    wrapper = RelativePositionEdgeTransformer(head, _config(enabled=True))
+
+    assert wrapper.proj is head.proj
+
+
 def test_head_count():
     """The head count is read off the wrapped block's own attention, never re-declared by a caller."""
     assert RelativePositionEdgeTransformer.head_count(_head()) == _HEADS

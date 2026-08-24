@@ -88,6 +88,16 @@ class RelativePositionEdgeTransformer(nn.Module):
         """The wrapped head's own state dict, in the pack's key space — what a checkpoint of this should carry."""
         return self.transformer.state_dict()
 
+    @property
+    def proj(self) -> nn.Module:
+        """The wrapped head's input projection, surfaced through the wrapper unchanged.
+
+        `EdgeTransformerScorer.uses_prior_velocity` reads the projection width to tell a velocity-widened head
+        from a plain one. That read must see the pack's own `proj` whether or not this wrapper is interposed —
+        so the wrapper forwards it rather than shadowing the pack's structure behind `self.transformer`.
+        """
+        return RelativePositionEdgeTransformer._part(self.transformer, "proj")
+
     @override
     def forward(
         self,
