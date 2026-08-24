@@ -4483,6 +4483,30 @@
       "weight": 1
     },
     {
+      "kind": "holds",
+      "source": "celltrack.analysis.merge_referee.GridStats",
+      "target": "celltrack.analysis.merge_referee.Band",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.merge_referee.MergeReferee",
+      "target": "celltrack.analysis.merge_referee.GridStats",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.analysis.merge_referee.MergeReferee.analyse",
+      "target": "celltrack.analysis.merge_referee.Band",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.analysis.merge_referee.MergeReferee.analyse",
+      "target": "celltrack.analysis.merge_referee.GridStats",
+      "weight": 1
+    },
+    {
       "kind": "references",
       "source": "celltrack.analysis.mitotic_appearance.AppearanceFeatures",
       "target": "celltrack.analysis.mitotic_appearance.PatchBox",
@@ -5302,6 +5326,30 @@
       "kind": "calls",
       "source": "celltrack.analysis.ranker_distribution.ScoredMovie.of",
       "target": "core.data.video.CellVideo.from_ome_zarr",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.analysis.run_status.RunStatus",
+      "target": "celltrack.analysis.run_status.Outcome",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.run_status.RunStatus",
+      "target": "celltrack.analysis.run_status.RunStatus",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.analysis.run_status.RunStatus",
+      "target": "celltrack.analysis.run_status._Eval",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.analysis.run_status.RunStatus._parse",
+      "target": "celltrack.analysis.run_status._Eval",
       "weight": 1
     },
     {
@@ -11407,6 +11455,12 @@
       "weight": 1
     },
     {
+      "kind": "calls",
+      "source": "celltrack.models.relative_position_transformer.RelativePositionEdgeTransformer.proj",
+      "target": "celltrack.models.relative_position_transformer.RelativePositionEdgeTransformer._part",
+      "weight": 1
+    },
+    {
       "kind": "references",
       "source": "celltrack.models.temporal_unet_detector.DetectorRecipe",
       "target": "celltrack.models.temporal_unet_detector.DetectorRecipe",
@@ -13453,6 +13507,12 @@
       "weight": 1
     },
     {
+      "kind": "holds",
+      "source": "celltrack.training.joint_config.EvalCfg",
+      "target": "celltrack.training.joint_config.SelectionObjective",
+      "weight": 1
+    },
+    {
       "kind": "references",
       "source": "celltrack.training.joint_config.JointTrainConfig",
       "target": "celltrack.data.augmentation.Augmentation",
@@ -13579,6 +13639,12 @@
       "weight": 1
     },
     {
+      "kind": "construct",
+      "source": "celltrack.training.joint_config.JointTrainConfig.from_args",
+      "target": "celltrack.training.joint_config.SelectionObjective",
+      "weight": 1
+    },
+    {
       "kind": "calls",
       "source": "celltrack.training.joint_config.JointTrainConfig.resolved",
       "target": "celltrack.training.joint_config.ScheduleCfg.resolved",
@@ -13684,6 +13750,12 @@
       "kind": "references",
       "source": "celltrack.training.joint_detector.JointTrainer",
       "target": "celltrack.data.pair_curriculum.PairDraw",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.joint_detector.JointTrainer",
+      "target": "celltrack.eval.model_evaluator.EvalResult",
       "weight": 1
     },
     {
@@ -14037,6 +14109,12 @@
     {
       "kind": "calls",
       "source": "celltrack.training.joint_detector.JointTrainer._initial_best",
+      "target": "celltrack.training.joint_detector.JointTrainer._selection_base",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer._initial_best",
       "target": "celltrack.training.run_tracking.TrainingRun.window",
       "weight": 1
     },
@@ -14264,6 +14342,12 @@
     },
     {
       "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer._selection_base",
+      "target": "celltrack.training.joint_config.JointTrainConfig.selection_scalar",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
       "source": "celltrack.training.joint_detector.JointTrainer._step_batch",
       "target": "celltrack.losses.tracking_loss.TrackingLoss.per_pair",
       "weight": 1
@@ -14434,6 +14518,12 @@
       "kind": "calls",
       "source": "celltrack.training.joint_detector.JointTrainer.train",
       "target": "celltrack.training.joint_detector.JointTrainer._run_window",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_detector.JointTrainer.train",
+      "target": "celltrack.training.joint_detector.JointTrainer._selection_base",
       "weight": 1
     },
     {
@@ -15843,7 +15933,7 @@
   ],
   "nodes": [
     {
-      "descendants": 124,
+      "descendants": 126,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -15859,7 +15949,7 @@
       "role": null
     },
     {
-      "descendants": 15,
+      "descendants": 17,
       "id": "celltrack.analysis",
       "label": "analysis",
       "level": "module",
@@ -15924,6 +16014,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.analysis.merge_referee",
+      "label": "merge_referee",
+      "level": "module",
+      "parent": "celltrack.analysis",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.analysis.mitotic_appearance",
       "label": "mitotic_appearance",
       "level": "module",
@@ -15942,6 +16040,14 @@
       "descendants": 0,
       "id": "celltrack.analysis.ranker_distribution",
       "label": "ranker_distribution",
+      "level": "module",
+      "parent": "celltrack.analysis",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.run_status",
+      "label": "run_status",
       "level": "module",
       "parent": "celltrack.analysis",
       "role": null
@@ -17228,6 +17334,30 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.analysis.merge_referee.Band",
+      "label": "Band",
+      "level": "class",
+      "parent": "celltrack.analysis.merge_referee",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.merge_referee.GridStats",
+      "label": "GridStats",
+      "level": "class",
+      "parent": "celltrack.analysis.merge_referee",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.merge_referee.MergeReferee",
+      "label": "MergeReferee",
+      "level": "class",
+      "parent": "celltrack.analysis.merge_referee",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.analysis.mitotic_appearance.AppearanceFeatures",
       "label": "AppearanceFeatures",
       "level": "class",
@@ -17408,6 +17538,30 @@
       "label": "ScoredMovie",
       "level": "class",
       "parent": "celltrack.analysis.ranker_distribution",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.run_status.Outcome",
+      "label": "Outcome",
+      "level": "class",
+      "parent": "celltrack.analysis.run_status",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.run_status.RunStatus",
+      "label": "RunStatus",
+      "level": "class",
+      "parent": "celltrack.analysis.run_status",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.run_status._Eval",
+      "label": "_Eval",
+      "level": "class",
+      "parent": "celltrack.analysis.run_status",
       "role": "satellite"
     },
     {
@@ -19244,6 +19398,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.training.joint_config.SelectionObjective",
+      "label": "SelectionObjective",
+      "level": "class",
+      "parent": "celltrack.training.joint_config",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.training.joint_detector.JointTrainer",
       "label": "JointTrainer",
       "level": "class",
@@ -20468,6 +20630,46 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.analysis.merge_referee.MergeReferee._components",
+      "label": "_components",
+      "level": "method",
+      "parent": "celltrack.analysis.merge_referee.MergeReferee",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.merge_referee.MergeReferee._grid_stats",
+      "label": "_grid_stats",
+      "level": "method",
+      "parent": "celltrack.analysis.merge_referee.MergeReferee",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.merge_referee.MergeReferee._peak_count",
+      "label": "_peak_count",
+      "level": "method",
+      "parent": "celltrack.analysis.merge_referee.MergeReferee",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.merge_referee.MergeReferee._prob",
+      "label": "_prob",
+      "level": "method",
+      "parent": "celltrack.analysis.merge_referee.MergeReferee",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.merge_referee.MergeReferee.analyse",
+      "label": "analyse",
+      "level": "method",
+      "parent": "celltrack.analysis.merge_referee.MergeReferee",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.analysis.mitotic_appearance.AppearanceFeatures._moments",
       "label": "_moments",
       "level": "method",
@@ -21040,6 +21242,30 @@
       "label": "of",
       "level": "method",
       "parent": "celltrack.analysis.ranker_distribution.ScoredMovie",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.run_status.RunStatus._parse",
+      "label": "_parse",
+      "level": "method",
+      "parent": "celltrack.analysis.run_status.RunStatus",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.run_status.RunStatus.classify",
+      "label": "classify",
+      "level": "method",
+      "parent": "celltrack.analysis.run_status.RunStatus",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.analysis.run_status.RunStatus.trustworthy",
+      "label": "trustworthy",
+      "level": "method",
+      "parent": "celltrack.analysis.run_status.RunStatus",
       "role": null
     },
     {
@@ -25660,6 +25886,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.models.relative_position_transformer.RelativePositionEdgeTransformer.proj",
+      "label": "proj",
+      "level": "method",
+      "parent": "celltrack.models.relative_position_transformer.RelativePositionEdgeTransformer",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.models.temporal_position_attention.TemporalPositionAttention.__init__",
       "label": "__init__",
       "level": "method",
@@ -26956,6 +27190,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.training.joint_config.JointTrainConfig.selection_scalar",
+      "label": "selection_scalar",
+      "level": "method",
+      "parent": "celltrack.training.joint_config.JointTrainConfig",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.training.joint_config.LoraCfg.to_config",
       "label": "to_config",
       "level": "method",
@@ -27008,6 +27250,14 @@
       "label": "resolved",
       "level": "method",
       "parent": "celltrack.training.joint_config.ScheduleCfg",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.joint_config.SelectionObjective.of",
+      "label": "of",
+      "level": "method",
+      "parent": "celltrack.training.joint_config.SelectionObjective",
       "role": null
     },
     {
@@ -27222,6 +27472,14 @@
       "descendants": 0,
       "id": "celltrack.training.joint_detector.JointTrainer._schedule",
       "label": "_schedule",
+      "level": "method",
+      "parent": "celltrack.training.joint_detector.JointTrainer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.joint_detector.JointTrainer._selection_base",
+      "label": "_selection_base",
       "level": "method",
       "parent": "celltrack.training.joint_detector.JointTrainer",
       "role": null
