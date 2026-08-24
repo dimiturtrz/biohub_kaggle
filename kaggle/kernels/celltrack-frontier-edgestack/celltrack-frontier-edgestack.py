@@ -1,9 +1,20 @@
-"""hmlo + the frontier EDGE stack — the one piece the 0.888 faithful-motion-ranker replication left off.
+"""hmlo's linker at OUR learned-evidence scale + the frontier EDGE stack — the two things 0.888 got wrong.
 
-Bead hmlo assembled the frontier bundle (dual-seed detector + two-pass motion linker + CC0 re-ranker at
-85/15 + output repairs + safe divisions, all at their constants) and scored 0.888 on the board — below the
-0.900 champion. hmlo ran the DEFAULT edge path though: equal-mean dual-seed blend, no view-TTA, no
-moment-alignment. The published 0.915 bundle's remaining, un-replicated levers all live on the edge side:
+Bead hmlo assembled the frontier bundle (dual-seed detector + two-pass motion linker + CC0 re-ranker + output
+repairs + safe divisions) and scored 0.888 — below the 0.900 champion. It got TWO things wrong, corrected here:
+
+  1. SCALE (the load-bearing fix). hmlo copied the frontier's ABSOLUTE learned weights ranker_bonus=0.6375,
+     affinity_bonus=0.1125. linkers.py:103-111 proves those don't transfer: our cost is `distance - 20*P`, so
+     0.6375 um of discount is ~30x too weak against our micrometre distances — an off-by-30 no-op. hmlo thus
+     ran a near-pure-geometry Hungarian with the ranker barely firing. The codebase's own recommended probe
+     keeps our derived budget (affinity_bonus + ranker_bonus = 2*gate_um = 20) and borrows only the frontier's
+     85/15 SPLIT -> ranker_bonus=17.0, affinity_bonus=3.0. That routes 85% of our full learned strength through
+     the ranker AND makes the edge stack below load-bearing (a sharper affinity weighted 3.0, not 0.1125).
+     (17/3 regressed -0.013 once, but on the FLOW linker's global-flow candidates = off-distribution; the
+     MOTION linker's distance-gated Hungarian candidates match the frontier's full_motion_assignment, untested.)
+
+  2. The EDGE stack hmlo omitted (ran the default equal-mean blend, no view-TTA, no moment-alignment). The
+     published 0.915 bundle's remaining un-replicated levers all live on the edge side:
 
   - EDGE_TTA (view_tta): each gap re-scored over 4 flip views, fused by JS-reliability log-opinion pool
     re-centred on identity. Down-weights the views a gap disagrees with -> SHARPER affinity exactly on the
@@ -53,9 +64,10 @@ from celltrack.multi_gpu_submission import MultiGpuSubmission  # noqa: E402
 from celltrack.operating_point import TrackerConfig  # noqa: E402
 from celltrack.postproc.topology_repair import TopologyConfig  # noqa: E402
 
-# hmlo's config verbatim (motion two-pass, ranker 85/15 at 0.6375/0.1125, thr 0.96875, output repairs, safe
-# divisions from shipped()), PLUS the frontier edge stack: view-TTA + seed-moment alignment, and the blend
-# weights those levers ship with. edge_blend (seed1, seed2) with seed2 = SECONDARY_EDGE_WEIGHT 0.15;
+# hmlo's motion two-pass linker + output repairs + safe divisions from shipped(), but at OUR learned-evidence
+# scale: budget = 2*gate_um = 20 split 85/15 -> ranker_bonus=17.0, affinity_bonus=3.0 (NOT hmlo's off-by-30
+# public constants 0.6375/0.1125). PLUS the frontier edge stack: view-TTA + seed-moment alignment, and the
+# blend weights those levers ship with. edge_blend (seed1, seed2) with seed2 = SECONDARY_EDGE_WEIGHT 0.15;
 # detector_blend = seed1's share = 1 - SECONDARY_DETECTION_WEIGHT 0.475 = 0.525.
 _shipped = TrackerConfig.shipped()
 _CONFIG = dataclasses.replace(
@@ -64,8 +76,8 @@ _CONFIG = dataclasses.replace(
         name="motion",
         tight_um=6.0,
         gate_um=10.0,
-        ranker_bonus=0.6375,
-        affinity_bonus=0.1125,
+        ranker_bonus=17.0,
+        affinity_bonus=3.0,
     ),
     topology=TopologyConfig(),
     threshold=0.96875,
