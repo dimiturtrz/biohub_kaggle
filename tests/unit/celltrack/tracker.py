@@ -191,7 +191,7 @@ def test_ephemeral(monkeypatch: pytest.MonkeyPatch):
 
 def test_from_joint(monkeypatch: pytest.MonkeyPatch):
     """`from_joint` mounts both heads from ONE joint checkpoint as the single-seed one-member blend."""
-    model = SimpleNamespace(detector=object(), transformer=object())
+    model = SimpleNamespace(detector=object(), transformer=object(), downsample=(1, 4, 4))
     monkeypatch.setattr(tracker_module.JointModel, "from_checkpoint", classmethod(lambda cls, path, device: model))
     monkeypatch.setattr(tracker_module.TemporalUNetDetector, "of", classmethod(lambda cls, net: _StubDetector()))
     monkeypatch.setattr(

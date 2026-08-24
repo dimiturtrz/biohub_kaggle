@@ -81,7 +81,9 @@ def test_prior():
 
 def test_build_wires_ilp_and_division_gates():
     """The ILP and division rows pass their radii through to the concrete linkers."""
-    assert ILPLinker(spacing=SPACING, max_distance_um=10.0) == LinkerConfig(name="ilp").build(SPACING)
+    assert ILPLinker(spacing=SPACING, max_distance_um=10.0, affinity_bonus=20.0) == LinkerConfig(name="ilp").build(
+        SPACING
+    )
     assert DivisionAwareLinker(spacing=SPACING, max_distance_um=10.0, division_distance_um=8.0) == LinkerConfig(
         name="division"
     ).build(SPACING)

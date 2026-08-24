@@ -11,9 +11,9 @@ import pytest
 from celltrack.analysis.appearance_identity import (
     IdentitySimilarity,
     InGateRanking,
-    RawBoxes,
     RotationGain,
 )
+from celltrack.data.raw_boxes import RawBoxes
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
 
@@ -36,51 +36,15 @@ def test_correlate():
     assert IdentitySimilarity.correlate(box, _blob((5, 9, 9), (2, 4, 7))) < 0.9  # a shifted cell is less alike
 
 
-class _FakeVideo:
-    """A one-frame volume with hand-placed blobs, so a box read has a known content — no zarr, no data root."""
+def test_raw_correlation_scorer():
+    """The default scorer ranks each candidate by correlation — the source's own copy scores highest."""
+    source = _blob((5, 9, 9), (2, 4, 4))
+    candidates = np.stack([source, _blob((5, 9, 9), (2, 4, 7)), _blob((5, 9, 9), (2, 4, 8))])
 
-    def __init__(self, volume: np.ndarray) -> None:
-        self._volume = volume
+    scores = IdentitySimilarity.raw_correlation_scorer(source, candidates)
 
-    @property
-    def volume_shape(self) -> tuple[int, int, int]:
-        return self._volume.shape  # type: ignore[return-value]
-
-    def window(self, timepoint: int, origin: tuple[int, int, int], size: tuple[int, int, int]) -> np.ndarray:
-        z, y, x = origin
-        dz, dy, dx = size
-        return self._volume[z : z + dz, y : y + dy, x : x + dx]
-
-
-def _graph(coordinates: list[list[int]]) -> TrackGraph:
-    """A track graph over consecutively-numbered node ids at the given `(t, z, y, x)` coordinates."""
-    return TrackGraph(
-        node_ids=np.arange(len(coordinates), dtype=np.int64),
-        coordinates=np.asarray(coordinates, dtype=np.int64),
-        edges=np.empty((0, 2), dtype=np.int64),
-    )
-
-
-def test_raw_boxes_of():
-    """A box is read around each node, and a node too close to the edge to fit a full box is dropped."""
-    volume = _blob((20, 40, 40), (10, 20, 20))
-    video = _FakeVideo(volume)
-    graph = _graph([[0, 10, 20, 20], [0, 0, 0, 0]])  # second node sits in the corner, box would fall off
-
-    boxes = RawBoxes.of(video, graph, np.array([0, 1]), _SPACING, radius_um=2.0)
-
-    assert boxes.kept.tolist() == [0]  # only the interior node survived
-    assert boxes.boxes.shape[0] == 1
-
-
-def test_select():
-    """Boxes come back for the requested REQUEST positions in the asked order, keeping a triple aligned."""
-    boxes = RawBoxes(boxes=np.arange(3 * 8).reshape(3, 2, 2, 2).astype(np.float32), kept=np.array([0, 2, 5]))
-
-    picked = boxes.select(np.array([5, 0]))
-
-    assert np.array_equal(picked[0], boxes.boxes[2])  # request-position 5 is the third stored box
-    assert np.array_equal(picked[1], boxes.boxes[0])
+    assert scores.shape == (3,)
+    assert int(np.argmax(scores)) == 0  # the identical box is the most similar
 
 
 def test_identity_similarity_of():
@@ -186,17 +150,6 @@ class _RankingStub:
             coordinates=np.column_stack([timepoints, positions]).astype(np.int64),
             edges=np.empty((0, 2), dtype=np.int64),
         )
-
-
-def test_aligned():
-    """A box is rolled so its brightest voxel lands at the centre — the miscentring control, no annotation used."""
-    box = _blob((5, 9, 9), (2, 6, 3))  # peak off-centre
-    boxes = RawBoxes(boxes=box[None], kept=np.array([0]))
-
-    rolled = boxes.aligned().boxes[0]
-
-    peak = np.unravel_index(int(np.argmax(rolled)), rolled.shape)
-    assert peak == (2, 4, 4)  # the maximum now sits at the box centre
 
 
 def test_median_gain():

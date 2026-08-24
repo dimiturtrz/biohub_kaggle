@@ -47,6 +47,7 @@ from scipy.ndimage import rotate
 
 from celltrack.analysis.drift_field import DriftDiagnosis
 from celltrack.analysis.localisation import CandidatePairs
+from celltrack.data.raw_boxes import BOX_RADIUS_UM, RawBoxes
 from celltrack.eval.dense_diagnosis import DENSE_MOVIE
 from celltrack.operating_point import TrackerConfig
 from core.data.tracks import TrackGraph
@@ -57,86 +58,9 @@ from core.paths import DataRoot
 
 logger = logging.getLogger(__name__)
 
-# The box half-extent, as a physical radius rather than a voxel count so it means the same on either grid. The
-# peak read-out suppresses maxima within one downsampled voxel (1.625 um), which IS a cell radius; two of them
-# holds the cell plus a thin collar of its surroundings — "just big enough to contain the cell", not its
-# neighbourhood, since the neighbourhood is what makes two cells look alike.
-BOX_RADIUS_UM = 3.25
 # A source with a single in-gate candidate poses no ranking question — there is nothing to rank against.
 _MIN_CONTESTED = 2
 _PERCENTILES = (25.0, 50.0, 75.0)
-
-
-@dataclass(frozen=True)
-class RawBoxes:
-    """One full-resolution box per node, read straight from the unpooled store.
-
-    Coordinates on a `TrackGraph` are already FULL-RESOLUTION voxel indices — the read-out multiplies its
-    downsampled peaks back up — so a box is a direct slice of the raw array and no rescaling is involved.
-    `CellVideo.window` slices zarr rather than materialising a timepoint, so only the chunks the box touches
-    decompress.
-
-    A node whose box would fall off the volume edge is dropped rather than padded: padding would fabricate
-    voxels and make a boundary cell correlate with anything else that was padded the same way.
-    """
-
-    boxes: Float[np.ndarray, "k z y x"]
-    kept: Int[np.ndarray, "k"]
-    """Positions in the REQUESTED row list that survived — the handle that keeps a triple aligned.
-
-    A box is dropped when it would fall off the volume, and the three columns of a triple drop independently,
-    so a positional zip of two box arrays would silently pair a source with another triple's target. Carrying
-    which requests survived lets the caller intersect and compare like with like.
-    """
-
-    @classmethod
-    def of(
-        cls,
-        video: CellVideo,
-        graph: TrackGraph,
-        rows: Int[np.ndarray, "k"],
-        spacing: Spacing,
-        radius_um: float = BOX_RADIUS_UM,
-    ) -> Self:
-        """Read a box around each named node, keeping only those that fit entirely inside the volume."""
-        size = cls._size(spacing, radius_um)
-        volume = video.volume_shape
-        kept: list[int] = []
-        boxes: list[np.ndarray] = []
-        for index, row in enumerate(rows.tolist()):
-            corner = [int(c) - e // 2 for c, e in zip(graph.positions()[row], size, strict=True)]
-            origin: tuple[int, int, int] = (corner[0], corner[1], corner[2])
-            if any(s < 0 or s + e > lim for s, e, lim in zip(origin, size, volume, strict=True)):
-                continue
-            boxes.append(video.window(int(graph.timepoints()[row]), origin, size).astype(np.float32))
-            kept.append(index)
-        stacked = np.stack(boxes) if boxes else np.zeros((0, *size), dtype=np.float32)
-        return cls(boxes=stacked, kept=np.asarray(kept, dtype=np.int64))
-
-    def select(self, requested: Int[np.ndarray, "m"]) -> Float[np.ndarray, "m z y x"]:
-        """This column's boxes for a chosen set of REQUEST positions, in the order asked for."""
-        order = {int(position): index for index, position in enumerate(self.kept)}
-        return self.boxes[[order[int(position)] for position in requested]]
-
-    @staticmethod
-    def _size(spacing: Spacing, radius_um: float) -> tuple[int, int, int]:
-        """The box in full-resolution voxels — odd per axis, so the cell centre is the centre voxel."""
-        return tuple(2 * round(radius_um / axis) + 1 for axis in spacing.as_array())  # type: ignore[return-value]
-
-    def aligned(self) -> Self:
-        """Each box re-centred on its own brightest voxel — the control for a miscentred detection.
-
-        Mislink endpoints sit measurably further from their annotated centres than the population, so a null
-        under detection centring is ambiguous between "these cells look alike" and "our boxes are off the
-        cells". Rolling each box so its maximum lands at the centre removes the second reading without using
-        any annotation, and it is what a matcher would do anyway.
-        """
-        rolled = np.empty_like(self.boxes)
-        centre = np.asarray(self.boxes.shape[1:]) // 2
-        for index, box in enumerate(self.boxes):
-            peak = np.unravel_index(int(np.argmax(box)), box.shape)
-            rolled[index] = np.roll(box, tuple(centre - np.asarray(peak)), axis=(0, 1, 2))
-        return type(self)(boxes=rolled, kept=self.kept)
 
 
 @dataclass(frozen=True)
@@ -181,6 +105,13 @@ class IdentitySimilarity:
         left, right = first.ravel() - first.mean(), second.ravel() - second.mean()
         scale = float(np.linalg.norm(left) * np.linalg.norm(right))
         return float(left @ right / scale) if scale else 0.0
+
+    @staticmethod
+    def raw_correlation_scorer(
+        source: Float[np.ndarray, "z y x"], candidates: Float[np.ndarray, "c z y x"]
+    ) -> Float[np.ndarray, "c"]:
+        """The default `BoxScorer` — normalised cross-correlation of the source box against each candidate box."""
+        return np.asarray([IdentitySimilarity.correlate(source, box) for box in candidates])
 
     def prefers_true(self) -> float:
         """Share of triples where appearance points at the TRUE successor; the null is >0.5, not 0.5 (see class)."""
@@ -240,6 +171,11 @@ class RotationGain:
         return len(self.identity)
 
 
+# A scorer ranks the source box against each candidate box — raw correlation by default, a learned encoder
+# cosine when the encoder gate supplies its own. Both return one similarity per candidate, higher = more alike.
+BoxScorer = Callable[[Float[np.ndarray, "z y x"], Float[np.ndarray, "c z y x"]], Float[np.ndarray, "c"]]
+
+
 @dataclass(frozen=True)
 class InGateRanking:
     """Where appearance ranks the TRUE successor among every candidate inside the linker's gate.
@@ -258,20 +194,22 @@ class InGateRanking:
     candidates: Int[np.ndarray, "k"]
 
     @classmethod
-    def of(
+    def of(  # noqa: PLR0913
         cls,
         prediction: TrackGraph,
         spacing: Spacing,
         box_reader: Callable[[Int[np.ndarray, "k"]], RawBoxes],
         pairs: CandidatePairs,
         gate_um: float,
+        scorer: BoxScorer = IdentitySimilarity.raw_correlation_scorer,
     ) -> Self:
         """Rank the true successor by appearance among the source's in-gate candidates, per triple.
 
         Takes the prediction graph, its spacing and a box-reader closure rather than the owning
         `IdentityDiagnosis`, so the ranking depends only on what it reads — the mutual class reference is what a
         diagnosis is for, not what a ranking needs. The box radius is fixed per call, so it is bound into the
-        reader rather than threaded as an argument.
+        reader rather than threaded as an argument. `scorer` is how the same ranking serves both the raw-appearance
+        diagnosis and the learned-encoder gate: swap what turns two boxes into a similarity, keep the choice set.
         """
         positions = spacing.to_micrometres(prediction.positions())
         timepoints = prediction.timepoints()
@@ -281,7 +219,7 @@ class InGateRanking:
             candidates = cls._in_gate(positions, timepoints, int(source), gate_um)
             if len(candidates) < _MIN_CONTESTED or int(true_target) not in candidates.tolist():
                 continue
-            ranked = cls._rank(box_reader, int(source), candidates)
+            ranked = cls._rank(box_reader, int(source), candidates, scorer)
             if ranked is None:
                 continue
             order = candidates[np.argsort(-ranked)]
@@ -306,13 +244,14 @@ class InGateRanking:
         box_reader: Callable[[Int[np.ndarray, "k"]], RawBoxes],
         source: int,
         candidates: Int[np.ndarray, "c"],
+        scorer: BoxScorer,
     ) -> Float[np.ndarray, "c"] | None:
-        """Appearance correlation of the source against each candidate, or None if any box left the volume."""
+        """Similarity of the source against each candidate under `scorer`, or None if any box left the volume."""
         source_box = box_reader(np.asarray([source]))
         candidate_boxes = box_reader(candidates)
         if not len(source_box.boxes) or len(candidate_boxes.boxes) != len(candidates):
             return None
-        return np.asarray([IdentitySimilarity.correlate(source_box.boxes[0], box) for box in candidate_boxes.boxes])
+        return scorer(source_box.boxes[0], candidate_boxes.boxes)
 
     def top_one(self) -> float:
         """How often appearance puts the true successor FIRST — the linker's actual question."""
