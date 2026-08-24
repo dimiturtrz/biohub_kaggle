@@ -342,6 +342,29 @@ class LossCfg(BaseModel):
         )
 
 
+class SelectionObjective(StrEnum):
+    """WHICH scalar save-best maximises — the shipped proxy, or a proxy-INDEPENDENT confusor readout.
+
+    The clamped proxy (`PROXY`) is the default and the right ruler BELOW the saturation ceiling. Above it the
+    proxy INVERTS: a mechanism that improves dense association discrimination (directional relative-PE) narrows
+    the confusor margin while the proxy REGRESSES (measured: dw0 +0.0267 held-out but -0.028 LB; the directional
+    warm arm's proxy fell 0.8485 -> 0.844 as mean_p_chosen dropped 0.581 -> 0.501), so PROXY-selection SAVES THE
+    INIT and discards the improved checkpoint. `CONFUSOR_MARGIN` selects on `mean_p_true - mean_p_chosen` over the
+    fixed both-detected mislink set instead — the very quantity such a mechanism moves, blind to the saturated
+    proxy. It is a DIFFERENCE over one set, so depressing every logit leaves it unchanged (not gameable that way);
+    it is meaningful only for a run whose objective targets that axis, so it is opt-in and PROXY stays default.
+    """
+
+    PROXY = "proxy"
+    CONFUSOR_MARGIN = "confusor_margin"
+
+    def of(self, selection_score: float, mean_p_true: float, mean_p_chosen: float) -> float:
+        """The higher-is-better scalar to maximise, from one eval's proxy score and its confusor means."""
+        if self is SelectionObjective.CONFUSOR_MARGIN:
+            return mean_p_true - mean_p_chosen
+        return selection_score
+
+
 class EvalCfg(BaseModel):
     """The in-loop scorer: the operating point the selector's tracker runs at, and what it is allowed to cost."""
 
@@ -357,6 +380,11 @@ class EvalCfg(BaseModel):
     tracker: TrackerConfig = Field(default_factory=TrackerConfig.shipped)
     # The selector eval skips flip-TTA: it buys a faithful score the checkpoint choice doesn't need, at 4x cost.
     tta: bool = False
+    # WHICH scalar save-best maximises (see SelectionObjective). PROXY is the shipped clamped metric and the
+    # default; CONFUSOR_MARGIN switches selection to the proxy-independent mean_p_true - mean_p_chosen readout,
+    # for a run whose mechanism targets the dense-confusor axis ABOVE the proxy's saturation ceiling (where
+    # proxy-selection provably discards the improved checkpoint and keeps the init).
+    selection_objective: SelectionObjective = SelectionObjective.PROXY
 
 
 class ScheduleCfg(BaseModel):
@@ -459,6 +487,11 @@ class JointTrainConfig(BaseModel):
         """The generated-scene appearance, so a caller holding the whole config need not reach through `data`."""
         return self.data.scene_config()
 
+    def selection_scalar(self, selection_score: float, mean_p_true: float, mean_p_chosen: float) -> float:
+        """The higher-is-better save-best scalar under the configured objective — no reaching through `eval`."""
+        objective = self.eval.selection_objective
+        return objective.of(selection_score, mean_p_true, mean_p_chosen)
+
     @staticmethod
     def _augmentation_from_args(args: argparse.Namespace) -> Augmentation:
         """Resolve the CLI's aug decision: the preset when on, the identity on `--no-augment`, with per-field overrides.
@@ -525,7 +558,10 @@ class JointTrainConfig(BaseModel):
                 slack_links=args.slack_links,
                 reliability_weighting=args.reliability_weighting,
             ),
-            eval=EvalCfg(tracker=replace(TrackerConfig.shipped(), threshold=args.eval_threshold)),
+            eval=EvalCfg(
+                tracker=replace(TrackerConfig.shipped(), threshold=args.eval_threshold),
+                selection_objective=SelectionObjective(args.selection_objective),
+            ),
             schedule=ScheduleCfg(
                 steps=args.steps,
                 eval_every=args.eval_every,

@@ -9,7 +9,7 @@ from __future__ import annotations
 import argparse
 
 from celltrack.operating_point import TrackerConfig
-from celltrack.training.joint_config import WARM_PACKS, ContrastiveSite
+from celltrack.training.joint_config import WARM_PACKS, ContrastiveSite, SelectionObjective
 
 
 class JointCli:
@@ -198,6 +198,13 @@ class JointCli:
             type=float,
             default=TrackerConfig.shipped().threshold,
             help="detection threshold of the selector eval (defaults to the SHIPPED operating point's)",
+        )
+        parser.add_argument(
+            "--selection-objective",
+            choices=tuple(o.value for o in SelectionObjective),
+            default=SelectionObjective.PROXY.value,
+            help="scalar save-best maximises: 'proxy' (shipped clamped metric) or 'confusor_margin' "
+            "(proxy-independent mean_p_true - mean_p_chosen, for a mechanism run above the proxy ceiling)",
         )
         parser.add_argument("--resume", action="store_true", help="continue from the .resume.pt snapshot")
         parser.add_argument("--weights", type=str, default="joint_tunet_ours.pt")

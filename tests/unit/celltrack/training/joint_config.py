@@ -25,6 +25,7 @@ from celltrack.training.joint_config import (
     OptimCfg,
     RuntimeCfg,
     ScheduleCfg,
+    SelectionObjective,
 )
 
 _CORPUS = 18024  # the real GT-pair count: one pair per step, so this is one epoch
@@ -290,6 +291,48 @@ def test_resolved_leaves_every_other_group_untouched():
         config.data,
         config.optim,
     )
+
+
+def test_selection_objective_defaults_to_proxy():
+    """A run selects on the shipped clamped proxy unless it opts out — an unasked run keeps yesterday's ruler."""
+    assert EvalCfg().selection_objective is SelectionObjective.PROXY
+
+
+def test_selection_objective_proxy_returns_the_proxy_score():
+    """PROXY reads the clamped proxy and ignores the confusor means — the default, unchanged behaviour."""
+    assert SelectionObjective.PROXY.of(selection_score=0.88, mean_p_true=0.2, mean_p_chosen=0.5) == 0.88
+
+
+def test_of():
+    """CONFUSOR_MARGIN reads mean_p_true - mean_p_chosen and ignores the proxy — the proxy-independent readout.
+
+    The directional warm arm's numbers are the case that motivates it: proxy 0.8485 -> 0.844 (regressed) while
+    the margin rose from 0.185 - 0.581 = -0.396 to 0.199 - 0.501 = -0.302. Proxy-selection saves the init; this
+    objective keeps the checkpoint whose confusor margin actually improved.
+    """
+    init = SelectionObjective.CONFUSOR_MARGIN.of(selection_score=0.8485, mean_p_true=0.185, mean_p_chosen=0.581)
+    improved = SelectionObjective.CONFUSOR_MARGIN.of(selection_score=0.844, mean_p_true=0.199, mean_p_chosen=0.501)
+    assert init == pytest.approx(-0.396)
+    assert improved == pytest.approx(-0.302)
+    assert improved > init  # the ruler that keeps the improved checkpoint the proxy would discard
+
+
+def test_selection_scalar():
+    """The whole config hands back the save-best scalar under its objective — callers need not reach through `eval`."""
+    proxy = JointTrainConfig()
+    assert proxy.selection_scalar(selection_score=0.88, mean_p_true=0.2, mean_p_chosen=0.5) == 0.88
+    margin = JointTrainConfig(eval=EvalCfg(selection_objective=SelectionObjective.CONFUSOR_MARGIN))
+    assert margin.selection_scalar(selection_score=0.844, mean_p_true=0.199, mean_p_chosen=0.501) == pytest.approx(
+        -0.302
+    )
+
+
+def test_from_args_selection_objective_reaches_the_eval_group():
+    """`--selection-objective confusor_margin` lands in the eval group — the selector's checkpoint ruler."""
+    config = JointTrainConfig.from_args(
+        JointCli.build_parser().parse_args(["--selection-objective", "confusor_margin"])
+    )
+    assert config.eval.selection_objective is SelectionObjective.CONFUSOR_MARGIN
 
 
 def test_link_axes():

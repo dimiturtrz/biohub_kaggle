@@ -15,18 +15,13 @@ term is the other one that is off by default: it mines the same near-decoys the 
 did, but scores them by MARGIN (`HardNegativeMargin`) and — the difference that makes it a new experiment —
 with the backbone unfrozen, since every association retrain that failed here trained against frozen features.
 
-The loop mirrors the detector trainer — eval-sized windows, EarlyStop + save-best + resume, the bf16 /
-channels_last / optional torch.compile speed setup — and selects on the same LB-aligned number: the
-`ModelEvaluator` score of BOTH trained heads through the shipped `CellTracker` on the densely-annotated
-VALIDATION movies (`celltrack.eval.proxy`), with the TEST four held out of training and out of selection so
-they remain a clean leaderboard estimate. Held-out loss does not transfer, and it hides which half moved; the
-pipeline score is the metric the leaderboard reports, with the edge PRC-AUC over the same validation movies'
-pairs logged beside it as the association half's own diagnostic. Selection reads the CLAMPED form of that score
-(`SplitScore.selection_score`) — the faithful metric pays a bonus for under-detection which our sparsely
-annotated proxy does not charge for and the dense hidden evaluation does — while the faithful number is logged
-beside it unchanged, as `proxy X (sel Y)`.
-Warm-starting (`--warm-start`) continues pilkwang's published detector+transformer; from scratch it is the honest
-own-trained baseline. Either way the best checkpoint by selection score is saved.
+The loop mirrors the detector trainer — eval-sized windows, EarlyStop + save-best + resume, bf16 /
+channels_last / optional torch.compile — and selects on the same LB-aligned number: the `ModelEvaluator` score
+of BOTH heads through the shipped `CellTracker` on the densely-annotated VALIDATION movies
+(`celltrack.eval.proxy`), TEST four held out of training and selection as a clean leaderboard estimate.
+Selection reads the CLAMPED form (`SplitScore.selection_score`) — the faithful metric pays an under-detection
+bonus our sparse proxy does not but the dense hidden eval does — logged as `proxy X (sel Y)`. Warm-starting
+(`--warm-start`) continues pilkwang's heads; from scratch is the honest own-trained baseline.
 """
 
 from __future__ import annotations
@@ -200,9 +195,11 @@ class JointTrainer:
             done += window
             result = self._evaluate(model, evaluator, pairs.val)
             pipeline = result.pipeline
-            # Weighted by the difficulty the window was TRAINED at, then the controller is told the raw score:
-            # a policy that moves the diet must not be judged by a metric that forgot the diet moved.
-            selected = pipeline.selection_score * (curriculum.selection_weight() if curriculum else 1.0)
+            # The configured objective (proxy by default; confusor margin above the ceiling) weighted by the
+            # difficulty the window TRAINED at — a policy moving the diet must not be judged by a metric that
+            # forgot it moved.
+            base = self._selection_base(pipeline)
+            selected = base * (curriculum.selection_weight() if curriculum else 1.0)
             if curriculum is not None:
                 curriculum.update(pipeline.selection_score)
             improved = stop.update(selected) if stop is not None else selected >= best
@@ -258,11 +255,8 @@ class JointTrainer:
     def _initial_best(
         self, model: JointModel, evaluator: ModelEvaluator, pairs: PairSplit, run: TrainingRun, setup: RunSetup
     ) -> float:
-        """The score before a single step — the bar a warm start must beat, tracked and checkpointed as window 0.
-
-        Also the base-calibration gate: a warm/chained run onto a miscalibrated base is aborted here rather
-        than trained onto for the length of the run and read as a false null (v1/v2 chained a +2-ratio base).
-        """
+        """The score before a step — the bar a warm start must beat (window 0), and the base-calibration gate:
+        a warm/chained run onto a miscalibrated base is aborted here, not read as a false null after training."""
         initial = self._evaluate(model, evaluator, pairs.val)
         logger.info(
             "init proxy %.4f (sel %.4f) | node R %.3f ratio %+.2f | mislinks %d inv %.2f P true %.3f vs chosen %.3f"
@@ -279,9 +273,15 @@ class JointTrainer:
         )
         expects_calibrated_base = setup.warm_start or setup.init_weights is not None
         BaseCalibration.gate(initial.pipeline.node_ratio, expects_calibrated_base=expects_calibrated_base)
-        run.window(0, self._metrics(initial, initial.pipeline.selection_score))
+        initial_best = self._selection_base(initial.pipeline)
+        run.window(0, self._metrics(initial, initial_best))
         self._checkpoint().save_best(setup.save_to, model)
-        return initial.pipeline.selection_score
+        return initial_best
+
+    def _selection_base(self, pipeline: EvalResult) -> float:
+        return self.config.selection_scalar(
+            pipeline.selection_score, pipeline.mean_p_true, pipeline.mean_p_chosen
+        )
 
     def _metrics(self, result: _EvalResult, best: float) -> dict[str, float]:
         """The eval half of one tracked row — the honest score, the selected-on one, the best so far, and the levers."""
