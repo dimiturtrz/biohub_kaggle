@@ -9,6 +9,7 @@ behaviour the config carries beyond holding values.
 import pytest
 from pydantic import ValidationError
 
+from celltrack.data.synthetic_scene import FAITHFUL_APPEARANCE, SceneConfig
 from celltrack.losses.softmax_focal_bce import SOURCE_AXIS, TARGET_AXIS
 from celltrack.operating_point import TrackerConfig
 from celltrack.training.joint_cli import JointCli
@@ -142,6 +143,18 @@ def test_joint_train_config_augmentation():
     """The run delegates to its data group, so the trainer asks the run and never reaches through it (demeter)."""
     run = JointTrainConfig(data=DataCfg(aug_flip_axes=(1, 2)))
     assert run.augmentation().flip_axes == (1, 2)
+
+
+def test_data_cfg_scene_config():
+    """`DataCfg.scene_config()` selects the appearance the generated scenes render from — default off, preset on."""
+    assert DataCfg().scene_config() == SceneConfig()  # identical-blob default
+    assert DataCfg(faithful_scenes=True).scene_config() == FAITHFUL_APPEARANCE
+
+
+def test_joint_train_config_scene_config():
+    """The run delegates to its data group, so the trainer asks the run and never reaches through it (demeter)."""
+    run = JointTrainConfig(data=DataCfg(faithful_scenes=True))
+    assert run.scene_config() == FAITHFUL_APPEARANCE
 
 
 def test_to_config():

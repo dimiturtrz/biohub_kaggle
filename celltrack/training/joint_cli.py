@@ -248,6 +248,11 @@ class JointCli:
         parser.add_argument(
             "--synthetic-scenes", type=int, default=0, help="hard scenes to GENERATE dynamically (0 = static npz)"
         )
+        parser.add_argument(
+            "--faithful-scenes",
+            action="store_true",
+            help="render generated scenes with the appearance-faithful preset (size spread + z-shape + noise)",
+        )
 
     @staticmethod
     def _add_link_flags(parser: argparse.ArgumentParser) -> None:

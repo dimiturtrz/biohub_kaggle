@@ -49,7 +49,6 @@ from celltrack.data.difficulty_sampler import DifficultySampler
 from celltrack.data.gpu_scene import GpuScenes
 from celltrack.data.joint_dataset import PairDataset, PairOptions, PairSample, PairTarget
 from celltrack.data.pair_curriculum import FixedMixture, PacedMixture, PairCurriculum, PairDraw
-from celltrack.data.synthetic_scene import SceneConfig
 from celltrack.detectors.tunet import DetectorRecipe
 from celltrack.eval.model_evaluator import EvalResult, ModelEvaluator
 from celltrack.eval.proxy import VALIDATION_MOVIES, TestMovieProxy
@@ -340,7 +339,7 @@ class JointTrainer:
         # batched call, so compiling it fused little — and the SAME module runs ragged per-pair in the selector
         # eval (whole videos, every gap a different node count), where a static compile thrashes the recompile cap.
         if self.config.data.gpu_scene_fraction:  # fuse the uniform-N generated-scene edge head (measured 4x)
-            model.compile_scene_head(SceneConfig().n_cells)
+            model.compile_scene_head(self.config.scene_config().n_cells)
         self.contrastive.to(self.config.runtime.device)
         self._objective.to(self.config.runtime.device)
         optimizer = torch.optim.AdamW(self._trained(model), lr=self.config.optim.lr)
@@ -641,7 +640,7 @@ class JointTrainer:
             return []
         if not hasattr(self, "_scene_source"):
             device = self.config.runtime.device
-            object.__setattr__(self, "_scene_source", GpuScenes(SceneConfig(), device))
+            object.__setattr__(self, "_scene_source", GpuScenes(self.config.scene_config(), device))
             object.__setattr__(self, "_scene_rng", torch.Generator(device).manual_seed(self.config.runtime.seed))
         pairs = self._scene_source.batch(count, self._scene_rng)  # type: ignore[attr-defined]
         return [(PairDraw(index=_UNTRACKED_INDEX), pair) for pair in pairs]

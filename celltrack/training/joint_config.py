@@ -27,6 +27,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt
 
 from celltrack.data.augmentation import DEFAULT_AUGMENTATION, Augmentation
+from celltrack.data.synthetic_scene import FAITHFUL_APPEARANCE, SceneConfig
 from celltrack.losses.softmax_focal_bce import SOURCE_AXIS, TARGET_AXIS
 from celltrack.losses.tracking_loss import TrackingLossConfig
 from celltrack.models.lora import LoraConfig
@@ -162,6 +163,13 @@ class DataCfg(BaseModel):
     # poisons, the detection-loss-punishes-good-detectors bias; annotated-recall may still read down because the
     # sparse eval only sees ~1-2% of cells. False trains association only (blob appearance never touches the head).
     gpu_scene_detection: bool = True
+    # Render generated scenes with the appearance-faithful preset (FAITHFUL_APPEARANCE) instead of the identical-
+    # blob default. One decision, not a knob sweep: the eqdx KS audit found the default blobs appearance-degenerate
+    # (why prior synth-training refutations were shallow — undertrained on a distribution the detector could shortcut).
+    # The preset adds size SPREAD + faithful z-shape + brightness/noise so both heads must learn the real signal.
+    # Off by default and byte-identical off. Reaches the numpy `synthetic_scenes` path fully; the GPU separable path
+    # honours every field except per-cell size (one shared kernel for conv3d speed). See synthetic_scene.py.
+    faithful_scenes: bool = False
     # Replace the FIXED share above with the feedback controller (`PacedMixture`): the two populations
     # alternate structurally and an EMA'd difficulty moves a per-sample LOSS WEIGHT instead of a draw
     # probability, with save-best corrected for the difficulty the window trained at. Off by default.
@@ -184,6 +192,10 @@ class DataCfg(BaseModel):
     def augmentation(self) -> Augmentation:
         """The augmentation policy these fields describe — identity by default, so an unasked run is unchanged."""
         return Augmentation(brightness=self.aug_brightness, offset=self.aug_offset, flip_axes=self.aug_flip_axes)
+
+    def scene_config(self) -> SceneConfig:
+        """The SceneConfig every generated-scene path renders from — one home for the faithful/default choice."""
+        return FAITHFUL_APPEARANCE if self.faithful_scenes else SceneConfig()
 
 
 class OptimCfg(BaseModel):
@@ -431,6 +443,10 @@ class JointTrainConfig(BaseModel):
     schedule: ScheduleCfg = Field(default_factory=ScheduleCfg)
     runtime: RuntimeCfg = Field(default_factory=RuntimeCfg)
 
+    def scene_config(self) -> SceneConfig:
+        """The generated-scene appearance, so a caller holding the whole config need not reach through `data`."""
+        return self.data.scene_config()
+
     @staticmethod
     def _augmentation_from_args(args: argparse.Namespace) -> Augmentation:
         """Resolve the CLI's aug decision: the preset when on, the identity on `--no-augment`, with per-field overrides.
@@ -474,6 +490,7 @@ class JointTrainConfig(BaseModel):
                 synthetic_scenes=args.synthetic_scenes,
                 gpu_scene_fraction=args.gpu_scene_fraction,
                 gpu_scene_detection=args.gpu_scene_detection,
+                faithful_scenes=args.faithful_scenes,
                 paced_curriculum=args.paced_curriculum,
                 include_test_in_train=args.include_test_in_train,
                 aug_brightness=augmentation.brightness,

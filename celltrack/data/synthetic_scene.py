@@ -69,13 +69,32 @@ class SceneConfig:
     # nuclei vary in brightness, the microscope PSF is z-anisotropic, and the frame carries background + noise.
     # Values live on the quantile-normalised [0, 1] scale the frames are read at (q0.001/q0.999 window). All
     # default to the identical-blob regime (off) so an existing run is unchanged; an appearance-diverse run
-    # turns them on. Per-cell SIZE variation is intentionally absent — it breaks the separable-blur that keeps
-    # the GPU path at conv3d speed; brightness + anisotropy + noise are the free, high-value knobs.
+    # turns them on. Per-cell SIZE variation (`size_log_std`) is available on this numpy render path — measured
+    # against the josefreitas faithful set, cell size (volume_um3) was the dominant single-cell fidelity gap
+    # (KS D~0.79, no other knob touches it). It stays off on the separable-blur GPU path, which needs one shared
+    # kernel for conv3d speed; brightness + anisotropy + noise remain the free knobs shared by both paths.
     intensity_log_std: float = 0.0  # per-cell peak = peak_intensity * exp(N(0, s)); nucleus brightness spread
+    size_log_std: float = 0.0  # per-cell sigma = blob_sigma_vox * exp(N(0, s)); nucleus SIZE spread (numpy path)
     sigma_z_ratio: float = 1.0  # z sigma = blob_sigma_vox * ratio; microscope PSF blurs z more than x/y
     background_level: float = 0.0  # additive constant baseline before noise
     noise_read_std: float = 0.0  # additive Gaussian read noise std (post-blur, [0, 1] scale)
     noise_shot_photons: float = 0.0  # Poisson shot noise; photons at unit signal (0 = off, higher = cleaner)
+
+
+# Appearance-faithful preset. One named decision, not a per-run sweep: the values are frozen from the KS fit
+# against the josefreitas set (eqdx audit 2026-08-24). They kill the identical-blob degeneracy that made prior
+# synth-training refutations shallow — size SPREAD + z-shape + brightness/noise — without chasing a fragile
+# multi-knob KS-tie (size and confusor density trade off physically; volume_um3 KS D 0.79 -> 0.52 is enough to
+# remove the degeneracy). n_cells / speed / turn keep their dense-hard defaults: the confusor axis josef lacks.
+FAITHFUL_APPEARANCE = SceneConfig(
+    blob_sigma_vox=2.2,
+    size_log_std=0.25,
+    sigma_z_ratio=1.0,
+    intensity_log_std=0.4,
+    background_level=0.12,
+    noise_read_std=0.04,
+    noise_shot_photons=150.0,
+)
 
 
 @dataclass(frozen=True)
@@ -165,15 +184,25 @@ class Scene:
         the frame gets a constant `background_level` and Poisson-then-Gaussian noise — so the detector sees the
         real signal (a peak over a noisy floor), not a trivially separable noise-free blob.
         """
-        sigma_axis = np.asarray(
+        base_sigma_axis = np.asarray(
             [config.blob_sigma_vox * config.sigma_z_ratio, config.blob_sigma_vox, config.blob_sigma_vox]
         )
-        two_sigma_sq_axis = 2.0 * sigma_axis**2
-        radius = np.ceil(3.0 * sigma_axis).astype(int)
+        # Per-cell size: a nucleus's radius varies (lognormal), so `size_log_std` scales every axis of its blob
+        # together (an isotropic size draw, not a new shape). Off (=0) collapses to one shared kernel, unchanged.
+        scale = (
+            np.exp(rng.normal(0.0, config.size_log_std, config.n_cells))
+            if config.size_log_std > 0.0
+            else np.ones(config.n_cells)
+        )
+        sigma_per_cell = base_sigma_axis[None, :] * scale[:, None]
+        two_sigma_sq_per_cell = 2.0 * sigma_per_cell**2
+        radius_per_cell = np.ceil(3.0 * sigma_per_cell).astype(int)
         shape = config.volume_shape
         volumes = np.zeros((len(positions), *shape), dtype=np.float32)
         for frame, centres in enumerate(positions):
             for cell, centre in enumerate(centres):
+                radius = radius_per_cell[cell]
+                two_sigma_sq_axis = two_sigma_sq_per_cell[cell]
                 base = np.floor(centre).astype(int)
                 lo = np.maximum(base - radius, 0)
                 hi = np.minimum(base + radius + 1, shape)

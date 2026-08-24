@@ -27,7 +27,7 @@ from celltrack.data.detection_pairs import DetectionPairs
 from celltrack.data.frame_source import FrameSource, PooledFrames, ZarrFrames
 from celltrack.data.joint_dataset import PairTarget
 from celltrack.data.synthetic_pairs import POOLED_BY, SyntheticPairs
-from celltrack.data.synthetic_scene import SceneConfig, SceneCorpus
+from celltrack.data.synthetic_scene import SceneCorpus
 from celltrack.eval.proxy import CV_MOVIES, TEST_MOVIES, VALIDATION_MOVIES, TestMovieProxy
 from celltrack.operating_point import TrackerConfig
 from celltrack.tracker import CellTracker
@@ -224,7 +224,7 @@ class PairSplit:
             # The DYNAMIC corpus: generated hard scenes (crowded fast-movers with a known answer) rather than the
             # static npz. Difficulty is the SceneConfig default (the dense-hard regime); the mix is synthetic_fraction.
             with Obs.timed(log, f"generating {data.synthetic_scenes} hard synthetic scenes"):
-                targets = SceneCorpus.generate(SceneConfig(), data.synthetic_scenes, config.runtime.seed)
+                targets = SceneCorpus.generate(data.scene_config(), data.synthetic_scenes, config.runtime.seed)
             logger.info("%d generated pairs from %d hard scenes", len(targets), data.synthetic_scenes)
             return targets
         if data.downsample != POOLED_BY:
