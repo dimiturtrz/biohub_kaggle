@@ -34,7 +34,7 @@ from core.paths import DataRoot
 
 logger = logging.getLogger(__name__)
 
-_CHAMPION = "shipped_thr097"  # the operating point currently on the leaderboard at 0.900
+_CHAMPION = "flow_thr080"  # the dual-seed tracker at thr0.80 — the config actually on the leaderboard at 0.900
 
 
 @dataclass(frozen=True)

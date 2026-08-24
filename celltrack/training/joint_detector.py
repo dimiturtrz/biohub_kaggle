@@ -279,9 +279,7 @@ class JointTrainer:
         return initial_best
 
     def _selection_base(self, pipeline: EvalResult) -> float:
-        return self.config.selection_scalar(
-            pipeline.selection_score, pipeline.mean_p_true, pipeline.mean_p_chosen
-        )
+        return self.config.selection_scalar(pipeline.selection_score, pipeline.mean_p_true, pipeline.mean_p_chosen)
 
     def _metrics(self, result: _EvalResult, best: float) -> dict[str, float]:
         """The eval half of one tracked row — the honest score, the selected-on one, the best so far, and the levers."""

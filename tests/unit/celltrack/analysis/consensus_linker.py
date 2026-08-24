@@ -99,7 +99,8 @@ def test_score(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
         paths=[tmp_path / "m.zarr"],
         truths=[SimpleNamespace(graph=truth)],
     )
-    graphs = {"shipped_thr097": {"m": _graph(_LINK_CELL0)}, "flow_thr080": {"m": _both_cells()}}
+    # champion (_CHAMPION = flow_thr080) draws only cell 0; the other config corroborates cell 1's link.
+    graphs = {"flow_thr080": {"m": _graph(_LINK_CELL0)}, "shipped_thr097": {"m": _both_cells()}}
     monkeypatch.setattr(ConsensusRun, "_graphs", lambda self, root: (proxy, graphs))
 
     consensus, singles, net_new, ranked = ConsensusRun("cpu").score(cast(DataRoot, tmp_path / "paths.yaml"))
@@ -108,4 +109,4 @@ def test_score(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     assert set(consensus) == {1, 2}  # vote>=1 (union) through vote>=2 (both configs)
     assert all(0.0 <= value <= 1.0 for value in consensus.values())
     assert net_new[2] == (0, 0)  # k=2 = intersection; it neither adds nor drops vs the champion here
-    assert ranked[0].added == 1  # champion+flow union recovers cell 1's link the champion alone lacks
+    assert ranked[0].added == 1  # the union subset recovers cell 1's link the champion alone lacks
