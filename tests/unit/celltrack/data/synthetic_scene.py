@@ -29,10 +29,11 @@ def test_scene_corpus_generate():
 
 
 def test_hard_fraction():
-    """Difficulty is a measured dial: a crowded fast-turning scene has many edges whose true successor is NOT
-    the nearest next-frame cell, and an easy sparse slow scene has almost none."""
-    hard = Scene.generate(SceneConfig(n_cells=300, speed_um_std=5.0, turn_std_rad=0.8), seed=0)
-    easy = Scene.generate(SceneConfig(n_cells=40, speed_um_std=0.5, turn_std_rad=0.1), seed=0)
+    """Difficulty is a measured dial driven by DENSITY (faithful motion makes near-rivals rare, as in reality):
+    a crowded scene has edges whose true successor is NOT the nearest next-frame cell, an easy sparse slow scene
+    has almost none. The contested case is genuine geometric crowding, not overspeed chaos."""
+    hard = Scene.generate(SceneConfig(n_cells=1500, speed_lognorm_sigma=0.7, turn_std_rad=0.8), seed=0)
+    easy = Scene.generate(SceneConfig(n_cells=40, speed_lognorm_sigma=0.15, turn_std_rad=0.1), seed=0)
 
     hard_frac = hard.hard_fraction(10.0, 1.625)
     easy_frac = easy.hard_fraction(10.0, 1.625)

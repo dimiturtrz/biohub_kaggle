@@ -42,10 +42,13 @@ class GpuScenes:
         cells = config.n_cells
 
         start = low + (high - low) * torch.rand(batch_size, cells, 3, generator=generator, device=self.device)
-        step = config.speed_um_mean / config.spacing_um
-        spread = config.speed_um_std / config.spacing_um
+        # Faithful lognormal step (median speed_um_mean, real fast-mover tail); see SceneConfig speed comment.
+        mu = math.log(config.speed_um_mean)
+        log_speed = mu + config.speed_lognorm_sigma * torch.randn(
+            batch_size, cells, 1, generator=generator, device=self.device
+        )
+        speed = log_speed.exp() / config.spacing_um
         direction = torch.randn(batch_size, cells, 3, generator=generator, device=self.device)
-        speed = step + torch.randn(batch_size, cells, 1, generator=generator, device=self.device).abs() * spread
         velocity = direction / direction.norm(dim=2, keepdim=True).clamp_min(1e-9) * speed
         nxt = torch.clamp(start + velocity, low, high)
 

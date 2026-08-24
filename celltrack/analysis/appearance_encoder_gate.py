@@ -43,6 +43,14 @@ from core.paths import DataRoot
 
 logger = logging.getLogger(__name__)
 
+# The raw-correlation TOP-1 the prior `appearance_identity` diagnosis measured on this dense-movie confusor set.
+_DOCUMENTED_RAW_TOP1 = 0.161
+# Pre-registered BEFORE any number is read (sibling, 2026-08-24): the raw-corr arm rides the SAME `_rank` path
+# as the encoder arm, so reproducing its documented value witnesses the shared harness. A raw-corr TOP-1 outside
+# this band means the shared path moved (chance 0.255 sits OUTSIDE it) — HALT before the encoder number exists,
+# so a moved harness can never masquerade as an encoder result on the n~37 set where a bug lands effect-sized.
+_WITNESS_BAND = 0.05
+
 
 class EncoderGate:
     """The one confusor-separation question that licenses spending a submission on xqjk — scorer, loader, report.
@@ -94,27 +102,51 @@ class EncoderGate:
         return InGateRanking.of(diagnosis.prediction, diagnosis.spacing, read, pairs, gate_um, scorer)  # type: ignore[arg-type]
 
     @staticmethod
+    def _log_ranking(label: str, name: str, ranking: InGateRanking) -> None:
+        """One TOP-1-against-chance line for a (population, scorer) arm."""
+        logger.info(
+            "%-10s %-9s n=%4d  TOP-1 %.3f (chance %.3f)  median rank %.1f",
+            label,
+            name,
+            ranking.count(),
+            ranking.top_one(),
+            ranking.chance(),
+            float(np.median(ranking.true_rank)) if ranking.count() else float("nan"),
+        )
+
+    @staticmethod
+    def _witness(diagnosis: IdentityDiagnosis, mislinked: CandidatePairs, gate_um: float, radius_um: float) -> bool:
+        """Run the raw-correlation arm FIRST and check it reproduces the documented TOP-1 within the pre-registered
+        band. A witness only witnesses if its verdict lands BEFORE the number it licenses: raw-corr and the encoder
+        ride the identical `_rank` path, so a raw-corr that reproduces 0.161 proves the shared harness is intact —
+        and a raw-corr that misses means the harness moved, so the encoder number must not be read at all."""
+        ranking = EncoderGate._rank(diagnosis, mislinked, gate_um, IdentitySimilarity.raw_correlation_scorer, radius_um)
+        EncoderGate._log_ranking("mislinked", "raw-corr", ranking)
+        intact = abs(ranking.top_one() - _DOCUMENTED_RAW_TOP1) <= _WITNESS_BAND
+        logger.info(
+            "witness    raw-corr  TOP-1 %.3f vs documented %.3f +/- %.3f  ->  %s",
+            ranking.top_one(),
+            _DOCUMENTED_RAW_TOP1,
+            _WITNESS_BAND,
+            "harness intact, reading encoder" if intact else "HARNESS MOVED — encoder arm NOT read",
+        )
+        return intact
+
+    @staticmethod
     def _report(diagnosis: IdentityDiagnosis, encoder: PatchEncoder, device: str, radius_um: float) -> None:
-        """Encoder vs raw-correlation TOP-1 against chance, on the mislinked confusor and the correct-edge control."""
+        """Witness the shared harness on raw-corr FIRST, then read the encoder on both populations only if intact."""
         gate_um = TrackerConfig.shipped().linker.gate_um
-        learned = EncoderGate.scorer(encoder, device)
         prediction, truth, matching = diagnosis.prediction, diagnosis.truth, diagnosis.matching
+        mislinked = CandidatePairs.mislinked(prediction, truth, matching)
+        if not EncoderGate._witness(diagnosis, mislinked, gate_um, radius_um):
+            return
+        learned = EncoderGate.scorer(encoder, device)
         populations = (
-            ("mislinked", CandidatePairs.mislinked(prediction, truth, matching)),
+            ("mislinked", mislinked),
             ("correct", CandidatePairs.correct(prediction, truth, matching, diagnosis.spacing, gate_um)),
         )
         for label, pairs in populations:
-            for name, scorer in (("raw-corr", IdentitySimilarity.raw_correlation_scorer), ("encoder", learned)):
-                ranking = EncoderGate._rank(diagnosis, pairs, gate_um, scorer, radius_um)
-                logger.info(
-                    "%-10s %-9s n=%4d  TOP-1 %.3f (chance %.3f)  median rank %.1f",
-                    label,
-                    name,
-                    ranking.count(),
-                    ranking.top_one(),
-                    ranking.chance(),
-                    float(np.median(ranking.true_rank)) if ranking.count() else float("nan"),
-                )
+            EncoderGate._log_ranking(label, "encoder", EncoderGate._rank(diagnosis, pairs, gate_um, learned, radius_um))
 
 
 def main() -> None:

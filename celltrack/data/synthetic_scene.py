@@ -23,6 +23,7 @@ module only manufactures the cases.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 import numpy as np
@@ -44,24 +45,33 @@ _Q_LOW, _Q_HIGH = 0.001, 0.999
 class SceneConfig:
     """The difficulty knobs of one generated sequence — every one is an argument, none a magic constant.
 
-    Defaults target the dense-movie regime: ~80 cells in a 64^3 isotropic volume (crowded), a mean step near
-    the measured 1.7um with a heavy fast-mover tail, and a per-frame turn spread that makes a constant-velocity
-    prediction wrong often enough to force the head onto the full trajectory. Raising `n_cells`, `speed_um_std`
-    or `turn_std_rad` makes the successor harder to pick; lowering them recovers the easy static-synthetic case.
+    Defaults target the dense-movie regime: ~700 cells in a 64^3 isotropic volume (crowded), a FAITHFUL
+    lognormal step (median 1.7um, real fast-mover tail), and a per-frame turn spread that makes a
+    constant-velocity prediction wrong often enough to force the head onto the full trajectory. Difficulty is
+    density- and appearance-driven: raising `n_cells` (genuine near-rivals) or `speed_lognorm_sigma` (tail) or
+    `turn_std_rad` makes the successor harder; lowering them recovers the easy static-synthetic case. The
+    confusor is NOT manufactured by overspeed — that produced unlearnable chaos (see the speed comment below).
     """
 
     volume_shape: tuple[int, int, int] = (64, 64, 64)
     spacing_um: float = 1.625  # the isotropic post-downsample grid the detector reads
     n_frames: int = 4
     # Defaults are the DENSE-HARD regime, chosen by measurement: at ~700 cells / 64^3 (the dense movie's own
-    # density) with a fast-mover tail and large turns, ~36% of in-gate edges have the true successor NOT nearest
-    # — the contested case the real corpus lacks. Lowering n_cells / speed_um_std / turn_std_rad recovers the
-    # easy static-synthetic case, so difficulty is a dial, not a fixed property.
+    # density) with a faithful lognormal step and large turns, in-gate edges get genuine near-rivals from
+    # DENSITY (not overshoot). Lowering n_cells / speed_lognorm_sigma / turn_std_rad recovers the easy
+    # static-synthetic case, so difficulty is a dial, not a fixed property.
     n_cells: int = 700
     blob_sigma_vox: float = 1.4  # a nucleus is ~2-3 voxels across on this grid
     peak_intensity: float = 1.0
-    speed_um_mean: float = 1.7  # the measured median annotated step
-    speed_um_std: float = 6.0  # the fast-mover tail — where the true successor lands far
+    # Per-frame displacement is LOGNORMAL, derived from the real annotated corpus (card-free audit 2026-08-24):
+    # real step um med 1.68 / p90 2.87 / p99 5.02 / max 7.81. Physics = slow diffusion + a directed fast-mover
+    # tail -> multiplicative, heavy-tailed -> lognormal (a half-normal is too light-tailed for the real max).
+    # median = speed_um_mean (exp(mu)); speed_lognorm_sigma sets the tail. sigma 0.46 reproduces p99 4.9 / max
+    # 7.3. The prior additive half-normal (speed_um_std=6.0) ran ~3.3x too fast (synth median 5.6um > real MAX)
+    # and manufactured 48% rival-nearer OVERSHOOT chaos (real ~0.1%) — an unlearnable confusor that poisoned the
+    # association head (eqdx gap-widened). The REAL confusor is density- + appearance-driven, not speed-driven.
+    speed_um_mean: float = 1.7  # the measured median annotated step = lognormal median exp(mu)
+    speed_lognorm_sigma: float = 0.46  # lognormal shape; the faithful fast-mover tail (fit to real p99/max)
     turn_std_rad: float = 0.8  # per-frame heading change; the constant-velocity prior fails when this is large
     margin_vox: float = 3.0  # keep centres off the volume face so a blob is not clipped
     # APPEARANCE DIVERSITY. The blob above is one identical, noise-free shape — trivially detectable, so a
@@ -116,12 +126,11 @@ class Scene:
         # Per-cell state: a start position and an initial velocity, the velocity in VOXELS per frame so it is
         # commensurate with the grid the blobs render on (um / um-per-voxel = voxels).
         start = rng.uniform(lo, hi, size=(config.n_cells, 3))
-        step_vox = config.speed_um_mean / config.spacing_um
-        spread_vox = config.speed_um_std / config.spacing_um
+        mu = math.log(config.speed_um_mean)
+        speed_vox = np.exp(mu + config.speed_lognorm_sigma * rng.normal(0.0, 1.0, size=(config.n_cells, 1)))
+        speed_vox /= config.spacing_um
         velocity = rng.normal(0.0, 1.0, size=(config.n_cells, 3))
-        velocity *= (step_vox + np.abs(rng.normal(0.0, spread_vox, size=(config.n_cells, 1)))) / (
-            np.linalg.norm(velocity, axis=1, keepdims=True) + 1e-9
-        )
+        velocity *= speed_vox / (np.linalg.norm(velocity, axis=1, keepdims=True) + 1e-9)
 
         positions = [start]
         current = start
