@@ -253,6 +253,12 @@ class JointCli:
             action="store_true",
             help="render generated scenes with the appearance-faithful preset (size spread + z-shape + noise)",
         )
+        parser.add_argument(
+            "--confusor-rate",
+            type=float,
+            default=0.0,
+            help="fraction of generated cells made CONSTRUCTED confusors (fast source + slow near-rival); 0.3~=32%%",
+        )
 
     @staticmethod
     def _add_link_flags(parser: argparse.ArgumentParser) -> None:

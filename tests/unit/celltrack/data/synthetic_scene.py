@@ -42,6 +42,19 @@ def test_hard_fraction():
     assert easy_frac < hard_frac  # difficulty responds to the knobs
 
 
+def test_confusor_rate_raises_hard_fraction():
+    """`confusor_rate` CONSTRUCTS the labelled hard case uniform placement almost never poses — a fast source
+    whose true successor departs while a slow distractor sits at its start as a false near-successor. rate=0 is
+    the sparse uniform baseline; a raised rate lifts hard_fraction toward that rate (measured ~linear)."""
+    base = {"n_cells": 200, "n_frames": 2, "volume_shape": (48, 48, 48)}
+    off = Scene.generate(SceneConfig(**base, confusor_rate=0.0), seed=0).hard_fraction(10.0, 1.625)
+    on = Scene.generate(SceneConfig(**base, confusor_rate=0.4), seed=0).hard_fraction(10.0, 1.625)
+
+    assert off < 0.15  # uniform placement barely poses the confusor
+    assert on > 0.25  # construction poses it, near the configured rate
+    assert on > 2.0 * off
+
+
 def test_blobs_render_at_cell_centres():
     """A cell centre is a local intensity maximum — the detector can find the cells the graph names."""
     scene = Scene.generate(SceneConfig(n_cells=20, n_frames=2, volume_shape=(32, 32, 32)), seed=1)

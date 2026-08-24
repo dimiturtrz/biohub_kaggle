@@ -50,6 +50,7 @@ class GpuScenes:
         speed = log_speed.exp() / config.spacing_um
         direction = torch.randn(batch_size, cells, 3, generator=generator, device=self.device)
         velocity = direction / direction.norm(dim=2, keepdim=True).clamp_min(1e-9) * speed
+        start, velocity = self._construct_confusors(start, velocity, low, high, generator)
         nxt = torch.clamp(start + velocity, low, high)
 
         # A cell keeps its brightness across the pair (drawn once, indexed in both frames), like the CPU scene.
@@ -69,6 +70,42 @@ class GpuScenes:
             )
             for index in range(batch_size)
         ]
+
+    def _construct_confusors(
+        self,
+        start: Float[Tensor, "b n 3"],
+        velocity: Float[Tensor, "b n 3"],
+        low: Float[Tensor, " 3"],
+        high: Float[Tensor, " 3"],
+        generator: torch.Generator,
+    ) -> tuple[Float[Tensor, "b n 3"], Float[Tensor, "b n 3"]]:
+        """Construct the labelled confusor for a `confusor_rate` share of cells — the torch twin of the CPU scene.
+
+        Same rule as `synthetic_scene.Scene._construct_confusors`: pick disjoint (source, distractor) slots, force
+        the source to a fast-mover step so its true successor departs, and drop a slow distractor within
+        `radius_um` of the source so its next-frame node stays put as a false near-successor. The slots are shared
+        across the batch but each element's positions are independent, so every scene gets its own confusor.
+        rate=0 (default) returns the inputs untouched — the plain uniform generator.
+        """
+        config = self.config
+        cells = start.shape[1]
+        n_pairs = min(round(config.confusor_rate * cells), cells // 2)
+        if n_pairs == 0:
+            return start, velocity
+        picked = torch.randperm(cells, generator=generator, device=self.device)[: 2 * n_pairs]
+        src, dis = picked[:n_pairs], picked[n_pairs:]
+        min_step_vox = config.confusor_min_step_um / config.spacing_um
+        speed = velocity[:, src, :].norm(dim=2, keepdim=True).clamp_min(1e-9)
+        velocity[:, src, :] = velocity[:, src, :] / speed * speed.clamp_min(min_step_vox)  # depart FAR
+        offset = torch.randn(start.shape[0], n_pairs, 3, generator=generator, device=self.device)
+        offset = offset / offset.norm(dim=2, keepdim=True).clamp_min(1e-9)
+        radius = torch.rand(start.shape[0], n_pairs, 1, generator=generator, device=self.device)
+        radius = radius * (config.confusor_radius_um / config.spacing_um)
+        start[:, dis, :] = torch.clamp(start[:, src, :] + offset * radius, low, high)  # sit next to the source
+        slow = velocity[:, dis, :].norm(dim=2, keepdim=True).clamp_min(1e-9)
+        slow_vox = config.confusor_distractor_step_um / config.spacing_um
+        velocity[:, dis, :] = velocity[:, dis, :] / slow * slow_vox  # stay put -> false near-successor
+        return start, velocity
 
     def _render(
         self, centres: Float[Tensor, "b n 3"], intensities: Float[Tensor, "b n"], generator: torch.Generator

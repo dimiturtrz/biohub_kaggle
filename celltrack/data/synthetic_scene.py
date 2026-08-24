@@ -89,6 +89,18 @@ class SceneConfig:
     background_level: float = 0.0  # additive constant baseline before noise
     noise_read_std: float = 0.0  # additive Gaussian read noise std (post-blur, [0, 1] scale)
     noise_shot_photons: float = 0.0  # Poisson shot noise; photons at unit signal (0 = off, higher = cleaner)
+    # CONFUSOR CONSTRUCTION. Uniform placement poses the association confusor (a next-frame node nearer the
+    # source than its true successor — the `hard_fraction` case) only ~4% of the time: density alone almost never
+    # puts a rival inside the true step, so the head trains on trivially separable edges and P_true never moves
+    # (joint_confusor_synth_v1, card-free audit 2026-08-24). These CONSTRUCT it instead of hoping density emits
+    # it. For `confusor_rate` of cells: boost the cell to a fast-mover (own step >= min_step, true successor
+    # departs FAR) and place a SLOW distractor within `radius_um` of its start (the distractor stays put, so its
+    # next-frame node sits near the source as a false near-successor). The source->distractor pair is a LABELED
+    # hard negative real annotation cannot give us. rate=0 (default) is the plain uniform generator, unchanged.
+    confusor_rate: float = 0.0  # fraction of cells made hard sources (each consumes one distractor; rate <= 0.5)
+    confusor_radius_um: float = 1.6  # distractor placed within this of the source start (~real mislink sep, 1 vox)
+    confusor_min_step_um: float = 3.0  # a source's forced step (>= radius, so rival <= own); real p90 2.87/p99 5.0
+    confusor_distractor_step_um: float = 0.5  # distractor's slow step, so it stays a near-source rival (real p10)
 
 
 # Appearance-faithful preset. One named decision, not a per-run sweep: the values are frozen from the KS fit
@@ -131,6 +143,7 @@ class Scene:
         speed_vox /= config.spacing_um
         velocity = rng.normal(0.0, 1.0, size=(config.n_cells, 3))
         velocity *= speed_vox / (np.linalg.norm(velocity, axis=1, keepdims=True) + 1e-9)
+        start, velocity = cls._construct_confusors(start, velocity, config, rng)
 
         positions = [start]
         current = start
@@ -156,6 +169,42 @@ class Scene:
         )
         volumes = cls._render(positions, config, intensities, rng)
         return cls(volumes=volumes, positions_vox=positions_vox, timepoints=timepoints, edges=edges)
+
+    @staticmethod
+    def _construct_confusors(
+        start: Float[np.ndarray, "n 3"],
+        velocity: Float[np.ndarray, "n 3"],
+        config: SceneConfig,
+        rng: np.random.Generator,
+    ) -> tuple[Float[np.ndarray, "n 3"], Float[np.ndarray, "n 3"]]:
+        """Turn a `confusor_rate` share of cells into labelled hard sources (fast) + slow near-source distractors.
+
+        The canonical difficulty is `hard_fraction`: an edge is hard when a next-frame node sits nearer the
+        SOURCE than the true successor does. Uniform placement almost never produces it, so we place it: pick
+        disjoint (source, distractor) pairs, force the source to a real fast-mover step (its true successor
+        departs), and drop the distractor within `radius_um` of the source with a near-zero step so its
+        next-frame node stays put — a false near-successor that competes on proximity. Both edges stay truthfully
+        labelled (each cell to itself), so the source->distractor candidate is a KNOWN negative. rate=0 is a no-op.
+        """
+        if config.confusor_rate <= 0.0:
+            return start, velocity
+        n_pairs = min(round(config.confusor_rate * config.n_cells), config.n_cells // 2)
+        if n_pairs == 0:
+            return start, velocity
+        picked = rng.permutation(config.n_cells)[: 2 * n_pairs]
+        src, dis = picked[:n_pairs], picked[n_pairs:]
+        lo, hi = config.margin_vox, np.asarray(config.volume_shape, dtype=np.float64) - config.margin_vox
+        min_step_vox = config.confusor_min_step_um / config.spacing_um
+        speed = np.linalg.norm(velocity[src], axis=1, keepdims=True)
+        velocity[src] = velocity[src] / (speed + 1e-9) * np.maximum(speed, min_step_vox)  # depart FAR
+        offset = rng.normal(0.0, 1.0, size=(n_pairs, 3))
+        offset /= np.linalg.norm(offset, axis=1, keepdims=True) + 1e-9
+        radius = rng.uniform(0.0, config.confusor_radius_um / config.spacing_um, size=(n_pairs, 1))
+        start[dis] = np.clip(start[src] + offset * radius, lo, hi)  # sit next to the source
+        slow = np.linalg.norm(velocity[dis], axis=1, keepdims=True)
+        slow_vox = config.confusor_distractor_step_um / config.spacing_um
+        velocity[dis] = velocity[dis] / (slow + 1e-9) * slow_vox  # stay put -> false near-successor
+        return start, velocity
 
     @staticmethod
     def _turn(

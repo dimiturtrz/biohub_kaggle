@@ -170,6 +170,11 @@ class DataCfg(BaseModel):
     # Off by default and byte-identical off. Reaches the numpy `synthetic_scenes` path fully; the GPU separable path
     # honours every field except per-cell size (one shared kernel for conv3d speed). See synthetic_scene.py.
     faithful_scenes: bool = False
+    # Fraction of generated cells turned into CONSTRUCTED confusors (a fast source + a slow near-source distractor,
+    # a labelled hard negative — see synthetic_scene.SceneConfig.confusor_rate). Uniform placement poses the
+    # confusor only ~4%; joint_confusor_synth_v1 trained on trivially-easy edges and P_true never moved. >0 raises
+    # the measured rate ~linearly (0.30 -> ~32%, confusor_audit). 0 (default) is the plain uniform generator.
+    confusor_rate: float = Field(0.0, ge=0.0, le=0.5)
     # Replace the FIXED share above with the feedback controller (`PacedMixture`): the two populations
     # alternate structurally and an EMA'd difficulty moves a per-sample LOSS WEIGHT instead of a draw
     # probability, with save-best corrected for the difficulty the window trained at. Off by default.
@@ -195,7 +200,8 @@ class DataCfg(BaseModel):
 
     def scene_config(self) -> SceneConfig:
         """The SceneConfig every generated-scene path renders from — one home for the faithful/default choice."""
-        return FAITHFUL_APPEARANCE if self.faithful_scenes else SceneConfig()
+        base = FAITHFUL_APPEARANCE if self.faithful_scenes else SceneConfig()
+        return replace(base, confusor_rate=self.confusor_rate)
 
 
 class OptimCfg(BaseModel):
@@ -491,6 +497,7 @@ class JointTrainConfig(BaseModel):
                 gpu_scene_fraction=args.gpu_scene_fraction,
                 gpu_scene_detection=args.gpu_scene_detection,
                 faithful_scenes=args.faithful_scenes,
+                confusor_rate=args.confusor_rate,
                 paced_curriculum=args.paced_curriculum,
                 include_test_in_train=args.include_test_in_train,
                 aug_brightness=augmentation.brightness,

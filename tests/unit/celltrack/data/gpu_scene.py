@@ -26,6 +26,28 @@ def test_batch():
     assert float(sample.frame_t.max()) > 0.5  # blobs rendered
 
 
+def test_confusor_construction_poses_near_rivals():
+    """On the GPU path, `confusor_rate` raises the share of sources with a next-frame node nearer than their true
+    successor (the source-vs-target confusor `hard_fraction` names). rate=0 is the sparse uniform baseline. Run on
+    'cpu' (the device is a field). The centres are lifted by (1,4,4), so divide back before measuring um."""
+
+    def confusor_rate(rate: float) -> float:
+        config = SceneConfig(n_cells=200, volume_shape=(48, 48, 48), confusor_rate=rate)
+        generator = torch.Generator("cpu").manual_seed(0)
+        sample = GpuScenes(config, "cpu").batch(1, generator)[0]
+        lift = torch.tensor([1.0, 4.0, 4.0])
+        source = sample.source_centres.float() / lift
+        target = sample.target_centres.float() / lift
+        distances = torch.cdist(source, target) * config.spacing_um
+        own = distances.diagonal()
+        in_gate = own <= 10.0
+        hard = in_gate & (distances.argmin(dim=1) != torch.arange(len(own)))
+        return hard.sum().item() / in_gate.sum().item()
+
+    assert confusor_rate(0.0) < 0.15  # uniform placement barely poses it
+    assert confusor_rate(0.4) > 0.25  # construction poses it
+
+
 def test_appearance_diversity_on_gpu_path():
     """The GPU render honours the same appearance knobs as the CPU scene: intensity spread widens the peak
     range, and background + noise lift the empty floor off zero. A clean config renders identical blobs on a
