@@ -55,26 +55,20 @@ from celltrack.losses.tracking_loss import (
     TrackingLoss,
     _PairOutcome,
 )
-from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeTransformerScorer
 from celltrack.models.joint_model import BatchedForward, JointForward, JointModel
-from celltrack.models.lora import LoRA
-from celltrack.models.temporal_unet_detector import TemporalUNetDetector
-from celltrack.operating_point import TrackerConfig
 from celltrack.training.base_calibration import BaseCalibration
 from celltrack.training.contrastive_term import ContrastiveTerm, ContrastiveTermConfig
 from celltrack.training.early_stop import EarlyStop
+from celltrack.training.joint_assembly import JointAssembly
 from celltrack.training.joint_checkpoint import RESUME_SUFFIX, JointCheckpoint, RunProgress
 from celltrack.training.joint_cli import JointCli
 from celltrack.training.joint_config import (
     WARM_PACKS,
     JointTrainConfig,
-    LoraCfg,
 )
 from celltrack.training.pair_split import PairSplit
-from celltrack.training.prior_velocity_source import PriorVelocitySource
 from celltrack.training.run_tracking import RunSetup, TrainingRun
 from celltrack.training.tunet_detector import _Optimization
-from core.geometry import Spacing
 from core.metrics.edge_auc import EdgeAUC
 from core.obs import Obs
 from core.paths import DataRoot
@@ -87,9 +81,6 @@ _DATASET = "biohub_cell_tracking"
 # Only the PROXY needs them: a joint run's own heads supply both the nodes and the affinity being selected on.
 _HEARTBEAT_UPDATES = 100  # log within-window progress this often, so a long window isn't silent
 _SECONDS_PER_HOUR = 3600.0
-# The fresh transformer's shape, matching the pilkwang head the warm-start path loads.
-_HIDDEN_DIM, _N_HEADS, _N_BLOCKS = 128, 4, 4
-_POS_FEATURE_DIM = 4 * _POS_EMBED_DIM  # sinusoidal embed of (t, z, y, x)
 # The uniform stream draws no index at all; -1 says so without a `int | None` that every reader must unwrap.
 _UNTRACKED_INDEX = -1
 
@@ -128,6 +119,10 @@ class JointTrainer:
         self._loss = TrackingLoss(
             config.loss.to_tracking_loss_config(config.data.downsample), self.contrastive, self._objective
         )
+        # The build phase (model + optimiser + feature installs) and the velocity feed live in one object beside
+        # the config that chose them; `train` rebuilds it once the epoch budget is resolved.
+        self._assembly = JointAssembly(config, self.contrastive, self._objective)
+        self._velocity = self._assembly.velocity
 
     @staticmethod
     def _prediction(out: JointForward) -> PairPrediction:
@@ -163,12 +158,17 @@ class JointTrainer:
         """
         steps_per_epoch = max(1, len(pairs.train))
         self.config = self.config.resolved(steps_per_epoch)
+        self._assembly = JointAssembly(self.config, self.contrastive, self._objective)  # rebuild on the resolved budget
+        self._velocity = self._assembly.velocity
         schedule = self.config.schedule
         save_to = setup.save_to
         torch.set_float32_matmul_precision("high")  # TF32 on the fp32 matmuls the bf16 autocast leaves alone
         torch.backends.cudnn.benchmark = True  # one static frame shape — cudnn picks the fastest algo once
-        model, optimization = self._prepare(
-            warm_start=setup.warm_start, init_weights=setup.init_weights, spacing=pairs.spacing
+        model, optimization = self._assembly.build(
+            warm_start=setup.warm_start,
+            init_weights=setup.init_weights,
+            detector_from=setup.detector_from,
+            spacing=pairs.spacing,
         )
 
         run = TrainingRun.open(self.config.model_dump(), setup)
@@ -215,7 +215,7 @@ class JointTrainer:
             logger.info(
                 "epoch %g/%g | step %5d/%d | train loss %.4f (edge %.4f det %.4f nce %.4f hn %.4f) | "
                 "proxy %.4f (sel %.4f) | "
-                "best %.4f%s | node R %.3f ratio %+.2f | mislinks %d inv %.2f P true %.3f vs chosen %.3f | "
+                "best %.4f%s | node R %.3f ratio %+.2f | mislinks %d inv %.2f P true %.3f vs chosen %.3f top1 %.3f | "
                 "sanity AUC %.4f | %.1f it/s | elapsed %.2fh ETA %.2fh",
                 round(done / steps_per_epoch, 2),
                 round(schedule.steps / steps_per_epoch, 2),
@@ -236,6 +236,7 @@ class JointTrainer:
                 pipeline.inverted_fraction,
                 pipeline.mean_p_true,
                 pipeline.mean_p_chosen,
+                pipeline.top1_fraction,
                 result.edge_auc,
                 rate,
                 (time.perf_counter() - run_start) / _SECONDS_PER_HOUR,
@@ -260,7 +261,7 @@ class JointTrainer:
         initial = self._evaluate(model, evaluator, pairs.val)
         logger.info(
             "init proxy %.4f (sel %.4f) | node R %.3f ratio %+.2f | mislinks %d inv %.2f P true %.3f vs chosen %.3f"
-            " | sanity AUC %.4f",
+            " top1 %.3f | sanity AUC %.4f",
             initial.pipeline.score,
             initial.pipeline.selection_score,
             initial.pipeline.node_recall,
@@ -269,10 +270,17 @@ class JointTrainer:
             initial.pipeline.inverted_fraction,
             initial.pipeline.mean_p_true,
             initial.pipeline.mean_p_chosen,
+            initial.pipeline.top1_fraction,
             initial.edge_auc,
         )
-        expects_calibrated_base = setup.warm_start or setup.init_weights is not None
-        BaseCalibration.gate(initial.pipeline.node_ratio, expects_calibrated_base=expects_calibrated_base)
+        # The band is grid-aware (BaseCalibration.upper_band): a finer decode over-detects by design, so its warm
+        # base sits at a positive ratio the (1,4,4) +-0.5 band would false-reject. detector_from is a warm base
+        # like any other now — its FROZEN detector's over-detection is exactly what the grid-scaled band admits.
+        _, dy, dx = self.config.data.downsample
+        expects_calibrated_base = setup.warm_start or setup.init_weights is not None or setup.detector_from is not None
+        BaseCalibration.gate(
+            initial.pipeline.node_ratio, expects_calibrated_base=expects_calibrated_base, inplane_area=dy * dx
+        )
         initial_best = self._selection_base(initial.pipeline)
         run.window(0, self._metrics(initial, initial_best))
         self._checkpoint().save_best(setup.save_to, model)
@@ -293,133 +301,14 @@ class JointTrainer:
             "inverted_fraction": result.pipeline.inverted_fraction,
             "mean_p_true": result.pipeline.mean_p_true,
             "mean_p_chosen": result.pipeline.mean_p_chosen,
+            "top1_fraction": result.pipeline.top1_fraction,
             "mislinks": result.pipeline.mislinks,
         }
-
-    def _schedule(self, optimizer: torch.optim.Optimizer) -> torch.optim.lr_scheduler.LRScheduler | None:
-        """A cosine decay to zero over the whole run, or none for a flat rate."""
-        if not self.config.optim.cosine_lr:
-            return None
-        return torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.config.schedule.steps)
-
-    def _prepare(
-        self, *, warm_start: bool, init_weights: Path | None = None, spacing: Spacing | None = None
-    ) -> tuple[JointModel, _Optimization]:
-        """The run's trained objects, built in the one order that keeps BOTH a warm start and a widened head.
-
-        The order is load-bearing. `widen_linear_inputs` REPLACES the head's input projection with a new
-        parameter object, so the sequence is: load the pretrained weights → widen → wrap for relative position →
-        and only then hand `model.parameters()` to the optimiser — built any earlier it holds the discarded proj.
-        """
-        model = self._model(warm_start=warm_start, init_weights=init_weights).to(self.config.runtime.device)
-        pretrained = {id(parameter) for parameter in model.parameters()}  # the base, BEFORE the feature installs
-        if self.config.model.temporal_position:  # motion sight; the position table lands on the model's device
-            model.detector.install_temporal_position()
-        self._velocity.widen(model)
-        if self.config.model.relative_position:  # geometry sight; a zero-init per-head distance bias in the head
-            if spacing is None:
-                raise ValueError("--relative-position needs the corpus spacing; PairSplit.spacing is unset")
-            model.install_relative_position(
-                spacing,
-                TrackerConfig.shipped().linker.gate_um,
-                self.config.runtime.device,
-                directional=self.config.model.relative_position_directional,
-            )
-        if self._lora.enabled:  # freeze the base, adapt the association locus; detection is anchored
-            installed = [parameter for parameter in model.parameters() if id(parameter) not in pretrained]
-            adapted = LoRA.inject(model, self._lora.to_config(), keep=installed)
-            if adapted == 0:
-                raise ValueError(f"LoRA targets {self._lora.targets} matched no layers")
-            logger.info("LoRA: %d layers adapted (rank %d), %d params kept", adapted, self._lora.rank, len(installed))
-            model = model.to(self.config.runtime.device)  # the new adapter params default to CPU — move them
-        if self.config.runtime.device == "cuda":
-            # channels_last_3d is a conv layout — scoped to `detector` (conv backbone) NOT the whole model: HOCT's
-            # rank-3/4 head tables raise "required rank 5 tensor". Stub omits the memory_format overload; valid.
-            model.detector = model.detector.to(memory_format=torch.channels_last_3d)  # type: ignore[no-matching-overload]
-        # Compile the backbone ALWAYS (static 64^3 shape) — not an option: a crash is a bug to fix at its root,
-        # not a reason to run eager. Default mode (fusion), not reduce-overhead: CUDA-graphing the backbone ALONE
-        # leaves the step-wide launch gaps (heads/loss/optimiser stay eager) untouched, so it did not lift the
-        # oscillating util and only added graph-capture warmup — the launch-latency needs the WHOLE step static,
-        # which the ragged per-pair loss is not. The temporal-attention SDPA is forced to MATH at forward time
-        # (see `_step`) — its efficient backward has a broken compiled meta-kernel.
-        model.detector.unet = torch.compile(model.detector.unet, dynamic=False)  # type: ignore[bad-assignment]
-        # The edge head stays EAGER: it is a tiny attention over the padded nodes, already collapsed to ONE
-        # batched call, so compiling it fused little — and the SAME module runs ragged per-pair in the selector
-        # eval (whole videos, every gap a different node count), where a static compile thrashes the recompile cap.
-        if self.config.data.gpu_scene_fraction:  # fuse the uniform-N generated-scene edge head (measured 4x)
-            model.compile_scene_head(self.config.scene_config().n_cells)
-        self.contrastive.to(self.config.runtime.device)
-        self._objective.to(self.config.runtime.device)
-        optimizer = torch.optim.AdamW(self._trained(model), lr=self.config.optim.lr)
-        return model, _Optimization(optimizer, self._schedule(optimizer))
-
-    def _trained(self, model: JointModel) -> list[nn.Parameter]:
-        """Every parameter the optimiser owns and the clip covers — both heads, plus the contrastive head.
-
-        At the `FEATURES` site the contrastive term holds none, so the list IS `model.parameters()` in the same
-        order (an unasked run is byte-identical). Under LoRA the base is frozen, so only the adapter deltas — all
-        that moves — are handed over.
-        """
-        if self._lora.enabled:
-            return [*LoRA.adapter_parameters(model), *self.contrastive.parameters(), *self._objective.parameters()]
-        return [*model.parameters(), *self.contrastive.parameters(), *self._objective.parameters()]
 
     def _auxiliary(self) -> dict[str, nn.Module]:
         """The run's auxiliary trained modules by snapshot key (contrastive head, link objective) — one home so
         saving and restoring cannot disagree on either name."""
         return {"contrastive": self.contrastive, "objective": self._objective}
-
-    @staticmethod
-    def _freeze_backbone_norm(model: JointModel) -> None:
-        """Put every BatchNorm in the detector into eval mode so it normalises by the warm pack's stored running
-        stats, not the current step's noisy batch stats. The affine weight/bias keep `requires_grad` and still
-        train; only the running-stat update and the batch-stat normalisation are suppressed."""
-        for module in model.detector.modules():
-            if isinstance(module, nn.modules.batchnorm._BatchNorm):  # noqa: SLF001 — no public base spans BN1d/2d/3d+SyncBN
-                module.eval()
-
-    @property
-    def _velocity(self) -> PriorVelocitySource:
-        """The run's history feed, reading the flag live — `train` re-resolves the config before the model exists."""
-        return PriorVelocitySource(
-            enabled=self.config.data.prior_velocity, gt_warmup_steps=self.config.data.velocity_gt_warmup_steps
-        )
-
-    @property
-    def _lora(self) -> LoraCfg:
-        """The run's adapter config, read live — keeps callers off a four-deep reach through `config.model.lora`."""
-        return self.config.model.lora
-
-    def _model(self, *, warm_start: bool, init_weights: Path | None = None) -> JointModel:
-        """A joint model to train — chained from a prior stage's checkpoint, warm-started from the pack, or fresh.
-
-        `init_weights` continues a checkpoint THIS trainer wrote (the staged curriculum): `from_checkpoint`
-        rebuilds both heads at the width the file was saved at — a compile prefix reloads transparently — so
-        the stage inherits the last stage's weights and nothing else. CAVEAT: chaining a `--prior-velocity`
-        checkpoint is broken — `_prepare` widens the head a SECOND time over the already-widened proj (bd
-        biohub_kaggle: double-widen). The non-velocity curriculum path is unaffected.
-        """
-        architecture, downsample = self.config.model, self.config.data.downsample
-        if init_weights is not None:
-            if warm_start:
-                raise ValueError("--init-weights and --warm-start are mutually exclusive: one init, not two")
-            logger.info("chained from prior-stage checkpoint at %s", init_weights)
-            return JointModel.from_checkpoint(init_weights, self.config.runtime.device)
-        if warm_start:
-            if architecture.norm != "batch" or architecture.head != "pack":
-                raise ValueError("warm-start needs the pilkwang BN pack: --norm group / --head hoct are from-scratch")
-            pack = DataRoot.from_config(_CONFIG).processed(_DATASET) / architecture.warm_pack
-            scorer = EdgeTransformerScorer.from_pack(pack, self.config.runtime.device)
-            logger.info("warm-started from pilkwang pack at %s", pack)
-            return JointModel(scorer.detector, scorer.transformer, downsample)
-        detector = TemporalUNetDetector(architecture.out_channels, architecture.layers, norm=architecture.norm)
-        transformer = EdgeTransformerScorer._head_cls(architecture.head)(  # noqa: SLF001 — the edge-head class
-            feat_dim=architecture.out_channels + _POS_FEATURE_DIM,
-            hidden_dim=_HIDDEN_DIM,
-            n_heads=_N_HEADS,
-            n_blocks=_N_BLOCKS,
-        )
-        return JointModel(detector, transformer, downsample)
 
     def _curriculum(self, pairs: PairSplit) -> PairCurriculum | None:
         """The run's ONE policy over (which pair, how much it counts), or None for the uniform stream.
@@ -454,7 +343,7 @@ class JointTrainer:
         """
         model.train()
         if self.config.model.freeze_backbone_norm:  # re-assert after train() flips the whole tree back to train mode
-            self._freeze_backbone_norm(model)
+            self._assembly.freeze_backbone_norm(model)
         steps = len(dataset)
         batch_size = self.config.optim.batch_size
         gpu_count = round(batch_size * self.config.data.gpu_scene_fraction)
@@ -572,7 +461,7 @@ class JointTrainer:
             draw.weight * weight * out.total for (draw, _), out, weight in zip(batch, outcomes, weights, strict=True)
         ]
         (torch.stack(terms).sum() / len(batch)).backward()
-        nn.utils.clip_grad_norm_(self._trained(model), self.config.optim.grad_clip)
+        nn.utils.clip_grad_norm_(self._assembly.trained(model), self.config.optim.grad_clip)
         optimization.step()
         optimization.zero_grad()
         return outcomes
@@ -627,7 +516,7 @@ class JointTrainer:
             )
             draw_weight = torch.tensor([draw.weight for draw, _ in batch], device=device, dtype=total.dtype)
             (draw_weight * total).sum().div(len(batch)).backward()
-        nn.utils.clip_grad_norm_(self._trained(model), self.config.optim.grad_clip)
+        nn.utils.clip_grad_norm_(self._assembly.trained(model), self.config.optim.grad_clip)
         optimization.step()
         optimization.zero_grad()
         return outcomes
@@ -739,7 +628,15 @@ def main() -> None:
     pairs, split = PairSplit.assemble(root, config, evaluator.proxy, log, args.val_videos)
 
     init_weights = proc / args.init_weights if args.init_weights else None
-    setup = RunSetup(save_to, warm_start=args.warm_start, resume=args.resume, split=split, init_weights=init_weights)
+    detector_from = proc / args.detector_from if args.detector_from else None
+    setup = RunSetup(
+        save_to,
+        warm_start=args.warm_start,
+        resume=args.resume,
+        split=split,
+        init_weights=init_weights,
+        detector_from=detector_from,
+    )
     JointTrainer(config).train(pairs, evaluator, setup)
 
 

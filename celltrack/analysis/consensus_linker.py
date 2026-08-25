@@ -114,6 +114,12 @@ class ConsensusRun(DecorrelationRun):
         proxy, graphs = self._graphs(root)
         matcher = DistanceMatcher(spacing=proxy.spacing)
         names = list(graphs)
+        if _CHAMPION not in graphs:
+            raise ValueError(
+                f"champion {_CHAMPION!r} absent from the consensus pool {names}: net-new-over-champion "
+                "would find no champion edges to subtract and report every consensus edge as added — a "
+                "false GO. Generate the champion graph before trusting the go/no-go for the held submission."
+            )
         stems = [path.stem for path in proxy.paths]
         truth_by_stem = {path.stem: truth.graph for path, truth in zip(proxy.paths, proxy.truths, strict=True)}
 

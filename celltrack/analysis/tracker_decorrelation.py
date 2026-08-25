@@ -19,8 +19,10 @@ import logging
 from dataclasses import dataclass, replace
 from pathlib import Path
 
+from celltrack.detectors.tunet import DetectorRecipe
 from celltrack.edges.blended_edge_scoring import EdgeBlendOptions
 from celltrack.eval.proxy import CV_MOVIES, TestMovieProxy
+from celltrack.models.joint_model import JointModel
 from celltrack.operating_point import TrackerConfig
 from celltrack.postproc.gap_closer import ReuseConfig
 from celltrack.tracker import CellTracker
@@ -37,6 +39,7 @@ class DecorrelationRun:
     """Runs each config over the CV movies once and reduces every pair to a pooled edge-agreement Jaccard."""
 
     device: str
+    finer_checkpoint: Path | None = None
 
     @staticmethod
     def configs(base: TrackerConfig) -> dict[str, TrackerConfig]:
@@ -72,7 +75,29 @@ class DecorrelationRun:
             configured = pipeline.with_config(config)
             graphs[name] = {path.stem: configured.run(path.name, path) for path in proxy.paths}
             logger.info("ran config %s over %d movies", name, len(proxy.paths))
+        if self.finer_checkpoint is not None:
+            graphs["finer122_joint"] = self._finer_graphs(proc, proxy)
         return proxy, graphs
+
+    def _finer_graphs(self, proc: Path, proxy: TestMovieProxy) -> dict[str, TrackGraph]:
+        """The finer (1,2,2) co-adapt joint tracker's per-movie graphs — a member from OUTSIDE the pack family.
+
+        Its detector decodes at a grid the 0.900-tying pack configs never touch, so any decorrelation it
+        carries is the recall axis the champion structurally lacks rather than another knob on the same head.
+        The logits are pre-dumped under `<stem>_logits`, so this reuses the cache and stays CPU-bound.
+        """
+        checkpoint = self.finer_checkpoint
+        if checkpoint is None:
+            raise ValueError("_finer_graphs needs a finer_checkpoint; the caller must guard on it")
+        resolved = checkpoint if checkpoint.is_absolute() else proc / checkpoint
+        model = JointModel.from_checkpoint(resolved, self.device)
+        recipe = DetectorRecipe(downsample=model.downsample)
+        tracker = CellTracker.from_joint(
+            resolved, recipe, self.device, config=TrackerConfig.shipped(), responses=proc / "cache/responses"
+        )
+        graphs = {path.stem: tracker.run(path.name, path) for path in proxy.paths}
+        logger.info("ran finer122 joint over %d movies", len(proxy.paths))
+        return graphs
 
     def agreement(self, root: DataRoot) -> dict[tuple[str, str], float]:
         """Pooled (micro-averaged) edge Jaccard between every pair of configs over the CV movies.
@@ -101,9 +126,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Edge-agreement between the 0.900-tying tracker configs on CV8.")
     parser.add_argument("--config", type=Path, default=Path("paths.yaml"), help="paths.yaml locating the data root")
     parser.add_argument("--device", default="cpu", help="cpu keeps the card free; detector responses are cached")
+    parser.add_argument(
+        "--finer-checkpoint",
+        type=Path,
+        default=None,
+        help="a (1,2,2) joint checkpoint to admit as an out-of-family member (logits must be pre-dumped)",
+    )
     parsed = parser.parse_args()
     root = DataRoot.from_config(parsed.config)
-    pairwise = DecorrelationRun(parsed.device).agreement(root)
+    pairwise = DecorrelationRun(parsed.device, parsed.finer_checkpoint).agreement(root)
     for (left, right), jaccard in sorted(pairwise.items(), key=lambda item: item[1]):
         logger.info("agree=%.4f  %-20s %-20s", jaccard, left, right)
     values = list(pairwise.values())

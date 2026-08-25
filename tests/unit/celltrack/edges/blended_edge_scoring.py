@@ -81,7 +81,7 @@ def test_affinities(tmp_path: Path):
     assert np.allclose(blended_matrix, solo_matrix, atol=1e-5)
 
 
-def test_fuse():
+def test_blended_edge_transformer_scorer_fuse():
     """Fusion is the harmonic mean, hand-computed — and a pair both directions call impossible fuses to 0."""
     forward = torch.tensor([[0.8, 0.2], [0.5, 0.0]])
     reverse = torch.tensor([[0.4, 0.6], [0.0, 0.0]])
@@ -359,6 +359,11 @@ def test_seed_scores_bidirectional_fuses_each_seed_alone(tmp_path: Path):
         forward = torch.softmax(a._gap_logits(gap), dim=0)
         reverse = torch.softmax(a._gap_logits(gap, reverse=True), dim=0).T
     assert np.allclose(reported[0].probabilities[0], BlendedEdgeTransformerScorer.fuse(forward, reverse).numpy())
+
+
+def test_calibrated_fusion_off_by_default():
+    """The gated fusion is opt-in: the blend options carry no fusion config unless one is asked for."""
+    assert EdgeBlendOptions().calibrated_fusion is None
 
 
 def test_seed_logit_moments(tmp_path: Path):

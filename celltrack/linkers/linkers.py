@@ -160,6 +160,22 @@ class LinkerConfig(BaseModel):
     # consumes a proper log-likelihood cost natively; refused elsewhere as a knob the pipeline would silently drop
     # (`flow` is a circulation that links only via negative arc costs, so a >= 0 PoE cost links nothing there).
     prior_one_step_msd_um2: float | None = Field(None, gt=0)
+    # OFF = our shipped `motion` cost, byte-identical. ON makes the `motion` linker reproduce the published
+    # 0.926/0.927 kernel's `motion_relink_edges` cost EXACTLY — `motion + 0.05*raw - kernel_learned_bonus*prob`,
+    # the kernel sigmoid guard on an out-of-range probability, and its >2600-node large-frame bail. A faithful
+    # REPLICA kept alongside our cost (never a revert to it): the kernel's absolute weights do not transfer to our
+    # derived P-budget (see `ranker_bonus`'s SCALE note), so this reproduces the floor, it does not tune our cost.
+    # `affinity_bonus`/`prior_one_step_msd_um2`/`ranker_bonus` are ignored on the `motion` linker while it is on.
+    kernel_faithful: bool = False
+    # The faithful cost's weight on the learned probability. Default 1.0 is the constant BOTH kernels actually ran
+    # (their module-load override of the 0.75 env default); read only when `kernel_faithful` is on.
+    kernel_learned_bonus: float = Field(1.0, ge=0)
+    # None = OFF, so the geometric tight/loose gate admits every in-range pair (byte-identical). Set, it is the
+    # published kernel's global edge-candidate floor (0.48, `edge_candidate_threshold`): the `motion` linker keeps
+    # only pairs whose learned edge probability clears it, ANDed onto the geometry. Read only by `motion` — the
+    # sole linker that admits candidates on a learned probability — so a floor on any other name is refused, not
+    # silently dropped, exactly as the affinity knobs are.
+    edge_admission_prob: float | None = Field(None, ge=0, le=1)
 
     def prior(self) -> "MotionDiffusionPrior | None":
         """The motion-diffusion expert this config prices with, or None for the linear blend — sigma from MSD(1)."""
@@ -311,7 +327,8 @@ class LinkerConfig(BaseModel):
         `volume_shape` is the video's `(z, y, x)` timepoint shape — the one fact about the imaging a detection
         graph does not carry — and only the boundary prior reads it. `ranker` carries the local-association
         re-ranker's per-gap probabilities (`AssociationRanker.affinities`), read by the ranker bonus as the
-        cost's third term; like `mutual` it is needed only when its knob is set.
+        cost's third term; like `mutual` it is needed only when its knob is set. The kernel's edge-candidate
+        floor (`edge_admission_prob`) is a config field, validated to `motion` and threaded by the motion row.
         """
         if affinity is not None and self.name not in _BONUS_READERS:
             logger.warning("linker %r ignores the mounted edge affinity — it was computed and discarded", self.name)
@@ -436,6 +453,10 @@ _Builder = Callable[[LinkerConfig, Spacing, EdgeAffinity | None, LinkerParts], L
 # `affinity_bonus` since it was written (its gate stays pure geometry, the cost inside the gate is blended).
 _BONUS_READERS = frozenset({"assignment", "flow", "motion"})
 
+# Which linkers admit candidates by the learned edge probability (the kernel's `edge_candidate_threshold` floor).
+# Only `motion`: it is the linker whose faithful path reproduces `motion_relink_edges`, where the 0.48 floor lives.
+_ADMISSION_READERS = frozenset({"motion"})
+
 # Which linkers price the re-ranker's term. The same three, and for the same reason: `RankerBonus.discount`
 # subtracts from whatever pair cost the linker already formed, so any linker with a per-pair cost can carry it.
 _RANKER_READERS = frozenset({"assignment", "flow", "motion"})
@@ -468,6 +489,7 @@ _KNOB_READERS: dict[str, frozenset[str]] = {
     "evidence_ramp": _RAMP_READERS,
     "admissible_affinity": _RAMP_READERS,
     "prior_one_step_msd_um2": _PRIOR_READERS,
+    "edge_admission_prob": _ADMISSION_READERS,
 }
 
 # Which linkers price a track boundary per node. Only the flow linker charges appearance and disappearance at all,
@@ -509,6 +531,9 @@ _BUILDERS: dict[str, _Builder] = {
         affinity_bonus=config.effective_bonus,
         prior=config.prior(),
         ranker=parts.ranker,
+        kernel_faithful=config.kernel_faithful,
+        learned_bonus=config.kernel_learned_bonus,
+        edge_admission_prob=config.edge_admission_prob,
     ),
     "ilp": lambda config, spacing, affinity, parts: ILPLinker(
         spacing=spacing,

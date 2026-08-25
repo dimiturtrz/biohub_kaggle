@@ -46,6 +46,7 @@ class RunSetup:
     resume: bool = False
     split: TrainingSplit | None = None
     init_weights: Path | None = None
+    detector_from: Path | None = None
 
 
 class TrainingRun:

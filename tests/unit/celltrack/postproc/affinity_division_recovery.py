@@ -9,13 +9,15 @@ from celltrack.affinity import EdgeAffinity
 from celltrack.postproc.affinity_division_recovery import (
     AffinityDivisionConfig,
     AffinityDivisionRecovery,
-    ForkCandidate,
     GeometricCandidacy,
+    RunnerUpCandidacy,
+    _FrameProposals,
+)
+from celltrack.postproc.fork_ranking import (
+    ForkCandidate,
     GeometryRanking,
     ProbabilityRanking,
-    RunnerUpCandidacy,
     SplitSymmetryRanking,
-    SurvivingDaughterRanking,
     _Gap,
 )
 from core.data.tracks import TrackGraph
@@ -56,16 +58,22 @@ def recovery(matrix: list[list[float]], **overrides: object) -> AffinityDivision
     )
 
 
-def candidate(kept: list[float], child: list[float], probability: float = 0.5, child_frames: int = 1) -> ForkCandidate:
-    """A fork whose mother sits at the origin, with both daughters placed in micrometres around her."""
-    return ForkCandidate(
-        parent=0,
-        kept=1,
-        child=2,
-        probability=probability,
-        positions_um=np.array([[0.0, 0.0, 0.0], kept, child]),
-        kept_frames=1,
-        child_frames=child_frames,
+def kernel_recovery(by_timepoint: dict[int, list[list[float]]], **overrides: object) -> AffinityDivisionRecovery:
+    """The 0.926-kernel replica: geometric candidacy, `d(p,c)+0.15*d(c1,c)` score, kernel gates, `kernel_faithful`."""
+    settings: dict[str, object] = {
+        "ranking": GeometryRanking(sister_weight=0.15),
+        "candidacy": GeometricCandidacy(),
+        "parent_gate_um": 8.0,
+        "sister_gate_um": 11.0,
+        "existing_child_gate_um": 10.0,
+        "max_added_forks": None,
+        "c3_divergence_um": 2.25,
+        "kernel_faithful": True,
+    }
+    return AffinityDivisionRecovery(
+        spacing=Spacing(z=1.0, y=1.0, x=1.0),
+        affinity=FakeAffinity({t: np.array(matrix, dtype=np.float32) for t, matrix in by_timepoint.items()}),
+        **(settings | overrides),  # pyrefly: ignore[bad-argument-type]
     )
 
 
@@ -174,79 +182,6 @@ def test_rejects_a_parent_whose_existing_child_is_far():
     assert gated.transform(graph(_MITOSIS, [[0, 1]])).edges.tolist() == [[0, 10]]
 
 
-def test_parent_distance_um():
-    """Mother to the proposed new daughter, in micrometres."""
-    assert candidate([1.0, 0.0, 0.0], [0.0, 3.0, 4.0]).parent_distance_um() == 5.0
-
-
-def test_sister_distance_um():
-    """The separation between the kept child and the candidate."""
-    assert candidate([2.0, 0.0, 0.0], [-2.0, 0.0, 0.0]).sister_distance_um() == 4.0
-
-
-def test_existing_child_distance_um():
-    """Mother to the child she already keeps."""
-    assert candidate([0.0, 0.0, 3.0], [1.0, 0.0, 0.0]).existing_child_distance_um() == 3.0
-
-
-def test_daughter_angle_cosine():
-    """-1 when the daughters leave on opposite sides, 0 at a right angle, 1 when they leave together."""
-    assert candidate([1.0, 0.0, 0.0], [-2.0, 0.0, 0.0]).daughter_angle_cosine() == -1.0
-    assert candidate([1.0, 0.0, 0.0], [0.0, 2.0, 0.0]).daughter_angle_cosine() == 0.0
-    assert candidate([1.0, 0.0, 0.0], [3.0, 0.0, 0.0]).daughter_angle_cosine() == 1.0
-
-
-def test_split_imbalance():
-    """Zero when the daughters balance about the mother, one when they leave in the same direction."""
-    assert candidate([1.0, 0.0, 0.0], [-1.0, 0.0, 0.0]).split_imbalance() == 0.0
-    assert candidate([1.0, 0.0, 0.0], [3.0, 0.0, 0.0]).split_imbalance() == 1.0
-    # Equal displacements at a right angle: the half-angle form, cos(45 degrees).
-    assert math.isclose(candidate([1.0, 0.0, 0.0], [0.0, 1.0, 0.0]).split_imbalance(), 0.5 * math.sqrt(2))
-
-
-def test_probability_ranking_cost():
-    """The head's most confident second daughter sorts first, so its cost is the negated probability."""
-    assert ProbabilityRanking().cost(candidate([1.0, 0.0, 0.0], [-1.0, 0.0, 0.0], probability=0.3)) == -0.3
-
-
-def test_geometry_ranking_cost():
-    """The frontier's `parent_dist + w * sister_dist`, so a tight pair close to the mother sorts first."""
-    fork = candidate([1.0, 0.0, 0.0], [-1.0, 0.0, 0.0])
-    assert GeometryRanking(sister_weight=0.15).cost(fork) == 1.0 + 0.15 * 2.0
-
-
-def test_split_symmetry_ranking_cost():
-    """Relative reach from the mother plus centroid imbalance — an opposite, balanced split scores lowest."""
-    ranking = SplitSymmetryRanking(parent_gate_um=4.0)
-    opposite = ranking.cost(candidate([2.0, 0.0, 0.0], [-2.0, 0.0, 0.0]))
-    aligned = ranking.cost(candidate([2.0, 0.0, 0.0], [2.0, 0.0, 0.0]))
-
-    assert opposite == 0.5  # imbalance 0: the daughters' centre of mass is the mother
-    assert aligned == 1.5  # same reach, but both daughters left together
-    assert opposite < aligned
-
-
-def test_surviving_daughter_ranking_cost():
-    """A daughter that dies at the fork pays the full penalty; one that reaches the length rule pays none."""
-    ranking = SurvivingDaughterRanking(SplitSymmetryRanking(parent_gate_um=4.0), min_track_length=6)
-    split = ([2.0, 0.0, 0.0], [-2.0, 0.0, 0.0])
-    survives = ranking.cost(candidate(*split, child_frames=6))
-    dies = ranking.cost(candidate(*split, child_frames=1))
-    halfway = ranking.cost(candidate(*split, child_frames=3))
-
-    assert survives == 0.5  # exactly the base ranking's cost: a surviving daughter is not penalised at all
-    assert dies == 1.5  # the shortfall spans the whole reachable range
-    assert survives < halfway < dies
-
-
-def test_surviving_daughter_ranking_cost_does_not_reward_outliving_the_rule():
-    """The penalty saturates at the length rule, so a long track cannot buy its way past a bad split."""
-    ranking = SurvivingDaughterRanking(SplitSymmetryRanking(parent_gate_um=4.0), min_track_length=6)
-    split = ([2.0, 0.0, 0.0], [-2.0, 0.0, 0.0])
-
-    assert ranking.cost(candidate(*split, child_frames=60)) == ranking.cost(candidate(*split, child_frames=6))
-
-
 def test_frames_ahead_counts_a_daughters_whole_future():
     """The candidate carries how long each daughter's track runs — read off the linked graph, not walked twice."""
     # Parent 0 at t=0; kept child 1 and orphan 2 at t=1; the orphan continues to 3 at t=2.
@@ -344,6 +279,7 @@ def _one_gap() -> _Gap:
         orphan=np.array([False, True, False]),
         positions_um=np.zeros((4, 3)),
         frames_ahead=np.array([9, 8, 7, 6]),
+        successor=np.array([-1, -1, -1, -1]),
     )
 
 
@@ -375,16 +311,6 @@ def test_geometric_candidacy_candidates():
     assert [(candidate.parent, candidate.child) for candidate in proposed] == [(0, 2)]
 
 
-def test_at_gap():
-    """The fork factory reads each daughter's surviving-frame count out of the gap it is built over."""
-    gap = _one_gap()
-
-    fork = ForkCandidate.at_gap(parent=0, kept=1, child=2, probability=0.5, gap=gap)
-
-    assert (fork.parent, fork.kept, fork.child) == (0, 1, 2)
-    assert (fork.kept_frames, fork.child_frames) == (8, 7)  # frames_ahead[1], frames_ahead[2]
-
-
 def test_budget_derives_the_ceiling_from_the_measured_division_rate():
     """With no explicit ceiling the budget IS the expected number of true divisions, per movie.
 
@@ -398,3 +324,180 @@ def test_budget_derives_the_ceiling_from_the_measured_division_rate():
 
     assert derived.budget(73_697) == 83  # the dense movie's detections -> ~83 expected divisions
     assert derived.budget(10_703) == 12  # a sparse movie budgets proportionally less
+
+
+def test_budget_folds_in_the_edge_fraction_ceiling():
+    """The frontier's global fork cap (~0.375% of edges) is folded into the budget beside the node-rate one."""
+    capped = recovery(_KEPT_TOP, max_added_forks=1000, max_fork_edge_fraction=0.00375)
+
+    assert capped.budget(1000, 100_000) == 375  # edge fraction is the smaller bound here
+    assert capped.budget(1000, 100) == 0  # 0.375% of 100 edges rounds to nothing
+    assert recovery(_KEPT_TOP, max_added_forks=1000).budget(1000, 100_000) == 1000  # no fraction -> node budget
+
+
+# A true division: parent (row 0) at t=0, kept child (row 1) and orphan runner-up (row 2) at t=1, and both
+# daughters continue to t=2 (rows 3, 4). The head ranks the kept child top and the orphan second.
+def _diverging_graph(child_t2_x: int):
+    coordinates = [[0, 0, 0, 1], [1, 0, 0, 0], [1, 0, 0, 3], [2, 0, 0, 0], [2, 0, 0, child_t2_x]]
+    return graph(coordinates, [[0, 1], [1, 3], [2, 4]])
+
+
+def test_c3_divergence_gate_admits_a_diverging_pair_and_rejects_a_static_one():
+    """A fork survives the C3 gate only when its daughters go on to move apart by at least the threshold."""
+    diverging = recovery(_KEPT_TOP, require_c3_divergence=True).transform(_diverging_graph(child_t2_x=6))
+    assert [0, 20] in diverging.edges.tolist()  # sep grows 3 -> 6 (+3um >= 2.25) -> fork kept
+
+    static = recovery(_KEPT_TOP, require_c3_divergence=True).transform(_diverging_graph(child_t2_x=3))
+    assert [0, 20] not in static.edges.tolist()  # sep 3 -> 3 (no growth) -> fork rejected
+
+    off = recovery(_KEPT_TOP).transform(_diverging_graph(child_t2_x=3))
+    assert [0, 20] in off.edges.tolist()  # gate off -> the static pair is still forked
+
+
+# A parent (row 0) whose orphan runner-up (row 2) is NOT its kept child's nearest cell: a decoy orphan
+# (row 3) sits closer to the kept child (row 1) than the true candidate does.
+_INTERLOPER = [[0, 0, 0, 6], [1, 0, 0, 4], [1, 0, 0, 8], [1, 0, 0, 5]]
+_KEPT_TOP_WITH_DECOY = [[0.7, 0.2, 0.1]]
+
+
+def test_mutual_nearest_gate_rejects_a_fork_whose_daughters_are_not_each_others_nearest():
+    """The kept child's nearest orphan is the decoy, not the proposed daughter, so the mutual-nearest gate fails."""
+    guarded = recovery(_KEPT_TOP_WITH_DECOY, require_mutual_nearest=True).transform(graph(_INTERLOPER, [[0, 1]]))
+    assert guarded.edges.tolist() == [[0, 10]]  # runner-up not mutual-nearest with the kept child -> no fork
+
+    off = recovery(_KEPT_TOP_WITH_DECOY).transform(graph(_INTERLOPER, [[0, 1]]))
+    assert off.edges.tolist() == [[0, 10], [0, 20]]  # gate off -> the runner-up is forked despite the decoy
+
+
+def test_mutual_nearest_gate_admits_a_clean_pair():
+    """With no closer orphan, the kept child and the proposed daughter ARE each other's nearest — the fork holds."""
+    clean = [[0, 0, 0, 1], [1, 0, 0, 0], [1, 0, 0, 2]]
+    forked = recovery(_KEPT_TOP, require_mutual_nearest=True).transform(graph(clean, [[0, 1]]))
+    assert forked.edges.tolist() == [[0, 10], [0, 20]]
+
+
+# A canonical division that passes EVERY kernel gate at once: a mid-track parent (row 1, predecessor row 0) at
+# t=1, its kept child (row 2) and one orphan sister (row 3) at t=2, each continuing to a single successor at t=3
+# (rows 4, 5) that move apart. Rows 4/5 sit +/-3 so the separation grows 2 -> 6 (>= 2.25). The affinity matrix
+# is keyed at the parent's frame (t=1); geometric candidacy ignores its values.
+_KERNEL_DIVISION = [[0, 0, 0, 0], [1, 0, 0, 0], [2, 0, 0, 1], [2, 0, 0, -1], [3, 0, 0, 3], [3, 0, 0, -3]]
+_KERNEL_EDGES = [[0, 1], [1, 2], [2, 4], [3, 5]]
+_KERNEL_AFFINITY = {1: [[0.5, 0.5]]}
+
+
+def test_kernel_faithful_c1_rejects_a_track_start_parent():
+    """C1: the kernel forks only off a MID-track parent. The only variable is whether the parent has a predecessor.
+
+    C1 cannot be unconditional — the OFF-path fixtures fork off track-start parents and expect it — so it is
+    gated behind `kernel_faithful`. It only ever REMOVES forks; here it removes the one off a start parent.
+    """
+    mid_track = kernel_recovery(_KERNEL_AFFINITY).transform(graph(_KERNEL_DIVISION, _KERNEL_EDGES))
+    assert [10, 30] in mid_track.edges.tolist()  # parent has predecessor row 0 -> mid-track -> fork kept
+
+    start_parent = kernel_recovery(_KERNEL_AFFINITY).transform(graph(_KERNEL_DIVISION, _KERNEL_EDGES[1:]))
+    assert [10, 30] not in start_parent.edges.tolist()  # drop the predecessor edge -> track start -> C1 rejects
+
+
+def test_kernel_faithful_c3_requires_single_successors_at_t_plus_two():
+    """C3: both daughters must continue at EXACTLY t+2 as single-successor nodes, else there is no divergence."""
+    diverging = kernel_recovery(_KERNEL_AFFINITY).transform(graph(_KERNEL_DIVISION, _KERNEL_EDGES))
+    assert [10, 30] in diverging.edges.tolist()  # single successors at t+2, separation grows -> fork kept
+
+    # The kept child's successor sits at t=4, not t+2 (a gap-spanning link) -> no readable divergence -> rejected.
+    gap_spanning = [[0, 0, 0, 0], [1, 0, 0, 0], [2, 0, 0, 1], [2, 0, 0, -1], [4, 0, 0, 3], [3, 0, 0, -3]]
+    spanned = kernel_recovery(_KERNEL_AFFINITY).transform(graph(gap_spanning, _KERNEL_EDGES))
+    assert [10, 30] not in spanned.edges.tolist()
+
+    # The candidate (row 3) has TWO successors (rows 5, 6) -> not a single-successor node -> C3 rejects.
+    multi = [*_KERNEL_DIVISION, [3, 0, 0, -4]]
+    multi_succ = kernel_recovery(_KERNEL_AFFINITY).transform(graph(multi, [*_KERNEL_EDGES, [3, 6]]))
+    assert [10, 30] not in multi_succ.edges.tolist()
+
+
+# A fork the kernel's ONE-directional C2 admits but our SYMMETRIC gate rejects: the candidate (row 3) IS the kept
+# child's nearest orphan, but the candidate's own nearest cell is a decoy orphan (row 4), not the kept child.
+_C2_DIVERGENCE = [
+    [0, 0, 0, 1],  # 0 predecessor of the parent
+    [1, 0, 0, 1],  # 1 mid-track parent
+    [2, 0, 0, 0],  # 2 kept child
+    [2, 0, 0, 2],  # 3 candidate: the kept child's nearest orphan
+    [2, 0, 0, 3],  # 4 decoy orphan: closer to the candidate than the kept child is
+    [3, 0, 0, -2],  # 5 kept child's successor
+    [3, 0, 0, 4],  # 6 candidate's successor (they diverge)
+]
+_C2_EDGES = [[0, 1], [1, 2], [2, 5], [3, 6]]
+_C2_AFFINITY = {1: [[0.5, 0.5, 0.5]]}
+
+
+def test_kernel_faithful_c2_is_one_directional_where_ours_is_symmetric():
+    """C2 one-directional accepts the kernel-set fork; our symmetric mutual-nearest rejects the very same one."""
+    kernel = kernel_recovery(_C2_AFFINITY).transform(graph(_C2_DIVERGENCE, _C2_EDGES))
+    assert [10, 30] in kernel.edges.tolist()  # candidate IS the kept child's nearest orphan -> one-directional admits
+
+    symmetric = AffinityDivisionRecovery(
+        spacing=Spacing(z=1.0, y=1.0, x=1.0),
+        affinity=FakeAffinity({1: np.array([[0.5, 0.5, 0.5]], dtype=np.float32)}),
+        ranking=GeometryRanking(sister_weight=0.15),
+        candidacy=GeometricCandidacy(),
+        parent_gate_um=8.0,
+        sister_gate_um=11.0,
+        existing_child_gate_um=10.0,
+        max_added_forks=1000,
+        require_mutual_nearest=True,  # our symmetric variant, kernel_faithful off
+    )
+    assert [10, 30] not in symmetric.transform(graph(_C2_DIVERGENCE, _C2_EDGES)).edges.tolist()
+
+
+def test_kernel_faithful_two_cap_binds_per_frame():
+    """The per-frame cap `round(single_child_parents * 0.0076)` (min one) admits one fork per frame under a
+    generous global cap — four valid candidates across two frames yield two forks, the cheaper in each frame."""
+    positions = np.array(
+        [
+            [0, 0, 0],
+            [0, 0, 1],
+            [0, 0, 1],  # frame 1 cand a: parent 0, kept 1, child 2 -> cost 1.0
+            [0, 0, 0],
+            [0, 0, 2],
+            [0, 0, 2],  # frame 1 cand b: parent 3, kept 4, child 5 -> cost 2.0
+            [0, 0, 0],
+            [0, 0, 1],
+            [0, 0, 3],  # frame 2 cand a: parent 6, kept 7, child 8 -> cost 3.3
+            [0, 0, 0],
+            [0, 0, 1],
+            [0, 0, 1],  # frame 2 cand b: parent 9, kept 10, child 11 -> cost 1.0
+        ],
+        dtype=float,
+    )
+
+    def fork(parent: int, kept: int, child: int) -> ForkCandidate:
+        return ForkCandidate(
+            parent=parent,
+            kept=kept,
+            child=child,
+            probability=0.5,
+            positions_um=positions,
+            kept_frames=1,
+            child_frames=1,
+        )
+
+    frame_one = _FrameProposals([fork(0, 1, 2), fork(3, 4, 5)], single_child_parents=2)  # frame_cap -> 1
+    frame_two = _FrameProposals([fork(6, 7, 8), fork(9, 10, 11)], single_child_parents=2)  # frame_cap -> 1
+
+    admitted, cap = kernel_recovery({})._admitted_two_cap([frame_one, frame_two], edge_count=100_000)
+
+    assert cap == round(100_000 * 0.00375)  # global cap 375 is generous -> the per-frame cap is what binds
+    assert sorted(fork.child for fork in admitted) == [2, 11]  # one per frame: the cheaper split each
+
+
+def test_build_kernel_faithful_replicates_the_kernel_recipe():
+    """`kernel_faithful=True` builds the kernel replica, ignoring the configured stage's ranking/candidacy/gates."""
+    affinity = cast(EdgeAffinity, FakeAffinity({}))
+    stage = AffinityDivisionConfig(kernel_faithful=True, ranking="probability", parent_gate_um=4.0).build(
+        Spacing(z=1.0, y=1.0, x=1.0), affinity, 6, 10.0
+    )
+
+    assert stage.kernel_faithful is True
+    assert stage.candidacy == GeometricCandidacy()
+    assert stage.ranking == GeometryRanking(sister_weight=0.15)  # the kernel's score, not the configured `probability`
+    assert (stage.parent_gate_um, stage.sister_gate_um, stage.existing_child_gate_um) == (8.0, 11.0, 10.0)
+    assert stage.c3_divergence_um == 2.25

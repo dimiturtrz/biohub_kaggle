@@ -8,22 +8,9 @@ second choice, so >1200 parents carry an orphan target at P >= 0.25 while the on
 division's second daughter sits at P = 0.124: a probability ranking sorts the true fork to the bottom and the
 cap then evicts it (measured: 1 TP / 807 FP uncapped, division Jaccard 0 capped).
 
-The ranking is therefore a strategy (`ForkRanking`), not a hard-coded sort key, and probability is only one of
-its implementations — kept as the default so no configured pipeline shifts silently:
-
-* `ProbabilityRanking` — the head's second-daughter probability, descending. Today's behaviour.
-* `GeometryRanking` — the public frontier's `parent_dist + 0.15 * sister_dist`, ascending, which ships at
-  public 0.915 with no probability floor and no learned verifier at all.
-* `SplitSymmetryRanking` — the cue the frontier does not use: true daughters separate onto OPPOSITE sides of
-  the mother (our division 232 has its two daughters 13.5 um apart), where a false sister in crowded tissue
-  sits at a random angle. Ranking a fork by how far the candidate is from the mother, penalised by how badly
-  the two daughters fail to balance around her.
-
-Orthogonal to all three, and composable with any of them, is what a fork IMPLIES rather than how it looks:
-
-* `SurvivingDaughterRanking` — a decorator penalising a proposed daughter that does not go on to survive as a
-  track. A real mitosis leaves two lineages that persist; a false fork typically grafts a fragment. The linked
-  graph already knows, so this costs no model, no training and no asset.
+The ranking is therefore a STRATEGY, not a hard-coded sort key — the `ForkRanking` family (probability,
+geometry, split-symmetry, and the composable surviving-daughter decorator) lives in `fork_ranking`, beside the
+`ForkCandidate` vocabulary it reads. This stage owns candidacy, the physical gates, admission and the budget.
 
 `min_second_prob` survives as an admission FLOOR, never as the sort key. A per-video budget bounds the
 speculation from both ends — a fraction of the graph's edges and an absolute ceiling, whichever is smaller.
@@ -55,13 +42,22 @@ import logging
 import math
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Protocol
 
 import numpy as np
-from jaxtyping import Bool, Float, Int
+from jaxtyping import Float, Int
 from pydantic import BaseModel, ConfigDict
 
 from celltrack.affinity import EdgeAffinity
+from celltrack.postproc.fork_ranking import (
+    _NO_SUCCESSOR,
+    ForkCandidate,
+    ForkRanking,
+    GeometryRanking,
+    ProbabilityRanking,
+    SplitSymmetryRanking,
+    SurvivingDaughterRanking,
+    _Gap,
+)
 from core.data.tracks import Adjacency, TrackGraph
 from core.geometry import Spacing
 
@@ -69,8 +65,6 @@ _SINGLE_CHILD = 1
 _UNPARENTED = 0
 _TOP_TARGET = 0
 _RUNNER_UP = 1
-_DEGENERATE = 0.0
-_SHORTEST_TRACK = 1
 
 logger = logging.getLogger(__name__)
 
@@ -81,180 +75,34 @@ logger = logging.getLogger(__name__)
 _DIVISION_RATE = 0.00113
 # Two daughters, each within the parent gate of one mother, are at most twice that apart.
 _SISTERS_PER_PARENT = 2.0
+# The public 0.926 "divsub" kernel's constants (add_safe_divisions_postlink), reproduced verbatim so the
+# `kernel_faithful` replica matches its emissions rather than our own gate bracket. Gates are the kernel's
+# env-overridden values (parent 8.0 / sister 11.0 / existing-child 10.0 um); the two frac caps are its
+# per-frame and global fork ceilings; the sister weight and C3 divergence are its score and post-mitotic
+# threshold. These live only on the kernel-faithful path — the configured path keeps its own derived gates.
+_KERNEL_PARENT_GATE_UM = 8.0
+_KERNEL_SISTER_GATE_UM = 11.0
+_KERNEL_EXISTING_CHILD_GATE_UM = 10.0
+_KERNEL_C3_DIVERGENCE_UM = 2.25
+_KERNEL_SISTER_WEIGHT = 0.15
+_KERNEL_PER_FRAME_FRAC = 0.0076
+_KERNEL_GLOBAL_EDGE_FRAC = 0.00375
+_ONE_FRAME = 1
+# The kernel floors both frac caps at one, so a small frame or a short movie can still admit a single fork.
+_MIN_CAP = 1
 
 
 @dataclass(frozen=True)
-class _Gap:
-    """One frame gap's node context: the t+1 target rows, which are unparented, all positions, all futures."""
+class _FrameProposals:
+    """One gap's candidate forks together with how many single-child parents that frame held.
 
-    targets: Int[np.ndarray, "t"]
-    orphan: Bool[np.ndarray, "t"]
-    positions_um: Float[np.ndarray, "n 3"]
-    frames_ahead: Int[np.ndarray, "n"]
-
-
-@dataclass(frozen=True)
-class ForkCandidate:
-    """One proposed fork and every quantity a ranking may read: the head's score, the split's geometry, its future.
-
-    The three nodes are graph ROWS; the micrometre positions are the whole video's, so a candidate carries no
-    copied coordinates. Public because a `ForkRanking` is written against this vocabulary.
+    The count is the kernel's per-frame cap denominator (`round(single_child * frac)`); it is not the number
+    of proposals, since a single-child parent may propose no daughter. Only the kernel-faithful two-cap
+    admission reads it — the configured path flattens `candidates` across frames and caps globally.
     """
 
-    parent: int
-    kept: int
-    child: int
-    probability: float
-    positions_um: Float[np.ndarray, "n 3"]
-    # How many frames each daughter's track survives from this gap onward, the mother's kept child included.
-    # The linker admits one child per node, so a daughter's future is a chain and its length is well defined.
-    kept_frames: int
-    child_frames: int
-
-    @classmethod
-    def at_gap(cls, parent: int, kept: int, child: int, probability: float, gap: "_Gap") -> "ForkCandidate":
-        """One proposed triangle over a gap, its daughters' futures read from the linked graph's frame counts."""
-        return cls(
-            parent=parent,
-            kept=kept,
-            child=child,
-            probability=probability,
-            positions_um=gap.positions_um,
-            kept_frames=int(gap.frames_ahead[kept]),
-            child_frames=int(gap.frames_ahead[child]),
-        )
-
-    def parent_distance_um(self) -> float:
-        """Mother to the proposed new daughter."""
-        return self._distance(self.parent, self.child)
-
-    def sister_distance_um(self) -> float:
-        """The two daughters' separation — large at a real division, which is why it is a gate, not a score."""
-        return self._distance(self.kept, self.child)
-
-    def existing_child_distance_um(self) -> float:
-        """Mother to the child she already keeps — a parent whose current link is long is a poor divider."""
-        return self._distance(self.parent, self.kept)
-
-    def daughter_angle_cosine(self) -> float:
-        """Cosine between the two daughter displacements from the mother: -1 opposite, 0 a random neighbour."""
-        kept, child = self._displacements()
-        scale = float(np.linalg.norm(kept) * np.linalg.norm(child))
-        if scale == _DEGENERATE:
-            return _DEGENERATE
-        return float(kept @ child) / scale
-
-    def split_imbalance(self) -> float:
-        """How far the daughters' centre of mass sits from the mother, as a fraction of how far they travelled.
-
-        `|u + v| / (|u| + |v|)` for the two displacements. It is `daughter_angle_cosine` in half-angle form —
-        for equal-length displacements it is exactly `cos(theta / 2)` — generalised to daughters that moved
-        unequally, and it is dimensionless: a division that splits twice as far scores the same. 0 is a clean
-        split about the mother, 1 is two cells leaving in the same direction.
-        """
-        kept, child = self._displacements()
-        travelled = float(np.linalg.norm(kept) + np.linalg.norm(child))
-        if travelled == _DEGENERATE:
-            return _DEGENERATE
-        return float(np.linalg.norm(kept + child)) / travelled
-
-    def _displacements(self) -> tuple[Float[np.ndarray, "3"], Float[np.ndarray, "3"]]:
-        """Both daughters' displacement from the mother."""
-        origin = self.positions_um[self.parent]
-        return self.positions_um[self.kept] - origin, self.positions_um[self.child] - origin
-
-    def _distance(self, a: int, b: int) -> float:
-        """Euclidean distance in micrometres between two node rows."""
-        return float(np.linalg.norm(self.positions_um[a] - self.positions_um[b]))
-
-
-class ForkRanking(Protocol):
-    """Orders competing forks under the budget. Lower cost wins, so every ranking speaks one direction."""
-
-    def cost(self, candidate: ForkCandidate) -> float:
-        """This fork's rank key — the smaller, the sooner it is admitted."""
-        ...
-
-
-@dataclass(frozen=True)
-class ProbabilityRanking:
-    """The edge head's second-daughter probability, highest first.
-
-    Measured NOT to discriminate on dense tissue (the true fork's P = 0.124 sits below >1200 false ones), so
-    it is the default only because it is what configured pipelines already ran.
-    """
-
-    def cost(self, candidate: ForkCandidate) -> float:
-        """Negated probability, so the head's most confident second daughter sorts first."""
-        return -candidate.probability
-
-
-@dataclass(frozen=True)
-class GeometryRanking:
-    """The public frontier's ranking: `parent_dist + w * sister_dist`, ascending — no probability at all."""
-
-    sister_weight: float
-
-    def cost(self, candidate: ForkCandidate) -> float:
-        """The frontier's score: tight to the mother first, tie-broken towards a tight sister pair."""
-        return candidate.parent_distance_um() + self.sister_weight * candidate.sister_distance_um()
-
-
-@dataclass(frozen=True)
-class SplitSymmetryRanking:
-    """Distance from the mother plus the daughters' failure to balance around her, both dimensionless.
-
-    Two terms, no fitted weight. Each is normalised by the constraint that already decides its own
-    admissibility — the parent distance by its gate, the imbalance by the distance the daughters travelled —
-    so both land in [0, 1] over the admitted set and an equal weighting is the only choice that is not tuned.
-    The sister distance appears in neither: it is a physical bound (a gate), and as a SCORE it has the wrong
-    sign, because a true mitosis pushes its daughters apart while a false sister sits close by in the crowd.
-    """
-
-    parent_gate_um: float
-
-    def cost(self, candidate: ForkCandidate) -> float:
-        """Relative reach from the mother plus centroid imbalance — most opposite and closest sorts first."""
-        return candidate.parent_distance_um() / self.parent_gate_um + candidate.split_imbalance()
-
-
-@dataclass(frozen=True)
-class SurvivingDaughterRanking:
-    """Any ranking, penalised by how far the proposed daughter falls short of surviving as a track.
-
-    A real mitosis leaves two lineages that PERSIST. A false fork typically grafts a fragment onto a track —
-    which is also what makes the stage's component-merge side effect indistinguishable from a division in the
-    total score. Nothing in the geometry can tell those apart, and the graph already knows: the recovery runs
-    on the linked graph, so both daughters' futures are in hand at ranking time. No model, no training, no
-    asset — the only cue here that reads what a fork IMPLIES rather than how it looks.
-
-    Normalised, like the terms it decorates, by the constraint that already decides the daughter's own
-    admissibility: `ShortTrackFilter`'s length rule. A daughter that survives it contributes 0, one that dies
-    at the fork contributes 1, so the term lands in [0, 1] and the equal weighting stays the untuned choice.
-
-    It decorates rather than replaces because persistence is orthogonal to geometry — every existing ranking
-    should be able to carry it, and none of them should have to restate the other's terms to do so.
-    """
-
-    base: ForkRanking
-    min_track_length: int
-
-    def cost(self, candidate: ForkCandidate) -> float:
-        """The base ranking's cost plus the daughter's shortfall against the length a track must reach."""
-        return self.base.cost(candidate) + self._shortfall(candidate.child_frames)
-
-    def _shortfall(self, frames: int) -> float:
-        """How far short of the length rule this daughter's track stops, over the range a daughter can span.
-
-        A daughter always spans at least the frame it appears in, so the reachable range is `1` to the length
-        rule and the normaliser is that span — not the rule itself, which would cap the penalty below 1 and
-        quietly weight this term under the geometry it is added to. Saturating at the rule is deliberate: a
-        long-lived daughter cannot buy its way past a bad split, it only stops being suspicious.
-        """
-        span = self.min_track_length - _SHORTEST_TRACK
-        if span <= _DEGENERATE:
-            return _DEGENERATE
-        return (self.min_track_length - min(frames, self.min_track_length)) / span
+    candidates: list["ForkCandidate"]
+    single_child_parents: int
 
 
 @dataclass(frozen=True)
@@ -329,6 +177,31 @@ class AffinityDivisionRecovery:
     # or every unparented target (frontier-geometric). The admission floors live on the candidacy that reads
     # them, so a candidacy that does not consult the head carries no floor it would ignore.
     candidacy: ForkCandidacy = RunnerUpCandidacy()
+    # The frontier "divsub" safe-division gates, each OFF by default so the shipped recovery is untouched:
+    #  * mutual-nearest — the new daughter and the kept child are each other's nearest among the gap's orphans,
+    #    so a fork is refused unless the two proposed sisters are one another's closest cell (no interloper);
+    #  * C3 divergence — both daughters continue at t+2 AND their separation grows by at least `c3_divergence_um`,
+    #    the post-mitotic signature that turns hundreds of speculative forks into the few real divisions.
+    require_mutual_nearest: bool = False
+    require_c3_divergence: bool = False
+    c3_divergence_um: float = 2.25
+    # A global fork ceiling as a fraction of the graph's edges (the frontier's ~0.375%), folded into `budget`
+    # beside the division-rate derivation — the smaller wins. None leaves the node-rate budget alone.
+    max_fork_edge_fraction: float | None = None
+    # The master switch for a byte-faithful replica of the public 0.926 kernel's `add_safe_divisions_postlink`.
+    # OFF (default) is the shipped stage, untouched. ON turns on ALL FOUR of the kernel's behaviours at once,
+    # each of which our configured stage either omits or does differently, regardless of the flags above:
+    #  * C1 — the parent must be MID-track (in-degree >= 1); the kernel refuses a fork off a track START. This
+    #    only ever REMOVES forks, but it removes ones the configured stage emits (its fixtures fork off
+    #    track-start parents), so it cannot be unconditional — it is gated here.
+    #  * C2 — mutual-nearest is ONE-directional: the new daughter must be the kept child's nearest ORPHAN
+    #    (pool = orphans only), not our symmetric nearest-of-each-other over orphans-plus-kept-child.
+    #  * C3 — both daughters must continue at EXACTLY t+2 AND each be a SINGLE-successor node; the kernel reads
+    #    `_succ1` (None unless out-degree is one) and checks the successor frame, where our default C3 takes the
+    #    first of possibly-many successors with no frame check.
+    #  * two-cap — a per-frame ceiling (`round(single_child_parents * 0.0076)`) AND a global one
+    #    (`round(edges * 0.00375)`), admitted per-frame-then-global, replacing our single global node-rate budget.
+    kernel_faithful: bool = False
 
     def transform(self, graph: TrackGraph) -> TrackGraph:
         """Return the graph with edge-head-proposed, geometry-ranked division edges added."""
@@ -341,7 +214,7 @@ class AffinityDivisionRecovery:
             edges=np.concatenate([graph.edges, recovered]),
         )
 
-    def budget(self, node_count: int) -> int:
+    def budget(self, node_count: int, edge_count: int | None = None) -> int:
         """How many forks this video may gain — DERIVED from the measured division rate unless one is set.
 
         The fraction scales with the movie's SIZE and the old absolute ceiling was a bare constant; neither is
@@ -357,7 +230,10 @@ class AffinityDivisionRecovery:
         divisions to find can only trade edge jaccard for speculation, and emitting far fewer leaves the term
         unclaimed. `max_added_forks` remains an explicit override so an ARM can bracket that derivation.
         """
-        return self.max_added_forks if self.max_added_forks is not None else round(node_count * _DIVISION_RATE)
+        derived = self.max_added_forks if self.max_added_forks is not None else round(node_count * _DIVISION_RATE)
+        if self.max_fork_edge_fraction is None or edge_count is None:
+            return derived
+        return min(derived, round(edge_count * self.max_fork_edge_fraction))
 
     def _division_edges(self, graph: TrackGraph) -> Int[np.ndarray, "d 2"]:
         """Every accepted fork as node-id pairs, ordered by the ranking's cost and cut at the budget."""
@@ -365,8 +241,8 @@ class AffinityDivisionRecovery:
         positions_um = self.spacing.to_micrometres(graph.positions())
         timepoints = graph.timepoints()
         frames_ahead = self._frames_ahead(adjacency, timepoints)
-        cap = self.budget(len(graph.node_ids))
-        proposals: list[ForkCandidate] = []
+        successor = self._successors(adjacency, timepoints)
+        frames: list[_FrameProposals] = []
         for timepoint in np.unique(timepoints)[:-1].tolist():
             probability = self.affinity.probabilities(timepoint)
             if probability is None:
@@ -378,14 +254,29 @@ class AffinityDivisionRecovery:
                 orphan=np.array([adjacency.in_degrees[row] == _UNPARENTED for row in targets], dtype=bool),
                 positions_um=positions_um,
                 frames_ahead=frames_ahead,
+                successor=successor,
             )
-            proposals.extend(self._gap_proposals(sources, probability, adjacency, gap))
-        accepted = self._admitted(proposals, cap)
-        logger.info("division recovery: %d proposals, %d forks emitted (budget %d)", len(proposals), len(accepted), cap)
+            candidates = self._gap_proposals(sources, probability, adjacency, gap)
+            frames.append(_FrameProposals(candidates, self._single_child_count(sources, adjacency)))
+        accepted, cap = self._admit(frames, graph)
+        proposed = sum(len(frame.candidates) for frame in frames)
+        logger.info("division recovery: %d proposals, %d forks emitted (budget %d)", proposed, len(accepted), cap)
         if not accepted:
             return np.empty((0, 2), dtype=np.int64)
         pairs = [(int(graph.node_ids[fork.parent]), int(graph.node_ids[fork.child])) for fork in accepted]
         return np.array(pairs, dtype=np.int64)
+
+    def _successors(self, adjacency: Adjacency, timepoints: Int[np.ndarray, "n"]) -> Int[np.ndarray, "n"]:
+        """The daughters' t+2 rows, read the kernel's way under `kernel_faithful` and ours otherwise."""
+        if self.kernel_faithful:
+            return self._single_successors(adjacency, timepoints)
+        return self._first_successors(adjacency, len(timepoints))
+
+    def _single_child_count(self, sources: Int[np.ndarray, "s"], adjacency: Adjacency) -> int:
+        """How many of a frame's sources are single-child parents — the kernel's per-frame cap denominator."""
+        if not self.kernel_faithful:
+            return 0
+        return sum(1 for source in sources.tolist() if adjacency.out_degrees[source] == _SINGLE_CHILD)
 
     @staticmethod
     def _frames_ahead(adjacency: Adjacency, timepoints: Int[np.ndarray, "n"]) -> Int[np.ndarray, "n"]:
@@ -402,6 +293,73 @@ class AffinityDivisionRecovery:
                 if len(successors):
                     frames[node] = 1 + int(frames[list(successors)].max())
         return frames
+
+    @staticmethod
+    def _first_successors(adjacency: Adjacency, node_count: int) -> Int[np.ndarray, "n"]:
+        """Each node's first successor row, or `_NO_SUCCESSOR` where its track ends — the daughter's t+2 node.
+
+        The linker admits one child per node, so a daughter's continuation is a single row; a node whose track
+        ends at this frame has none, and the C3 divergence gate reads that as "no t+2, cannot have diverged".
+        """
+        successor = np.full(node_count, _NO_SUCCESSOR, dtype=np.int64)
+        for node in range(node_count):
+            children = adjacency.successors[node]
+            if len(children):
+                successor[node] = int(children[_TOP_TARGET])
+        return successor
+
+    @staticmethod
+    def _single_successors(adjacency: Adjacency, timepoints: Int[np.ndarray, "n"]) -> Int[np.ndarray, "n"]:
+        """The kernel's `_succ1` with its frame check: a node's successor row only if it has EXACTLY one and it
+        sits one frame ahead — `_NO_SUCCESSOR` otherwise.
+
+        The kernel reads C3 divergence off `_succ1` (None unless out-degree is one) and then rejects unless that
+        successor is at t+2 — one frame past the daughter, which sits at t+1. Baking both requirements into the
+        successor row means `ForkCandidate.divergence_um` returns None for a multi-successor or gap-spanning
+        daughter without any extra lookup, exactly as the geometry-only path already treats a track that ends.
+        """
+        successor = np.full(len(timepoints), _NO_SUCCESSOR, dtype=np.int64)
+        for node in range(len(timepoints)):
+            children = adjacency.successors[node]
+            if len(children) == _SINGLE_CHILD:
+                child = int(children[_TOP_TARGET])
+                if int(timepoints[child]) == int(timepoints[node]) + _ONE_FRAME:
+                    successor[node] = child
+        return successor
+
+    def _admit(self, frames: list[_FrameProposals], graph: TrackGraph) -> tuple[list[ForkCandidate], int]:
+        """The accepted forks and the cap that bounded them — kernel two-cap under the flag, our budget else."""
+        if self.kernel_faithful:
+            return self._admitted_two_cap(frames, len(graph.edges))
+        cap = self.budget(len(graph.node_ids), len(graph.edges))
+        flat = [candidate for frame in frames for candidate in frame.candidates]
+        return self._admitted(flat, cap), cap
+
+    def _admitted_two_cap(self, frames: list[_FrameProposals], edge_count: int) -> tuple[list[ForkCandidate], int]:
+        """The kernel's per-frame-then-global admission: sort each frame by score, cap it, cap the total.
+
+        Each frame admits at most `round(single_child_parents * 0.0076)` forks (min one, as the kernel floors
+        both caps), and the whole video at most `round(edges * 0.00375)`. A daughter is claimed once across the
+        whole video, so two frames cannot name the same orphan. The global cap is a hard ceiling — once it is
+        reached no later frame can add, which is what the kernel's break-on-`global_cap` does across frames.
+        """
+        global_cap = max(_MIN_CAP, round(edge_count * _KERNEL_GLOBAL_EDGE_FRAC))
+        claimed: set[int] = set()
+        admitted: list[ForkCandidate] = []
+        for frame in frames:
+            frame_cap = max(_MIN_CAP, round(frame.single_child_parents * _KERNEL_PER_FRAME_FRAC))
+            added_this_frame = 0
+            for candidate in sorted(frame.candidates, key=self._rank_key):
+                if len(admitted) >= global_cap:
+                    return admitted, global_cap
+                if added_this_frame >= frame_cap:
+                    break
+                if candidate.child in claimed:
+                    continue
+                claimed.add(candidate.child)
+                admitted.append(candidate)
+                added_this_frame += 1
+        return admitted, global_cap
 
     def _admitted(self, proposals: list[ForkCandidate], cap: int) -> list[ForkCandidate]:
         """The cheapest forks the budget allows, each proposed daughter claimed by at most one mother.
@@ -439,13 +397,63 @@ class AffinityDivisionRecovery:
                 continue
             if adjacency.out_degrees[parent] != _SINGLE_CHILD:
                 continue
+            if self.kernel_faithful and adjacency.in_degrees[parent] == _UNPARENTED:
+                continue  # C1: the kernel forks only off a MID-track parent, never a track start.
             kept = int(adjacency.successors[parent][_TOP_TARGET])
             found.extend(
                 candidate
                 for candidate in self.candidacy.candidates(parent, kept, probability[source_index], gap)
-                if self._within_gates(candidate)
+                if self._within_gates(candidate) and self._safe_division(candidate, gap)
             )
         return found
+
+    def _safe_division(self, candidate: ForkCandidate, gap: _Gap) -> bool:
+        """The frontier divsub gates: mutual-nearest daughters and C3 divergence, each a no-op when its flag is off.
+
+        Both fail CLOSED when required — a candidate that cannot be shown to satisfy the requested signature is
+        rejected — so turning a gate on only ever removes forks, never invents them.
+        """
+        return self._daughters_mutual_nearest(candidate, gap) and self._daughters_diverge(candidate)
+
+    def _daughters_mutual_nearest(self, candidate: ForkCandidate, gap: _Gap) -> bool:
+        """The kept child and the proposed daughter are each other's nearest — one-directional under the kernel.
+
+        The kernel's C2 is ONE-directional: the proposed daughter must be the kept child's nearest ORPHAN (pool
+        = orphans only), no reciprocal check. Our own gate is SYMMETRIC over orphans-plus-kept-child — each must
+        be the other's nearest. Both reject a fork that grafts an orphan belonging to some nearer lineage; the
+        kernel path exists so the replica matches its emissions rather than our stricter variant.
+        """
+        if self.kernel_faithful:
+            orphans = gap.targets[gap.orphan]
+            return self._nearest_in(candidate.kept, orphans, gap.positions_um) == candidate.child
+        if not self.require_mutual_nearest:
+            return True
+        pool = np.append(gap.targets[gap.orphan], candidate.kept)
+        return (
+            self._nearest_in(candidate.kept, pool, gap.positions_um) == candidate.child
+            and self._nearest_in(candidate.child, pool, gap.positions_um) == candidate.kept
+        )
+
+    @staticmethod
+    def _nearest_in(row: int, pool: Int[np.ndarray, "p"], positions_um: Float[np.ndarray, "n 3"]) -> int:
+        """The pool member (other than `row`) closest to `row`, or `_NO_SUCCESSOR` if the pool holds only `row`."""
+        others = pool[pool != row]
+        if not len(others):
+            return _NO_SUCCESSOR
+        distances = np.linalg.norm(positions_um[others] - positions_um[row], axis=1)
+        return int(others[int(np.argmin(distances))])
+
+    def _daughters_diverge(self, candidate: ForkCandidate) -> bool:
+        """Both daughters continue at t+2 and their separation there exceeds the fork's by `c3_divergence_um`.
+
+        The growth test is identical either way; what differs is the successor rows it reads — the kernel-faithful
+        path uses single-successor, one-frame-ahead rows (`_single_successors`) so a multi-successor or
+        gap-spanning daughter has no t+2 node, where the configured C3 takes the first of any successors.
+        """
+        if not (self.kernel_faithful or self.require_c3_divergence):
+            return True
+        divergence = candidate.divergence_um()
+        return divergence is not None and divergence >= self.c3_divergence_um
 
     def _within_gates(self, candidate: ForkCandidate) -> bool:
         """Whether the proposed triangle is physically a division: the mother, her new daughter, her old one."""
@@ -529,6 +537,22 @@ class AffinityDivisionConfig(BaseModel):
     # behaviour; it is a decorator rather than a fourth ranking because persistence is orthogonal to geometry —
     # any ranking can carry it, and none should have to restate another's terms to do so.
     require_persistence: bool = False
+    # The frontier "divsub" safe-division gates, OFF by default so the shipped 0.900 recovery is unchanged. Turn
+    # both on for the frontier arm: `--set division.require_mutual_nearest=true division.require_c3_divergence=true`.
+    # `c3_divergence_um` is the minimum growth in the two daughters' separation from t+1 to t+2 (2.25um, the public
+    # kernel's post-mitotic threshold); `max_fork_edge_fraction` is the global fork ceiling as a fraction of edges
+    # (~0.00375), folded into the budget beside the division-rate derivation. None leaves the node-rate budget alone.
+    require_mutual_nearest: bool = False
+    require_c3_divergence: bool = False
+    c3_divergence_um: float = 2.25
+    max_fork_edge_fraction: float | None = None
+    # OFF is the shipped stage. ON builds a byte-faithful replica of the public 0.926 kernel's safe-division
+    # postlink instead: the frontier's geometric candidacy and `parent_dist + 0.15*sister_dist` score, the
+    # kernel's gate bracket (parent 8.0 / sister 11.0 / existing-child 10.0 um), and all four kernel behaviours
+    # (C1 mid-track parent, C2 one-directional mutual-nearest, C3 single-successor t+2 divergence, the per-frame
+    # + global two-cap). It ignores the ranking/candidacy/gate/budget fields above, which describe our own
+    # configured stage; both remain reachable, toggled by this one flag, so neither is ever the revert-to end state.
+    kernel_faithful: bool = False
 
     def parent_gate(self, gate_um: float) -> float:
         """The mother-to-daughter gate — the linker's own unless one is set, since a fork IS a one-frame step."""
@@ -553,6 +577,8 @@ class AffinityDivisionConfig(BaseModel):
         `ShortTrackFilter`. The persistence term normalises by it rather than restating it, so the two stages
         cannot disagree about how long a track has to be.
         """
+        if self.kernel_faithful:
+            return self._build_kernel_faithful(spacing, affinity)
         if self.ranking not in FORK_RANKINGS:
             raise ValueError(f"unknown division ranking {self.ranking!r}, expected one of {sorted(FORK_RANKINGS)}")
         if self.candidacy not in FORK_CANDIDACIES:
@@ -569,4 +595,31 @@ class AffinityDivisionConfig(BaseModel):
             sister_gate_um=self.sister_gate(gate_um),
             existing_child_gate_um=self.existing_child_gate(),
             max_added_forks=self.max_added_forks,
+            require_mutual_nearest=self.require_mutual_nearest,
+            require_c3_divergence=self.require_c3_divergence,
+            c3_divergence_um=self.c3_divergence_um,
+            max_fork_edge_fraction=self.max_fork_edge_fraction,
+            kernel_faithful=False,
+        )
+
+    @staticmethod
+    def _build_kernel_faithful(spacing: Spacing, affinity: EdgeAffinity) -> AffinityDivisionRecovery:
+        """A byte-faithful replica of the public 0.926 kernel's `add_safe_divisions_postlink`.
+
+        Every value is the kernel's own, so nothing here reads the configured stage's ranking, gates or budget:
+        the geometric candidacy (every near orphan), the `parent_dist + 0.15*sister_dist` score, the kernel gate
+        bracket, and `kernel_faithful=True` — which turns on C1, C2 one-directional, C3 single-successor t+2 and
+        the two-cap admission inside the stage regardless of the `require_*` flags.
+        """
+        return AffinityDivisionRecovery(
+            spacing=spacing,
+            affinity=affinity,
+            ranking=GeometryRanking(sister_weight=_KERNEL_SISTER_WEIGHT),
+            candidacy=GeometricCandidacy(),
+            parent_gate_um=_KERNEL_PARENT_GATE_UM,
+            sister_gate_um=_KERNEL_SISTER_GATE_UM,
+            existing_child_gate_um=_KERNEL_EXISTING_CHILD_GATE_UM,
+            max_added_forks=None,
+            c3_divergence_um=_KERNEL_C3_DIVERGENCE_UM,
+            kernel_faithful=True,
         )

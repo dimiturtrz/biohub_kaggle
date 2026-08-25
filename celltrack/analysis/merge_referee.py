@@ -107,18 +107,40 @@ class MergeReferee:
         peaks_matched = sum(cls._peak_count(prob[t], floor, matched_sep) for t in range(prob.shape[0]))
         return vols, peaks_native, peaks_matched
 
+    @staticmethod
+    def _floor_by_grid(prob_by_grid: dict[str, np.ndarray], floor: float) -> dict[str, float]:
+        """Per-grid prob floor matched to the coarse grid's foreground FRACTION, not its absolute prob.
+
+        The coarse field carries the shipped, calibrated operating point, so its foreground fraction at
+        `floor` is the physical cell-mass fraction. A cell occupies a fixed physical volume, so that
+        fraction is grid-invariant -- matching it (via each grid's own quantile) is the correct cross-grid
+        normaliser. An absolute prob floor is NOT: a from-scratch fine head can saturate the sigmoid (every
+        voxel p>0.85), so a shared 0.5 floor passes 100% of the fine field and the peak count goes
+        floor-invariant. Thresholding each grid at equal foreground mass removes that scale confound.
+        """
+        target_frac = float((prob_by_grid[_COARSE_GRID] > floor).mean())
+        out: dict[str, float] = {}
+        for grid, prob in prob_by_grid.items():
+            out[grid] = floor if grid == _COARSE_GRID else float(np.quantile(prob, 1.0 - target_frac))
+        return out
+
     @classmethod
     def analyse(cls, logit_by_grid: dict[str, np.ndarray], floor: float) -> dict[str, GridStats]:
         """Basin/peak/band statistics for each decode grid, given its loaded logit volume.
 
         Pure compute: no disk, no card. `logit_by_grid` maps a grid key in `_YX_PIXELS` to its
         (T, Z, Y, X) logit volume. V0 (single-cell volume) is taken from the coarse grid's median
-        basin and shared, so the merged-mass fraction is a fair cross-grid comparison.
+        basin and shared, so the merged-mass fraction is a fair cross-grid comparison. Each grid is
+        thresholded at a foreground-fraction-matched floor (see `_floor_by_grid`) so a differently-scaled
+        finer field compares at equal cell mass rather than an absolute prob it may never cross.
         """
+        prob_by_grid = {grid: cls._prob(logit) for grid, logit in logit_by_grid.items()}
+        floor_by_grid = cls._floor_by_grid(prob_by_grid, floor)
+        logger.info("  floors (fg-frac matched): %s", {g: round(f, 4) for g, f in floor_by_grid.items()})
         vols_by_grid: dict[str, np.ndarray] = {}
         peaks_by_grid: dict[str, tuple[int, int]] = {}
-        for grid, logit in logit_by_grid.items():
-            vols, peaks_native, peaks_matched = cls._grid_stats(cls._prob(logit), _YX_PIXELS[grid], floor)
+        for grid, prob in prob_by_grid.items():
+            vols, peaks_native, peaks_matched = cls._grid_stats(prob, _YX_PIXELS[grid], floor_by_grid[grid])
             vols_by_grid[grid] = vols
             peaks_by_grid[grid] = (peaks_native, peaks_matched)
 
@@ -153,18 +175,44 @@ class MergeReferee:
 
 def main() -> None:  # pragma: no cover
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--weights-key", default="pilkwang_seed1_logits")
+    parser.add_argument(
+        "--weights-key",
+        default="pilkwang_seed1_logits",
+        help="single-key fallback: BOTH grids load from here (same-model self-consistency, e.g. pilkwang packs "
+        "decoded at both grids). Ignored when --fine-key is set.",
+    )
+    parser.add_argument(
+        "--fine-key",
+        default=None,
+        help="candidate FINE (1,2,2) logits key. When set, the coarse (1,4,4) BASELINE is read from --coarse-key "
+        "instead, so a grid-locked joint checkpoint (e.g. finer122) is compared against the real coarse baseline: "
+        "decoding a (1,2,2)-trained detector at (1,4,4) is off-grid garbage, so its coarse band is not self-supplied.",
+    )
+    parser.add_argument(
+        "--coarse-key",
+        default="pilkwang_seed1_logits",
+        help="coarse (1,4,4) BASELINE logits key; used only when --fine-key is set.",
+    )
     parser.add_argument("--video-key", default="44b6_e57ff5c6.zarr")
     parser.add_argument("--floor", type=float, default=0.5)
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
+    key_by_grid: dict[str, str] = dict.fromkeys(_YX_PIXELS, str(args.weights_key))
+    if args.fine_key:
+        key_by_grid = {"ds1x4x4": str(args.coarse_key), "ds1x2x2": str(args.fine_key)}
     logit_by_grid = {
-        grid: np.load(_CACHE / args.weights_key / f"{args.video_key}.logit.{grid}_tta1_pc0.npy") for grid in _YX_PIXELS
+        grid: np.load(_CACHE / key_by_grid[grid] / f"{args.video_key}.logit.{grid}_tta1_pc0.npy") for grid in _YX_PIXELS
     }
     result = MergeReferee.analyse(logit_by_grid, args.floor)
     coarse, fine = result["ds1x4x4"], result["ds1x2x2"]
-    logger.info("weights=%s video=%s floor=%s", args.weights_key, args.video_key, args.floor)
+    logger.info(
+        "coarse=%s fine=%s video=%s floor=%s",
+        key_by_grid["ds1x4x4"],
+        key_by_grid["ds1x2x2"],
+        args.video_key,
+        args.floor,
+    )
     logger.info(
         "  (1,4,4): %6d basins | median V %.1f | merged-mass frac %.4f",
         coarse.n_components,

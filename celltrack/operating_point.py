@@ -9,15 +9,26 @@ naming a recipe does not drag the mounted models' import graph along with it.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from celltrack.edges.blended_edge_scoring import EdgeBlendOptions
+from celltrack.edges.calibrated_fusion import CalibratedFusionOptions
 from celltrack.linkers.linkers import LinkerConfig
 from celltrack.postproc.affinity_division_recovery import AffinityDivisionConfig
 from celltrack.postproc.division_recovery import DivisionRecoveryConfig
 from celltrack.postproc.gap_closer import BridgeConfig, ReuseConfig
 from celltrack.postproc.short_track_filter import ShortTrackRescueConfig
 from celltrack.postproc.topology_repair import TopologyConfig
+
+# The frontier_replica operating point's constants, each a MEASURED value of the public 0.926 stack, not a
+# tuning surface (see `TrackerConfig.frontier_replica`). The detection threshold sits between the shipped 0.97
+# and the high-precision 0.99; the secondary seed carries the frontier's 0.475 detector weight (so the primary,
+# which `detector_blend` holds, is its complement); the division C3 gate and global fork fraction are the public
+# divsub kernel's own; the motion linker gates tight-then-loose at the annotated one-frame displacement bounds.
+_FRONTIER_THRESHOLD = 0.96875
+_SECONDARY_DETECTOR_WEIGHT = 0.475
+_MOTION_TIGHT_UM = 6.0
+_MOTION_LOOSE_UM = 10.0
 
 
 @dataclass(frozen=True)
@@ -35,6 +46,10 @@ class TrackerConfig:
     # The seed-1 fraction of the detector's logit blend; None is the equal mean the frontier ships. The edge
     # blend favours seed 1 (0.8), so the detector blend may too — a value w tilts the two seeds to (w, 1-w).
     detector_blend: float | None = None
+    # Off by default: z-score / std-ratio align each secondary detector seed onto the primary before the logit
+    # blend — the detection half of the calibrated dual-seed fusion, so an independently trained second seed
+    # contributes its ranking rather than its own scale. Inert unless `detector_blend` tilts the two seeds.
+    detector_align_moments: bool = False
     # Off by default: detect each frame inside its REAL (t, t+1) pair instead of the shipped (t, t) duplicate.
     # The net was TRAINED on real pairs but ships temporally blind; enable to A/B whether the temporal axis
     # carries the division / dense-detection signal the sparse proxy cannot see. A MOUNT-time knob (it changes
@@ -85,6 +100,14 @@ class TrackerConfig:
     # live here rather than at the mount because they are operating-point knobs a sweep re-points — reach them
     # with `--set edge_options.align_seed_moments=true` / `--set edge_options.view_tta=true`.
     edge_options: EdgeBlendOptions = field(default_factory=EdgeBlendOptions)
+    # OFF by default (byte-identical when off): the two remaining kernel-fidelity divergences that live on the
+    # tracker's own path rather than in a nested config — the linker's edge-candidate admission floor (E5, the
+    # kernel's 0.48 `edge_candidate_threshold`, threaded to `LinkerConfig.build`) and the detection-stage
+    # per-frame retention guard (E6, revert a frame's blended detection to primary when its high-threshold peak
+    # count collapses, threaded to `pipeline.nodes`). Both are the published kernel's exact behaviour; the four
+    # fusion divergences and the divsub/motion cost replicas carry their OWN faithful flags on their nested
+    # configs. Turn all of them on together for the full byte-faithful replica (see `frontier_replica`).
+    kernel_faithful: bool = False
 
     @classmethod
     def shipped(cls) -> "TrackerConfig":
@@ -112,6 +135,68 @@ class TrackerConfig:
             # the linker's own, and the budget derived from the measured division rate (a leaderboard-confirmed
             # removal — caps of ~1072, ~400 and the derived ~157 forks all scored 0.899).
             division=AffinityDivisionConfig(),
+        )
+
+    @classmethod
+    def frontier_replica(cls) -> "TrackerConfig":
+        """The genuine 0.926 stack as one operating point — the shipped recipe with all five frontier arms ON.
+
+        The one home the kernel and any local eval both mount, so the replica is a single definition rather than
+        a list of literals restated per call site (the same argument `shipped` makes). It is `shipped` plus:
+
+        * the calibrated dual-seed FUSION — both heads flipped as `proxy_eval._with_calibrated_fusion` does: the
+          edge blend to the margin-gated `CalibratedFusionOptions` and the detector blend to the std-ratio-aligned
+          mix that gives the secondary seed the frontier's 0.475 weight (so `detector_blend`, seed 1's share, is
+          its complement) with moment alignment on. The second seed is mounted by `MultiGpuSubmission.secondary_pack`;
+        * a detection THRESHOLD between the shipped 0.97 and the high-precision 0.99;
+        * the divsub recovery stage in its BYTE-FAITHFUL form (`kernel_faithful`) — the public kernel's own gate
+          bracket, geometric candidacy and ranking, with C1 (mid-track parent), one-directional mutual-nearest,
+          C3 single-successor t+2 divergence and the per-frame + global two-cap. This is what scored 0.926; the
+          per-flag `require_*` bracket is our own looser recovery and diverges (the fidelity oracle proved it
+          fabricates forks off track-starts and drops the cap floor), so the replica takes the faithful switch;
+        * the MOTION relink linker, gating tight-then-loose at the annotated one-frame displacement bounds.
+
+        DeepCenter (the fifth arm) is the mounted `center_pack`, orthogonal to this config. Gated on the fidelity
+        oracle, and on the published 0.926 precedent — never on the saturated local proxy, which inverts above 0.89.
+        """
+        base = cls.shipped()
+        # shipped always carries the division stage; the fallback keeps the type honest without an assert.
+        division = base.division or AffinityDivisionConfig()
+        return replace(
+            base,
+            threshold=_FRONTIER_THRESHOLD,
+            detector_blend=1.0 - _SECONDARY_DETECTOR_WEIGHT,
+            detector_align_moments=True,
+            edge_options=base.edge_options.model_copy(update={"calibrated_fusion": CalibratedFusionOptions()}),
+            division=division.model_copy(update={"kernel_faithful": True}),
+            linker=LinkerConfig(name="motion", tight_um=_MOTION_TIGHT_UM, gate_um=_MOTION_LOOSE_UM),
+        )
+
+    @classmethod
+    def kernel_faithful_replica(cls) -> "TrackerConfig":
+        """The FULL byte-faithful replica: `frontier_replica` with every one of the six fidelity switches ON.
+
+        `frontier_replica` is the genuine 0.926 recipe with the divsub stage already in its faithful form; this
+        is the single incantation that also flips the other five, so the whole stack reproduces the published
+        kernel exactly rather than our shipped approximations:
+
+        * the FUSION divergences (E1-E4) — `edge_options.calibrated_fusion.kernel_faithful`;
+        * the linker edge-candidate ADMISSION floor (E5) and the detection retention GUARD (E6) — this config's
+          own `kernel_faithful`, threaded to the linker's `edge_admission_prob` and the detector's `nodes`;
+        * the MOTION relink COST replica — `linker.kernel_faithful`;
+        * the divsub recovery replica — `division.kernel_faithful`, already on from `frontier_replica`.
+        """
+        base = cls.frontier_replica()
+        fusion = base.edge_options.calibrated_fusion
+        if fusion is None:
+            raise ValueError("frontier_replica must mount the calibrated fusion before it can be made faithful")
+        return replace(
+            base,
+            kernel_faithful=True,
+            edge_options=base.edge_options.model_copy(
+                update={"calibrated_fusion": fusion.model_copy(update={"kernel_faithful": True})}
+            ),
+            linker=base.linker.model_copy(update={"kernel_faithful": True}),
         )
 
     def __post_init__(self) -> None:

@@ -105,6 +105,39 @@ def test_shard_graphs_mounts_the_ranker_on_each_worker(monkeypatch: pytest.Monke
     assert trackers[0].ranker_pack is None  # the mount is a copy, not a mutation of the ephemeral tracker
 
 
+def test_secondary_pack_repoints_the_second_seed(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    """A submission given a `secondary_pack` mounts it as the fusion's SECOND seed, keeping the primary.
+
+    The mount half of the calibrated dual-seed fusion: the pack decides which second opinion the fusion reads,
+    the config (`TrackerConfig.frontier_replica`) decides whether it is read at all. Absent, the mount is left
+    at whatever `packs[1]` already is — the single-seed path.
+    """
+    mounts: list[tuple[Path, Path]] = []
+
+    def ephemeral(pack1: Path, pack2: Path, device: str, config: TrackerConfig | None = None) -> _StubTracker:
+        mounts.append((pack1, pack2))
+        return _StubTracker(device)
+
+    monkeypatch.setattr(dispatch.CellTracker, "ephemeral", staticmethod(ephemeral))
+    secondary = tmp_path / "seed314159"
+    submission = MultiGpuSubmission(
+        packs=(Path("p1"), Path("p2")),
+        config=TrackerConfig.frontier_replica(),
+        devices=("cpu",),
+        secondary_pack=secondary,
+    )
+    shard = submission.shards([tmp_path / "a.zarr"])[0]
+
+    assert sorted(submission.shard_graphs(shard)) == ["a"]
+    assert mounts == [(Path("p1"), secondary)]  # primary kept, second seed re-pointed to the secondary pack
+
+    # No secondary given: the mount is left as the default second seed (single-seed path).
+    mounts.clear()
+    default = MultiGpuSubmission(packs=(Path("p1"), Path("p2")), config=TrackerConfig(), devices=("cpu",))
+    assert sorted(default.shard_graphs(default.shards([tmp_path / "a.zarr"])[0])) == ["a"]
+    assert mounts == [(Path("p1"), Path("p2"))]
+
+
 class _FailedProcess:
     """A worker that dies without delivering its shard — the crash the parent must turn into a loud raise."""
 

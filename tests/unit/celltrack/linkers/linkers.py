@@ -293,6 +293,26 @@ def test_build_wires_the_motion_linker_with_the_affinity_it_prices():
     assert built.ranker == RankerBonus(ranker=ranker, bonus=17.0)
 
 
+def test_build_threads_the_edge_admission_floor_onto_the_motion_linker():
+    """The kernel's 0.48 edge-candidate floor lands on the built motion linker's `edge_admission_prob`."""
+    built = LinkerConfig(name="motion", gate_um=9.0, tight_um=5.0, edge_admission_prob=0.48).build(SPACING)
+    assert isinstance(built, MotionHungarianLinker)
+    assert built.edge_admission_prob == 0.48
+
+
+def test_build_leaves_the_edge_admission_floor_off_by_default():
+    """Unset, the built linker carries no floor — the shipped pure-geometry admission, byte-identical."""
+    built = LinkerConfig(name="motion", gate_um=9.0, tight_um=5.0).build(SPACING)
+    assert isinstance(built, MotionHungarianLinker)
+    assert built.edge_admission_prob is None
+
+
+def test_build_refuses_an_edge_admission_floor_on_a_non_admitting_linker():
+    """A floor on a linker that does not gate candidates by a learned probability is refused at construction."""
+    with pytest.raises(ValueError, match="edge_admission_prob"):
+        LinkerConfig(name="flow", gate_um=9.0, edge_admission_prob=0.48)
+
+
 def test_the_motion_cost_reads_the_affinity_the_config_hands_it():
     """A strong affinity on the farther in-gate target overrides the geometric pick — THROUGH the config.
 

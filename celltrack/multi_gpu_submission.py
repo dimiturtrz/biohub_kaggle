@@ -76,6 +76,13 @@ class MultiGpuSubmission:
     # The DeepCenter centre-prior pack, or None to run without confirmed recovery. A PATH for the same
     # survives-the-spawn reason as the packs above — the worker mounts it on its own device.
     center_pack: Path | None = None
+    # The independently-seeded secondary detector+edge pack for the calibrated dual-seed fusion, or None to
+    # mount whatever `packs[1]` already is. A PATH for the same survives-the-spawn reason as the packs above:
+    # present, it becomes the mount's SECOND seed, so the fusion's second opinion is this pack rather than the
+    # default secondary. It only carries weight once the config turns the fusion on (see
+    # `TrackerConfig.frontier_replica`, which sets the detector blend and edge `calibrated_fusion`); the pack is
+    # the mount half of that knob, the config the activation half — exactly the split proxy_eval mounts under.
+    secondary_pack: Path | None = None
 
     def shards(self, videos: list[Path]) -> tuple[VideoShard, ...]:
         """Deal the videos round-robin across the devices — interleaved, so no one worker gets every long movie.
@@ -97,9 +104,16 @@ class MultiGpuSubmission:
         Submission(graphs=ordered).write_csv(out)
         logger.info("wrote %s", out)
 
+    def _mount_packs(self) -> tuple[Path, Path]:
+        """The primary pack paired with the fusion's second seed — the attached secondary when one is given."""
+        if self.secondary_pack is None:
+            return self.packs
+        return (self.packs[0], self.secondary_pack)
+
     def shard_graphs(self, shard: VideoShard) -> dict[str, TrackGraph]:
         """Mount the tracker on this shard's device and run the full pipeline over its videos, keyed by name."""
-        tracker = CellTracker.ephemeral(self.packs[0], self.packs[1], shard.device, self.config)
+        primary, secondary = self._mount_packs()
+        tracker = CellTracker.ephemeral(primary, secondary, shard.device, self.config)
         if self.ranker_pack is not None:
             tracker = tracker.with_ranker(self.ranker_pack)
         if self.center_pack is not None:

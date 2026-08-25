@@ -28,6 +28,7 @@ from jaxtyping import Float
 from pydantic import BaseModel, ConfigDict
 from torch import Tensor
 
+from celltrack.edges.calibrated_fusion import CalibratedFusion, CalibratedFusionOptions
 from celltrack.edges.flip_view_edge_scoring import FlipViewEdgeScorer
 from celltrack.edges.seed_moment_alignment import LogitMoments, SeedMomentAlignment
 from celltrack.models.edge_transformer import EdgeGap, EdgeTransformerScorer, PrecomputedEdgeAffinity
@@ -35,12 +36,14 @@ from celltrack.models.prior_velocity import GapHistory
 from core.data.tracks import TrackGraph
 
 _DENOMINATOR_FLOOR = 1e-12
+# The fusion mixes exactly TWO seeds — below that count there is nothing to fuse, so the caller raises.
+_MIN_FUSION_SEEDS = 2
 
 
 class EdgeBlendOptions(BaseModel):
-    """The two disclosed frontier transforms around the blend, both default OFF — one knob object, not three flags.
+    """The disclosed frontier transforms around the blend, all default OFF — one knob object, not several flags.
 
-    They travel together because they are asked the same way (a candidate arm of a proxy sweep) and neither is
+    They travel together because they are asked the same way (a candidate arm of a proxy sweep) and none is
     part of the shipped path until one of them earns it. `bidirectional` stays a separate argument: it is a
     shipped setting the tracker re-points per run, not a candidate.
 
@@ -54,6 +57,10 @@ class EdgeBlendOptions(BaseModel):
 
     align_seed_moments: bool = False
     view_tta: bool = False
+    # None keeps the ordinary convex blend; present flips the seed combination to the margin-gated calibrated
+    # fusion above. It supersedes both `align_seed_moments` (it calibrates internally) and the bidirectional
+    # fuse (the gated dual-seed blend IS the fusion) — a run either takes the convex path or this one.
+    calibrated_fusion: CalibratedFusionOptions | None = None
 
 
 _DEFAULT_OPTIONS = EdgeBlendOptions()
@@ -177,12 +184,30 @@ class BlendedEdgeTransformerScorer:
         self, gap: EdgeGap, histories: tuple[GapHistory, ...]
     ) -> tuple[Float[Tensor, "s t"], tuple[GapHistory, ...]]:
         """One gap's probabilities and each seed's carried history — forward, optionally fused with the reverse."""
+        if self.options.calibrated_fusion is not None:
+            return self._calibrated_probabilities(self.options.calibrated_fusion, gap, histories)
         blended, carried = self._forward_logits(gap, histories)
         forward = torch.softmax(blended, dim=0)
         if not self.bidirectional:
             return forward, carried
         reverse = torch.softmax(self._reverse_logits(gap), dim=0).T
         return self.fuse(forward, reverse), carried
+
+    def _calibrated_probabilities(
+        self, options: CalibratedFusionOptions, gap: EdgeGap, histories: tuple[GapHistory, ...]
+    ) -> tuple[Float[Tensor, "s t"], tuple[GapHistory, ...]]:
+        """The margin-gated calibrated fusion of the first two seeds — the frontier's dual-seed edge lever.
+
+        Primary is seed 0, secondary seed 1: the mount pairs pilkwang's primary with the second pack, which the
+        proxy CLI re-points at an independently trained seed for this fusion. The seeds carry their histories
+        exactly as the convex path does; only the way their logits combine into a probability matrix differs.
+        """
+        scored = self._seed_scored(gap, histories)
+        if len(scored) < _MIN_FUSION_SEEDS:
+            raise ValueError("calibrated fusion needs a primary and a secondary seed; mount two packs")
+        carried = tuple(history for _, history in scored)
+        fused = CalibratedFusion(options).fuse(scored[0][0], scored[1][0])
+        return fused, carried
 
     def seed_logit_moments(self, path: Path, detections: TrackGraph, device: str) -> list[GapSeedMoments]:
         """Every gap's per-seed logit mean and std, in ascending time — the numbers the blend weights act on.

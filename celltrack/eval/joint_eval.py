@@ -123,7 +123,7 @@ def main() -> None:
     )
     logger.info(
         "faithful %.4f | clamped %.4f | node recall %.4f ratio %+.3f | mislinks %d inverted %.3f "
-        "P_true %.3f vs P_chosen %.3f",
+        "P_true %.3f vs P_chosen %.3f top1 %.3f",
         result.score,
         result.selection_score,
         result.node_recall,
@@ -132,6 +132,7 @@ def main() -> None:
         result.inverted_fraction,
         result.mean_p_true,
         result.mean_p_chosen,
+        result.top1_fraction,
     )
 
 

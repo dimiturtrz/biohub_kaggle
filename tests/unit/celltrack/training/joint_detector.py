@@ -12,7 +12,6 @@ import numpy as np
 import pytest
 import torch
 import zarr
-from torch import nn
 
 from celltrack.data.difficulty_sampler import DifficultySampler
 from celltrack.data.frame_source import ZarrFrames
@@ -23,17 +22,13 @@ from celltrack.edges.blended_edge_scoring import BlendedEdgeTransformerScorer
 from celltrack.eval.model_evaluator import ModelEvaluator
 from celltrack.eval.proxy import TestMovieProxy
 from celltrack.losses.tracking_loss import _PairOutcome
-from celltrack.models.edge_transformer import _POS_EMBED_DIM
 from celltrack.models.joint_model import JointModel
-from celltrack.models.lora import LoRA
-from celltrack.models.prior_velocity import PriorVelocity
 from celltrack.operating_point import TrackerConfig
 from celltrack.training.joint_checkpoint import RESUME_SUFFIX
 from celltrack.training.joint_config import (
     ContrastiveSite,
     DataCfg,
     JointTrainConfig,
-    LoraCfg,
     LossCfg,
     ModelCfg,
     OptimCfg,
@@ -47,42 +42,6 @@ from core.data.tracks import AnnotatedTracks
 from core.data.video import ImageStatistics
 from core.geometry import Spacing
 from tests.unit.celltrack.conftest import RecordingMlflow
-
-_CORPUS = 18024  # the real GT-pair count: one pair per step, so this is one epoch
-
-
-def test_group_norm_rejects_a_warm_start():
-    """`--norm group` with `--warm-start` fails fast: a pilkwang BN pack cannot load a bufferless GroupNorm.
-
-    The guard fires before any pack is touched, so it needs no data root — a from-scratch-only architecture
-    swap and a warm init are contradictory, and the run says so at build rather than crashing on a key mismatch.
-    """
-    trainer = JointTrainer(JointTrainConfig(model=ModelCfg(norm="group")))
-    with pytest.raises(ValueError, match="from-scratch"):
-        trainer._model(warm_start=True)
-
-
-def test_fresh_build_threads_the_group_norm():
-    """A from-scratch build carries the configured norm into the detector it constructs — the GPU arm's backbone.
-
-    The warm path is barred (previous test); this is the path the from-scratch run actually takes, so the
-    `--norm group` flag must reach the built detector rather than defaulting the published BN backbone back in.
-    """
-    trainer = JointTrainer(JointTrainConfig(model=ModelCfg(out_channels=2, layers=(2, 4), norm="group")))
-    assert trainer._model(warm_start=False).detector.norm == "group"
-
-
-def test_schedule_spans_the_resolved_step_count():
-    """The cosine horizon is built from the RESOLVED budget — resolving epochs late must not leave it stale."""
-    config = JointTrainConfig(schedule=ScheduleCfg(steps=10, epochs=2.0), optim=OptimCfg(cosine_lr=True)).resolved(
-        _CORPUS
-    )
-    optimizer = torch.optim.AdamW([torch.zeros(1, requires_grad=True)], lr=1e-4)
-
-    schedule = JointTrainer(config)._schedule(optimizer)
-
-    assert schedule is not None
-    assert schedule.T_max == 36048  # type: ignore[missing-attribute]
 
 
 def _outcome(edge_logits: torch.Tensor, edge_matrix: torch.Tensor) -> _PairOutcome:
@@ -260,6 +219,7 @@ def test_train_records_each_window(
         "inverted_fraction",
         "mean_p_true",
         "mean_p_chosen",
+        "top1_fraction",
         "mislinks",
         "train_loss",
         "edge_loss",
@@ -380,56 +340,11 @@ def _sampling_config() -> JointTrainConfig:
     return _cpu_config().model_copy(update={"data": DataCfg(downsample=(1, 1, 1), difficulty_sampling=True)})
 
 
-def _lora_velocity_config() -> JointTrainConfig:
-    """Velocity ON under a frozen-base LoRA — the combo where the widened columns must survive the base freeze."""
-    return _cpu_config().model_copy(
-        update={
-            "model": ModelCfg(out_channels=2, layers=(2, 4), lora=LoraCfg(enabled=True)),
-            "data": DataCfg(downsample=(1, 1, 1), prior_velocity=True),
-        }
-    )
-
-
-def test_prepare_keeps_the_velocity_columns_trainable_under_lora(video_store: Path):
-    """LoRA freezes the base, but the velocity's widened projection is a zero-init feature INSTALL, not base.
-
-    `LoRA.inject`'s blanket freeze catches the installed columns, and `adapter_parameters` (requires_grad only)
-    then drops them from the optimiser: left so, they sit at their zero init forever and the feature is a silent
-    no-op that still reads ON in the log. `_prepare` thaws them, so the widened projection both trains and rides
-    the optimiser — while its new columns still start at exactly zero, so the warm start is intact at step 0.
-    """
-    trainer = JointTrainer(_lora_velocity_config())
-    model, optimization = trainer._prepare(warm_start=False)
-    proj = model.transformer.proj
-    base = cast(nn.Linear, proj.base if isinstance(proj, LoRA.Linear) else proj)  # LoRA wraps the widened proj
-
-    optimised = {id(parameter) for group in optimization.optimizer.param_groups for parameter in group["params"]}
-    assert base.weight.requires_grad  # thawed — not left frozen by inject's blanket base freeze
-    assert id(base.weight) in optimised  # and the optimiser actually owns it, so the columns train
-    assert not base.weight[:, -PriorVelocity.DIM :].any()  # the velocity columns still start at exactly zero
-
-
-def test_prepare_widens_the_head_before_building_the_optimizer(video_store: Path):
-    """ORDER: widening replaces the projection object, so the optimiser must be built AFTER it, over the new one.
-
-    Built the other way round the run still trains — it just never moves the live projection, in silence. The
-    pin is identity: the parameter the optimiser holds IS the widened layer's weight, and its new columns
-    start at exactly zero so the (pretrained) head's output is unchanged at step 0.
-    """
-    model, optimization = JointTrainer(_velocity_config())._prepare(warm_start=False)
-    projection = cast(nn.Linear, model.transformer.proj)
-
-    assert projection.in_features == _cpu_config().model.out_channels + 4 * _POS_EMBED_DIM + PriorVelocity.DIM
-    optimised = {id(parameter) for group in optimization.optimizer.param_groups for parameter in group["params"]}
-    assert id(projection.weight) in optimised
-    assert not projection.weight[:, -PriorVelocity.DIM :].any()
-
-
 def test_losses_hands_the_velocity_to_the_model(video_store: Path, monkeypatch: pytest.MonkeyPatch):
     """The scored pair reaches `JointModel.forward` carrying a real, non-zero prior displacement; the batched
     no-grad pass that produced it forwards ZERO velocity for its own sources (one step back, no recursion)."""
     trainer = JointTrainer(_velocity_config())
-    model, _ = trainer._prepare(warm_start=False)
+    model, _ = trainer._assembly.build(warm_start=False)
     sample = PairDataset(_pairs(video_store), 1, (1, 1, 1), 0, PairOptions(with_previous=True)).pair(1)
     scored: list[torch.Tensor | None] = []
     gap_velocities: list[torch.Tensor] = []
@@ -489,7 +404,7 @@ def _contrastive_gradients(config: JointTrainConfig, video_store: Path) -> tuple
     """
     torch.manual_seed(0)
     trainer = JointTrainer(config)
-    model, _ = trainer._prepare(warm_start=False)
+    model, _ = trainer._assembly.build(warm_start=False)
     sample = PairDataset(_pairs(video_store), 1, (1, 1, 1), 0).pair(0)
 
     trainer._losses(model, sample).contrastive.backward()
@@ -535,18 +450,6 @@ def test_train_carries_the_projection_head_through_the_resume_snapshot(
     assert all(torch.equal(snapshot[name], value) for name, value in trainer.contrastive.state_dict().items())
 
 
-def test_prepare_hands_the_projection_head_to_the_optimizer(video_store: Path):
-    """A head nobody optimises is a head that never learns: its parameters ride the optimiser and the clip."""
-    trainer = JointTrainer(_contrastive_config(ContrastiveSite.DETACHED_PROJECTION))
-    model, optimization = trainer._prepare(warm_start=False)
-
-    optimised = {id(parameter) for group in optimization.optimizer.param_groups for parameter in group["params"]}
-    head = list(trainer.contrastive.parameters())
-
-    assert head and {id(parameter) for parameter in head} <= optimised
-    assert len(trainer._trained(model)) == len(list(model.parameters())) + len(head)
-
-
 def test_train_records_sampler_health(
     video_store: Path, in_bounds_tracks: AnnotatedTracks, tmp_path: Path, mlflow_backend: RecordingMlflow
 ):
@@ -577,7 +480,7 @@ def test_losses_carries_the_hard_negative_term_into_the_total(video_store: Path)
     torch.manual_seed(0)
     weighted = _cpu_config().model_copy(update={"loss": LossCfg(hard_negative_weight=1.0)})
     trainer = JointTrainer(weighted)
-    model, _ = trainer._prepare(warm_start=False)
+    model, _ = trainer._assembly.build(warm_start=False)
     sample = PairDataset(_pairs(video_store), 1, (1, 1, 1), 0).pair(0)
 
     outcome = trainer._losses(model, sample)

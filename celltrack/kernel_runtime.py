@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 _INPUT_GLOB = "/kaggle/input/**"
 _PACK_CONFIG = "weights/unet_transformer/split_0/config.json"
+_SECONDARY_SEED_TOKEN = "seed314159"
 _RANKER_MANIFEST = "ASSOCIATION_RANKER_MANIFEST.json"
 _TEST_GLOB = "/kaggle/input/**/biohub-cell-tracking-during-development/test/*.zarr"
 _ZARR_SUFFIX = ".zarr"
@@ -90,6 +91,24 @@ class KernelRuntime:
         ]
         logger.info("center prior pack: %s", found[:1])
         return Path(found[0]).parent if found else None
+
+    @staticmethod
+    def secondary_pack() -> Path | None:
+        """The independently-seeded seed314159 detector+edge pack for the calibrated dual-seed fusion, or `None`.
+
+        Found the way the detector packs are — by the `config.json` a pack alone carries — but selected by the
+        dataset token that marks the SECOND, independently trained seed (`seed314159`), so the kernel names a
+        DATASET and not a mount layout. A kernel that does not attach it gets `None` and runs the single-seed
+        path rather than failing on a directory nobody wrote down. Locally the pack sits at
+        `reference/seed314159/weights/unet_transformer/split_0` under the data root.
+        """
+        found = [
+            Path(config).parent
+            for config in glob.glob(f"{_INPUT_GLOB}/{_PACK_CONFIG}", recursive=True)
+            if _SECONDARY_SEED_TOKEN in config
+        ]
+        logger.info("secondary pack: %s", found[:1])
+        return found[0] if found else None
 
     @staticmethod
     def pack_source() -> Path:

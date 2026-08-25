@@ -74,6 +74,19 @@ def test_center_prior_pack(monkeypatch: pytest.MonkeyPatch):
     assert KernelRuntime.center_prior_pack() is None  # detector-only mount -> no confirmed recovery
 
 
+def test_secondary_pack(monkeypatch: pytest.MonkeyPatch):
+    """`secondary_pack` picks the seed314159 pack by its dataset token, skipping the support-pack seed."""
+    configs = [
+        "/kaggle/input/support-pack-50ep/weights/unet_transformer/split_0/config.json",
+        "/kaggle/input/seed314159-pack/weights/unet_transformer/split_0/config.json",
+    ]
+    monkeypatch.setattr(kernel_runtime.glob, "glob", lambda pattern, recursive: configs)
+    assert KernelRuntime.secondary_pack() == Path(configs[1]).parent
+
+    monkeypatch.setattr(kernel_runtime.glob, "glob", lambda pattern, recursive: configs[:1])
+    assert KernelRuntime.secondary_pack() is None  # secondary seed not attached -> single-seed path
+
+
 def test_test_videos(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """`test_videos` returns the competition test zarrs as sorted Paths."""
     unsorted = [str(tmp_path / "b.zarr"), str(tmp_path / "a.zarr")]

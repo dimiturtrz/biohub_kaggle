@@ -62,3 +62,21 @@ def test_align_of_a_flat_seed_is_finite():
     aligned = SeedMomentAlignment.align(torch.full((2, 2), 5.0), torch.tensor([[0.0, 1.0], [2.0, 3.0]]))
     assert torch.isfinite(aligned).all()
     assert torch.allclose(aligned, torch.full((2, 2), 1.5))
+
+
+def test_align_per_column():
+    """Each TARGET column is z-scored by its OWN moments over the sources, unlike the scalar-global `align`.
+
+    On a column-varying matrix the per-column map re-centres each column onto the reference column's mean
+    (so every output column has ~zero mean once the reference's is subtracted back), and it differs from the
+    global `align`, which shares one scalar mean/std over the whole matrix.
+    """
+    logits = torch.tensor([[0.0, 10.0], [2.0, 14.0]])  # col 0: mean 1 std 1; col 1: mean 12 std 2
+    reference = torch.zeros(2, 2)  # zero mean per column -> output columns re-centre onto zero
+    aligned = SeedMomentAlignment.align_per_column(logits, reference)
+
+    assert torch.isfinite(aligned).all()
+    assert torch.allclose(aligned.mean(dim=0), torch.zeros(2), atol=1e-6)  # each column centred on the reference's mean
+
+    global_aligned = SeedMomentAlignment.align(logits, reference)
+    assert not torch.allclose(aligned, global_aligned)  # per-column calibration is not the scalar-global one

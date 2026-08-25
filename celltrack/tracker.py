@@ -18,12 +18,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
 from celltrack.affinity import EdgeAffinity
-from celltrack.detectors.pipeline import BlendDetectorScorer
+from celltrack.detectors.pipeline import BlendDetectorScorer, DetectionFusionOptions
 from celltrack.detectors.response_cache import EphemeralResponseStore, ResponseCache, ResponseStore
 from celltrack.detectors.tunet import DetectorRecipe, TemporalUNetDetector
 from celltrack.edges.association_ranker import AssociationRanker
 from celltrack.edges.blended_edge_scoring import BlendedEdgeTransformerScorer
 from celltrack.linkers.linking import Linker
+from celltrack.linkers.motion_linking import _KERNEL_EDGE_ADMISSION_THRESHOLD
 from celltrack.models.edge_transformer import EdgeTransformerScorer
 from celltrack.models.joint_model import JointModel
 from celltrack.operating_point import TrackerConfig
@@ -136,7 +137,12 @@ class CellTracker:
 
     @classmethod
     def from_joint(
-        cls, checkpoint: Path, recipe: DetectorRecipe, device: str, config: TrackerConfig | None = None
+        cls,
+        checkpoint: Path,
+        recipe: DetectorRecipe,
+        device: str,
+        config: TrackerConfig | None = None,
+        responses: Path | None = None,
     ) -> "CellTracker":
         """The shipped tracker with BOTH heads from one jointly-trained checkpoint — no pilkwang packs.
 
@@ -159,7 +165,14 @@ class CellTracker:
         edge_scorer = BlendedEdgeTransformerScorer(
             (scorer,), (1.0,), bidirectional=config.bidirectional_edges, options=config.edge_options
         )
-        blended = BlendDetectorScorer(detectors=((detector, EphemeralResponseStore()),), recipe=recipe, device=device)
+        # A submission persists nothing (ephemeral). But the merge_referee GT-free gate reads cached fp32 logit
+        # volumes off disk (`<video>.logit.<grid>_tta1_pc0.npy`), so a diagnostic dump run threads a persistent
+        # ResponseCache under `cache_key` (default: the checkpoint stem + "_logits"). Same fingerprint the
+        # pilkwang packs cache under, so the referee compares like-for-like across weights-keys.
+        store: ResponseStore = (
+            ResponseCache(responses, f"{checkpoint.stem}_logits") if responses is not None else EphemeralResponseStore()
+        )
+        blended = BlendDetectorScorer(detectors=((detector, store),), recipe=recipe, device=device)
         return cls(detector=blended, edge_scorer=edge_scorer, device=device, config=config)
 
     @classmethod
@@ -236,7 +249,15 @@ class CellTracker:
         seed1 = self.config.detector_blend
         blend = None if seed1 is None else (seed1, 1 - seed1)
         detect_start = time.perf_counter()
-        nodes = self.detector.nodes(video_key, path, self.config.threshold, blend)
+        nodes = self.detector.nodes(
+            video_key,
+            path,
+            self.config.threshold,
+            blend,
+            fusion=DetectionFusionOptions(
+                align_moments=self.config.detector_align_moments, kernel_faithful=self.config.kernel_faithful
+            ),
+        )
         affinity_start = time.perf_counter()
         affinity = self.edge_scorer.affinities(path, nodes, self.device)
         mutual = self.fused_affinities(path, nodes, affinity)
@@ -331,7 +352,11 @@ class CellTracker:
         """
         config = self.config
         evidence = evidence if evidence is not None else StageEvidence()
-        link = LinkerStage(config.linker.build(spacing, affinity, mutual, volume_shape, evidence.ranker))
+        # E5: in faithful mode the linker admits an edge candidate only above the kernel's 0.48 probability floor.
+        linker = config.linker
+        if config.kernel_faithful:
+            linker = linker.model_copy(update={"edge_admission_prob": _KERNEL_EDGE_ADMISSION_THRESHOLD})
+        link = LinkerStage(linker.build(spacing, affinity, mutual, volume_shape, evidence.ranker))
         # Division recovery reads the edge affinity, so it needs a learned head and runs before the short-track
         # filter (whose division-preserving carve-out can only protect a fork that already exists).
         divide = (

@@ -110,3 +110,20 @@ def test_score(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     assert all(0.0 <= value <= 1.0 for value in consensus.values())
     assert net_new[2] == (0, 0)  # k=2 = intersection; it neither adds nor drops vs the champion here
     assert ranked[0].added == 1  # the union subset recovers cell 1's link the champion alone lacks
+
+
+def test_score_rejects_a_pool_missing_the_champion(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """A pool without _CHAMPION must RAISE, not silently report every consensus edge as net-new (a false GO).
+
+    Guards the bd-82aq footgun: with no champion among the voters there are no champion edges to subtract, so
+    `added` would equal the whole consensus and the go/no-go would greenlight spending the one held submission.
+    """
+    truth = _graph(_LINK_CELL0)
+    proxy = SimpleNamespace(
+        spacing=Spacing(1, 1, 1), paths=[tmp_path / "m.zarr"], truths=[SimpleNamespace(graph=truth)]
+    )
+    graphs = {"challenger_a": {"m": _both_cells()}, "challenger_b": {"m": _both_cells()}}  # no flow_thr080
+    monkeypatch.setattr(ConsensusRun, "_graphs", lambda self, root: (proxy, graphs))
+
+    with pytest.raises(ValueError, match="champion"):
+        ConsensusRun("cpu").score(cast(DataRoot, tmp_path / "paths.yaml"))

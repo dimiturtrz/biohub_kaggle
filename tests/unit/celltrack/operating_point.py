@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from celltrack.edges.calibrated_fusion import CalibratedFusionOptions
 from celltrack.operating_point import TrackerConfig
 
 # The layers whose whole output is a NUMBER — a score, a checkpoint, a diagnosis. A bare `TrackerConfig()`
@@ -45,6 +46,54 @@ def test_shipped():
     assert (division.min_second_prob, division.min_kept_prob) == (0.0, 0.0)  # the floor excluded the true case
     assert (division.parent_gate_um, division.sister_gate_um) == (None, None)  # derived from the linker's gate
     assert division.max_added_forks is None  # ~1072, ~400 and the derived ~157 forks all scored 0.899
+
+
+def test_frontier_replica():
+    """The genuine 0.926 stack as one operating point — every frontier arm ON, and `shipped` left untouched.
+
+    Pinned like `shipped` because the kernel and any local eval mount THIS one definition: a drift here silently
+    ships a different pipeline under the replica's name. The DeepCenter veto is the mounted `center_pack` and the
+    secondary seed the mounted `secondary_pack`, both orthogonal to the config, so they are not asserted here.
+    """
+    replica = TrackerConfig.frontier_replica()
+
+    assert replica.threshold == 0.96875  # between the shipped 0.97 and the high-precision 0.99
+    # Calibrated dual-seed fusion: both heads flipped, exactly as proxy_eval._with_calibrated_fusion does.
+    assert isinstance(replica.edge_options.calibrated_fusion, CalibratedFusionOptions)
+    assert replica.detector_blend == pytest.approx(0.525)  # seed-1 share = 1 - the frontier's 0.475 secondary
+    assert replica.detector_align_moments is True
+    # divsub in its BYTE-FAITHFUL form: kernel_faithful turns on the kernel's own C1/C2/C3/two-cap stage
+    # (the fidelity oracle proved the per-flag require_* bracket diverges — it forks off track-starts).
+    division = replica.division
+    assert division is not None
+    assert division.kernel_faithful is True
+    # Motion relink linker, tight-then-loose at the annotated one-frame displacement bounds.
+    assert (replica.linker.name, replica.linker.tight_um, replica.linker.gate_um) == ("motion", 6.0, 10.0)
+
+    assert TrackerConfig.shipped().linker.name == "flow"  # shipped is not perturbed by building the replica
+    assert TrackerConfig.shipped().edge_options.calibrated_fusion is None
+
+
+def test_kernel_faithful_replica():
+    """The full byte-faithful replica: `frontier_replica` plus all six kernel-fidelity switches ON, in one home.
+
+    The single incantation the deliverable names. `frontier_replica` already carries the faithful divsub; this
+    also flips the fusion (E1-E4), the tracker's own admission+guard toggle (E5+E6) and the motion cost replica,
+    so the whole stack reproduces the published kernel rather than our shipped approximations.
+    """
+    replica = TrackerConfig.kernel_faithful_replica()
+
+    assert replica.kernel_faithful is True  # E5 (edge admission) + E6 (detection guard)
+    assert replica.linker.kernel_faithful is True  # the motion relink cost replica
+    fusion = replica.edge_options.calibrated_fusion
+    assert fusion is not None
+    assert fusion.kernel_faithful is True  # the calibrated fusion divergences (E1-E4)
+    division = replica.division
+    assert division is not None
+    assert division.kernel_faithful is True  # the divsub recovery replica, inherited from frontier_replica
+
+    # frontier_replica itself stays the genuine (non-strict) stack — building the faithful one does not perturb it.
+    assert TrackerConfig.frontier_replica().kernel_faithful is False
 
 
 def test_no_measuring_module_constructs_a_bare_operating_point():

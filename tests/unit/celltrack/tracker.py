@@ -7,12 +7,13 @@ import numpy as np
 import pytest
 
 from celltrack import tracker as tracker_module
-from celltrack.detectors.pipeline import BlendDetectorScorer
+from celltrack.detectors.pipeline import BlendDetectorScorer, DetectionFusionOptions
 from celltrack.detectors.response_cache import EphemeralResponseStore
 from celltrack.detectors.tunet import DetectorRecipe
 from celltrack.edges.blended_edge_scoring import EdgeBlendOptions
 from celltrack.linkers.linkers import LinkerConfig
 from celltrack.linkers.linking import Linker
+from celltrack.linkers.motion_linking import _KERNEL_EDGE_ADMISSION_THRESHOLD, MotionHungarianLinker
 from celltrack.operating_point import TrackerConfig
 from celltrack.postproc.topology_repair import TopologyConfig
 from celltrack.tracker import CellTracker, LinkerStage
@@ -46,7 +47,13 @@ class _StubBlend:
     """A blend detector that returns a fixed two-cell chain, so the linker + post-proc run without a forward."""
 
     def nodes(
-        self, video_key: str, path: Path, threshold: float, weights: tuple[float, ...] | None = None
+        self,
+        video_key: str,
+        path: Path,
+        threshold: float,
+        weights: tuple[float, ...] | None = None,
+        *,
+        fusion: DetectionFusionOptions | None = None,
     ) -> TrackGraph:
         return _CHAIN
 
@@ -124,6 +131,59 @@ def test_run_hands_the_linker_the_volume_shape(monkeypatch: pytest.MonkeyPatch):
     linker = LinkerConfig(name="flow", boundary_prior=True)
     tracker = _tracker(monkeypatch, TrackerConfig(min_track_length=1, smooth_strength=0.0, linker=linker))
     assert tracker.run("m.zarr", Path("m.zarr")).node_ids.tolist() == [0, 1]  # built and ran; no shape = ValueError
+
+
+def test_kernel_faithful_threads_the_admission_floor_and_the_detection_guard(monkeypatch: pytest.MonkeyPatch):
+    """`TrackerConfig.kernel_faithful` reaches BOTH ends: the linker's 0.48 admission floor (E5) and the
+
+    detector's per-frame retention guard (E6). One toggle, threaded to the two divergences that live on the
+    tracker's own path rather than in a nested config — the plumbing assertion that the flag actually lands.
+    """
+    monkeypatch.setattr(
+        tracker_module.CellVideo, "from_ome_zarr", staticmethod(lambda path: _Video(Spacing(1.0, 1.0, 1.0)))
+    )
+    blend = _CountingBlend(_CHAIN)
+    config = TrackerConfig(
+        linker=LinkerConfig(name="motion", tight_um=6.0, gate_um=10.0),
+        kernel_faithful=True,
+        min_track_length=1,
+        smooth_strength=0.0,
+    )
+    tracker = CellTracker(
+        detector=cast(BlendDetectorScorer, blend),
+        edge_scorer=cast(tracker_module.BlendedEdgeTransformerScorer, _StubEdgeScorer()),
+        device="cpu",
+        config=config,
+    )
+    tracker.run("m.zarr", Path("m.zarr"))
+
+    assert blend.kernel_faithful_seen == [True]  # E6: the detection guard flag reached `nodes`
+    link_stage = tracker._stages(Spacing(1.0, 1.0, 1.0), affinity=None)[0]
+    assert isinstance(link_stage, LinkerStage)
+    assert cast(MotionHungarianLinker, link_stage.linker).edge_admission_prob == _KERNEL_EDGE_ADMISSION_THRESHOLD
+
+
+def test_kernel_faithful_off_leaves_both_paths_untouched(monkeypatch: pytest.MonkeyPatch):
+    """With the toggle off the detector sees `False` and the linker carries no admission floor — byte-identical."""
+    monkeypatch.setattr(
+        tracker_module.CellVideo, "from_ome_zarr", staticmethod(lambda path: _Video(Spacing(1.0, 1.0, 1.0)))
+    )
+    blend = _CountingBlend(_CHAIN)
+    config = TrackerConfig(
+        linker=LinkerConfig(name="motion", tight_um=6.0, gate_um=10.0), min_track_length=1, smooth_strength=0.0
+    )
+    tracker = CellTracker(
+        detector=cast(BlendDetectorScorer, blend),
+        edge_scorer=cast(tracker_module.BlendedEdgeTransformerScorer, _StubEdgeScorer()),
+        device="cpu",
+        config=config,
+    )
+    tracker.run("m.zarr", Path("m.zarr"))
+
+    assert blend.kernel_faithful_seen == [False]  # E6 off
+    link_stage = tracker._stages(Spacing(1.0, 1.0, 1.0), affinity=None)[0]
+    assert isinstance(link_stage, LinkerStage)
+    assert cast(MotionHungarianLinker, link_stage.linker).edge_admission_prob is None  # E5 off
 
 
 def test_with_config(monkeypatch: pytest.MonkeyPatch):
@@ -349,11 +409,19 @@ class _CountingBlend:
     def __init__(self, graph: TrackGraph = _FORK) -> None:
         self.graph = graph
         self.calls = 0
+        self.kernel_faithful_seen: list[bool] = []
 
     def nodes(
-        self, video_key: str, path: Path, threshold: float, weights: tuple[float, ...] | None = None
+        self,
+        video_key: str,
+        path: Path,
+        threshold: float,
+        weights: tuple[float, ...] | None = None,
+        *,
+        fusion: DetectionFusionOptions | None = None,
     ) -> TrackGraph:
         self.calls += 1
+        self.kernel_faithful_seen.append(bool(fusion and fusion.kernel_faithful))
         return self.graph
 
 

@@ -51,6 +51,10 @@ class SeedMomentAlignment:
 
     STD_RATIO_MIN = 0.5
     STD_RATIO_MAX = 2.0
+    # The kernel-faithful per-column path floors each column's spread at a fixed epsilon before the ratio, as the
+    # published kernel does (`clamp_min(1e-4)`), rather than at the dtype eps the global path uses — a
+    # near-degenerate single-source column then rescales by a bounded factor instead of an arbitrary one.
+    PER_COLUMN_STD_FLOOR = 1e-4
 
     @classmethod
     def align(cls, logits: Float[Tensor, "s t"], reference: Float[Tensor, "s t"]) -> Float[Tensor, "s t"]:
@@ -59,6 +63,23 @@ class SeedMomentAlignment:
         floor = torch.finfo(logits.dtype).eps
         ratio = min(max(target.std / max(source.std, floor), cls.STD_RATIO_MIN), cls.STD_RATIO_MAX)
         return (logits - source.mean) * ratio + target.mean
+
+    @classmethod
+    def align_per_column(cls, logits: Float[Tensor, "s t"], reference: Float[Tensor, "s t"]) -> Float[Tensor, "s t"]:
+        """`logits` re-expressed in `reference`'s units PER TARGET COLUMN — the published kernel's calibration.
+
+        The global `align` shares one scalar mean/std over the whole `s x t` matrix; the frontier kernel instead
+        z-scores each TARGET column by its OWN moments over the sources (`mean/std(dim=source, keepdim=True)`),
+        so a target where the primary is sharp and one where it is flat are each put on the primary's local
+        scale rather than on the video-gap's average. Reduction is over the source axis (`dim=0`), matching the
+        kernel's `dim=1` on its `(1, n_src, n_tgt)` tensor. The std ratio is clamped exactly as the global path.
+        """
+        source_mean = logits.mean(dim=0, keepdim=True)
+        target_mean = reference.mean(dim=0, keepdim=True)
+        source_std = logits.std(dim=0, correction=0, keepdim=True).clamp_min(cls.PER_COLUMN_STD_FLOOR)
+        target_std = reference.std(dim=0, correction=0, keepdim=True).clamp_min(cls.PER_COLUMN_STD_FLOOR)
+        ratio = (target_std / source_std).clamp(cls.STD_RATIO_MIN, cls.STD_RATIO_MAX)
+        return (logits - source_mean) * ratio + target_mean
 
     @staticmethod
     def moments(logits: Float[Tensor, "s t"]) -> LogitMoments:

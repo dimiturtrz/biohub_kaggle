@@ -20,9 +20,12 @@ from typing import get_args, get_type_hints
 
 from pydantic import BaseModel
 
+from celltrack.detectors.center_prior import CenterPriorScorer, CenterVetoConfig
+from celltrack.edges.calibrated_fusion import CalibratedFusionOptions
 from celltrack.eval.proxy import CV_MOVIES, TEST_MOVIES, TestMovieProxy
 from celltrack.eval.sweep_tracking import SweepTracking
 from celltrack.operating_point import TrackerConfig
+from celltrack.postproc.gap_closer import ReuseConfig, SyntheticGap
 from celltrack.tracker import CellTracker
 from core.metrics.score import SplitScore, VideoMetrics
 from core.paths import DataRoot
@@ -40,6 +43,15 @@ _ACQUISITION_PREFIX = 4
 # Public because the ranker drift diagnosis mounts the SAME artifact, and two spellings of one path is exactly
 # how a diagnosis ends up characterising a different mount than the sweep it is diagnosing.
 RANKER_ARTIFACT = "reference/association_ranker"
+
+# The primary edge+detector pack and the default secondary, relative to the processed root. The secondary is
+# pilkwang's own seed 2 unless `--secondary-pack` re-points it at an independently trained seed for the fusion.
+PRIMARY_PACK = Path("reference/pilkwang/split_0")
+SECONDARY_PACK_DEFAULT = Path("reference/pilkwang/seed2/weights/unet_transformer/split_0")
+
+# The calibrated fusion's detection-side mix: the SECONDARY seed carries this weight (the frontier's 0.475), so
+# the primary — the value `detector_blend` (seed 1's share) actually holds — is its complement.
+SECONDARY_DETECTOR_WEIGHT = 0.475
 
 
 class ConfigOverride:
@@ -110,6 +122,30 @@ class TrackerProxyEval:
     disappearance_costs: tuple[float, ...] = (_SHIPPED.linker.disappearance_cost,)
     stems: tuple[str, ...] = TEST_MOVIES
     overrides: tuple[str, ...] = ()
+    # The DeepCenter centre-prior pack directory, relative to the processed root, or None to run without it.
+    # Present -> the mounted tracker carries a `CenterPriorScorer` AND `config_at` installs the frontier's
+    # DeepCenter-gated recovery arm (`ReuseConfig(veto, synthetic)`) on any cell that has not set its own reuse
+    # stage — the two are one knob because the veto is inert unless a stage reads it (only the reuse-bridge does).
+    center_pack: Path | None = None
+    # The SECOND (secondary) edge+detector pack, relative to the processed root — pilkwang's own seed 2 by
+    # default. Point it at an INDEPENDENTLY seeded pack (e.g. reference/seed314159/…) to feed the calibrated
+    # fusion a second opinion for BOTH heads; the same pack serves the detector blend and the edge blend.
+    secondary_pack: Path = SECONDARY_PACK_DEFAULT
+    # One attributable knob: flip the edge blend to the margin-gated calibrated dual-seed fusion and the detector
+    # blend to the frontier's std-ratio-aligned 0.475-secondary mix. Off keeps the shipped 0.900 recipe intact.
+    calibrated_fusion: bool = False
+    # Inert unless `calibrated_fusion` is on: flip the edge fusion from our variant (scalar-global calibration,
+    # binary full-weight low-margin gate, edge-level retention guard) to the published 0.926 kernel's math
+    # BYTE-FOR-BYTE — per-target-column calibration and a continuous per-column blend ramp. Replicate-the-number
+    # floor: an attributable A/B of the variant against the faithful mode on the same mounted seeds.
+    fusion_kernel_faithful: bool = False
+    # Base the whole sweep on `TrackerConfig.frontier_replica()` instead of `shipped()` — the genuine 0.926 stack
+    # as one operating point (calibrated fusion + DeepCenter recovery + byte-faithful divsub + motion relink). The
+    # two packs the replica config assumes are still mounted separately via `--secondary-pack`/`--center-pack`;
+    # this only swaps the config base, so a dry-run validates the exact shipped operating point assembles and
+    # tracks (not for the proxy number, which is banned at the saturated top — for node-ratio / division sanity).
+    frontier_replica: bool = False
+    kernel_faithful_replica: bool = False
 
     def _mount(self, root: DataRoot) -> tuple[TestMovieProxy, CellTracker]:
         """The loaded proxy and the tracker mounted once — models and per-seed caches shared across the sweep.
@@ -125,14 +161,20 @@ class TrackerProxyEval:
         # only re-points the post-detection stages. The swept coordinates are re-applied per cell regardless.
         base = self.config_at(self.thresholds[0], self.disappearance_costs[0])
         pipeline = CellTracker.from_packs(
-            proc / "reference/pilkwang/split_0",
-            proc / "reference/pilkwang/seed2/weights/unet_transformer/split_0",
+            proc / PRIMARY_PACK,
+            proc / self.secondary_pack,
             proc / "cache/responses",
             self.device,
             base,
         )
         if self.config_at(self.thresholds[0], self.disappearance_costs[0]).linker.needs_ranker:
             pipeline = pipeline.with_ranker(proc / RANKER_ARTIFACT)
+        # Mount DeepCenter's centre prior like the ranker — a caller-supplied pack directory under the data root,
+        # so the same code path serves the local eval and the Kaggle mount. Mounted once; the per-cell
+        # `with_config` sweep carries the scorer through (see `CellTracker.with_config`).
+        if self.center_pack is not None:
+            scorer = CenterPriorScorer.from_pack(proc / self.center_pack, self.device)
+            pipeline = replace(pipeline, center_scorer=scorer)
         return proxy, pipeline
 
     def scores(self, root: DataRoot) -> dict[tuple[float, float], SplitScore]:
@@ -159,12 +201,56 @@ class TrackerProxyEval:
         linker.name=flow` was measuring a pipeline we do not submit. Only the two swept coordinates are
         replaced on top of it.
         """
-        config = replace(
-            _SHIPPED, threshold=threshold, linker=_SHIPPED.linker.model_copy(update={"disappearance_cost": cost})
-        )
+        if self.kernel_faithful_replica:
+            base = TrackerConfig.kernel_faithful_replica()
+        elif self.frontier_replica:
+            base = TrackerConfig.frontier_replica()
+        else:
+            base = _SHIPPED
+        config = replace(base, threshold=threshold, linker=base.linker.model_copy(update={"disappearance_cost": cost}))
         for assignment in self.overrides:
             config = ConfigOverride.apply(config, assignment)
+        if self.calibrated_fusion:
+            config = self._with_calibrated_fusion(config)
+            if self.fusion_kernel_faithful:
+                config = self._with_kernel_faithful_fusion(config)
+        # A mounted centre prior does nothing until a stage reads its veto, and only the reuse-bridge does. So
+        # `--center-pack` installs the frontier's DeepCenter recovery arm (reuse + confirmed synthetic insertion,
+        # each at its shipped default) whenever a cell has not set its own reuse stage — the single knob that
+        # turns the mounted pack into a measurable arm. The two-level nesting this needs is not `--set`-reachable.
+        if self.center_pack is not None and config.reuse is None:
+            config = replace(config, reuse=ReuseConfig(veto=CenterVetoConfig(), synthetic=SyntheticGap()))
         return config
+
+    @staticmethod
+    def _with_calibrated_fusion(config: TrackerConfig) -> TrackerConfig:
+        """The frontier's dual-seed fusion folded onto a resolved config — the single `--calibrated-fusion` knob.
+
+        Both heads flip together: the edge blend to the margin-gated calibrated fusion (`CalibratedFusionOptions`
+        at its frontier defaults), and the detector blend to the std-ratio-aligned mix that gives the secondary
+        seed the frontier's 0.475 weight. `detector_blend` holds seed 1's (the primary's) share, so it is the
+        complement of that secondary weight.
+        """
+        return replace(
+            config,
+            edge_options=config.edge_options.model_copy(update={"calibrated_fusion": CalibratedFusionOptions()}),
+            detector_blend=1.0 - SECONDARY_DETECTOR_WEIGHT,
+            detector_align_moments=True,
+        )
+
+    @staticmethod
+    def _with_kernel_faithful_fusion(config: TrackerConfig) -> TrackerConfig:
+        """Flip the already-installed calibrated fusion to the published kernel's byte-faithful edge math.
+
+        Applied AFTER `_with_calibrated_fusion` (which installs `CalibratedFusionOptions()` at its frontier
+        defaults), this re-points only the `kernel_faithful` flag on that same fusion config — per-target-column
+        calibration and the continuous per-column ramp — leaving every constant the frontier ships untouched.
+        """
+        fusion = config.edge_options.calibrated_fusion
+        if fusion is None:
+            raise ValueError("kernel-faithful fusion requires calibrated fusion to be installed first")
+        faithful = fusion.model_copy(update={"kernel_faithful": True})
+        return replace(config, edge_options=config.edge_options.model_copy(update={"calibrated_fusion": faithful}))
 
     def breakdown(self, root: DataRoot) -> dict[str, VideoMetrics]:
         """Per-movie metrics of the tracker at its first swept threshold — separates recall from bonus-farming."""
@@ -198,6 +284,12 @@ class _Args:
     overrides: tuple[str, ...] = field(default=())
     stems_label: str = field(default="test")
     per_movie: bool = field(default=False)
+    center_pack: Path | None = field(default=None)
+    secondary_pack: Path = field(default=SECONDARY_PACK_DEFAULT)
+    calibrated_fusion: bool = field(default=False)
+    fusion_kernel_faithful: bool = field(default=False)
+    frontier_replica: bool = field(default=False)
+    kernel_faithful_replica: bool = field(default=False)
 
     @classmethod
     def from_argv(cls) -> "_Args":
@@ -219,6 +311,43 @@ class _Args:
             help="comma-separated disappearance costs to sweep (default: the shipped operating point's)",
         )
         parser.add_argument("--cv", action="store_true", help="score the fixed-8 CV instead of the four test movies")
+        parser.add_argument(
+            "--center-pack",
+            type=Path,
+            default=None,
+            help="DeepCenter pack dir under the processed root (e.g. reference/deepcenter/weights/full_frame_center); "
+            "mounts the centre prior AND installs its reuse+synthetic recovery arm",
+        )
+        parser.add_argument(
+            "--secondary-pack",
+            type=Path,
+            default=SECONDARY_PACK_DEFAULT,
+            help="the secondary edge+detector pack dir under the processed root (default: pilkwang seed 2); point "
+            "it at an independently trained seed (e.g. reference/seed314159/weights/unet_transformer/split_0)",
+        )
+        parser.add_argument(
+            "--calibrated-fusion",
+            action="store_true",
+            help="flip both heads to the margin-gated calibrated dual-seed fusion (the frontier's #1 lever)",
+        )
+        parser.add_argument(
+            "--fusion-kernel-faithful",
+            action="store_true",
+            help="with --calibrated-fusion, use the published kernel's byte-faithful edge math (per-column "
+            "calibration + continuous ramp) instead of our variant",
+        )
+        parser.add_argument(
+            "--frontier-replica",
+            action="store_true",
+            help="base the sweep on TrackerConfig.frontier_replica() (the genuine 0.926 stack) instead of shipped(); "
+            "still pass --secondary-pack/--center-pack for the packs the replica config assumes are mounted",
+        )
+        parser.add_argument(
+            "--kernel-faithful-replica",
+            action="store_true",
+            help="base the sweep on TrackerConfig.kernel_faithful_replica() (byte-faithful fusion+linker+divsub, "
+            "the true reimpl of the published 0.926 kernel); wins over --frontier-replica if both are given",
+        )
         parser.add_argument("--per-movie", action="store_true", help="also log each movie's raw Jaccard and node ratio")
         parser.add_argument(
             "--set",
@@ -238,6 +367,12 @@ class _Args:
             overrides=tuple(parsed.overrides),
             stems_label="cv-8" if parsed.cv else "test-4",
             per_movie=parsed.per_movie,
+            center_pack=parsed.center_pack,
+            secondary_pack=parsed.secondary_pack,
+            calibrated_fusion=parsed.calibrated_fusion,
+            fusion_kernel_faithful=parsed.fusion_kernel_faithful,
+            frontier_replica=parsed.frontier_replica,
+            kernel_faithful_replica=parsed.kernel_faithful_replica,
         )
 
 
@@ -246,7 +381,19 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     args = _Args.from_argv()
     root = DataRoot.from_config(args.config)
-    evaluator = TrackerProxyEval(args.device, args.thresholds, args.disappearance_costs, args.stems, args.overrides)
+    evaluator = TrackerProxyEval(
+        args.device,
+        args.thresholds,
+        args.disappearance_costs,
+        args.stems,
+        args.overrides,
+        center_pack=args.center_pack,
+        secondary_pack=args.secondary_pack,
+        calibrated_fusion=args.calibrated_fusion,
+        fusion_kernel_faithful=args.fusion_kernel_faithful,
+        frontier_replica=args.frontier_replica,
+        kernel_faithful_replica=args.kernel_faithful_replica,
+    )
     logger.info("proxy=%s set=%s", args.stems_label, list(args.overrides))
     breakdown: dict[str, VideoMetrics] = evaluator.breakdown(root) if args.per_movie else {}
     for stem, metric in breakdown.items():
