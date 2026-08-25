@@ -150,6 +150,14 @@ def test_data_cfg_scene_config():
     """`DataCfg.scene_config()` selects the appearance the generated scenes render from — default off, preset on."""
     assert DataCfg().scene_config() == SceneConfig()  # identical-blob default
     assert DataCfg(faithful_scenes=True).scene_config() == FAITHFUL_APPEARANCE
+    assert not DataCfg().scene_config().confusor_invert_velocity  # default is the velocity-continuous shape
+    assert DataCfg(confusor_invert_velocity=True).scene_config().confusor_invert_velocity  # opt-in reaches the scene
+
+
+def test_from_args_confusor_invert_velocity_reaches_the_scene():
+    """`--confusor-invert-velocity` lands in the rendered SceneConfig — the flag drives the generator."""
+    config = JointTrainConfig.from_args(JointCli.build_parser().parse_args(["--confusor-invert-velocity"]))
+    assert config.scene_config().confusor_invert_velocity
 
 
 def test_joint_train_config_scene_config():

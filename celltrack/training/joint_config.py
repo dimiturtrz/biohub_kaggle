@@ -181,6 +181,11 @@ class DataCfg(BaseModel):
     # confusor only ~4%; joint_confusor_synth_v1 trained on trivially-easy edges and P_true never moved. >0 raises
     # the measured rate ~linearly (0.30 -> ~32%, confusor_audit). 0 (default) is the plain uniform generator.
     confusor_rate: float = Field(0.0, ge=0.0, le=0.5)
+    # Construct the confusor as velocity-DEFEATING (the true successor departs OFF the source heading, cos ~ -0.17)
+    # instead of the default velocity-CONTINUOUS shape (successor departs ALONG the heading, cos ~ +0.57). The real
+    # dense mislink is the former — a head trained on the continuous shape learns "trust velocity", which INVERTS on
+    # the real confusor (the v2 P_true-below-baseline null). Off by default; audited by confusor_audit --align.
+    confusor_invert_velocity: bool = False
     # Replace the FIXED share above with the feedback controller (`PacedMixture`): the two populations
     # alternate structurally and an EMA'd difficulty moves a per-sample LOSS WEIGHT instead of a draw
     # probability, with save-best corrected for the difficulty the window trained at. Off by default.
@@ -207,7 +212,7 @@ class DataCfg(BaseModel):
     def scene_config(self) -> SceneConfig:
         """The SceneConfig every generated-scene path renders from — one home for the faithful/default choice."""
         base = FAITHFUL_APPEARANCE if self.faithful_scenes else SceneConfig()
-        return replace(base, confusor_rate=self.confusor_rate)
+        return replace(base, confusor_rate=self.confusor_rate, confusor_invert_velocity=self.confusor_invert_velocity)
 
 
 class OptimCfg(BaseModel):
@@ -538,6 +543,7 @@ class JointTrainConfig(BaseModel):
                 gpu_scene_detection=args.gpu_scene_detection,
                 faithful_scenes=args.faithful_scenes,
                 confusor_rate=args.confusor_rate,
+                confusor_invert_velocity=args.confusor_invert_velocity,
                 paced_curriculum=args.paced_curriculum,
                 include_test_in_train=args.include_test_in_train,
                 aug_brightness=augmentation.brightness,

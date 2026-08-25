@@ -31,7 +31,7 @@ from __future__ import annotations
 import argparse
 import logging
 from collections.abc import Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from enum import IntEnum
 from pathlib import Path
 
@@ -379,6 +379,26 @@ class AffinityIndex:
             return None
         return float(matrix[row, true_column]), float(matrix[row, chosen_column])
 
+    def true_rank(self, source_id: int, true_id: int) -> int | None:
+        """How many scored candidates outrank the true successor — 0 = the affinity's top pick, or `None`.
+
+        Scale-free where the margin is not: `mean(P_true) - mean(P_chosen)` scales with how peaked the head's
+        distribution is, so an undertrained (flatter) head reads a smaller |margin| whether or not it ranks
+        better, and the margin ordering of two arms at different training stages is confounded by temperature.
+        The rank of the true target among all scored candidates at `t+1` is invariant to that peakedness — it
+        moves only when the head reorders candidates — so it is the keep/kill ruler for comparing two heads.
+        The matrix columns are every real detected node at `t+1` (dense, no padding), so the count is honest.
+        """
+        source = self.slots.source(source_id)
+        if source is None:
+            return None
+        timepoint, row = source
+        matrix = self.affinity.probabilities(timepoint)
+        true_column = self.slots.column(true_id, timepoint)
+        if matrix is None or true_column is None:
+            return None
+        return int((matrix[row, :] > matrix[row, true_column]).sum())
+
 
 @dataclass(frozen=True)
 class MislinkSignal:
@@ -396,6 +416,22 @@ class MislinkSignal:
 
     p_true: Float[np.ndarray, "m"]
     p_chosen: Float[np.ndarray, "m"]
+    edges: Int[np.ndarray, "m 2"] = field(default_factory=lambda: np.empty((0, 2), dtype=np.int64))
+    """The ground-truth `(source, target)` node index of each recorded mislink — a STABLE cross-arm key.
+
+    The GT graph is identical across tracker arms, so two arms' mislink sets join on this key: the matched
+    population is the GT edges BOTH arms mislink, the only comparison that separates "head got better" from
+    "recall imported harder confusors" when the set size moves between arms. Left empty on the hand-built
+    signals in tests and on the analysis consumers that read only the aggregate margin.
+    """
+    ranks: Int[np.ndarray, "m"] = field(default_factory=lambda: np.empty(0, dtype=np.int64))
+    """How many scored candidates outrank the true successor for each mislink — the SCALE-FREE confusor read.
+
+    The margin `P_true - P_chosen` scales with head sharpness, so two arms at different training stages are not
+    margin-comparable (temperature confound). The rank is invariant to peakedness — `top1_fraction` (how often
+    the affinity ranks the true target first) is the keep/kill ruler for one head against another. Empty on the
+    hand-built test signals.
+    """
 
     @classmethod
     def of(
@@ -408,15 +444,23 @@ class MislinkSignal:
         node_ids = prediction.node_ids
         mislinked = np.flatnonzero((fates == Fate.MISLINK_CONFLICT) | (fates == Fate.MISLINK_FREE))
         pairs: list[tuple[float, float]] = []
+        kept_edges: list[tuple[int, int]] = []
+        kept_ranks: list[int] = []
         for source, target in truth.edge_rows()[mislinked]:
             source_row, true_row = int(predicted_of_truth[source]), int(predicted_of_truth[target])
             chosen_row = successors[source_row][0]
-            scored = index.pair(int(node_ids[source_row]), int(node_ids[true_row]), int(node_ids[chosen_row]))
+            source_id, true_id = int(node_ids[source_row]), int(node_ids[true_row])
+            scored = index.pair(source_id, true_id, int(node_ids[chosen_row]))
             if scored is not None:
                 pairs.append(scored)
+                kept_edges.append((int(source), int(target)))
+                rank = index.true_rank(source_id, true_id)
+                kept_ranks.append(rank if rank is not None else -1)
         return cls(
             p_true=np.array([true for true, _ in pairs], dtype=np.float64),
             p_chosen=np.array([chosen for _, chosen in pairs], dtype=np.float64),
+            edges=np.array(kept_edges, dtype=np.int64).reshape(-1, 2),
+            ranks=np.array(kept_ranks, dtype=np.int64),
         )
 
     def inverted_fraction(self) -> float:
@@ -434,13 +478,27 @@ class MislinkSignal:
             return float("nan"), float("nan")
         return float(np.mean(self.p_true)), float(np.mean(self.p_chosen))
 
+    def top1_fraction(self) -> float:
+        """Share of mislinks where the affinity ranks the true target FIRST — the scale-free confusor ruler.
+
+        NaN on an empty set. Unlike the margin, this is invariant to head sharpness, so it compares two arms at
+        different training stages honestly: it rises only when the head reorders the true target above its
+        rivals, not when the whole distribution sharpens.
+        """
+        ranked = self.ranks[self.ranks >= 0]
+        return float(np.mean(ranked == 0)) if len(ranked) else float("nan")
+
     @classmethod
     def pooled(cls, signals: Sequence["MislinkSignal"]) -> "MislinkSignal":
         """Every movie's mislinks as one signal — an eval reads its inversion over the whole proxy, not per video."""
         empty = np.empty(0, dtype=np.float64)
+        empty_edges = np.empty((0, 2), dtype=np.int64)
+        empty_ranks = np.empty(0, dtype=np.int64)
         return cls(
             p_true=np.concatenate([signal.p_true for signal in signals]) if signals else empty,
             p_chosen=np.concatenate([signal.p_chosen for signal in signals]) if signals else empty,
+            edges=np.concatenate([signal.edges for signal in signals]) if signals else empty_edges,
+            ranks=np.concatenate([signal.ranks for signal in signals]) if signals else empty_ranks,
         )
 
 

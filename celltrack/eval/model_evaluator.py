@@ -69,6 +69,7 @@ class EvalResult:
     inverted_fraction: float
     mean_p_true: float
     mean_p_chosen: float
+    top1_fraction: float
     mislinks: int
 
 
@@ -227,6 +228,7 @@ class ModelEvaluator:
             inverted_fraction=signal.inverted_fraction(),
             mean_p_true=mean_true,
             mean_p_chosen=mean_chosen,
+            top1_fraction=signal.top1_fraction(),
             mislinks=len(signal.p_true),
         )
 

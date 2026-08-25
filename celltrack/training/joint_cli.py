@@ -45,6 +45,16 @@ class JointCli:
             default=None,
             help="init from a joint checkpoint this trainer saved (path relative to processed/)",
         )
+        # Fast head-only validation: warm ONLY the detector from a converged checkpoint, fresh-init the configured
+        # head, freeze the detector, train the head alone. Isolates the edge-head mechanism on identical detector
+        # features (both arms share one detector) and skips the multi-hour detector pretrain. Unlike --init-weights
+        # (whole model, same head) this crosses head classes: a pack-detector ckpt warms a --head hoct run.
+        parser.add_argument(
+            "--detector-from",
+            type=str,
+            default=None,
+            help="warm the detector from a joint checkpoint, fresh-init + train ONLY the head (path under processed/)",
+        )
         # Stage-3 corpus: fold the four TEST movies into the train set (competitors do, and the hidden set overlaps
         # them). Selection still lands on the validation four, so the LB estimate stays honest — only the TRAIN
         # corpus grows. Off by default: test stays held out as an estimate.
@@ -270,6 +280,12 @@ class JointCli:
             type=float,
             default=0.0,
             help="fraction of generated cells made CONSTRUCTED confusors (fast source + slow near-rival); 0.3~=32%%",
+        )
+        parser.add_argument(
+            "--confusor-invert-velocity",
+            action="store_true",
+            help="build the confusor velocity-DEFEATING (successor departs OFF the source heading) — the real dense "
+            "mislink, vs the default velocity-continuous shape a head learns to trust and then inverts on",
         )
 
     @staticmethod

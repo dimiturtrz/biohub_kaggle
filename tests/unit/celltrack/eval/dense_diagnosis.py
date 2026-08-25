@@ -258,6 +258,15 @@ def test_inverted_fraction():
     assert MislinkSignal(p_true=np.array([]), p_chosen=np.array([])).inverted_fraction() == 0.0
 
 
+def test_top1_fraction():
+    """`top1_fraction` is the share of mislinks the affinity ranks the true target first — scale-free ruler."""
+    empty = np.array([], dtype=np.float64)
+    signal = MislinkSignal(p_true=empty, p_chosen=empty, ranks=np.array([0, 2, 0, -1], dtype=np.int64))
+    assert signal.top1_fraction() == 2 / 3  # ranks 0 and 0 are top-1; rank 2 is not; -1 (unscored) is excluded
+    # No scored ranks -> NaN, so an empty read drops out of a series rather than reading as a real zero.
+    assert math.isnan(MislinkSignal(p_true=empty, p_chosen=empty).top1_fraction())
+
+
 def _slotted_graph() -> TrackGraph:
     """One t0 node and two t1 nodes with non-row node ids — the row space a by-id lookup has to survive."""
     return TrackGraph(
@@ -312,6 +321,16 @@ def test_pair():
     assert index.pair(6, 7, 7) is None  # gap 1 was never scored
     assert index.pair(5, 5, 6) is None  # a "target" in the source's own frame is no column of this gap
     assert index.pair(99, 6, 7) is None  # a node the affinity never scored (a bridge's invented midpoint)
+
+
+def test_true_rank():
+    """`true_rank` counts how many scored candidates outrank the true successor — 0 is the affinity's top pick."""
+    index = AffinityIndex.of(_slotted_graph(), _Affinity({0: np.array([[0.7, 0.2]], dtype=np.float64)}))
+
+    assert index.true_rank(5, 6) == 0  # node 6 (P 0.7) is the row's top pick — nothing outranks it
+    assert index.true_rank(5, 7) == 1  # node 7 (P 0.2) is outranked by node 6
+    assert index.true_rank(6, 7) is None  # gap 1 was never scored
+    assert index.true_rank(99, 6) is None  # a node the affinity never scored
 
 
 def test_means():
