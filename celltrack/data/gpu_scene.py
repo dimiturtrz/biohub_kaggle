@@ -88,6 +88,15 @@ class GpuScenes:
         rate=0 (default) returns the inputs untouched — the plain uniform generator.
         """
         config = self.config
+        if config.confusor_invert_velocity:
+            # The inversion (velocity-DEFEATING) confusor needs a heading HISTORY to depart from; a GpuScenes pair
+            # is two frames, so it cannot pose it. Fail loud rather than silently drop the flag and train on the
+            # velocity-CONTINUOUS confusor the flag was set to avoid — route inversion through the CPU pool path.
+            message = (
+                "confusor_invert_velocity is unsupported on the 2-frame GpuScenes path (no heading history to "
+                "invert against); use the CPU multi-frame pool (--synthetic-fraction) with --prior-velocity."
+            )
+            raise ValueError(message)
         cells = start.shape[1]
         n_pairs = min(round(config.confusor_rate * cells), cells // 2)
         if n_pairs == 0:

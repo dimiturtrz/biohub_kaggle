@@ -2,7 +2,7 @@ import torch
 
 from celltrack.data.confusor_audit import ConfusorAudit
 from celltrack.data.gpu_scene import GpuScenes
-from celltrack.data.synthetic_scene import SceneConfig
+from celltrack.data.synthetic_scene import Scene, SceneConfig
 
 
 def _audit(rate: float) -> ConfusorAudit:
@@ -38,3 +38,31 @@ def test_sweep():
     percents = [r[1] for r in rows]
     assert percents[0] < 15.0  # uniform baseline
     assert percents[1] > 25.0 and percents[2] > percents[1]  # measured rate tracks the configured rate
+
+
+def test_last_step_alignment():
+    """`last_step_alignment` reads the axis a velocity prior keys on: cos(true_step, incoming heading) over the
+    confusor sources. The default (velocity-CONTINUOUS) poses it clearly positive; the inversion (velocity-
+    DEFEATING, faithful to the real dense mislink) flips it below zero."""
+    config = SceneConfig(n_cells=700, confusor_rate=0.45)
+    continuous = ConfusorAudit.last_step_alignment(Scene.generate(config, seed=0), config)
+
+    inverted = SceneConfig(n_cells=700, confusor_rate=0.45, confusor_invert_velocity=True)
+    inversion = ConfusorAudit.last_step_alignment(Scene.generate(inverted, seed=0), inverted)
+
+    assert continuous > 0.3  # successor departs along the heading — a velocity prior solves it
+    assert inversion < 0.1  # successor departs off the heading — a velocity prior anti-points
+    assert inversion < continuous - 0.4  # the construction flips the keyed axis
+
+
+def test_alignment():
+    """`alignment` returns one (rate, mean source alignment) row per requested `confusor_rate` for a construction
+    mode: the continuous mode reads positive across rates, the inversion mode reads negative — the per-mode
+    faithfulness table `--align` prints."""
+    audit = _audit(0.0)
+    continuous = dict(audit.alignment([0.3, 0.45], invert=False))
+    inversion = dict(audit.alignment([0.3, 0.45], invert=True))
+
+    assert continuous[0.45] > 0.3  # velocity-continuous poses it positive
+    assert inversion[0.45] < 0.1  # inversion flips it
+    assert inversion[0.45] < continuous[0.45]  # the mode is the axis that moves

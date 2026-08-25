@@ -39,6 +39,7 @@ from core.data.tracks import TrackGraph
 # raw grid (y, x times 4; z unchanged) and a run must use this downsample, exactly as the static synthetic does.
 _SCENE_DOWNSAMPLE: tuple[int, int, int] = (1, 4, 4)
 _Q_LOW, _Q_HIGH = 0.001, 0.999
+_MIN_FRAMES_FOR_HEADING = 3  # inversion confusor needs t-1, t, t+1: two prior frames to establish a heading
 
 
 @dataclass(frozen=True)
@@ -101,6 +102,16 @@ class SceneConfig:
     confusor_radius_um: float = 1.6  # distractor placed within this of the source start (~real mislink sep, 1 vox)
     confusor_min_step_um: float = 3.0  # a source's forced step (>= radius, so rival <= own); real p90 2.87/p99 5.0
     confusor_distractor_step_um: float = 0.5  # distractor's slow step, so it stays a near-source rival (real p10)
+    # VELOCITY-INVERSION mode. The default construction above is velocity-CONTINUOUS: the source's true successor
+    # departs ALONG its heading (align ~ +1), so a velocity prior SOLVES it (synth oracle 0.634). The REAL dense
+    # confusor is velocity-DEFEATING: the true successor departs OFF the source's heading (measured align ~ -0.17,
+    # own motion ~1um << 6.4um gap) while the near-static rival sits ON the old-trajectory extrapolation, exactly
+    # where a velocity prior predicts the source lands. Training on the continuous confusor teaches a rule the
+    # head solves with velocity and that inverts on real data (v2 null, 2026-08-24). This mode poses the faithful
+    # case: at the last transition a confusor source jumps off-heading (align ~ -confusor_anti_align) and its
+    # paired distractor is the static cell on the predicted old-trajectory landing.
+    confusor_invert_velocity: bool = False
+    confusor_anti_align: float = 0.17  # target -cos(true_step, incoming heading); real dense mislinks ~ 0.17
 
 
 # Appearance-faithful preset. One named decision, not a per-run sweep: the values are frozen from the KS fit
@@ -132,8 +143,7 @@ class Scene:
     def generate(cls, config: SceneConfig, seed: int) -> "Scene":
         """Place crowded cells, move them (fast-movers + turns), render blobs, and record the true edges."""
         rng = np.random.default_rng(seed)
-        shape = np.asarray(config.volume_shape, dtype=np.float64)
-        lo, hi = config.margin_vox, shape - config.margin_vox
+        lo, hi = cls._box(config)
 
         # Per-cell state: a start position and an initial velocity, the velocity in VOXELS per frame so it is
         # commensurate with the grid the blobs render on (um / um-per-voxel = voxels).
@@ -143,14 +153,16 @@ class Scene:
         speed_vox /= config.spacing_um
         velocity = rng.normal(0.0, 1.0, size=(config.n_cells, 3))
         velocity *= speed_vox / (np.linalg.norm(velocity, axis=1, keepdims=True) + 1e-9)
-        start, velocity = cls._construct_confusors(start, velocity, config, rng)
 
-        positions = [start]
-        current = start
-        for _ in range(1, config.n_frames):
-            velocity = cls._turn(velocity, config.turn_std_rad, rng)
-            current = np.clip(current + velocity, lo, hi)  # a cell that would leave stays at the face
-            positions.append(current)
+        # Two confusor constructions. The default (velocity-CONTINUOUS) is posed on the initial velocity before
+        # the walk; the inversion (velocity-DEFEATING, faithful to real dense mislinks) is posed on the built
+        # trajectory afterwards, because it needs the source's heading history to depart from.
+        if config.confusor_invert_velocity:
+            positions = cls._advance(start, velocity, config, rng)
+            cls._apply_confusor_inversion(positions, config, rng)
+        else:
+            start, velocity = cls._construct_confusors(start, velocity, config, rng)
+            positions = cls._advance(start, velocity, config, rng)
 
         # A cell keeps its brightness across the sequence (a nucleus does not flicker), so the per-cell peak is
         # drawn once here and indexed by cell in every frame's render.
@@ -205,6 +217,75 @@ class Scene:
         slow_vox = config.confusor_distractor_step_um / config.spacing_um
         velocity[dis] = velocity[dis] / (slow + 1e-9) * slow_vox  # stay put -> false near-successor
         return start, velocity
+
+    @staticmethod
+    def _box(config: SceneConfig) -> tuple[Float[np.ndarray, " 3"], Float[np.ndarray, " 3"]]:
+        """The (lo, hi) voxel bounds a cell centre is clipped to — the volume inset by the render margin."""
+        shape = np.asarray(config.volume_shape, dtype=np.float64)
+        return np.full(3, config.margin_vox, dtype=np.float64), shape - config.margin_vox
+
+    @classmethod
+    def _advance(
+        cls,
+        start: Float[np.ndarray, "n 3"],
+        velocity: Float[np.ndarray, "n 3"],
+        config: SceneConfig,
+        rng: np.random.Generator,
+    ) -> list[Float[np.ndarray, "n 3"]]:
+        """Walk every cell forward n_frames-1 steps under its (turning) velocity, clipping to the box."""
+        lo, hi = cls._box(config)
+        positions = [start]
+        current = start
+        for _ in range(1, config.n_frames):
+            velocity = cls._turn(velocity, config.turn_std_rad, rng)
+            current = np.clip(current + velocity, lo, hi)  # a cell that would leave stays at the face
+            positions.append(current)
+        return positions
+
+    @classmethod
+    def _apply_confusor_inversion(
+        cls,
+        positions: list[Float[np.ndarray, "n 3"]],
+        config: SceneConfig,
+        rng: np.random.Generator,
+    ) -> None:
+        """Pose the velocity-DEFEATING confusor in place: at the last transition a source jumps OFF its heading
+        while its paired rival sits static on the old-trajectory extrapolation, where a velocity prior predicts.
+
+        This is the faithful dense mislink ([[celltrack-relative-pe-radial-confusor-directional]]): the true
+        successor's step is anti-correlated with the incoming heading (cos ~ -confusor_anti_align, real ~ -0.17),
+        and own motion (~1um) is dwarfed by the off-trajectory jump. The default _construct_confusors poses the
+        OPPOSITE (successor departs ALONG the heading), which a velocity prior solves and which every prior synth
+        motion arm therefore learned nothing from. Needs >=3 frames so frames 0..t give the source a heading.
+        """
+        if config.confusor_rate <= 0.0 or config.n_frames < _MIN_FRAMES_FOR_HEADING:
+            return
+        n_pairs = min(round(config.confusor_rate * config.n_cells), config.n_cells // 2)
+        if n_pairs == 0:
+            return
+        lo, hi = cls._box(config)
+        picked = rng.permutation(config.n_cells)[: 2 * n_pairs]
+        src, dis = picked[:n_pairs], picked[n_pairs:]
+        t = config.n_frames - 2  # confusor transition t -> t+1
+        incoming = positions[t][src] - positions[t - 1][src]
+        inc_dir = incoming / (np.linalg.norm(incoming, axis=1, keepdims=True) + 1e-9)
+        # True successor departs off-heading: a random direction with its along-heading part removed (cos ~ 0),
+        # then tilted back so cos(step, incoming) = -anti_align exactly.
+        rand = rng.normal(0.0, 1.0, size=(n_pairs, 3))
+        perp = rand - (rand * inc_dir).sum(axis=1, keepdims=True) * inc_dir
+        perp_dir = perp / (np.linalg.norm(perp, axis=1, keepdims=True) + 1e-9)
+        anti = config.confusor_anti_align
+        step_dir = perp_dir * math.sqrt(max(0.0, 1.0 - anti * anti)) - inc_dir * anti  # unit, cos with inc = -anti
+        step_vox = config.confusor_min_step_um / config.spacing_um
+        positions[t + 1][src] = np.clip(positions[t][src] + step_dir * step_vox, lo, hi)
+        # Rival: static cell on the old-trajectory landing (where a constant-velocity prior extrapolates the src).
+        old_landing = positions[t][src] + incoming
+        offset = rng.normal(0.0, 1.0, size=(n_pairs, 3))
+        offset /= np.linalg.norm(offset, axis=1, keepdims=True) + 1e-9
+        radius = rng.uniform(0.0, config.confusor_radius_um / config.spacing_um, size=(n_pairs, 1))
+        landing = np.clip(old_landing + offset * radius, lo, hi)
+        for frame in positions:
+            frame[dis] = landing  # fully static rival -> its own history never betrays it as the wrong successor
 
     @staticmethod
     def _turn(

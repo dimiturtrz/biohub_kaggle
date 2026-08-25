@@ -30,3 +30,18 @@ def test_gate_boundary_passes_at_the_threshold():
     BaseCalibration.gate(-0.5, expects_calibrated_base=True)
     with pytest.raises(ValueError, match="miscalibrated"):
         BaseCalibration.gate(0.51, expects_calibrated_base=True)
+
+
+def test_upper_band():
+    """A finer decode over-detects by design; its upper band scales with the in-plane area ratio vs (1,4,4)."""
+    assert BaseCalibration.upper_band(16) == 0.5  # the (1,4,4) reference is unchanged
+    assert BaseCalibration.upper_band(4) == 2.0  # (1,2,2): 4x the pixels -> 4x the band
+
+
+def test_gate_admits_finer_grid_over_detection_but_not_under_detection():
+    """On a finer grid a positive ratio the (1,4,4) band would reject passes; under-detection stays barred."""
+    BaseCalibration.gate(1.01, expects_calibrated_base=True, inplane_area=4)  # measured finer warm base, valid
+    with pytest.raises(ValueError, match="miscalibrated"):  # under-detection is never grid-explained
+        BaseCalibration.gate(-0.8, expects_calibrated_base=True, inplane_area=4)
+    with pytest.raises(ValueError, match="miscalibrated"):  # a truly broken over-detect is still caught
+        BaseCalibration.gate(3.0, expects_calibrated_base=True, inplane_area=4)
