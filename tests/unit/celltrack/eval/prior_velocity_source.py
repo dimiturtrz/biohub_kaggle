@@ -15,11 +15,11 @@ import zarr
 
 from celltrack.data.frame_source import ZarrFrames
 from celltrack.data.joint_dataset import PairDataset, PairOptions, PairSample, PairTarget
+from celltrack.eval.prior_velocity_source import PriorVelocitySource
 from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeGap, EdgeTransformerScorer
 from celltrack.models.joint_model import JointModel
 from celltrack.models.prior_velocity import GapHistory, PriorVelocity
 from celltrack.models.temporal_unet_detector import DetectorRecipe, TemporalUNetDetector
-from celltrack.training.prior_velocity_source import PriorVelocitySource
 from core.data.tracks import TrackGraph
 from core.data.video import ImageStatistics
 

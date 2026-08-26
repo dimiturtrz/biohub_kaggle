@@ -36,6 +36,10 @@ _SPATIAL_AXES = 3
 # it (8 for the 32/64/128 stage widths, a safe divisor for any other), never the raise `GroupNorm(8, 20)` is.
 _NORM_GROUPS = 8
 NORMS = ("batch", "group")
+# Width of the dedicated center-point contrastive embedding head (CELLECT-style). A per-cell vector this wide
+# gives the InfoNCE term its own representation to reshape, separate from the 1-channel detection logit — so the
+# backbone learns cell-discriminating features under a strong gradient without trading the detection head away.
+_EMBED_CHANNELS = 64
 
 
 @dataclass(frozen=True)
@@ -156,6 +160,11 @@ class TemporalUNetDetector(nn.Module):
         if norm == "group":
             self._groupnorm_backbone()
         self.detect_head = nn.Conv3d(out_channels, 1, kernel_size=1)
+        # A dedicated per-voxel embedding head, PARALLEL to the detection head and tapping the SAME backbone
+        # features. Fresh-init and unused at inference (the tracker reads only detection + edge logits); it exists
+        # to carry the center-point contrastive gradient back into the backbone during training. A warm-start
+        # checkpoint predates this head, so every loader below tolerates its absent key (strict=False).
+        self.embed_head = nn.Conv3d(out_channels, _EMBED_CHANNELS, kernel_size=1)
         # Whether the backbone's per-voxel time attention carries a frame-position embedding (motion sight).
         # False = the published order-blind backbone. `install_temporal_position` flips it and rewrites the
         # attention blocks; the flag is persisted so a trained checkpoint rebuilds the same blocks before loading.
@@ -249,7 +258,10 @@ class TemporalUNetDetector(nn.Module):
         config = json.loads((pack / "config.json").read_text())
         detector = cls(config["unet_out_channels"], tuple(config["unet_layers"]))
         state = torch.load(pack / "edge_predictor_best.pth", map_location=map_location, weights_only=True)
-        detector.load_state_dict({k: v for k, v in state.items() if k.startswith(("unet.", "detect_head."))})
+        # strict=False: the fresh embed_head has no counterpart in the pilkwang pack (unet + detect_head only).
+        detector.load_state_dict(
+            {k: v for k, v in state.items() if k.startswith(("unet.", "detect_head."))}, strict=False
+        )
         return detector, DetectorRecipe.from_config(config)
 
     @classmethod
@@ -257,7 +269,8 @@ class TemporalUNetDetector(nn.Module):
         """Rebuild a detector we trained: our checkpoint carries both the weights and the recipe."""
         blob = torch.load(path, map_location=map_location, weights_only=True)
         detector = cls(int(blob["out_channels"]), tuple(blob["layers"]), norm=blob.get("norm", "batch"))
-        detector.load_state_dict(cls._uncompiled(blob["state_dict"]))
+        # strict=False: a checkpoint written before the embed head existed carries no embed_head.* key.
+        detector.load_state_dict(cls._uncompiled(blob["state_dict"]), strict=False)
         return detector, DetectorRecipe.from_config(blob["recipe"])
 
     @staticmethod

@@ -47,7 +47,7 @@ from tests.unit.celltrack.conftest import RecordingMlflow
 def _outcome(edge_logits: torch.Tensor, edge_matrix: torch.Tensor) -> _PairOutcome:
     """A pair outcome whose loss terms are placeholders — `test_observe` reads only its edge tensors."""
     zero = torch.zeros(())
-    return _PairOutcome(torch.tensor(3.0), zero, zero, zero, zero, edge_logits, edge_matrix)
+    return _PairOutcome(torch.tensor(3.0), zero, zero, zero, zero, zero, edge_logits, edge_matrix)
 
 
 def _cpu_config() -> JointTrainConfig:

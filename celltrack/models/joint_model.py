@@ -51,6 +51,11 @@ class JointForward:
     edge_logits: Float[Tensor, "s u"]
     source_features: Float[Tensor, "s d"]
     target_features: Float[Tensor, "u d"]
+    # The dedicated center-point embedding (`TemporalUNetDetector.embed_head`) sampled at each node's voxel — the
+    # representation the center-embedding contrastive term acts on, kept separate from the head's `*_features` so
+    # the term reshapes its OWN 64-channel head, not the features the edge transformer already consumes.
+    source_embed: Float[Tensor, "s e"]
+    target_embed: Float[Tensor, "u e"]
 
 
 @dataclass(frozen=True)
@@ -67,6 +72,8 @@ class BatchedForward:
     logits: Float[Tensor, "b max max"]
     source_features: Float[Tensor, "b max d"]
     target_features: Float[Tensor, "b max d"]
+    source_embed: Float[Tensor, "b max e"]
+    target_embed: Float[Tensor, "b max e"]
     source_mask: Bool[Tensor, "b max"]
     target_mask: Bool[Tensor, "b max"]
     source_lengths: tuple[int, ...]
@@ -81,6 +88,8 @@ class BatchedForward:
                 self.logits[i, :s, :t],
                 self.source_features[i, :s],
                 self.target_features[i, :t],
+                self.source_embed[i, :s],
+                self.target_embed[i, :t],
             )
             for i, (s, t) in enumerate(zip(self.source_lengths, self.target_lengths, strict=True))
         ]
@@ -140,7 +149,10 @@ class JointModel(nn.Module):
         relative = config.get("relative_position")
         if relative:  # rebuild the geometry wrapper before its weights (incl. the bias buffers) load
             transformer = RelativePositionEdgeTransformer(transformer, cls._relative_config(relative))
-        detector.load_state_dict(cls._align_state_to(detector, state["detector_state"]))
+        # strict=False on the detector alone: a checkpoint written before the center-embedding head existed carries
+        # no embed_head.* key, and warming from it (a shipped-grid base for the CELLECT arm) must leave that fresh
+        # head at its init rather than fail the load. The transformer stays strict — nothing new was added to it.
+        detector.load_state_dict(cls._align_state_to(detector, state["detector_state"]), strict=False)
         transformer.load_state_dict(cls._align_state_to(transformer, transformer_state))
         model = cls(detector, transformer, tuple(config["downsample"]))
         return model.to(device).eval()
@@ -312,12 +324,20 @@ class JointModel(nn.Module):
         mask_source = index[None, :] < torch.tensor(source_lengths, device=features.device)[:, None]
         mask_target = index[None, :] < torch.tensor(target_lengths, device=features.device)[:, None]
         logits = self.transformer(feat_source, feat_target, source_voxels, target_voxels, mask_source, mask_target)
+        embed_source = self._sample_points_batched(
+            self.detector.embed_head(features[:, 0]), source_voxels / downsample, spatial
+        )
+        embed_target = self._sample_points_batched(
+            self.detector.embed_head(features[:, 1]), target_voxels / downsample, spatial
+        )
         return BatchedForward(
             detect_t,
             detect_t1,
             logits,
             feat_source,
             feat_target,
+            embed_source,
+            embed_target,
             mask_source,
             mask_target,
             source_lengths,
@@ -399,4 +419,34 @@ class JointModel(nn.Module):
         is_scene = compiled is not None and source_voxel.shape[0] == self._scene_nodes
         transformer = compiled if is_scene else self.transformer
         edge_logits = transformer(feat_source, feat_target, source_voxel, target_voxel)  # (s, u)
-        return JointForward(detection_t, detection_t1, edge_logits, feat_source, feat_target)
+        embed_t = self.detector.embed_head(features[0:1])[0]  # (E, Z, Y', X')
+        embed_t1 = self.detector.embed_head(features[1:2])[0]
+        source_embed = self._sample_points(embed_t, source_voxel / downsample, spatial)
+        target_embed = self._sample_points(embed_t1, target_voxel / downsample, spatial)
+        return JointForward(
+            detection_t, detection_t1, edge_logits, feat_source, feat_target, source_embed, target_embed
+        )
+
+    @staticmethod
+    def _sample_points(
+        feature_map: Float[Tensor, "c z y x"], grid_positions: Float[Tensor, "n 3"], spatial: Float[Tensor, "3"]
+    ) -> Float[Tensor, "n c"]:
+        """Each node's raw feature-map channels at its nearest voxel — the embedding gather, no position embed.
+
+        Mirrors the clamp-and-index of `EdgeTransformerScorer.node_features`, but returns the raw channels alone:
+        the center-embedding term contrasts a pure appearance vector, so nothing is appended to it here.
+        """
+        device = feature_map.device
+        clamped = grid_positions.round().long().clamp(min=torch.zeros(3, dtype=torch.long, device=device))
+        clamped = torch.minimum(clamped, (spatial - 1).long())
+        return feature_map[:, clamped[:, 0], clamped[:, 1], clamped[:, 2]].T
+
+    @staticmethod
+    def _sample_points_batched(
+        feature_maps: Float[Tensor, "b c z y x"], grid_positions: Float[Tensor, "b n 3"], spatial: Float[Tensor, "3"]
+    ) -> Float[Tensor, "b n c"]:
+        """`_sample_points` over a PADDED batch — one advanced index per pair, mirroring `batched_node_features`."""
+        clamped = torch.minimum(grid_positions.round().long().clamp(min=0), (spatial - 1).long())
+        batch, nodes = grid_positions.shape[0], grid_positions.shape[1]
+        rows = torch.arange(batch, device=feature_maps.device)[:, None].expand(batch, nodes)
+        return feature_maps[rows, :, clamped[..., 0], clamped[..., 1], clamped[..., 2]]

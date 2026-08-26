@@ -54,7 +54,15 @@ def _model() -> JointModel:
 
 
 def _prediction(out: JointForward) -> PairPrediction:
-    return PairPrediction(out.edge_logits, out.detection_t, out.detection_t1, out.source_features, out.target_features)
+    return PairPrediction(
+        out.edge_logits,
+        out.detection_t,
+        out.detection_t1,
+        out.source_features,
+        out.target_features,
+        out.source_embed,
+        out.target_embed,
+    )
 
 
 def _batched_prediction(batched: BatchedForward) -> BatchedPrediction:
@@ -80,6 +88,7 @@ def _outcome(edge_logits: torch.Tensor, edge_matrix: torch.Tensor) -> _PairOutco
         detection=torch.tensor(2.0),
         contrastive=torch.tensor(0.5),
         hard_negative=torch.tensor(0.25),
+        center_embed=torch.tensor(0.125),
         edge_logits=edge_logits,
         edge_matrix=edge_matrix,
     )
@@ -94,6 +103,7 @@ def test_logged():
         "det_loss": 2.0,
         "contrastive_loss": 0.5,
         "hard_negative_loss": 0.25,
+        "center_embed_loss": 0.125,
     }
 
 
@@ -166,7 +176,15 @@ def test_reliability_weights():
 
     def _with(reliability: torch.Tensor | None) -> _PairOutcome:
         return _PairOutcome(
-            torch.tensor(1.0), zero, zero, zero, zero, torch.zeros(1, 1), torch.zeros(1, 1), reliability=reliability
+            torch.tensor(1.0),
+            zero,
+            zero,
+            zero,
+            zero,
+            zero,
+            torch.zeros(1, 1),
+            torch.zeros(1, 1),
+            reliability=reliability,
         )
 
     weighted = _loss().reliability_weights([_with(torch.tensor(2.0)), _with(torch.tensor(4.0))])

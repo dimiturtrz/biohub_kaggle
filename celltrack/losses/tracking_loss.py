@@ -23,6 +23,7 @@ from torch import Tensor
 
 from celltrack.losses.association_objective import AssociationObjective
 from celltrack.losses.balanced_bce import BalancedBCE
+from celltrack.losses.center_embed import CenterEmbedContrastive
 from celltrack.losses.hard_negative_margin import HardNegativeMargin
 from celltrack.losses.sample_weight import SampleWeight
 
@@ -47,6 +48,8 @@ class TrackingLossConfig:
     contrastive_weight: float
     hard_negative_weight: float
     hard_negatives: int
+    center_embed_weight: float
+    center_embed_temperature: float
     reliability_weighting: bool
     downsample: tuple[int, int, int]
     gate_um: float
@@ -61,6 +64,8 @@ class PairPrediction:
     detection_t1: Tensor
     source_features: Float[Tensor, "s d"]
     target_features: Float[Tensor, "u d"]
+    source_embed: Float[Tensor, "s e"]
+    target_embed: Float[Tensor, "u e"]
 
 
 @dataclass(frozen=True)
@@ -108,6 +113,7 @@ class _PairOutcome:
     detection: Tensor
     contrastive: Tensor
     hard_negative: Tensor
+    center_embed: Tensor
     edge_logits: Tensor
     edge_matrix: Tensor
     ignored_fraction: float | None = None
@@ -127,6 +133,7 @@ class _PairOutcome:
             "det_loss": float(self.detection.detach()),
             "contrastive_loss": float(self.contrastive.detach()),
             "hard_negative_loss": float(self.hard_negative.detach()),
+            "center_embed_loss": float(self.center_embed.detach()),
             **ambiguous,
         }
 
@@ -180,11 +187,19 @@ class TrackingLoss:
             target.source_centres, target.target_centres, edge_matrix, config.hard_negatives
         )
         hard_negative = HardNegativeMargin.of(edge_logits, edge_matrix, decoys)
+        center_embed = CenterEmbedContrastive.of(
+            prediction.source_embed,
+            prediction.target_embed,
+            edge_matrix,
+            decoys,
+            config.center_embed_temperature,
+        )
         loss = (
             edge
             + config.det_weight * det
             + config.contrastive_weight * contrastive
             + config.hard_negative_weight * hard_negative
+            + config.center_embed_weight * center_embed
         )
         ignored = self._ignored((prediction.detection_t, centres_t_grid), (prediction.detection_t1, centres_t1_grid))
         reliability = (
@@ -198,7 +213,9 @@ class TrackingLoss:
             if config.reliability_weighting
             else None
         )
-        return _PairOutcome(loss, edge, det, contrastive, hard_negative, edge_logits, edge_matrix, ignored, reliability)
+        return _PairOutcome(
+            loss, edge, det, contrastive, hard_negative, center_embed, edge_logits, edge_matrix, ignored, reliability
+        )
 
     def batched(
         self, prediction: BatchedPrediction, targets: list[PairGroundTruth]
@@ -227,6 +244,7 @@ class TrackingLoss:
                 total[index],
                 edge[index],
                 detection[index],
+                zero,
                 zero,
                 zero,
                 forward.edge_logits,

@@ -63,12 +63,17 @@ kaggle/**/*.pt
 kaggle/**/*.whl
 # Kernel run outputs (submission.csv etc are reproducible artifacts, never committed).
 kaggle/kernels/**/out/
+# Kaggle kernel notebooks are generated submit artifacts (repo policy: no .ipynb in git).
+kaggle/kernels/**/*.ipynb
 .venv-repro/
 
 # Scratch experiment output — underscore-prefixed local scratch dirs, nohup logs, ad-hoc out dirs.
 kaggle/_*/
 *.nohup
 /scratchpad_kaggle_out/
+
+# Organizers' reference scorer repo — external checkout, read for the metric, never vendored.
+/scratchpad_kout/
 
 # ephemeral agent worktrees (isolated; not part of tracked tree)
 .claude/worktrees/

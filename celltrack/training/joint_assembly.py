@@ -21,6 +21,7 @@ from pathlib import Path
 import torch
 from torch import nn
 
+from celltrack.eval.prior_velocity_source import PriorVelocitySource
 from celltrack.losses.association_objective import AssociationObjective
 from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeTransformerScorer
 from celltrack.models.joint_model import JointModel
@@ -29,7 +30,6 @@ from celltrack.models.temporal_unet_detector import TemporalUNetDetector
 from celltrack.operating_point import TrackerConfig
 from celltrack.training.contrastive_term import ContrastiveTerm
 from celltrack.training.joint_config import JointTrainConfig, LoraCfg
-from celltrack.training.prior_velocity_source import PriorVelocitySource
 from celltrack.training.tunet_detector import _Optimization
 from core.geometry import Spacing
 from core.paths import DataRoot

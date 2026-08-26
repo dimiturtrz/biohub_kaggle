@@ -128,7 +128,13 @@ class JointTrainer:
     def _prediction(out: JointForward) -> PairPrediction:
         """The model's forward repacked into the loss's own input — the seam that keeps the loss off the model type."""
         return PairPrediction(
-            out.edge_logits, out.detection_t, out.detection_t1, out.source_features, out.target_features
+            out.edge_logits,
+            out.detection_t,
+            out.detection_t1,
+            out.source_features,
+            out.target_features,
+            out.source_embed,
+            out.target_embed,
         )
 
     @staticmethod
@@ -487,6 +493,7 @@ class JointTrainer:
             and all(JointModel.fits_batched(s.source_centres.shape[0], s.target_centres.shape[0]) for s in samples)
             and loss.contrastive_weight == 0.0
             and loss.hard_negative_weight == 0.0
+            and loss.center_embed_weight == 0.0
             and not loss.reliability_weighting
         )
 

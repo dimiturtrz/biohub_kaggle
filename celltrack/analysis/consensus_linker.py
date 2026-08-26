@@ -205,9 +205,23 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Vote-union the 0.900-tying tracker configs and score edge Jaccard.")
     parser.add_argument("--config", type=Path, default=Path("paths.yaml"), help="paths.yaml locating the data root")
     parser.add_argument("--device", default="cpu", help="cpu keeps the card free; detector responses are cached")
+    parser.add_argument(
+        "--finer-checkpoint",
+        type=Path,
+        default=None,
+        help="a (1,2,2) joint checkpoint to admit as an out-of-family member (logits must be pre-dumped); its "
+        "extra nodes make it the densest reference backbone, so new_vs_champion measures the recall it adds",
+    )
+    parser.add_argument(
+        "--finer-linker",
+        default=None,
+        help="linker to run the finer checkpoint under (e.g. 'ilp' for the global solver); default = shipped motion",
+    )
     parsed = parser.parse_args()
     root = DataRoot.from_config(parsed.config)
-    consensus, singles, net_new, ranked = ConsensusRun(parsed.device).score(root)
+    consensus, singles, net_new, ranked = ConsensusRun(
+        parsed.device, parsed.finer_checkpoint, parsed.finer_linker
+    ).score(root)
 
     best_single = max(singles.values())
     best_name = max(singles, key=lambda name: singles[name])

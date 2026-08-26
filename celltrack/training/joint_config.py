@@ -322,6 +322,12 @@ class LossCfg(BaseModel):
     # logit is one LEARNED scalar calibrated to the mean real logit, not the frontier's constant 0 (our logits
     # sit near -11). False keeps the plain focal BCE and every number measured under it.
     slack_links: bool = False
+    # Weight on the CELLECT center-point contrastive term over the DEDICATED `embed_head` (64-ch), NOT the shared
+    # node features the InfoNCE `contrastive_weight` acts on. The head exists only to carry this gradient, so the
+    # backbone can reshape a wide per-cell vector for discrimination without disturbing the detection logit beside
+    # it. 0.0 by default: computed and logged as a diagnostic, an unasked run is byte-for-byte yesterday's. Shares
+    # `temperature` (the InfoNCE softmax temperature) for its own cosine cross-entropy.
+    center_embed_weight: float = Field(0.0, ge=0)
 
     @property
     def link_axes(self) -> tuple[int, ...]:
@@ -341,6 +347,8 @@ class LossCfg(BaseModel):
             contrastive_weight=self.contrastive_weight,
             hard_negative_weight=self.hard_negative_weight,
             hard_negatives=self.hard_negatives,
+            center_embed_weight=self.center_embed_weight,
+            center_embed_temperature=self.temperature,
             reliability_weighting=self.reliability_weighting,
             downsample=downsample,
             gate_um=TrackerConfig.shipped().linker.gate_um,
@@ -562,6 +570,7 @@ class JointTrainConfig(BaseModel):
                 symmetric_links=args.symmetric_links,
                 balanced_links=args.balanced_links,
                 slack_links=args.slack_links,
+                center_embed_weight=args.center_embed_weight,
                 reliability_weighting=args.reliability_weighting,
             ),
             eval=EvalCfg(

@@ -66,32 +66,7 @@ class JointCli:
         parser.add_argument(
             "--det-weight", type=float, default=1.0, help="weight on the detection term vs the edge term"
         )
-        parser.add_argument(
-            "--contrastive-weight", type=float, default=0.0, help="weight on the InfoNCE term over the node features"
-        )
-        # WHERE that weight acts. On the features it is measured to trade detection away for discrimination
-        # (proxy 0.8414 -> 0.7292, node recall 0.966 -> 0.867); the projecting sites give the term its own
-        # embedding to shape, `detached_projection` keeping the backbone out of its reach entirely.
-        parser.add_argument(
-            "--contrastive-site",
-            choices=tuple(ContrastiveSite),
-            default=ContrastiveSite.FEATURES,
-            type=ContrastiveSite,
-            help="where the InfoNCE term acts: on the shared features, or through its own projection head",
-        )
-        parser.add_argument("--temperature", type=float, default=0.07, help="InfoNCE softmax temperature over targets")
-        # The zni probe's mining under a MARGIN objective and an UNFROZEN backbone — the one combination never run.
-        # Its absolute form (decoy probability -> 0, UNet frozen) flattened the head; a weight here is matched to the
-        # term's own logged magnitude against the edge term, so the arm measures the mechanism and not a rescaling.
-        parser.add_argument(
-            "--hard-negative-weight",
-            type=float,
-            default=0.0,
-            help="weight on the ranking term holding each source's true logit above its nearest wrong targets'",
-        )
-        parser.add_argument(
-            "--hard-negatives", type=int, default=4, help="nearest wrong targets mined per annotated source"
-        )
+        JointCli._add_contrastive_flags(parser)
         JointCli._add_link_flags(parser)
         parser.add_argument(
             "--reliability-weighting",
@@ -286,6 +261,42 @@ class JointCli:
             action="store_true",
             help="build the confusor velocity-DEFEATING (successor departs OFF the source heading) — the real dense "
             "mislink, vs the default velocity-continuous shape a head learns to trust and then inverts on",
+        )
+
+    @staticmethod
+    def _add_contrastive_flags(parser: argparse.ArgumentParser) -> None:
+        """The representation-shaping loss terms — InfoNCE, its margin, and the CELLECT center embedding.
+
+        Every weight is 0.0 by default (computed and logged as a diagnostic, an unasked run is yesterday's).
+        `--contrastive-weight`/`--contrastive-site` act on the SHARED node features (features site measured to
+        trade detection away for discrimination); `--center-embed-weight` acts instead on the dedicated 64-ch
+        `embed_head` the backbone is free to reshape without disturbing the detection logit beside it.
+        """
+        parser.add_argument(
+            "--contrastive-weight", type=float, default=0.0, help="weight on the InfoNCE term over the node features"
+        )
+        parser.add_argument(
+            "--contrastive-site",
+            choices=tuple(ContrastiveSite),
+            default=ContrastiveSite.FEATURES,
+            type=ContrastiveSite,
+            help="where the InfoNCE term acts: on the shared features, or through its own projection head",
+        )
+        parser.add_argument("--temperature", type=float, default=0.07, help="InfoNCE softmax temperature over targets")
+        parser.add_argument(
+            "--hard-negative-weight",
+            type=float,
+            default=0.0,
+            help="weight on the ranking term holding each source's true logit above its nearest wrong targets'",
+        )
+        parser.add_argument(
+            "--hard-negatives", type=int, default=4, help="nearest wrong targets mined per annotated source"
+        )
+        parser.add_argument(
+            "--center-embed-weight",
+            type=float,
+            default=0.0,
+            help="weight on the CELLECT center-point contrastive term over the dedicated 64-ch embed head",
         )
 
     @staticmethod
