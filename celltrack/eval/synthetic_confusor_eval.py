@@ -143,6 +143,16 @@ class SyntheticConfusorEval:
     @torch.no_grad()
     def score(self, model: JointModel, seed: int) -> ConfusorEvalResult:  # devtools-ignore: test-mirror
         """Rank the model's affinity over every generated target, pooled and confusor-only."""
+        downsample = tuple(model.downsample)
+        if downsample != _SCENE_DOWNSAMPLE:
+            raise ValueError(
+                f"scenes render on the {_SCENE_DOWNSAMPLE}-equivalent 64^3 grid with coords lifted by that "
+                f"factor, but this checkpoint's downsample is {downsample}; forward would divide "
+                f"the lifted coords by {downsample} and land every node off the feature grid "
+                f"(silently clamped) -- the read would be noise. A finer-substrate checkpoint has no faithful "
+                f"scene here (the generator is isotropic (1,4,4)-native); adjudicate it on the native shipped "
+                f"pipeline via ModelEvaluator (inverted_fraction / mislinks / selection_score) instead."
+            )
         model.eval()
         device = str(next(model.parameters()).device)
         pool = _RankPool()

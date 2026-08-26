@@ -96,6 +96,20 @@ def test_pool_columns_without_gt_parent_skipped() -> None:
     assert pool.result().every.n_cases == 1
 
 
+class _WrongSubstrateModel:
+    """A JointModel stand-in whose downsample does not match the scene grid — `score` must reject it early."""
+
+    downsample = (1, 2, 2)
+
+
+def test_score_rejects_mismatched_substrate() -> None:
+    # The generator is (1,4,4)-native; a (1,2,2) checkpoint's forward would divide the lifted coords by 2 and
+    # clamp every node off the 64^3 feature grid, reading noise. `score` must raise before that silent misread.
+    harness = SyntheticConfusorEval.build(1, 0.45, seed=7, faithful=False, prior_velocity=False)
+    with pytest.raises(ValueError, match="downsample"):
+        harness.score(_WrongSubstrateModel(), seed=7)  # type: ignore[arg-type]
+
+
 def test_build() -> None:
     # A tiny generation: the faithful-inverted scene set is non-empty and the velocity feed matches the flag.
     harness = SyntheticConfusorEval.build(2, 0.45, seed=1234, faithful=False, prior_velocity=False)
