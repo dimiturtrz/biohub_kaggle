@@ -26,8 +26,9 @@ from queue import Empty
 import torch
 import torch.multiprocessing as torch_mp
 
-from celltrack.detectors.center_prior import CenterPriorScorer
+from celltrack.detectors.center_prior import CenterPriorScorer, CenterVetoConfig
 from celltrack.operating_point import TrackerConfig
+from celltrack.postproc.gap_closer import ReuseConfig, SyntheticGap
 from celltrack.tracker import CellTracker
 from core.data.submission import Submission
 from core.data.tracks import TrackGraph
@@ -118,6 +119,18 @@ class MultiGpuSubmission:
             tracker = tracker.with_ranker(self.ranker_pack)
         if self.center_pack is not None:
             tracker = replace(tracker, center_scorer=CenterPriorScorer.from_pack(self.center_pack, shard.device))
+            # The centre pack is only half the DeepCenter recovery arm: its veto gates the reuse-bridge and the
+            # confirmed synthetic insertion, but that GapCloser only mounts when `config.reuse` is set. The
+            # faithful config leaves it None, so absent this the pack loads and vetoes nothing — the same
+            # mount/activation split proxy_eval installs (config_at). Only auto-install when the caller has not
+            # pinned a reuse policy of its own.
+            if self.config.reuse is None:
+                tracker = tracker.with_config(
+                    replace(
+                        self.config,
+                        reuse=ReuseConfig(gate_um=5.8, veto=CenterVetoConfig(), synthetic=SyntheticGap()),
+                    )
+                )
         logger.info("%s: %d videos — %s", shard.device, len(shard.videos), [key for key, _ in shard.videos])
         return {key: tracker.run(key, path) for key, path in shard.videos}
 

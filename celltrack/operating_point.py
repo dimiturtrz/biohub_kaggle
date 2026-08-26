@@ -197,6 +197,9 @@ class TrackerConfig:
                 update={"calibrated_fusion": fusion.model_copy(update={"kernel_faithful": True})}
             ),
             linker=base.linker.model_copy(update={"kernel_faithful": True}),
+            # evgendvorkin's published 0.926 kernel closes two-frame gaps (GAP_CLOSE_MAX_GAP=2); our replica
+            # left the span at 1. The GT-free fire-check confirms it recovers +81 edges on the dense movie.
+            bridge=base.bridge.model_copy(update={"max_gap": 2}),
         )
 
     def __post_init__(self) -> None:
