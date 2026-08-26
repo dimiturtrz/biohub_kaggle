@@ -92,7 +92,7 @@ DEP002 = ["pytest", "pytest-cov", "sdlc-devtools", "beartype", "pydantic", "kagg
 [tool.ruff]
 line-length = 120
 # >>> LOCAL-SLOT: ruff-exclude — edit freely, the template will not overwrite intent here
-extend-exclude = ["docs", "learning", "research", "interpretations"]
+extend-exclude = ["docs", "learning", "research", "interpretations", "kaggle/kernels/*/champion_submission.py"]
 # <<< LOCAL-SLOT: ruff-exclude
 
 [tool.ruff.lint]
