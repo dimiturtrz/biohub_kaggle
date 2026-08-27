@@ -20,11 +20,12 @@ import torch
 
 from celltrack.models.edge_transformer import EdgeTransformerScorer
 from celltrack.models.hoct_edge_transformer import _NEG_INF, HoctEdgeTransformer
-from celltrack.models.joint_model import _HIDDEN_DIM, _N_BLOCKS, _N_HEADS, JointModel
+from celltrack.models.joint_model import _N_BLOCKS, _N_HEADS, JointModel
 from celltrack.models.temporal_unet_detector import TemporalUNetDetector
 from celltrack.training.joint_checkpoint import JointCheckpoint
 
 _FEAT_DIM = 40
+_HIDDEN_DIM = 128  # the pilkwang pack width (was a joint_model constant before it moved to per-run config)
 _SMALL_HIDDEN = 64
 _SMALL_HEADS = 4
 _SMALL_BLOCKS = 2

@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 _CONFIG = Path(__file__).parents[2] / "paths.yaml"
 _DATASET = "biohub_cell_tracking"
 # The fresh transformer's shape, matching the pilkwang head the warm-start path loads.
-_HIDDEN_DIM, _N_HEADS, _N_BLOCKS = 128, 4, 4
+_N_HEADS = 4  # head count is fixed; width/depth come from the run's ModelCfg (edge_hidden_dim / edge_blocks)
 _POS_FEATURE_DIM = 4 * _POS_EMBED_DIM  # sinusoidal embed of (t, z, y, x)
 
 
@@ -185,9 +185,9 @@ class JointAssembly:
                 raise ValueError(f"detector-from grid {source.downsample} != run grid {downsample}")
             head = EdgeTransformerScorer._head_cls(architecture.head)(  # noqa: SLF001 — the edge-head class
                 feat_dim=architecture.out_channels + _POS_FEATURE_DIM,
-                hidden_dim=_HIDDEN_DIM,
+                hidden_dim=architecture.edge_hidden_dim,
                 n_heads=_N_HEADS,
-                n_blocks=_N_BLOCKS,
+                n_blocks=architecture.edge_blocks,
             )
             logger.info("warm detector from %s, fresh %s head (detector frozen)", detector_from, architecture.head)
             return JointModel(source.detector, head, downsample)
@@ -201,8 +201,8 @@ class JointAssembly:
         detector = TemporalUNetDetector(architecture.out_channels, architecture.layers, norm=architecture.norm)
         transformer = EdgeTransformerScorer._head_cls(architecture.head)(  # noqa: SLF001 — the edge-head class
             feat_dim=architecture.out_channels + _POS_FEATURE_DIM,
-            hidden_dim=_HIDDEN_DIM,
+            hidden_dim=architecture.edge_hidden_dim,
             n_heads=_N_HEADS,
-            n_blocks=_N_BLOCKS,
+            n_blocks=architecture.edge_blocks,
         )
         return JointModel(detector, transformer, downsample)

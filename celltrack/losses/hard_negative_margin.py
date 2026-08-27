@@ -72,4 +72,12 @@ class HardNegativeMargin:
             scores = logits.float()
             true_logit = scores.masked_fill(links <= 0, float("inf")).min(dim=1).values
             rows, columns = decoys[:, 0], decoys[:, 1]
-            return F.softplus(scores[rows, columns] - true_logit[rows]).mean()
+            # softplus of a raw-logit DIFFERENCE is unbounded and grows linearly, unlike the sigmoid-bounded
+            # BCE/NCE terms that absorb an outlier into their mean. A single exploded true_logit therefore
+            # drives this term to millions and dominates the loss (avl8: hn 2.18M vs edge 17, early-stopped
+            # epoch 5). The head's logits are O(1-10) (healthy edge BCE), so a true-vs-decoy gap above 50 is
+            # already a maximally-confident inversion whose gradient is sigmoid(50)~=1 -- identical to any
+            # larger gap. Clamping the difference at 50 preserves full ranking gradient across the genuine
+            # hard range (0-50) and bounds only pathological/numerical outliers, capping the term near 50.
+            margin = (scores[rows, columns] - true_logit[rows]).clamp(max=50.0)
+            return F.softplus(margin).mean()

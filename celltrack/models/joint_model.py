@@ -26,7 +26,7 @@ from celltrack.models.temporal_unet_detector import TemporalUNetDetector
 from core.geometry import Spacing
 
 # The published head's shape, which a checkpoint's weights were trained in and must be rebuilt at.
-_HIDDEN_DIM, _N_HEADS, _N_BLOCKS = 128, 4, 4
+_N_HEADS, _N_BLOCKS = 4, 4  # head count is fixed; width/depth are read off the checkpoint in from_checkpoint
 # The fixed node count the batched training forward pads every pair to, so the whole GPU forward is ONE static
 # shape (the prerequisite for the batched masked loss to read a padded block, and for a graph to capture it).
 # Sized from the corpora AND the synthetic generator: real pairs max 33 (GT) / 102 (gated) nodes, but a
@@ -140,11 +140,20 @@ class JointModel(nn.Module):
         # head is wrapped for relative position — read whichever the checkpoint carries.
         transformer_state = state["transformer_state"]
         proj_key = "proj.weight" if "proj.weight" in transformer_state else "transformer.proj.weight"
+        # Read BOTH input width and edge-head capacity off the saved weights, not a module constant — the head can be
+        # built wider/deeper than the pilkwang default (a HOCT run at C=288), and `proj.weight` is `(hidden_dim,
+        # feat_dim)`, so its two axes recover both. Depth = the number of distinct `node_blocks.N` indices under the
+        # same prefix; a head without that submodule (the pack SimpleNodeTransformer) falls back to the default depth.
+        prefix = proj_key[: -len("proj.weight")]
+        block_prefix = f"{prefix}node_blocks."
+        block_idxs = {
+            key[len(block_prefix) :].split(".", 1)[0] for key in transformer_state if key.startswith(block_prefix)
+        }
         transformer: nn.Module = EdgeTransformerScorer._head_cls(config.get("head", "pack"))(  # noqa: SLF001 — head class
             feat_dim=transformer_state[proj_key].shape[1],
-            hidden_dim=_HIDDEN_DIM,
+            hidden_dim=transformer_state[proj_key].shape[0],
             n_heads=_N_HEADS,
-            n_blocks=_N_BLOCKS,
+            n_blocks=len(block_idxs) or _N_BLOCKS,
         )
         relative = config.get("relative_position")
         if relative:  # rebuild the geometry wrapper before its weights (incl. the bias buffers) load

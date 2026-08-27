@@ -120,6 +120,13 @@ class ModelCfg(BaseModel):
     # relative-position sight and higher-order edge comparison the pack head structurally cannot represent (the
     # dense-confusor discrimination axis). From-scratch only: a pack warm start carries no HOCT weights to continue.
     head: Literal["pack", "hoct"] = "pack"
+    # Edge-head capacity, from-scratch only. The default 128/4 is the pilkwang SimpleNodeTransformer shape the
+    # warm-start path must match byte-for-byte — NOT a tuned HOCT width. The #1-CTC HOCT arch runs C=288, and the
+    # confusor residual is head-bound (affinity ranks a wrong neighbour above true on 74/77 ILP mislinks), so a
+    # hoct run replicating the winner widens to 288 (still 4 heads: 288/4 = 72, RoPE-valid). Baked into the
+    # checkpoint's proj/block shapes, so `from_checkpoint` reads the width back off the weights, not this default.
+    edge_hidden_dim: PositiveInt = 128
+    edge_blocks: PositiveInt = 4
 
 
 class DataCfg(BaseModel):
@@ -533,6 +540,8 @@ class JointTrainConfig(BaseModel):
                 relative_position_directional=args.relative_position_directional,
                 norm=args.norm,
                 head=args.head,
+                edge_hidden_dim=args.edge_hidden_dim,
+                edge_blocks=args.edge_blocks,
                 freeze_backbone_norm=args.freeze_backbone_norm,
                 lora=LoraCfg(
                     enabled=args.lora, rank=args.lora_rank, alpha=args.lora_alpha, targets=tuple(args.lora_targets)

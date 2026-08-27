@@ -215,6 +215,19 @@ class JointCli:
             help="edge-head architecture (from-scratch only): 'pack' (pilkwang SimpleNodeTransformer) or 'hoct'"
             " (two-stage 3D-RoPE node + line-to-line edge attention)",
         )
+        parser.add_argument(
+            "--edge-hidden-dim",
+            type=int,
+            default=128,
+            help="edge-head width (from-scratch only). Default 128 = pilkwang shape; the #1-CTC HOCT arch is 288"
+            " (must stay divisible by 4 heads). Read back off the checkpoint on reload, so a widened run reloads.",
+        )
+        parser.add_argument(
+            "--edge-blocks",
+            type=int,
+            default=4,
+            help="edge-head depth per stage (from-scratch only). Default 4 = pilkwang shape.",
+        )
 
     @staticmethod
     def _add_synthetic_flags(parser: argparse.ArgumentParser) -> None:

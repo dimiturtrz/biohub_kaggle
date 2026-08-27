@@ -6,11 +6,13 @@ in `conftest` stand in with the same shape contracts, so this exercises the join
 """
 
 from pathlib import Path
+from typing import cast
 
 import torch
 from torch import nn
 
 from celltrack.models.edge_transformer import _POS_EMBED_DIM, EdgeTransformerScorer
+from celltrack.models.hoct_edge_transformer import HoctEdgeTransformer
 from celltrack.models.joint_model import _MAX_NODES, JointModel
 from celltrack.models.prior_velocity import PriorVelocity
 from celltrack.models.relative_position_transformer import RelativePositionEdgeTransformer
@@ -283,5 +285,36 @@ def test_from_checkpoint(tmp_path: Path):
     assert loaded.downsample == (1, 4, 4)
     for restored, original in zip(
         loaded.detector.state_dict().values(), saved.detector.state_dict().values(), strict=True
+    ):
+        assert torch.equal(restored, original)
+
+
+def test_from_checkpoint_recovers_widened_hoct_head(tmp_path: Path):
+    """A hoct head trained WIDER/DEEPER than the pilkwang 128/4 default reloads at its own shape.
+
+    The width/depth are read off the saved weights (proj.weight rows, node_blocks index count), not a module
+    constant — so a C=288-style run (here 24/3, off the default to catch a hardcode) rebuilds and loads strict.
+    """
+    out_channels = 2
+    feat_dim = out_channels + 4 * _POS_EMBED_DIM
+    transformer = HoctEdgeTransformer(feat_dim=feat_dim, hidden_dim=24, n_heads=4, n_blocks=3)
+    saved = JointModel(TemporalUNetDetector(out_channels, (2, 4)), transformer, downsample=(1, 4, 4))
+    path = tmp_path / "joint_hoct_wide.pt"
+    torch.save(
+        {
+            "detector_state": saved.detector.state_dict(),
+            "transformer_state": saved.transformer.state_dict(),
+            "config": {"out_channels": out_channels, "layers": [2, 4], "downsample": [1, 4, 4], "head": "hoct"},
+        },
+        path,
+    )
+
+    loaded = JointModel.from_checkpoint(path)
+
+    head = cast(HoctEdgeTransformer, loaded.transformer)
+    assert head.proj.weight.shape[0] == 24  # width recovered, not the 128 default
+    assert len(head.node_blocks) == 3  # depth recovered, not the 4 default
+    for restored, original in zip(
+        loaded.transformer.state_dict().values(), saved.transformer.state_dict().values(), strict=True
     ):
         assert torch.equal(restored, original)
