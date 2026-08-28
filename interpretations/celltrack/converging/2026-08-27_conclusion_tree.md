@@ -87,6 +87,17 @@ REFUTED (off-grid, +60.9% peak inflation = fabricated fragments = harness). Co-a
 sub-1.6µm cells, physics-validated GT-free (bottleneck A HOLDS). BUT **B FLAT** (from-scratch/co-adapt head
 too weak at 8× density) AND **GT nearest-neighbor floor = 2.87µm, ZERO cells <2µm across 131k frames** → sub-
 1.6µm un-merges are FP splits, not recall. A-axis real but bounded; needs B solved AT finer to matter.
+> **FOLD 2026-08-28 — the "B FLAT" finer-head verdicts are HARNESS, not capacity.** Every finer122
+> edge-head checkpoint (coadapt_long standard, hoct_converge, AND the 3.D-CHEAP-CUT rzvw head-only run)
+> trained with contrastive `nce=0 hn=0` — LossCfg defaults both to 0.0 (joint_config.py:288,298) and the
+> launch scripts omit the flags. All three plateau proxy ~0.61, inv 0.97 = the degenerate untrained-affinity
+> signature. avl8 (same joint arch, nce ON): proxy 0.79 / node R 0.92 / inv 0.54. So B-FLAT-at-finer was
+> never tested with the association objective's key term ON. **Un-refutes** finer-head B AND the HOCT×slack
+> coupling (3.D cheap-cut). The never-run cell = finer122 detector + nce ON → staged `launch_hoct_finer122_nce.sh`
+> (contrastive 1.5, hard-neg 0.015 — recovered EXACT from avl8 loss decomposition, == nwfi record). CAVEAT:
+> this is an INSTRUMENT to close the axis honestly (does nce flip finer inv 0.97→~0.5?), NOT a >0.945 bet —
+> the 3.D ceiling (0.926 ≈ 0.924) still bounds any solo edge head. If the instrument clears the axis, the win
+> is still the Terminal-#2 JOINT stack, not this arm alone.
 
 ### F. Data DISTRIBUTION — train on detected crowd (`--detected-videos` / dw0)
 **REFUTED on the board.** Feeding the SimpleNodeTransformer head the complete detected crowd: +0.0267
@@ -179,6 +190,11 @@ gain last time. Spec (so the launch is designed, not improvised):
   recalibrated linker) → (3) off_eval6 → (4) slot. Each step gates the next; do not skip.
 - **Cost:** cheap arm = head-only GPU (short); full bet = multi-hour GPU. Both wheel+card-gated. The cheap
   arm is the highest-ratio next GPU spend — price it FIRST on wheel-grant.
+- **CHEAP-CUT INVALIDATED 2026-08-28:** the rzvw head-only run above executed with `nce=hn=0` (flags
+  omitted) → trained FLAT (proxy 0.6187, top1 0.20) = the nce-off plateau, NOT a coupling refutation. The
+  coupling gate must be RE-RUN with `--contrastive-weight 1.5 --hard-negative-weight 0.015`. Staged as
+  `launch_hoct_finer122_nce.sh` (frozen coadapt_long detector + hoct head + nce ON). Card-gated behind knee
+  raddino (~0900z). Gate unchanged: faithful holds/beats 0.6877 AND top1 >> 0.012 = coupling confirmed.
 
 ## What is DEAD — do not re-suggest
 motion-in-ILP · division postproc/FP-fork · directional-PE (detection-side) · consensus copy-ensemble ·
