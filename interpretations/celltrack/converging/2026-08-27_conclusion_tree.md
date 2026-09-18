@@ -26,6 +26,10 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   ~300–560 labelled nodes vs ~17 sparse on real → supplies the complete-candidate supervision
   ([[celltrack-pmkf-trains-gt-sparse-not-detected-crowd]]) our real labels lack. Held-out: 20 movies
   (7×44b6, 13×6bba) — the public weights trained on all 199, so both arms must retrain.
+- **Ruler (09-19):** the public weights, LEAKED on holdout20, with default predict (`--use-ilp`, thr 0.99) score
+  **0.8842** (edgeJ 0.889, divJ 0 of 17, nodeR 0.992). They clear the 20 movies' labels but score ~0.06 below
+  the LB plateau, so the local number is a relative ruler only: compare the A/B arms with each other, never
+  with the LB. Divisions score zero at default settings — the post-proc stack carries the LB gap.
 
 ## ROOT
 
