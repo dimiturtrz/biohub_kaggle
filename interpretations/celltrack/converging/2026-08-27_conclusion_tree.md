@@ -30,6 +30,11 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   **0.8842** (edgeJ 0.889, divJ 0 of 17, nodeR 0.992). They clear the 20 movies' labels but score ~0.06 below
   the LB plateau, so the local number is a relative ruler only: compare the A/B arms with each other, never
   with the LB. Divisions score zero at default settings — the post-proc stack carries the LB gap.
+- **V50's last layer is public-LB surgery (09-19).** After the V1329 foundation it (a) linearizes EVERY fork
+  (keeps the nearer child — a general "predict no divisions" policy) and (b) re-adds ≤2 divisions per ≥30k-node
+  movie through ~10 thresholds fit to one public event (`6bba_05db0fb1`, P=20025→D=20865). (b) is overfit but
+  tiny; (a) is the real private-LB bet. Hedge fork `celltrack-public-v1329f` = foundation only (after
+  ozermehmet's candidate pair); the V50−v1329f LB delta prices the surgery. Final-2 pick = one of each.
 
 ## ROOT
 
