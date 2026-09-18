@@ -12,6 +12,21 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-18 — frontier went public; the tree's "no public >0.927" premise is OBSOLETE
+
+- Public kernels now plateau at **0.947**; alfonso1799 V50 claims **0.9605** (pilkwang UNet+node-transformer
+  primary, temporal-unet3d secondary, DeepCenter veto, v1327 w3 real-model, tracksdata ILP + heavy post-proc).
+  Its guard report admits `leaderboard_feedback_used_for_configuration: True` → overfit-risk on private.
+  Forked unchanged as `celltrack-public-v50` / `celltrack-public-0947`; LB pending (watcher auto-submits).
+- **Consequence:** every LEVEL 3–4 verdict below was measured on OUR model family. The frontier model is a
+  different (stronger) substrate — our replicate-first rule now points at *its* weights + trainer
+  (`external/frontier_ds/…support-pack…/repo`), not our pmkf/HOCT stack. Build-past levers go on top of it.
+- **Open build-past (bd, P1):** synthetic CC0 pretrain → real fine-tune of the frontier model (forum +0.012–0.018).
+  Not a repeat: prior synth nulls were our generator / frozen UNet / from-scratch joint. Synth frames carry
+  ~300–560 labelled nodes vs ~17 sparse on real → supplies the complete-candidate supervision
+  ([[celltrack-pmkf-trains-gt-sparse-not-detected-crowd]]) our real labels lack. Held-out: 20 movies
+  (7×44b6, 13×6bba) — the public weights trained on all 199, so both arms must retrain.
+
 ## ROOT
 
 - **Goal:** WIN (1st). Winning cluster 0.945–0.962. **Banked best = 0.924 LB** (sub 55779061 = faithful
@@ -198,5 +213,5 @@ gain last time. Spec (so the launch is designed, not improvised):
 
 ## What is DEAD — do not re-suggest
 motion-in-ILP · division postproc/FP-fork · directional-PE (detection-side) · consensus copy-ensemble ·
-frontier-replicate as a number (+0.003, no public >0.927 code) · link-loss form family solo ·
+link-loss form family solo ·
 appearance/pair_context/view_tta · finer sub-1.6µm as recall.
