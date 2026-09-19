@@ -59,6 +59,10 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   The first two add recall, but node recall is already about 0.98 on the visible movies. So each is priced at
   ≤0.01, below the floor. Probe on the LB only once 0947's own score lands; without the base score, a variant's
   score can't be read.
+- **0947 fork = 0.947 on LB, the NEW CHAMPION (+0.008 over v1329f, +0.023 over our own 0.924) (09-19).** It is
+  reyhanksatria's notebook with three input paths changed; the model is Pilkwang's pack. So the gain is upstream's,
+  not ours. Now that the base has a score, thtennant's `gapfill` and `readmit` variants are pushed as LB probes
+  (`kaggle/kernels/celltrack-public-0947-*`). Final-2 default = 0947 + v1329f.
 
 ## ROOT
 
