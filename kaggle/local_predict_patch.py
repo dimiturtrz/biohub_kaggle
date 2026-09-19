@@ -24,6 +24,17 @@ LOOP_HEAD = (
 POST_HEAD = "        graph = build_graph(coords, edges)\n"
 SAVE = '        save_graph(graph, output_dir / f"{name}.geff")\n'
 PREDICT_DEF = "def predict(\n"
+MODEL_READY = "    model.eval()\n    return model, config"
+AMP_ENCODE = (
+    "    model.eval()\n"
+    "    _encode_fp32 = model.encode\n"
+    "    def _encode_bf16(imgs, _encode=_encode_fp32):\n"
+    '        with torch.autocast("cuda", dtype=torch.bfloat16):\n'
+    "            unet, det = _encode(imgs)\n"
+    "        return unet.float(), [d.float() for d in det]\n"
+    "    model.encode = _encode_bf16\n"
+    "    return model, config"
+)
 
 CACHE_HELPER = """
 import concurrent.futures as _futures
@@ -196,10 +207,14 @@ def apply(repo: Path) -> None:
     post_part = source[post_start:loop_end]
     loop = LOOP_SETUP + LOOP_HEAD + REUSE + gpu_part + FINISH_HEAD + indent(post_part) + FINISH_TAIL + SUBMIT + DRAIN
     source = source[:loop_start] + loop + source[loop_end:]
-    variant = "batched_tta" if os.environ.get("LOCAL_BATCHED_TTA") == "1" else ""
+    variants = [flag for flag in ("batched_tta", "amp") if os.environ.get(f"LOCAL_{flag.upper()}") == "1"]
+    variant = "+".join(variants)
     helpers = f"_LOCAL_VARIANT = {variant!r}\n" + CACHE_HELPER + FRAME_PREFETCH + DIHEDRAL_HELPER
     source = source.replace(PREDICT_DEF, helpers + PREDICT_DEF)
-    if variant:
+    if "batched_tta" in variants:
         source = batch_tta(source)
+    if "amp" in variants:
+        assert source.count(MODEL_READY) == 1, "expected one model-ready line"
+        source = source.replace(MODEL_READY, AMP_ENCODE)
     source = source.replace(CANDIDATES, CANDIDATES_VECTORIZED)
     script.write_text(source, encoding="utf-8")
