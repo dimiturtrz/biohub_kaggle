@@ -151,6 +151,14 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   the drift guard does not cover it), so `celltrack-public-0947-fast` (`kaggle/env_variant.py`) should
   emit a byte-identical submission in ~1600 s. A kernel RUN costs no submission slot, so this is a free
   probe: pushed 22:36Z, verify by diffing its `submission.csv` against 0947's.
+  **E25 — `SECONDARY_DETECTION_WEIGHT` is INERT (local, fp16, N=20, 44 videos). 0.6 → adj 0.9021 /
+  missed GT 418 · 0.8 (shipped) → 0.9018 / 446 · 0.95 → 0.9021 / 454. Spread 0.0003 = noise across a
+  36-cell missed-GT swing: the blend moves detection RECALL and the score does not follow. Two readings,
+  same direction — the two detectors agree wherever it matters, and the score is association-bound, not
+  detection-bound (see "score lever is association not detection"). So the freed runtime above must NOT
+  buy a third DETECTION vote. Follow-up arm running 22:41Z: `SECONDARY_EDGE_WEIGHT` 0.30 / 0.05 vs the
+  shipped 0.15 — the same fusion knob on the association side, never swept.**
+
   This retires the "6-config ensemble infeasible, ~18-24 h" bound — it was measured with the validator
   block in every member. Marginal cost of an extra member is ~940 s (predict 301 + PP 639), so 3-4
   members fit inside one 9 h kernel even before fp16. "The models are slow" was never the models.** Cache-key bug found: env paths under the work dir made every shard miss → keys now content-fingerprinted
