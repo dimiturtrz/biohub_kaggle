@@ -79,7 +79,7 @@ def cache_predictions(source: str) -> str:
     """Patch the predict script once the kernel has checksummed and patched it itself, before it first runs."""
     first_predict = 'splits_path = REPO_DIR / "kaggle_test_splits_50ep.json"\n'
     assert source.count(first_predict) == 1, "expected one test-split line ahead of the first prediction"
-    return source.replace(first_predict, '__import__("local_predict_cache").apply(REPO_DIR)\n' + first_predict)
+    return source.replace(first_predict, '__import__("local_predict_patch").apply(REPO_DIR)\n' + first_predict)
 
 
 def shard_spec(spec: dict, shard: str) -> dict:
@@ -115,6 +115,8 @@ def main() -> None:
     parser.add_argument("--env", action="append", default=[], metavar="KEY=VALUE", help="pin a kernel env var")
     parser.add_argument("--gpu-workers", type=int, default=1, help="prediction shards sharing the one GPU")
     parser.add_argument("--candidate-shard", metavar="I/K", help="run only every K-th spec candidate from I")
+    parser.add_argument("--prediction-cache", type=Path, default=PREDICTION_CACHE)
+    parser.add_argument("--batched-tta", action="store_true", help="one batched encode for the 7 TTA views")
     parser.add_argument("--stage-only", action="store_true")
     args = parser.parse_args()
     work = args.work.resolve()
@@ -129,7 +131,8 @@ def main() -> None:
         "PYTHONUNBUFFERED": "1",
         "MPLBACKEND": "Agg",
         "PYTHONPATH": os.pathsep.join([str(Path(__file__).parent), os.environ.get("PYTHONPATH", "")]),
-        "LOCAL_PREDICTION_CACHE": str(PREDICTION_CACHE),
+        "LOCAL_PREDICTION_CACHE": str(args.prediction_cache.resolve()),
+        "LOCAL_BATCHED_TTA": "1" if args.batched_tta else "0",
     }
     subprocess.run([sys.executable, script.name], cwd=work, env=env, check=True)
 

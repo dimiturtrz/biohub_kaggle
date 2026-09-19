@@ -106,8 +106,18 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   `celltrack-reid3-steal-probe` v1: steal ratio 1.5/2/3, owner-um 3/4.5, no-reattach, composed w/ reid3 selected.
   Gate: div_tp up, div_fp flat, adj loss ≤0.0005.
   LOCAL VALIDATOR (15:00Z): `kaggle/local_kernel.py` runs any kernel on the 5090 (remaps /kaggle paths; `--spec` =
-  donor_probe candidates; `--env KEY=VAL` pins env; kernel resume states cache the GPU predictions ⇒ re-runs = CPU PP
-  sweep only). Test predict 4 videos = 2.8 min locally. DENOMINATOR is the point: donor validator = 8 stems, 12 GT
+  donor_probe candidates; `--env KEY=VAL` pins env). CORRECTION: kernel re-materializes its repo + predict wipes output
+  ⇒ resume states did NOT cache GPU predictions; `kaggle/local_predict_cache.py` now caches per-video geffs keyed by
+  argv+BIOHUB_* env+weights fingerprint (`--candidate-shard I/K` splits the CPU PP sweep across processes on one cache).
+  Test predict 4 videos = 2.8 min locally. **FIDELITY PASS (15:20Z):** local base over the donor's 8 stems = donor
+  `validator_results.csv` (division counts identical, |Δadj| ≤ 5e-5) ⇒ local PP ranking is trustworthy.
+  GPU profile: predict = U-Net bs=1 → transformer bs=1 → CPU ILP serial per video ⇒ GPU idles during ILP (bursty
+  util). Fix = in-process pipelining (ILP of video k on CPU thread while GPU runs k+1) + batched windows — also Kaggle
+  runtime headroom for stacking. New donors 15:25Z: noisyislands linker-MLP (2 epochs, 4 videos, ~0 negatives =
+  toy) · xgboost-division (13 GT-only fork feats, negatives = random non-forks, in-sample acc 0.997 ⇒ trivial
+  labels, no track score) · thtennant divprec-v1 (ppsweep selected=base, no held-out) ⇒ none carries evidence. The
+  IDEA they gesture at is real but untried by us: a fork classifier trained on PREDICTED-graph candidate forks
+  (labels = GT match), replacing reid3's hand SAFE_DIV_* thresholds. DENOMINATOR is the point: donor validator = 8 stems, 12 GT
   divisions ⇒ a division knob moves 1 event = ±0.08 divJ = noise. Local lets N_PER_TYPE grow (pool 71 44b6 + 128
   6bba). Caveat: primary weights' train split undocumented (deepcenter: 71/128 split) ⇒ validator may be in-sample;
   use it to RANK PP configs, not as an LB estimate. First run = reid3 unchanged, fidelity check vs donor csv.
