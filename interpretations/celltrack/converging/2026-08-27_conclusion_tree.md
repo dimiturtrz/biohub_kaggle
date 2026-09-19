@@ -39,8 +39,11 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   The visible-test run completed cleanly (V1329 took 25 min, all hashes matched, no traceback). But the V1327
   adapted-detector guard fell back to the untouched V1290 primary on 98/100 frames of `44b6_0b24845f` (median
   retention 0.76): per its own guard, the headline detector is unfit on a dense 44b6 movie. The hidden-run log is
-  not downloadable, so the cause of the drop is not established. Until v1329f/0947 land, the public-kernel
-  fork path is NOT a proven step up; 0.924 stays the champion and a final-2 anchor.
+  not downloadable, so the cause of the drop is not established.
+- **v1329f (foundation, no surgery) = 0.939 on LB, the NEW CHAMPION (+0.015 over 0.924) (09-19).** Same notebook
+  as V50 minus the surgery cell, so the surgery's measured price is **−0.032**. Fork linearization (drop every
+  division) plus the 2-division rescue loses 0.032: the LB rewards the foundation's divisions, and "predict no
+  divisions" is refuted on the LB, not just overfit. Final-2 = v1329f + one decorrelated candidate (not V50).
 
 ## ROOT
 
