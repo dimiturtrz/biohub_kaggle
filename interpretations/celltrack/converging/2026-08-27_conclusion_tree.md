@@ -93,15 +93,18 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   | E2 | flow-seeded motion relink (`MOTION_RELINK_FLOW_*`, K 12, radius 40 µm) | thtennant gapfill/readmit/divprec | code | inside E1/E3 probes |
   | E3 | readmit discarded detections (score ≥0.965, r 4 µm) | thtennant readmit | code | on LB: probe 56354352 |
   | E4 | division precision: sister symmetry τ 0.6→0.4, sister-min 0 | thtennant divprec | knob | untested |
-  | E5 | learned re-ID appearance descriptors as pair feature (sweep picks REID_WEIGHT 4.0) | arnav170 reid3 | code | untested; our raw-patch appearance was coin-flip, learned re-ID ≠ that |
+  | E5 | learned re-ID appearance descriptors as pair feature (sweep picks REID_WEIGHT 4.0) | arnav170 reid3 | code | **DONOR-NULL** (its own `reid_report.json`, 5656 held-out sources): GBM top-1 0.98568 = transformer top-1 0.98568 exactly; perm-importance tf_prob 0.202 AUC, every descriptor block ≤0.0014 ⇒ appearance adds nothing past tf_prob. Sweep adjJ +0.004 (8 vids) sub-floor. Don't port. |
   | E6 | packet grouping post-process (`grouped_postprocess`, xy radial shell profile) | newwang12 grouped | code | untested |
-  | E7 | test-time denoising-AE prefilter (30 steps, α 0.17) | ghazarosbarseghyan91 dae | code | untested |
-  | E8 | sub-voxel centroid refinement (`refine_all_centroids`) | evgendvorkin 0.927 | code | untested on 0947 base |
+  | E7 | test-time denoising-AE prefilter (30 steps, α 0.17) | ghazarosbarseghyan91 dae | code | **DONOR-INCONCLUSIVE** (its validator vs reid3 `base` on the 4 shared stems): adjJ 0.8811 vs 0.8858 (−0.005), per-stem ±0.06, spurious −15 %, missed +1.25 ⇒ no carry evidence; low priority |
+  | E8 | sub-voxel centroid refinement (`refine_all_centroids`) | evgendvorkin 0.927 | code | **MECHANISM-NULL, not submitted**: metric `DistanceMatching(max_distance=7.0 µm)` vs refine shift ≤ sub-voxel (<1 µm), and both donor + 0947 round output to int voxels. Ported anyway (`kaggle/element_transplant.py`, variant `celltrack-public-0947-refine`, smoke-tested) — the CLI is the reusable transplant harness. |
   | E9 | DET 0.965→0.96 | thtennant det096 / beraterolelk | knob | beraterolelk tie ⇒ sub-floor |
   | E10 | runtime budget: frame cache 48, ILP timeout 1200, deadline degrade | thtennant fast | code | ENABLER — headroom for stacking E5–E8 in 9 h |
   | E11 | TabPFN division classifier | noisyislands | code | low ceiling (divisions ≤0.002) |
-  Plan: E1–E3 read from the pending probes; then ONE composite = best-of(E1/E3) + E10 + E4, then add E5/E8 (largest
-  plausible mechanisms: association appearance + localisation) — bd issues per element.
+  Plan (rev 14:05Z): donor OUTPUTS are free evidence — `kaggle kernels output <owner>/<slug>` gives each donor's own
+  validator/ppsweep/reid_report; read them BEFORE porting. E5/E8 retired by that read (above); E7 inconclusive.
+  Remaining: E1–E3 (pending probes) → composite best-of(E1/E3) + E10 + E4. Donor divdiag (reid3, 8 held-out stems):
+  divJ 0.23, 9/12 FN, **6/12 = "2nd daughter OWNED by another track"** — the steal/reattach axis (SAFE_DIV_STEAL_*, off by
+  default in reid3) is the division-side element to look at next.
 - **synth_pre80 done 13:01Z**: synth val best 0.9783 (80 ep). Chained all199_from_synth80 started; ep1 val 0.9201 on
   the 4-movie split (not comparable to the 20-holdout A/B arms' 0.89–0.91). ~25 min/epoch.
 - **Forum 740145 (hengck23):** Kaggle GT sometimes sits on cell "corners" (Ultrack-derived); many FPs lie next to a GT
