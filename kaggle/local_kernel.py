@@ -25,6 +25,7 @@ log = logging.getLogger(__name__)
 
 REPO = Path(__file__).resolve().parents[1]
 FRONTIER_DATASETS = REPO / "external" / "frontier_ds"
+PREDICTION_CACHE = REPO / "runs" / "local_kernel" / "_prediction_cache"
 COMPETITION = "biohub-cell-tracking-during-development"
 FUTURE_IMPORT = "from __future__ import annotations\n"
 
@@ -64,11 +65,42 @@ def pin_env(source: str, overrides: dict[str, str]) -> str:
     return source
 
 
-def stage(kernel: Path, spec: Path | None, work: Path, overrides: dict[str, str]) -> Path:
+def share_gpu(source: str, workers: int) -> str:
+    """Point the kernel's multi-GPU shard path at N workers on this machine's single GPU."""
+    two_gpu_cap = re.compile(r"min\(2, (?:_torch\.cuda\.device_count\(\)|available_gpu_count), (len\(\w+\))\)")
+    assert len(two_gpu_cap.findall(source)) == 2, "expected the test + validator worker-count lines"  # noqa: PLR2004
+    source = two_gpu_cap.sub(rf"min({workers}, \1)", source)
+    one_token_per_gpu = "return [str(index) for index in range(count)]"
+    assert source.count(one_token_per_gpu) == 1, "expected one CUDA token helper"
+    return source.replace(one_token_per_gpu, 'return ["0"] * count')
+
+
+def cache_predictions(source: str) -> str:
+    """Patch the predict script once the kernel has checksummed and patched it itself, before it first runs."""
+    first_predict = 'splits_path = REPO_DIR / "kaggle_test_splits_50ep.json"\n'
+    assert source.count(first_predict) == 1, "expected one test-split line ahead of the first prediction"
+    return source.replace(first_predict, '__import__("local_predict_cache").apply(REPO_DIR)\n' + first_predict)
+
+
+def shard_spec(spec: dict, shard: str) -> dict:
+    index, count = map(int, shard.split("/"))
+    labels = list(spec["candidates"])[index::count]
+    return {
+        "candidates": {label: spec["candidates"][label] for label in labels},
+        "diagnose": spec["diagnose"] if index == 0 else {},
+    }
+
+
+def stage(kernel: Path, work: Path, options: argparse.Namespace, overrides: dict[str, str]) -> Path:
     work.mkdir(parents=True, exist_ok=True)
-    source = pin_env(kernel_source(kernel), overrides)
-    if spec is not None:
-        source = rewrite(source, json.loads(spec.read_text()))
+    source = cache_predictions(pin_env(kernel_source(kernel), overrides))
+    if options.gpu_workers > 1:
+        source = share_gpu(source, options.gpu_workers)
+    if options.spec is not None:
+        spec = json.loads(options.spec.read_text())
+        if options.candidate_shard:
+            spec = shard_spec(spec, options.candidate_shard)
+        source = rewrite(source, spec)
     script = work / "kernel.py"
     script.write_text(remap(source, work), encoding="utf-8")
     return script
@@ -81,15 +113,24 @@ def main() -> None:
     parser.add_argument("--spec", type=Path)
     parser.add_argument("--work", type=Path, required=True)
     parser.add_argument("--env", action="append", default=[], metavar="KEY=VALUE", help="pin a kernel env var")
+    parser.add_argument("--gpu-workers", type=int, default=1, help="prediction shards sharing the one GPU")
+    parser.add_argument("--candidate-shard", metavar="I/K", help="run only every K-th spec candidate from I")
     parser.add_argument("--stage-only", action="store_true")
     args = parser.parse_args()
     work = args.work.resolve()
     overrides = dict(pair.split("=", 1) for pair in args.env)
-    script = stage(args.kernel, args.spec, work, overrides)
+    script = stage(args.kernel, work, args, overrides)
     log.info("staged %s", script)
     if args.stage_only:
         return
-    env = {**os.environ, **overrides, "PYTHONUNBUFFERED": "1", "MPLBACKEND": "Agg"}
+    env = {
+        **os.environ,
+        **overrides,
+        "PYTHONUNBUFFERED": "1",
+        "MPLBACKEND": "Agg",
+        "PYTHONPATH": os.pathsep.join([str(Path(__file__).parent), os.environ.get("PYTHONPATH", "")]),
+        "LOCAL_PREDICTION_CACHE": str(PREDICTION_CACHE),
+    }
     subprocess.run([sys.executable, script.name], cwd=work, env=env, check=True)
 
 
