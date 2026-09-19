@@ -109,6 +109,8 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   | E18 | 402-epoch support-pack edge predictor (vs pilkwang 50ep), thr 0.99, ILP app 1.0 / disapp 2.0 | yongjilyu ct-sp402 | none | the one WEIGHTS donor seen (longer-trained model = our model gap) but `yongjilyu/biohub-ct-inference-pack` is PRIVATE (API 403) → unharvestable; watch for it going public |
   | E19 | none — older 0947 ancestor (det 0.960, ILP div 1.2, safe-div thr 0.25) | chukkkk lb-942 | 0.942 | superseded by 0947 |
   | E20 | none — no model mounts, kinematic heuristic tracker | avikdas567 3d-kinematic | none | below learned base → skip |
+  | E21 | = E2 (flow-seeded relink) + tight55 + safe-div 0.25 + validator off | thtennant flow2-v1 (09-19 re-list) | env | already inside gapfill 0.947 tie → skip |
+  | E22 | none — pseudocode scaffold (ResUNet3D + MCMF linker + motion GPT), driver commented out, no weights/score | umarshad notebook82c6959503 | none | from-scratch, unrunnable → skip |
   E12 probe (14:33Z): reid3 own divdiag — `retro6_nnk2` leaves OWNED at 6/12 (retro does not reach owned cases); steal never
   run by donor. Sized: owned 6/12 FN, divJ 0.23 → ≤~0.6 ⇒ ≤ +0.037 proxy IF steal is clean (adj cost unknown). Probe =
   `kaggle/donor_probe.py` (re-runs donor's OWN validator sweep with our configs, no slot) → kernel
@@ -150,7 +152,7 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   missed by EVERY knob → the n=8 steal hypothesis does not hold at n=40; division recall is upstream (detection /
   association), not a postproc knob. Division term ceiling = 0.1·divJ ≈ 0.014 → axis CLOSED for PP.
   **Detection threshold (same 40):** 0.955 adj 0.9008 vs 0.965 0.9022 (−0.0014): 17 fewer missed GT nodes, +20
-  fragmented edges, +12.9k pred nodes — extra nodes do not become links. 0.975 pending.
+  fragmented edges, +12.9k pred nodes — extra nodes do not become links. 0.975: adj 0.9020 (−0.0002), missed GT 461 vs 440 @0.955 — threshold axis FLAT over 0.955–0.975 (span 0.0014); only the LB probe det096 can still move it.
   **Kaggle steal probe (reid3 own 8-video validator, T4):** base 0.9490, all 7 steal/tight knobs 0.9477–0.9511
   (adj ±0.003, 3 TP / 9 FN divisions everywhere) — same FLAT verdict as n=40 on an independent run.
 - **Cross-family decorrelation (18:20Z, GT-free, 4 visible test movies):** 0947 vs v1329f submission edges agree
