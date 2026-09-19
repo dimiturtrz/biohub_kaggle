@@ -103,6 +103,7 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   | E13 | XGBoost division classifier (13 GT-only features) | noisyislands xgboost-division-events | code | same family as E11; divisions ≤0.002 LB → skip |
   | E14 | linker 'association MLP' on candidate distance only | noisyislands linker-association-mlp | code | pilot, weaker than 0947's tf_prob (E5 showed even rich descriptors add 0 past tf_prob) → skip |
   | X1 | SCORER EXPLOIT, not an element: fake hub node t=−1000 → roots of top-1400 components + 5 chained off-image (−10000) fake divisions appended to submission | codezzzsleep 095-owned-validation (09-19) | — | **WON'T PORT**: games the metric, no tracking change; same family as the kirneo off-image hack (0 divJ for us); a host fix would void it on private |
+  | E15 | none — verbatim fork | pawanmali zhincez947-fork-v1 | — | code + env + data sources byte-identical to our 0947 base → nothing to harvest |
   E12 probe (14:33Z): reid3 own divdiag — `retro6_nnk2` leaves OWNED at 6/12 (retro does not reach owned cases); steal never
   run by donor. Sized: owned 6/12 FN, divJ 0.23 → ≤~0.6 ⇒ ≤ +0.037 proxy IF steal is clean (adj cost unknown). Probe =
   `kaggle/donor_probe.py` (re-runs donor's OWN validator sweep with our configs, no slot) → kernel
@@ -116,7 +117,12 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   `validator_results.csv` (division counts identical, |Δadj| ≤ 5e-5) ⇒ local PP ranking is trustworthy.
   GPU profile: predict = U-Net bs=1 → transformer bs=1 → CPU ILP serial per video ⇒ GPU idles during ILP (bursty
   util). Fix = in-process pipelining (ILP of video k on CPU thread while GPU runs k+1) + batched windows — also Kaggle
-  runtime headroom for stacking. New donors 15:25Z: noisyislands linker-MLP (2 epochs, 4 videos, ~0 negatives =
+  runtime headroom for stacking. **PIPELINED PREDICT (16:00Z, `local_predict_patch.py`):** worker-thread ILP +
+  frame prefetch + numpy edge candidates → geffs BIT-IDENTICAL to cache (4/4); wall 3.01 vs 2.94 min = no win
+  because GPU side (~120 s/4 videos, bs=1 encodes) now dominates. Batched 7-view dihedral TTA is NOT exact (node
+  counts differ 0.01–0.1%/video — cuDNN algo per batch size flips threshold-edge detections); speed re-timed solo
+  pending. Cache-key bug found: env paths under the work dir made every shard miss → keys now content-fingerprinted
+  (f4d499b). New donors 15:25Z: noisyislands linker-MLP (2 epochs, 4 videos, ~0 negatives =
   toy) · xgboost-division (13 GT-only fork feats, negatives = random non-forks, in-sample acc 0.997 ⇒ trivial
   labels, no track score) · thtennant divprec-v1 (ppsweep selected=base, no held-out) ⇒ none carries evidence. The
   IDEA they gesture at is real but untried by us: a fork classifier trained on PREDICTED-graph candidate forks
