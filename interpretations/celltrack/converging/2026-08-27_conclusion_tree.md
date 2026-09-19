@@ -86,6 +86,10 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
     public 0.939 (reid3 also 0.913) = v1329f level, below 0947. Grouped = S5 "A-only" TIGHT 6.25 sweep. Skip.
   - beraterolelk `0-947-lb-biohub-deepcenter-ilp-tracker`: same 3 pinned weights; DET 0.96 + relink TIGHT 5.5 +
     PPSWEEP margin 0.0005; titled 0.947 = TIE with 0947. Weak evidence det096 knob is sub-floor; lowers det096 probe value.
+  - ghazarosbarseghyan91 `biohub-dae-alpha-0-17`: test-time denoising-autoencoder prefilter (30 steps, α 0.17) +
+    bidirectional edge 0.30, relink bonus 1.35; cites LB 0.939 < 0947. Skip.
+- **synth_pre80 done 13:01Z**: synth val best 0.9783 (80 ep). Chained all199_from_synth80 started; ep1 val 0.9201 on
+  the 4-movie split (not comparable to the 20-holdout A/B arms' 0.89–0.91). ~25 min/epoch.
 - **Forum 740145 (hengck23):** Kaggle GT sometimes sits on cell "corners" (Ultrack-derived); many FPs lie next to a GT
   node. Their trick: at a 99% edge-recall cutoff, re-rank only the surviving candidates with a heavier module.
 
