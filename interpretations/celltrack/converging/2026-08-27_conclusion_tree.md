@@ -151,6 +151,32 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   the drift guard does not cover it), so `celltrack-public-0947-fast` (`kaggle/env_variant.py`) should
   emit a byte-identical submission in ~1600 s. A kernel RUN costs no submission slot, so this is a free
   probe: pushed 22:36Z, verify by diffing its `submission.csv` against 0947's.
+  **E32 — THE ENSEMBLE SEAT IS OPEN, AND RUNTIME WAS NEVER THE THING BLOCKING IT. Two corrections in
+  one measurement. (a) SIZE: the hidden test is **4 videos**, `predict_minutes_total` 9.93, and the
+  validator-free kernel finishes in 1590 s of a 9 h budget — **~20x headroom**. "The models are too slow
+  to ensemble" is false; we can afford several full passes in one kernel. (b) DIVERSITY: `kaggle/tracker_agreement.py`
+  matches nodes between two submitted trackers within 2 µm per frame and compares edge sets. 0947 (LB 0.947)
+  vs v1329f (LB 0.939) share **108192 edges, with 10356 0947-only and 10700 v1329f-only — shared_fraction_of_union
+  0.8371**. Two trackers 0.008 apart on the board disagree about **one edge in six**. That is not the
+  saturated pool of [[ensemble-diversity-has-a-quality-floor]] — that verdict was measured inside OUR
+  single recipe; these are two independent public forks. The seat is open; what is unproven is the
+  COMBINATION RULE. Note the merge needs no re-run: both submissions already exist as kernel outputs, so a
+  merge kernel can attach them as inputs at ~zero GPU.
+  **CORRECTION, same sitting — I first called the ~21 k disputed edges the headroom, and that is the wrong
+  denominator.** `kaggle/merge_submissions.py` (constraint-safe union in the champion's frame) admits only
+  **263 of 10700** donor edges at 2 µm and **428** at 5 µm, and the rejection histogram says why: **9492
+  fail `unmatched_endpoint`** and 956 fail `target_has_parent`. Two facts follow. (i) Most of the
+  0947/v1329f disagreement is **DETECTION-side** — each finds ~3–7 k nodes the other has no node for —
+  which is the same detection-side verdict the rest of this tree keeps landing on, now measured between two
+  frontier forks instead of inside our own. (ii) **Edge UNION is structurally dead as a rule**: the champion
+  already assigns a parent to nearly every node, so a union can only fill orphans, and orphans are ~0.2 % of
+  edges. The live rule is a **SWAP**, not a union — at 5 µm the two trackers assign *different* parents on
+  **6141 / 6485** matched-node edges (~5.3 % of the graph), and a 2-member vote cannot break that tie. So
+  the next step is a THIRD independent voter (v50, LB 0.907, the only non-0947-family fork we hold;
+  gapfill/readmit are 0947 variants and therefore correlated voters), with the rule "flip 0947's parent only
+  where the third member agrees with v1329f against it". 5.3 % contested is above the bar; the flip count is
+  the number to measure before spending a slot.**
+
   **E31 — BANK: the validator is 74 % of the kernel's wall-clock, and removing it is OUTPUT-NEUTRAL.
   `celltrack-public-0947-fast` (= 0947 with `BIOHUB_VALIDATOR_ENABLE=0`, staged by `kaggle/env_variant.py`)
   finished in **1590 s vs the base kernel's 6286 s** and its `submission.csv` is **byte-identical**
