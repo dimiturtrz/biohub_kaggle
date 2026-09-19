@@ -151,6 +151,21 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   the drift guard does not cover it), so `celltrack-public-0947-fast` (`kaggle/env_variant.py`) should
   emit a byte-identical submission in ~1600 s. A kernel RUN costs no submission slot, so this is a free
   probe: pushed 22:36Z, verify by diffing its `submission.csv` against 0947's.
+  **E30 — donor triage round 2 (23:12Z), three kernels, zero new arms — but one numeric.
+  `newwang12/biohub-v1-grouped` (11 votes) and `leonixis/biohub-v1-infer` are both 0947-family
+  (177 / 77 hits on `harmonic_association|DeepCenter|ILPSolver|BIOHUB_`); an env-block diff against
+  `logs/0947_src.py` returns exactly ONE substantive numeric difference —
+  `BIOHUB_DEEPCENTER_SAFE_DIV_THRESHOLD` **0.25 vs our 0.20** — plus `BIOHUB_VALIDATOR_ENABLE=0`, which
+  independently confirms the validator-free `-fast` variant is what the field runs. Neither posts a score,
+  so 0.25 is a hint, not evidence; it is a DETECTION-side (DeepCenter division veto) knob, hence upstream
+  of the E29 seam and still GPU-priced — queue it BEHIND the disappearance sweep, not ahead of it.
+  `noisyislands/biohub-linker-association-mlp` is a 6-feature `EdgeMLP(6→16→16→1)` over GT-node geometry
+  with injected synthetic dups/noise: that is simultaneously
+  [[celltrack-four-cues-fail-confusor-detection-side]] (geometry-only cues rank the true successor at or
+  below chance) and [[celltrack-pmkf-trains-gt-sparse-not-detected-crowd]] (trains on the GT-sparse pool,
+  not the ~980-FP/frame detected pool). Refuted family, no score posted, NO arm. Einstein criterion held
+  three times in one pass.**
+
   **E29 — the ILP-cost axis is no longer GPU-priced. `predict_video` returns `(coords, edges)` — the
   candidate graph with `edge_prob` — and everything under it (`build_graph` + `td.solvers.ILPSolver`) is
   pure CPU, so the GPU half knows nothing about the solver weights. `local_predict_patch.py` now caches
