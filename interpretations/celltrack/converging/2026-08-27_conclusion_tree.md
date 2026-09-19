@@ -133,7 +133,9 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   differ −0.03…+0.15% vs fp32 — same order as batched noise; score effect unmeasured. Speed only pays if it buys an
   ensemble seat inside the Kaggle runtime. **bf16 unbatched, N=20 (19:45Z): adj 0.9025 vs fp32 0.9022, 23.8 vs 29.2
   GPU-s/video (−18.5%) → accuracy-neutral.** But the Kaggle kernel runs on T4 (sm75, no native bf16), so the shippable
-  form is fp16 autocast — `amp16_n20` running (`--amp fp16`). Cache-key bug found: env paths under the work dir made every shard miss → keys now content-fingerprinted
+  form is fp16 autocast. **fp16, N=20 (20:44Z): adj 0.9018 (−0.0004), missed GT 446, 16.8 GPU-s/video (−42%), no
+  NaN → accuracy-neutral.** Shipped as `celltrack-public-0947-fp16` (`kaggle/amp_variant.py`) — the Kaggle runtime vs
+  0947's 6286 s says how much room it frees for a third member. Cache-key bug found: env paths under the work dir made every shard miss → keys now content-fingerprinted
   (f4d499b). New donors 15:25Z: noisyislands linker-MLP (2 epochs, 4 videos, ~0 negatives =
   toy) · xgboost-division (13 GT-only fork feats, negatives = random non-forks, in-sample acc 0.997 ⇒ trivial
   labels, no track score) · thtennant divprec-v1 (ppsweep selected=base, no held-out) ⇒ none carries evidence. The
