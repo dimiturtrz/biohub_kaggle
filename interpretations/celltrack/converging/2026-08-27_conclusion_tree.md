@@ -51,6 +51,14 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   reverses on the hidden movies (−0.032). The visible-4 score cannot rank division policies. It also cannot tune
   the family's other knobs, because the pack's weights trained on all199, which includes these movies. The LB
   is the only clean ruler for this family.
+- **thtennant forked 0947 three ways (09-19, unscored).** All three are post-process edits on the same "0.939 base +
+  holdout-selected post-process" notebook (`research/frontier_kernels/thtennant_*`):
+  - `gapfill` bridges gaps ≤3 frames with the detector's sub-threshold peaks (score ≥0.5).
+  - `readmit` re-adds discarded peaks (score ≥0.965) within 4 µm of an open track end.
+  - `divprec` tightens the sister symmetry τ from 0.6 to 0.4.
+  The first two add recall, but node recall is already about 0.98 on the visible movies. So each is priced at
+  ≤0.01, below the floor. Probe on the LB only once 0947's own score lands; without the base score, a variant's
+  score can't be read.
 
 ## ROOT
 
