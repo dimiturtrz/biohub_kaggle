@@ -122,8 +122,11 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   runtime headroom for stacking. **PIPELINED PREDICT (16:00Z, `local_predict_patch.py`):** worker-thread ILP +
   frame prefetch + numpy edge candidates → geffs BIT-IDENTICAL to cache (4/4); wall 3.01 vs 2.94 min = no win
   because GPU side (~120 s/4 videos, bs=1 encodes) now dominates. Batched 7-view dihedral TTA is NOT exact (node
-  counts differ 0.01–0.1%/video — cuDNN algo per batch size flips threshold-edge detections); speed re-timed solo
-  pending. Cache-key bug found: env paths under the work dir made every shard miss → keys now content-fingerprinted
+  counts differ 0.01–0.1%/video — cuDNN algo per batch size flips threshold-edge detections). **Timing 16:32Z (4 test videos, CPU sweeps running
+  alongside — same load for both arms):** fp32 bs=1 120.2 GPU-s · batched-TTA fp32 151.5 (+26%, SLOWER — bs=7 at 64³
+  loses to bs=1; keep off) · bf16 autocast + batched 97.2 (−36% vs batched, −19% vs baseline). bf16 geff node counts
+  differ −0.03…+0.15% vs fp32 — same order as batched noise; score effect unmeasured. Speed only pays if it buys an
+  ensemble seat inside the Kaggle runtime; bf16-without-batch not yet timed. Cache-key bug found: env paths under the work dir made every shard miss → keys now content-fingerprinted
   (f4d499b). New donors 15:25Z: noisyislands linker-MLP (2 epochs, 4 videos, ~0 negatives =
   toy) · xgboost-division (13 GT-only fork feats, negatives = random non-forks, in-sample acc 0.997 ⇒ trivial
   labels, no track score) · thtennant divprec-v1 (ppsweep selected=base, no held-out) ⇒ none carries evidence. The
