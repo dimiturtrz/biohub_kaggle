@@ -80,14 +80,28 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
     - DET_THRESHOLD 0.965 → 0.96, which raises N_pred, the term hikaggler says moves the LB.
     - frame cache 48, ILP timeout 1200 s, repair deadline 27000 s. "fast-tight60" is runtime engineering, not a model change.
     - gapfill-det096 adds a flow-seeded motion relink (`MOTION_RELINK_FLOW_*`).
-  - noisyislands trains a TabPFN division classifier. Divisions are worth ≤0.002 on the LB per hikaggler, so skip it.
-  - Only probe det096 after our gapfill/readmit probes score.
-  - newwang12 `biohub-v1-grouped` (10 votes) and arnav170 `biohub-reid3`: both V9 packet-routing lineage, self-cited
-    public 0.939 (reid3 also 0.913) = v1329f level, below 0947. Grouped = S5 "A-only" TIGHT 6.25 sweep. Skip.
+  - noisyislands trains a TabPFN division classifier (divisions ≤0.002 LB per hikaggler).
+  - newwang12 `biohub-v1-grouped` (10 votes), arnav170 `biohub-reid3`, ghazarosbarseghyan91 `biohub-dae-alpha-0-17`:
+    V9-lineage hosts self-citing 0.939 — host LB is irrelevant, they are ELEMENT DONORS (inventory below).
   - beraterolelk `0-947-lb-biohub-deepcenter-ilp-tracker`: same 3 pinned weights; DET 0.96 + relink TIGHT 5.5 +
-    PPSWEEP margin 0.0005; titled 0.947 = TIE with 0947. Weak evidence det096 knob is sub-floor; lowers det096 probe value.
-  - ghazarosbarseghyan91 `biohub-dae-alpha-0-17`: test-time denoising-autoencoder prefilter (30 steps, α 0.17) +
-    bidirectional edge 0.30, relink bonus 1.35; cites LB 0.939 < 0947. Skip.
+    PPSWEEP margin 0.0005; titled 0.947 = TIE with 0947 → det096 knob alone likely sub-floor.
+- **ELEMENT INVENTORY vs 0947 (harvest elements, not notebooks; 09-19).** Diff = `BIOHUB_*` keys + new `def`s per
+  public kernel (scratch `elements.py`). Each row = transplant candidate into the 0947 base:
+  | # | element | donor | port | status |
+  |---|---|---|---|---|
+  | E1 | gap-fill from low-threshold detection pool (`fill_gaps_from_low_detections`, LOWDET 0.3, ≤3% added) | thtennant gapfill | code | on LB: probe 56354350 |
+  | E2 | flow-seeded motion relink (`MOTION_RELINK_FLOW_*`, K 12, radius 40 µm) | thtennant gapfill/readmit/divprec | code | inside E1/E3 probes |
+  | E3 | readmit discarded detections (score ≥0.965, r 4 µm) | thtennant readmit | code | on LB: probe 56354352 |
+  | E4 | division precision: sister symmetry τ 0.6→0.4, sister-min 0 | thtennant divprec | knob | untested |
+  | E5 | learned re-ID appearance descriptors as pair feature (sweep picks REID_WEIGHT 4.0) | arnav170 reid3 | code | untested; our raw-patch appearance was coin-flip, learned re-ID ≠ that |
+  | E6 | packet grouping post-process (`grouped_postprocess`, xy radial shell profile) | newwang12 grouped | code | untested |
+  | E7 | test-time denoising-AE prefilter (30 steps, α 0.17) | ghazarosbarseghyan91 dae | code | untested |
+  | E8 | sub-voxel centroid refinement (`refine_all_centroids`) | evgendvorkin 0.927 | code | untested on 0947 base |
+  | E9 | DET 0.965→0.96 | thtennant det096 / beraterolelk | knob | beraterolelk tie ⇒ sub-floor |
+  | E10 | runtime budget: frame cache 48, ILP timeout 1200, deadline degrade | thtennant fast | code | ENABLER — headroom for stacking E5–E8 in 9 h |
+  | E11 | TabPFN division classifier | noisyislands | code | low ceiling (divisions ≤0.002) |
+  Plan: E1–E3 read from the pending probes; then ONE composite = best-of(E1/E3) + E10 + E4, then add E5/E8 (largest
+  plausible mechanisms: association appearance + localisation) — bd issues per element.
 - **synth_pre80 done 13:01Z**: synth val best 0.9783 (80 ep). Chained all199_from_synth80 started; ep1 val 0.9201 on
   the 4-movie split (not comparable to the 20-holdout A/B arms' 0.89–0.91). ~25 min/epoch.
 - **Forum 740145 (hengck23):** Kaggle GT sometimes sits on cell "corners" (Ultrack-derived); many FPs lie next to a GT
