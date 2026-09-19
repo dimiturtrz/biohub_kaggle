@@ -81,3 +81,4 @@ kaggle/_*/
 # Cross-agent mailbox: inbox/ dir is tracked (.gitkeep), the dropped messages are transient.
 /inbox/*
 !/inbox/.gitkeep
+research/frontier_kernels/*/output/
