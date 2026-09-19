@@ -127,7 +127,7 @@ def main() -> None:
     parser.add_argument("--candidate-shard", metavar="I/K", help="run only every K-th spec candidate from I")
     parser.add_argument("--prediction-cache", type=Path, default=PREDICTION_CACHE)
     parser.add_argument("--batched-tta", action="store_true", help="one batched encode for the 7 TTA views")
-    parser.add_argument("--amp", action="store_true", help="bf16 autocast around the detector encode")
+    parser.add_argument("--amp", choices=("bf16", "fp16"), help="autocast dtype around the detector encode")
     parser.add_argument("--stage-only", action="store_true")
     args = parser.parse_args()
     work = args.work.resolve()
@@ -145,7 +145,7 @@ def main() -> None:
         "LOCAL_PREDICTION_CACHE": str(args.prediction_cache.resolve()),
         "LOCAL_WORK_DIR": str(work),
         "LOCAL_BATCHED_TTA": "1" if args.batched_tta else "0",
-        "LOCAL_AMP": "1" if args.amp else "0",
+        "LOCAL_AMP": args.amp or "0",
     }
     subprocess.run([sys.executable, script.name], cwd=work, env=env, check=True)
 

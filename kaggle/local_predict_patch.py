@@ -28,13 +28,15 @@ MODEL_READY = "    model.eval()\n    return model, config"
 AMP_ENCODE = (
     "    model.eval()\n"
     "    _encode_fp32 = model.encode\n"
-    "    def _encode_bf16(imgs, _encode=_encode_fp32):\n"
-    '        with torch.autocast("cuda", dtype=torch.bfloat16):\n'
+    "    def _encode_amp(imgs, _encode=_encode_fp32):\n"
+    '        with torch.autocast("cuda", dtype=torch.{dtype}):\n'
     "            unet, det = _encode(imgs)\n"
     "        return unet.float(), [d.float() for d in det]\n"
-    "    model.encode = _encode_bf16\n"
+    "    model.encode = _encode_amp\n"
     "    return model, config"
 )
+AMP_DTYPES = {"1": "bfloat16", "bf16": "bfloat16", "fp16": "float16"}
+AMP_VARIANTS = {"bfloat16": "amp", "float16": "amp_fp16"}
 
 CACHE_HELPER = """
 import concurrent.futures as _futures
@@ -231,14 +233,17 @@ def apply(repo: Path) -> None:
     post_part = source[post_start:loop_end]
     loop = LOOP_SETUP + LOOP_HEAD + REUSE + gpu_part + FINISH_HEAD + indent(post_part) + FINISH_TAIL + SUBMIT + DRAIN
     source = source[:loop_start] + loop + source[loop_end:]
-    variants = [flag for flag in ("batched_tta", "amp") if os.environ.get(f"LOCAL_{flag.upper()}") == "1"]
+    amp_dtype = AMP_DTYPES.get(os.environ.get("LOCAL_AMP", "0"))
+    variants = ["batched_tta"] * (os.environ.get("LOCAL_BATCHED_TTA") == "1") + [AMP_VARIANTS[amp_dtype]] * bool(
+        amp_dtype
+    )
     variant = "+".join(variants)
     helpers = f"_LOCAL_VARIANT = {variant!r}\n" + CACHE_HELPER + FRAME_PREFETCH + DIHEDRAL_HELPER
     source = source.replace(PREDICT_DEF, helpers + PREDICT_DEF)
     if "batched_tta" in variants:
         source = batch_tta(source)
-    if "amp" in variants:
+    if amp_dtype:
         assert source.count(MODEL_READY) == 1, "expected one model-ready line"
-        source = source.replace(MODEL_READY, AMP_ENCODE)
+        source = source.replace(MODEL_READY, AMP_ENCODE.replace("{dtype}", amp_dtype))
     source = source.replace(CANDIDATES, CANDIDATES_VECTORIZED)
     script.write_text(source, encoding="utf-8")
