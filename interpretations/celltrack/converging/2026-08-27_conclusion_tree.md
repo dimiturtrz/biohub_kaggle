@@ -82,6 +82,8 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
     - gapfill-det096 adds a flow-seeded motion relink (`MOTION_RELINK_FLOW_*`).
   - noisyislands trains a TabPFN division classifier. Divisions are worth ≤0.002 on the LB per hikaggler, so skip it.
   - Only probe det096 after our gapfill/readmit probes score.
+  - newwang12 `biohub-v1-grouped` (10 votes) and arnav170 `biohub-reid3`: both V9 packet-routing lineage, self-cited
+    public 0.939 (reid3 also 0.913) = v1329f level, below 0947. Grouped = S5 "A-only" TIGHT 6.25 sweep. Skip.
 - **Forum 740145 (hengck23):** Kaggle GT sometimes sits on cell "corners" (Ultrack-derived); many FPs lie next to a GT
   node. Their trick: at a 99% edge-recall cutoff, re-rank only the surviving candidates with a heavier module.
 
