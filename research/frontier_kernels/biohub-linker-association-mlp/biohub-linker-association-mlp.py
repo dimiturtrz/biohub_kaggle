@@ -145,6 +145,22 @@ def main():
     ap.add_argument("--window", type=int, default=5)
     ap.add_argument("--epochs", type=int, default=2)
     ap.add_argument("--lr", type=float, default=1e-3)
+    # Candidate pool control
+    ap.add_argument("--candidate-mode", choices=["gt_clean", "production_sim", "mixed"],
+                   default="production_sim",
+                   help="gt_clean: only clean GT-node candidates (old behaviour). "
+                        "production_sim: inject synthetic duplicate/noise nodes to "
+                        "mimic production detector output (hard negatives). "
+                        "mixed: both pools, weighted. Default production_sim.")
+    ap.add_argument("--synthetic-dup-rate", type=float, default=0.15,
+                   help="Fraction of GT nodes duplicated as fake duplicates "
+                        "(offset ≤3 µm, matching production detector duplicate behaviour).")
+    ap.add_argument("--synthetic-noise-rate", type=float, default=0.10,
+                   help="Fraction of frames that get synthetic noise nodes "
+                        "(random position, no GT identity).")
+    ap.add_argument("--neg-pos-ratio", type=float, default=1.5,
+                   help="Negative-to-positive sample ratio for class balancing. "
+                        "Lower = more negative-heavy (production-like). Default 1.5.")
     args = ap.parse_args()
     is_kaggle, has_cuda = assert_kaggle_env()
     print(f"Linker train kaggle={is_kaggle} cuda={has_cuda} fold={args.fold} window={args.window} epochs={args.epochs} lr={args.lr}")
@@ -274,17 +290,87 @@ def main():
         print(f"WARNING: No GT files found for {train_datasets[:2]}, listing {d} contents")
         print(list(d.iterdir())[:10] if d.exists() else "no dir")
 
+    # --- Production-simulation synthetic node injection ---
+    # The forensics show the production detector creates duplicates (~3 µm offset)
+    # and noise nodes that create impostor candidates far closer than true pairs.
+    # We inject synthetic nodes that mimic this behaviour so the MLP sees
+    # realistic hard negatives during training.
+    rng_global = np.random.default_rng(args.fold * 7919 + 42)
+
+    def inject_synthetic_nodes(nodes: dict, all_frames, by_t, synthetic_dup_rate, synthetic_noise_rate):
+        """Return extended node dict + extended GT edges.
+
+        For each GT node, with probability synthetic_dup_rate add a duplicate
+        at up to 3 µm offset (in voxel units). For a fraction of frames, add
+        synthetic noise nodes at random positions within the bounding box.
+        These synthetic nodes have node ids above the max GT node id.
+        """
+        extended = dict(nodes)
+        extended_gt_edges = set()
+        base_gt_edges = set()  # caller fills this in
+
+        max_gt_id = max(nodes.keys()) if nodes else 0
+        next_id = max_gt_id + 1
+        rng = np.random.default_rng(next_id + args.fold)
+
+        # Compute bounding box for noise node placement
+        all_nodes_list = list(nodes.values())
+        if all_nodes_list:
+            z_min = min(p[1] for p in all_nodes_list)
+            z_max = max(p[1] for p in all_nodes_list)
+            y_min = min(p[2] for p in all_nodes_list)
+            y_max = max(p[2] for p in all_nodes_list)
+            x_min = min(p[3] for p in all_nodes_list)
+            x_max = max(p[3] for p in all_nodes_list)
+        else:
+            z_min, z_max, y_min, y_max, x_min, x_max = 0, 0, 0, 0, 0, 0
+
+        n_dups = 0
+        n_noise = 0
+        for nid, (t, z, y, x) in nodes.items():
+            # Duplicate injection
+            if rng.random() < synthetic_dup_rate:
+                # offset in voxel units, up to 3 µm total
+                max_vox_off = int(np.ceil(3.0 / 0.40625))  # ~7 voxels in x/y
+                dz = int(rng.integers(-2, 3))
+                dy = int(rng.integers(-max_vox_off, max_vox_off + 1))
+                dx = int(rng.integers(-max_vox_off, max_vox_off + 1))
+                dup_id = next_id
+                next_id += 1
+                extended[dup_id] = (t, z + dz, y + dy, x + dx)
+                n_dups += 1
+                # Duplicates share the same GT edges as the original node
+                for (s, d) in base_gt_edges:
+                    if s == nid:
+                        extended_gt_edges.add((dup_id, d))
+                    if d == nid:
+                        extended_gt_edges.add((s, dup_id))
+
+        # Noise nodes: add a few per frame
+        for t in all_frames:
+            if rng.random() < synthetic_noise_rate:
+                z = int(rng.integers(max(0, z_min - 5), z_max + 5))
+                y = int(rng.integers(max(0, y_min - 5), y_max + 5))
+                x = int(rng.integers(max(0, x_min - 5), x_max + 5))
+                nid_new = next_id
+                next_id += 1
+                extended[nid_new] = (t, z, y, x)
+                n_noise += 1
+
+        if n_dups or n_noise:
+            print(f"    [synthetic] dups={n_dups} noise={n_noise} (dup_rate={synthetic_dup_rate}, noise_rate={synthetic_noise_rate})")
+
+        return extended, extended_gt_edges
+
     # --- Link table building (plan §7: real association scoring, not placeholder) ---
-    # Uses the linker-learned serving features from the error_budget forensics:
-    # displacement_um (primary signal), temporal_delta_frames, is_first_frame,
-    # is_last_frame, motion_residual_um, and competing_link_count.
-    #
-    # The V28/V30 forensics found that the MLP logit sensitivity to rank_t was
-    # -0.209 per step and the impostor won 33/33 swap cases when trained on
-    # clean GT-node candidates but served on production candidates with
-    # duplicates/noise. This training uses GT-node candidates (correct labels)
-    # plus a competing-link count feature so the model learns to reject the
-    # impostor even when it is geometrically closer.
+    # Candidate pools:
+    #   gt_clean: clean GT-node candidates only (original behaviour)
+    #   production_sim: inject synthetic dup + noise nodes before candidate
+    #     generation so the MLP sees realistic impostor hard negatives
+    #   mixed: train on both pools with a weighted mixture
+    candidate_mode = args.candidate_mode
+    print(f"  Candidate mode: {candidate_mode}")
+
     class EdgeMLP(nn.Module):
         def __init__(self):
             super().__init__()
@@ -313,13 +399,38 @@ def main():
         total_n = 0
         for ds, gt_path in gt_files:
             try:
-                nodes, gt_edges, g = load_gt_nodes_edges(gt_path)
-                # Build per-frame dict for candidate generation
+                base_nodes, base_gt_edges, g = load_gt_nodes_edges(gt_path)
                 from collections import defaultdict
                 import scipy.spatial
-                by_t = defaultdict(dict)
-                for nid, (t, z, y, x) in nodes.items():
-                    by_t[t][nid] = (t, z, y, x)
+                base_all_frames = sorted({p[0] for p in base_nodes.values()})
+                base_by_t = defaultdict(dict)
+                for nid, (t, z, y, x) in base_nodes.items():
+                    base_by_t[t][nid] = (t, z, y, x)
+
+                # Candidate pool construction
+                if candidate_mode == "gt_clean":
+                    nodes = base_nodes
+                    gt_edges = base_gt_edges
+                    by_t = base_by_t
+                elif candidate_mode == "production_sim":
+                    ext_nodes, ext_gt = inject_synthetic_nodes(
+                        base_nodes, base_all_frames, base_by_t,
+                        args.synthetic_dup_rate, args.synthetic_noise_rate)
+                    nodes = ext_nodes
+                    gt_edges = base_gt_edges | ext_gt
+                    by_t = defaultdict(dict)
+                    for nid, (t, z, y, x) in nodes.items():
+                        by_t[t][nid] = (t, z, y, x)
+                else:  # mixed
+                    ext_nodes, ext_gt = inject_synthetic_nodes(
+                        base_nodes, base_all_frames, base_by_t,
+                        args.synthetic_dup_rate, args.synthetic_noise_rate)
+                    nodes = base_nodes | ext_nodes
+                    gt_edges = base_gt_edges | ext_gt
+                    by_t = defaultdict(dict)
+                    for nid, (t, z, y, x) in nodes.items():
+                        by_t[t][nid] = (t, z, y, x)
+
                 # Generate candidates (10 um radius, top-3 per target)
                 cands = set()
                 target_to_cands = defaultdict(list)  # tgt -> [(src, dist)]
@@ -399,10 +510,10 @@ def main():
                 n_neg_all = int((1 - labels_arr).sum())
                 if n_pos_all == 0:
                     continue
-                # Balance: keep all positives, sample up to 2x negatives randomly
+                # Balance: keep all positives, sample up to neg_pos_ratio * n_pos negatives randomly
                 pos_idx = np.where(labels_arr == 1.0)[0]
                 neg_idx = np.where(labels_arr == 0.0)[0]
-                n_keep_neg = min(2 * n_pos_all, len(neg_idx))
+                n_keep_neg = min(int(args.neg_pos_ratio * n_pos_all), len(neg_idx))
                 if n_keep_neg < len(neg_idx):
                     keep_neg = rng.choice(neg_idx, size=n_keep_neg, replace=False)
                 else:
@@ -448,16 +559,20 @@ def main():
         torch.save(ckpt, ckpt_dir / "last.pt")
 
     prov = {
-        "model": "EdgeMLP 6->16->16->1 on [dist/10, temporal_delta, is_first, is_last, motion_resid/10, comp_count], class-balanced 2:1 neg:pos, pilot real training",
+        "model": "EdgeMLP 6->16->16->1 on [dist/10, temporal_delta, is_first, is_last, motion_resid/10, comp_count], class-balanced neg:pos, pilot real training",
         "candidate": {"max_distance_um": MAX_DIST, "topk_targets": TOPK, "aim_recall": 0.995},
         "solver": {"type": "event_solver explicit b/d/c/h"},
+        "candidate_mode": candidate_mode,
+        "synthetic_dup_rate": args.synthetic_dup_rate,
+        "synthetic_noise_rate": args.synthetic_noise_rate,
+        "neg_pos_ratio": args.neg_pos_ratio,
         "window": args.window,
         "epochs": args.epochs,
         "lr": args.lr,
         "fold": args.fold,
         "train_datasets": train_datasets,
         "best_loss": best_loss,
-        "note": "Real pilot per plan §7. Features match the linker serving contract from lb_calibration forensics (rank_t sensitivity -0.209; impostor 33/33 win rate). Replace with SimpleNodeTransformer for full.",
+        "note": "Pilot per plan §7. When candidate_mode=production_sim, synthetic duplicate + noise nodes are injected to mimic production detector impostor behaviour.",
     }
     (ckpt_dir / "prov.json").write_text(json.dumps(prov, indent=2))
     print(f"Wrote {ckpt_dir / 'prov.json'} and checkpoints to {ckpt_dir} best {best_loss:.4f}")

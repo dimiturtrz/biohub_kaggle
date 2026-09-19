@@ -28,9 +28,10 @@ def _candidates_source(candidates: dict[str, dict]) -> str:
 
 
 def _diagnose_source(diagnose: dict[str, dict]) -> str:
-    return "".join(
+    calls = "".join(
         f"    diagnose_divisions({json.dumps(label)}, {json.dumps(config)})\n" for label, config in diagnose.items()
     )
+    return calls or "    pass\n"
 
 
 def rewrite(source: str, spec: dict) -> str:

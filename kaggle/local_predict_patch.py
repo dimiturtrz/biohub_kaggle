@@ -4,7 +4,8 @@ The kernel re-materializes its tracking repo on every start and the predict scri
 re-run that only changes post-processing would redo all GPU prediction. `apply` rewrites the per-video loop so
 that it copies a cached `<stem>.geff` when one exists under LOCAL_PREDICTION_CACHE, keyed by everything the
 prediction reads: its CLI args (bar output naming), the BIOHUB_* env vars the script names, and a fingerprint of
-each weights file.
+each weights file. File-valued args/env enter the key as content fingerprints and the work dir as `<work>`, so
+runs in different work dirs share one cache.
 
 The rest removes CPU work that serialized with the GPU (profiled: ILP solve, zarr frame reads and a Python
 double loop over the edge-probability matrix left the GPU idle between encode bursts), with identical outputs:
@@ -42,13 +43,21 @@ def _local_prediction_cache(name):
             skip = True
             continue
         argv.append(arg)
-    weights = [Path(a) for a in argv if a.endswith((".pt", ".pth", ".ckpt"))]
-    weights += [Path(os.environ[k]) for k in named if k.endswith("WEIGHTS") and os.environ.get(k)]
-    fingerprints = []
-    for path in sorted(set(weights)):
+    def fingerprint(path):
         with path.open("rb") as handle:
-            fingerprints.append([path.name, path.stat().st_size, hashlib.sha1(handle.read(1 << 20)).hexdigest()])
-    key = [argv, sorted((k, os.environ[k]) for k in named if k in os.environ), fingerprints]
+            return [path.name, path.stat().st_size, hashlib.sha1(handle.read(1 << 20)).hexdigest()]
+
+    def portable(value):
+        if Path(value).is_file():
+            return fingerprint(Path(value))
+        work = Path(os.environ["LOCAL_WORK_DIR"])
+        return value.replace(str(work), "<work>").replace(work.as_posix(), "<work>")
+
+    weights = [Path(a) for a in argv if a.endswith((".pt", ".pth", ".ckpt"))]
+    fingerprints = [fingerprint(path) for path in sorted(set(weights))]
+    argv = [portable(a) for a in argv]
+    env = sorted((k, portable(os.environ[k])) for k in named if k in os.environ)
+    key = [argv, env, fingerprints]
     key = json.dumps(key + [_LOCAL_VARIANT] if _LOCAL_VARIANT else key)
     return Path(os.environ["LOCAL_PREDICTION_CACHE"]) / hashlib.sha1(key.encode()).hexdigest()[:16] / f"{name}.geff"
 

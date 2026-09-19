@@ -132,6 +132,7 @@ def main() -> None:
         "MPLBACKEND": "Agg",
         "PYTHONPATH": os.pathsep.join([str(Path(__file__).parent), os.environ.get("PYTHONPATH", "")]),
         "LOCAL_PREDICTION_CACHE": str(args.prediction_cache.resolve()),
+        "LOCAL_WORK_DIR": str(work),
         "LOCAL_BATCHED_TTA": "1" if args.batched_tta else "0",
     }
     subprocess.run([sys.executable, script.name], cwd=work, env=env, check=True)
