@@ -167,6 +167,23 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   the drift guard does not cover it), so `celltrack-public-0947-fast` (`kaggle/env_variant.py`) should
   emit a byte-identical submission in ~1600 s. A kernel RUN costs no submission slot, so this is a free
   probe: pushed 22:36Z, verify by diffing its `submission.csv` against 0947's.
+  **E34 — PLUMBING CORRECTION: E29's candidate cache has NEVER ONCE FIRED, so the "ILP arms are free"
+  saving is projected, not banked. `find runs -name '*.candidates.npz'` returns **0 files** across all
+  21 prediction-cache dirs (which hold 40 `.geff` + 40 `.retention.jsonl` each and no candidates). Cause
+  is ordering, not a bug: the `_save_candidates` code landed in `kaggle/local_predict_patch.py` at commit
+  `6c1424a` 23:06Z, while the only run since (`secedge_0.30`) started 22:41Z and finished predicting
+  ~23:04Z — it ran the older patch. Confirmed by grepping its restored `tracking_repo` predict script:
+  0 hits for `_save_candidates`, but the CANDIDATES→vectorized rewrite IS present, so it was patched, by
+  the previous revision. The patch itself is sound: applying it to a pristine
+  `external/frontier_ds/biohub-tracking-support-pack-50ep-v1` script parses (`ast.parse` OK) and puts
+  `_save_candidates(_candidates, coords, edges)` in the `else` branch directly after `predict_video`,
+  exactly at the GPU/CPU seam. **Consequence for `logs/run_ilpdisapp.sh`: arm 1 pays the FULL GPU
+  prediction (~23 min at N=20, per the secedge timings), and only arms 2-4 are CPU.** The sweep is
+  ~1 GPU-arm + 3 CPU-arms, not 4 CPU-arms. Also corrects the kill accounting: `secedge_0.30` DID reach
+  the end — `submission.csv` 241937 rows, `validator_results.csv` written, `run.log` ends at
+  `FINAL: 22002 nodes, 21298 edges` — the only missing artifact is `ppsweep_results.csv`.
+  **Rule earned: a cache is not a saving until a file exists on disk; assert the artifact, not the code.**
+
   **E33 — REFUTED, and it cost no slot and no GPU: v1329f has NO ensemble seat, because where the two
   trackers actually disagree the champion is right. `tracker_agreement.py --disputes` isolates the only
   edges a combination rule could ever swap — nodes BOTH trackers gave a parent to, but a different one —
