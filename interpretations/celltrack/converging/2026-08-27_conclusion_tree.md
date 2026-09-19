@@ -151,6 +151,18 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   the drift guard does not cover it), so `celltrack-public-0947-fast` (`kaggle/env_variant.py`) should
   emit a byte-identical submission in ~1600 s. A kernel RUN costs no submission slot, so this is a free
   probe: pushed 22:36Z, verify by diffing its `submission.csv` against 0947's.
+  **E31 — BANK: the validator is 74 % of the kernel's wall-clock, and removing it is OUTPUT-NEUTRAL.
+  `celltrack-public-0947-fast` (= 0947 with `BIOHUB_VALIDATOR_ENABLE=0`, staged by `kaggle/env_variant.py`)
+  finished in **1590 s vs the base kernel's 6286 s** and its `submission.csv` is **byte-identical**
+  (`cmp` clean, 241357 lines both). Not an approximation that needs an LB confirm — the same bytes score
+  the same. E30 independently found the field running `VALIDATOR_ENABLE=0` too. **Consequence: ~4700 s
+  of the kernel budget is now free at zero cost to the shipped score**, which is what makes anything
+  second-pass affordable on Kaggle, where E29's local candidate cache does NOT reach. Spend it on a
+  SECOND ILP pass at a different disappearance weight with edge union (the two-pass tracklet ILP that
+  [[celltrack-refuted-axis-is-the-long-run-lever]] flags as a jointly-necessary 0.945 lever) — not on a
+  third detection vote, which E25 measured inert, and not on a base-family ensemble member, which
+  [[celltrack-base-decorr-has-no-finer-member-redundant]] already called NO-GO.**
+
   **E30 — donor triage round 2 (23:12Z), three kernels, zero new arms — but one numeric.
   `newwang12/biohub-v1-grouped` (11 votes) and `leonixis/biohub-v1-infer` are both 0947-family
   (177 / 77 hits on `harmonic_association|DeepCenter|ILPSolver|BIOHUB_`); an env-block diff against
