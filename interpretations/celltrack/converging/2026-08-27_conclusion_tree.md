@@ -139,7 +139,21 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   0947's 6286 s says how much room it frees for a third member. **Kaggle fp16 run (22:16Z, T4, submitted):
   test predict 9.68→5.15 min (−47 %), validator predict 16.4→7.6 min (−54 %), wall 6286→5590 s (−11 % — the visible
   run is install + CPU post-proc bound). The GPU half is what a third member would buy time from, and fp16 nearly
-  halves it; the hidden run has many more videos, so its GPU share (and the saving) is larger.** Cache-key bug found: env paths under the work dir made every shard miss → keys now content-fingerprinted
+  halves it; the hidden run has many more videos, so its GPU share (and the saving) is larger.**
+
+  **E24 — the kernel is 77 % SELF-VALIDATOR, not model. Stage profile of the fp16 log (5590 s total):
+  install+weights 313 · test predict 301 · test PP + write submission 639 · validator predict 499 ·
+  validator base PP 440 · 7 candidate PP sweeps 3034 · validator rewrite 352. The shipped submission
+  costs ~1250 s; the held-out self-validation block costs 4325 s and its only product is choosing one
+  PP candidate — `tight55` (`MOTION_RELINK_TIGHT_UM 5.5`) in BOTH the fp32 and fp16 runs, with every
+  candidate inside ±0.002 adj (noise). Pinning that override and setting `BIOHUB_VALIDATOR_ENABLE=0`
+  reproduces the same config by code (the rewrite applies exactly that one key over the env base, and
+  the drift guard does not cover it), so `celltrack-public-0947-fast` (`kaggle/env_variant.py`) should
+  emit a byte-identical submission in ~1600 s. A kernel RUN costs no submission slot, so this is a free
+  probe: pushed 22:36Z, verify by diffing its `submission.csv` against 0947's.
+  This retires the "6-config ensemble infeasible, ~18-24 h" bound — it was measured with the validator
+  block in every member. Marginal cost of an extra member is ~940 s (predict 301 + PP 639), so 3-4
+  members fit inside one 9 h kernel even before fp16. "The models are slow" was never the models.** Cache-key bug found: env paths under the work dir made every shard miss → keys now content-fingerprinted
   (f4d499b). New donors 15:25Z: noisyislands linker-MLP (2 epochs, 4 videos, ~0 negatives =
   toy) · xgboost-division (13 GT-only fork feats, negatives = random non-forks, in-sample acc 0.997 ⇒ trivial
   labels, no track score) · thtennant divprec-v1 (ppsweep selected=base, no held-out) ⇒ none carries evidence. The
