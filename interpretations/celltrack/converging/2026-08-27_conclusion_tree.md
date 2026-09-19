@@ -35,6 +35,12 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   movie through ~10 thresholds fit to one public event (`6bba_05db0fb1`, P=20025→D=20865). (b) is overfit but
   tiny; (a) is the real private-LB bet. Hedge fork `celltrack-public-v1329f` = foundation only (after
   ozermehmet's candidate pair); the V50−v1329f LB delta prices the surgery. Final-2 pick = one of each.
+- **V50 fork scores 0.907 on OUR LB (09-19), below the banked 0.924.** The claimed 0.947/0.9605 did not reproduce.
+  The visible-test run completed cleanly (V1329 took 25 min, all hashes matched, no traceback). But the V1327
+  adapted-detector guard fell back to the untouched V1290 primary on 98/100 frames of `44b6_0b24845f` (median
+  retention 0.76): per its own guard, the headline detector is unfit on a dense 44b6 movie. The hidden-run log is
+  not downloadable, so the cause of the drop is not established. Until v1329f/0947 land, the public-kernel
+  fork path is NOT a proven step up; 0.924 stays the champion and a final-2 anchor.
 
 ## ROOT
 
