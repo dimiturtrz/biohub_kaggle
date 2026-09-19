@@ -136,7 +136,10 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   GPU-s/video (−18.5%) → accuracy-neutral.** But the Kaggle kernel runs on T4 (sm75, no native bf16), so the shippable
   form is fp16 autocast. **fp16, N=20 (20:44Z): adj 0.9018 (−0.0004), missed GT 446, 16.8 GPU-s/video (−42%), no
   NaN → accuracy-neutral.** Shipped as `celltrack-public-0947-fp16` (`kaggle/amp_variant.py`) — the Kaggle runtime vs
-  0947's 6286 s says how much room it frees for a third member. Cache-key bug found: env paths under the work dir made every shard miss → keys now content-fingerprinted
+  0947's 6286 s says how much room it frees for a third member. **Kaggle fp16 run (22:16Z, T4, submitted):
+  test predict 9.68→5.15 min (−47 %), validator predict 16.4→7.6 min (−54 %), wall 6286→5590 s (−11 % — the visible
+  run is install + CPU post-proc bound). The GPU half is what a third member would buy time from, and fp16 nearly
+  halves it; the hidden run has many more videos, so its GPU share (and the saving) is larger.** Cache-key bug found: env paths under the work dir made every shard miss → keys now content-fingerprinted
   (f4d499b). New donors 15:25Z: noisyislands linker-MLP (2 epochs, 4 videos, ~0 negatives =
   toy) · xgboost-division (13 GT-only fork feats, negatives = random non-forks, in-sample acc 0.997 ⇒ trivial
   labels, no track score) · thtennant divprec-v1 (ppsweep selected=base, no held-out) ⇒ none carries evidence. The
