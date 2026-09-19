@@ -18,5 +18,5 @@ for arm in ${ARMS[@]}; do
 done
 for arm in ${ARMS[@]}; do
   OMP_NUM_THREADS=2 .venv/Scripts/python tools/frontier_ilp_sweep.py --frontier-repo "$REPO" --data-dir "$REAL" sweep \
-    --cache "$CACHE_ROOT/$arm" --grid "$GRID" --workers 10 > "logs/frontier/sweep_$arm.log" 2>&1
+    --cache "$CACHE_ROOT/$arm" --grid "$GRID" --workers "${WORKERS:-4}" > "logs/frontier/sweep_$arm.log" 2>&1
 done
