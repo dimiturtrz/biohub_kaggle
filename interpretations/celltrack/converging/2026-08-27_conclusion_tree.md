@@ -151,6 +151,18 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   the drift guard does not cover it), so `celltrack-public-0947-fast` (`kaggle/env_variant.py`) should
   emit a byte-identical submission in ~1600 s. A kernel RUN costs no submission slot, so this is a free
   probe: pushed 22:36Z, verify by diffing its `submission.csv` against 0947's.
+  **E27 — donor triage 2026-09-19 22:50Z. `codezzzsleep/biohub-095-owned-validation` (claims 0.95) is a
+  METRIC HACK, not a method: it appends a hub node at `t=-1000, z=y=x=-10000`, links the 1400 largest
+  components' roots to it, then chains 5 synthetic fork triples (`MAX_COMPONENTS=1400`, `FORKS=5`) —
+  same family as `kirneo_metric-hack-last-call-update`, already recorded as farming zero divJ. NOT
+  submittable, and its "0.95" is not evidence about any mechanism. One legit datum survives it: its ILP
+  weights are edge −1.0 / appearance 0.0 / **disappearance 1.4**, against our 2. Someone else tuned this
+  axis and landed BELOW us — the opposite direction from E26's prediction — so the arm is two-sided
+  (3.5 and 1.4), not one. `binasalama/…-ilp-gap-recovery` is our own env family at stock defaults
+  (disapp 0.1) = no new information. `fabriciodasilva/biohub-dodecatiad` is a from-scratch DoG-blob
+  detector + greedy motion linker, no learned model, no posted score: structurally out-of-recipe (an
+  ensemble-seat shape) but built on the DoG filter our own normalization axis already refuted as LOWERING
+  centre detectability — not worth GPU ahead of the disappearance arms.**
   **E26 — THE MISSING EDGES ARE OMISSIONS, NOT CONFUSIONS. `validator_results.csv` already carried the
   decomposition and we had never summed it. Over the 40 held-out videos (base config, fp16 run):
   GT edges 47170 · edge recall 0.9475 · edge_fn 2476 = 1016 lost to detection (41 %) + 1460 FRAGMENTED
