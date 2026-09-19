@@ -151,6 +151,21 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   the drift guard does not cover it), so `celltrack-public-0947-fast` (`kaggle/env_variant.py`) should
   emit a byte-identical submission in ~1600 s. A kernel RUN costs no submission slot, so this is a free
   probe: pushed 22:36Z, verify by diffing its `submission.csv` against 0947's.
+  **E33 — REFUTED, and it cost no slot and no GPU: v1329f has NO ensemble seat, because where the two
+  trackers actually disagree the champion is right. `tracker_agreement.py --disputes` isolates the only
+  edges a combination rule could ever swap — nodes BOTH trackers gave a parent to, but a different one —
+  and there are **961 of them, not the 6.1 k E32 estimated** (the rest of the "a_only/b_only" counts were
+  unmatched-node artifacts, the same denominator error E32 already had to correct once). On those 961:
+  **0947 median step 2.071 µm vs v1329f 8.286 µm, and 0947 picks the shorter step in 98.86 %**; only 24
+  disputes are within 1 µm of each other. GT median step is 1.82 µm with p99 7.2 µm and max 9.96
+  ([[celltrack-gate-um-is-derived-from-displacement]]), so v1329f's contested picks sit at the gate and are
+  physically implausible — this is not a tie to break, it is v1329f being wrong, and it is presumably WHY it
+  scores 0.939 against 0947's 0.947. **Net for the whole donor: 428 orphan-fill edges (0.2 %) plus 961
+  disputes it loses 99 % of. There is no headroom to combine.** Consequence for the plan: the final-2
+  default of 0947 + v1329f stands only as SUBMISSION diversification against private-LB variance, never as
+  a merge; and the 0.947→0.974 gap is NOT reachable by combining the public forks we hold — the remaining
+  levers stay detection-side, where E32(i) put ~3–7 k nodes each fork finds and the other does not.**
+
   **E32 — THE ENSEMBLE SEAT IS OPEN, AND RUNTIME WAS NEVER THE THING BLOCKING IT. Two corrections in
   one measurement. (a) SIZE: the hidden test is **4 videos**, `predict_minutes_total` 9.93, and the
   validator-free kernel finishes in 1590 s of a 9 h budget — **~20x headroom**. "The models are too slow

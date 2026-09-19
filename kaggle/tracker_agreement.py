@@ -73,15 +73,75 @@ def compare_video(
     }
 
 
+def dispute_steps(
+    a_nodes: pd.DataFrame, a_edges: pd.DataFrame, b_nodes: pd.DataFrame, b_edges: pd.DataFrame
+) -> tuple[list[float], list[float]]:
+    """Step length each tracker chose, for nodes both gave a parent to but a DIFFERENT one.
+
+    A union cannot touch these: the node already has a parent in the champion. If one tracker's choice is
+    systematically shorter, the two differ by a bias that can be applied directly rather than ensembled.
+    """
+    pairs = match_within_video(a_nodes, b_nodes)
+    position = {
+        node: row * SPACING_UM
+        for node, row in zip(a_nodes["node_id"], a_nodes[["z", "y", "x"]].to_numpy(), strict=True)
+    }
+    a_parent = dict(zip(a_edges["target_id"], a_edges["source_id"], strict=True))
+    b_parent = dict(zip(b_edges["target_id"], b_edges["source_id"], strict=True))
+    reverse = {donor: base for base, donor in pairs.items()}
+
+    a_steps, b_steps = [], []
+    for target, a_source in a_parent.items():
+        donor_target = pairs.get(target)
+        b_source = reverse.get(b_parent.get(donor_target, -1), -1)
+        if b_source in (-1, a_source) or a_source not in position or b_source not in position:
+            continue
+        a_steps.append(float(np.linalg.norm(position[target] - position[a_source])))
+        b_steps.append(float(np.linalg.norm(position[target] - position[b_source])))
+    return a_steps, b_steps
+
+
+def report_disputes(a_nodes, a_edges, b_nodes, b_edges) -> None:  # noqa: ANN001
+    a_steps, b_steps = [], []
+    for dataset in sorted(set(a_nodes["dataset"]) & set(b_nodes["dataset"])):
+        left, right = dispute_steps(
+            a_nodes[a_nodes["dataset"] == dataset],
+            a_edges[a_edges["dataset"] == dataset],
+            b_nodes[b_nodes["dataset"] == dataset],
+            b_edges[b_edges["dataset"] == dataset],
+        )
+        a_steps += left
+        b_steps += right
+    a_array, b_array = np.array(a_steps), np.array(b_steps)
+    log.info(
+        "DISPUTED PARENTS %s",
+        json.dumps(
+            {
+                "n": len(a_steps),
+                "a_median_step_um": round(float(np.median(a_array)), 3),
+                "b_median_step_um": round(float(np.median(b_array)), 3),
+                "a_shorter_frac": round(float((a_array < b_array).mean()), 4),
+                "both_within_1um": int((np.abs(a_array - b_array) < 1.0).sum()),
+            },
+            indent=2,
+        ),
+    )
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--a", type=Path, required=True, help="a kernel output dir holding submission.csv")
     parser.add_argument("--b", type=Path, required=True)
+    parser.add_argument("--disputes", action="store_true", help="report contested parent assignments instead")
     args = parser.parse_args()
 
     a_nodes, a_edges = read_submission(args.a / "submission.csv")
     b_nodes, b_edges = read_submission(args.b / "submission.csv")
+
+    if args.disputes:
+        report_disputes(a_nodes, a_edges, b_nodes, b_edges)
+        return
 
     totals: dict[str, int] = {}
     for dataset in sorted(set(a_nodes["dataset"]) & set(b_nodes["dataset"])):
