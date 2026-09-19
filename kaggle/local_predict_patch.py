@@ -73,6 +73,28 @@ def _local_prediction_cache(name):
     return Path(os.environ["LOCAL_PREDICTION_CACHE"]) / hashlib.sha1(key.encode()).hexdigest()[:16] / f"{name}.geff"
 
 
+def _retention_records(cached):
+    return cached.with_suffix(".retention.jsonl")
+
+
+def _save_retention(name, cached):
+    lines = [
+        line
+        for log in Path(os.environ["LOCAL_WORK_DIR"]).glob("retention_guard_*.jsonl")
+        for line in log.read_text().splitlines()
+        if line.strip() and json.loads(line)["dataset"] == name
+    ]
+    _retention_records(cached).write_text("".join(line + "\\n" for line in lines))
+
+
+def _restore_retention(cached):
+    records = _retention_records(cached)
+    if records.exists():
+        shard = os.environ.get("BIOHUB_GPU_SHARD", "single").replace("/", "_")
+        with (Path(os.environ["LOCAL_WORK_DIR"]) / f"retention_guard_{shard}.jsonl").open("a") as log:
+            log.write(records.read_text())
+
+
 """
 FRAME_PREFETCH = """
 _frame_pool, _frame_jobs, _frame_source = _futures.ThreadPoolExecutor(2), {}, [None]
@@ -171,6 +193,7 @@ REUSE = (
     "        if _cached.exists():\n"
     "            import shutil\n"
     '            shutil.copytree(_cached, output_dir / f"{name}.geff")\n'
+    "            _restore_retention(_cached)\n"
     "            continue\n"
     "        _gpu_start = _time.perf_counter()\n"
 )
@@ -181,6 +204,7 @@ FINISH_TAIL = (
     "            import shutil\n"
     "            shutil.rmtree(_cached, ignore_errors=True)\n"
     '            shutil.copytree(output_dir / f"{name}.geff", _cached)\n'
+    "            _save_retention(name, _cached)\n"
     '            print(f"PREDICT_TIMING {name} gpu_s={_gpu_s:.1f} '
     'post_s={_time.perf_counter() - _post_start:.1f}", flush=True)\n'
 )
