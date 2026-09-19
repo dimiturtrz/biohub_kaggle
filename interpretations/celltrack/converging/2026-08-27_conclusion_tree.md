@@ -75,6 +75,13 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
     different recipe: 20 pretrain + 10 real epochs vs their 80 + 60, and 0.006 on the trainer metric is noise.
   - Re-run at their recipe: `synth_pre80` launched 09:03Z (580 seqs, ≈3.5 h). The 60-epoch real fine-tune (≈20 h) is
     gated on the pretrain converging.
+- **New public forks (09-19), unscored:**
+  - thtennant's det096 line, vs 0947:
+    - DET_THRESHOLD 0.965 → 0.96, which raises N_pred, the term hikaggler says moves the LB.
+    - frame cache 48, ILP timeout 1200 s, repair deadline 27000 s. "fast-tight60" is runtime engineering, not a model change.
+    - gapfill-det096 adds a flow-seeded motion relink (`MOTION_RELINK_FLOW_*`).
+  - noisyislands trains a TabPFN division classifier. Divisions are worth ≤0.002 on the LB per hikaggler, so skip it.
+  - Only probe det096 after our gapfill/readmit probes score.
 - **Forum 740145 (hengck23):** Kaggle GT sometimes sits on cell "corners" (Ultrack-derived); many FPs lie next to a GT
   node. Their trick: at a 99% edge-recall cutoff, re-rank only the surviving candidates with a heavier module.
 
