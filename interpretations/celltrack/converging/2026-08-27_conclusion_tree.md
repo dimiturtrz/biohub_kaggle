@@ -63,6 +63,20 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   reyhanksatria's notebook with three input paths changed; the model is Pilkwang's pack. So the gain is upstream's,
   not ours. Now that the base has a score, thtennant's `gapfill` and `readmit` variants are pushed as LB probes
   (`kaggle/kernels/celltrack-public-0947-*`). Final-2 default = 0947 + v1329f.
+- **Forum 741749 (hikaggler, own 0.939): node-count calibration predicts LB, model ranking doesn't; synth pretrain is
+  the one lever (09-19).**
+  - The N_pred ratio term moved their LB every time. A one-point recall change did not.
+  - Post-proc settings chosen locally carried over to the LB. The local ranking of two trained models did not.
+  - Their synth recipe: CC0 José Freitas sequences, only 497 of 2174, pretrain detector + linker 80 epochs, then
+    60 epochs on real. 24-video hold-out: 0.9146 → 0.9269 (+0.012).
+    - Using all 2174 sequences at equal gradient steps scored −0.005.
+    - Pretraining pushes N_pred up and doesn't help divisions.
+  - Our synth A/B (from_synth 0.9063 < scratch 0.9127, trainer acc·recall) is **INCONCLUSIVE, not refuted**. It used a
+    different recipe: 20 pretrain + 10 real epochs vs their 80 + 60, and 0.006 on the trainer metric is noise.
+  - Re-run at their recipe: `synth_pre80` launched 09:03Z (580 seqs, ≈3.5 h). The 60-epoch real fine-tune (≈20 h) is
+    gated on the pretrain converging.
+- **Forum 740145 (hengck23):** Kaggle GT sometimes sits on cell "corners" (Ultrack-derived); many FPs lie next to a GT
+  node. Their trick: at a 99% edge-recall cutoff, re-rank only the surviving candidates with a heavier module.
 
 ## ROOT
 
