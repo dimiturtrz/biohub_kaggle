@@ -106,6 +106,9 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   | E15 | none — verbatim fork | pawanmali zhincez947-fork-v1 | — | code + env + data sources byte-identical to our 0947 base → nothing to harvest |
   | E16 | none — strict subset of 0947 (single seed, no TTA, no DeepCenter veto; thr 0.985, tighter repair caps) | binasalama learned-unet-transformer-ilp-gap-recovery (09-19 re-pull, 0-line diff vs stored) | none stated | inference-only "closing note" of its line → nothing to harvest |
   | E17 | none — param deltas only: GAP_CLOSE 5.8 (0947 5.0), TIGHT 5.5 (6.0), DeepCenter div veto OFF (0947 ON) | gautiermarti deepcenter-unet3d (v29, same 3 mounts as 0947) | self-reported val n=4 0.943; table stops at v8 LB 0.934 | same lineage as 0947; its v30 "TTA link-logit fusion" is a note, not code; tight55 already in detthr probe |
+  | E18 | 402-epoch support-pack edge predictor (vs pilkwang 50ep), thr 0.99, ILP app 1.0 / disapp 2.0 | yongjilyu ct-sp402 | none | the one WEIGHTS donor seen (longer-trained model = our model gap) but `yongjilyu/biohub-ct-inference-pack` is PRIVATE (API 403) → unharvestable; watch for it going public |
+  | E19 | none — older 0947 ancestor (det 0.960, ILP div 1.2, safe-div thr 0.25) | chukkkk lb-942 | 0.942 | superseded by 0947 |
+  | E20 | none — no model mounts, kinematic heuristic tracker | avikdas567 3d-kinematic | none | below learned base → skip |
   E12 probe (14:33Z): reid3 own divdiag — `retro6_nnk2` leaves OWNED at 6/12 (retro does not reach owned cases); steal never
   run by donor. Sized: owned 6/12 FN, divJ 0.23 → ≤~0.6 ⇒ ≤ +0.037 proxy IF steal is clean (adj cost unknown). Probe =
   `kaggle/donor_probe.py` (re-runs donor's OWN validator sweep with our configs, no slot) → kernel
@@ -148,6 +151,17 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   association), not a postproc knob. Division term ceiling = 0.1·divJ ≈ 0.014 → axis CLOSED for PP.
   **Detection threshold (same 40):** 0.955 adj 0.9008 vs 0.965 0.9022 (−0.0014): 17 fewer missed GT nodes, +20
   fragmented edges, +12.9k pred nodes — extra nodes do not become links. 0.975 pending.
+  **Kaggle steal probe (reid3 own 8-video validator, T4):** base 0.9490, all 7 steal/tight knobs 0.9477–0.9511
+  (adj ±0.003, 3 TP / 9 FN divisions everywhere) — same FLAT verdict as n=40 on an independent run.
+- **Cross-family decorrelation (18:20Z, GT-free, 4 visible test movies):** 0947 vs v1329f submission edges agree
+  81–93 % (44b6_0b24845f 0.81, 6bba_05db0fb1 0.85; node match ≤2 vox). But the v1327-w3 "real model" is the
+  0947 PRIMARY + 0.09 % weight delta (unet 0.0009, transformer 0.0003 rel-L2; vs seed314159 secondary ≈1.0) —
+  the disagreement is PIPELINE (post-proc/decode), not model diversity. w3-as-secondary killed on mechanism
+  (would replace the one decorrelated seed with a primary clone); no run.
+- **LB instruments pushed 18:24Z (expiring slots, Kaggle GPU):** `0947-det096` (DET 0.965→0.96 only — tests
+  hikaggler's "N_pred moves LB" on our base) and `0947-synthsec` (secondary seed314159 → our all199_from_synth80
+  ep2 ckpt, private dataset `dimiturnt/celltrack-synth80-ft2` — first structurally-different member; an ep2
+  under-trained ckpt, so a loss = "under-trained seat", not "synth refuted"). Watcher `logs/kaggle/watch_0947_probes2.log`.
 - **synth_pre80 done 13:01Z**: synth val best 0.9783 (80 ep). Chained all199_from_synth80 started; ep1 val 0.9201 on
   the 4-movie split (not comparable to the 20-holdout A/B arms' 0.89–0.91). ~25 min/epoch.
 - **Forum 740145 (hengck23):** Kaggle GT sometimes sits on cell "corners" (Ultrack-derived); many FPs lie next to a GT

@@ -70,8 +70,8 @@ def pin_env(source: str, overrides: dict[str, str]) -> str:
     for key, value in overrides.items():
         assignment = re.compile(rf"os\.environ\[(['\"]){key}\1\] = .*")
         source = assignment.sub(lambda _, k=key, v=value: f"os.environ[{k!r}] = {v!r}", source)
-        guard_entry = re.compile(rf"^(    \"{key}\": )(?:[-0-9.eE]+|\"[^\"]*\"),$", re.MULTILINE)
-        source = guard_entry.sub(lambda m, v=value: f"{m.group(1)}{guard_literal(v)},", source)
+        guard_entry = re.compile(rf"""((['"]){key}\2: )(?:[-0-9.eE]+|"[^"]*"|'[^']*')(?=\s*[,}}])""")
+        source = guard_entry.sub(lambda m, v=value: f"{m.group(1)}{guard_literal(v)}", source)
     return source
 
 
