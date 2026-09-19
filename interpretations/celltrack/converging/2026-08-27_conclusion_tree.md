@@ -151,6 +151,18 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   the drift guard does not cover it), so `celltrack-public-0947-fast` (`kaggle/env_variant.py`) should
   emit a byte-identical submission in ~1600 s. A kernel RUN costs no submission slot, so this is a free
   probe: pushed 22:36Z, verify by diffing its `submission.csv` against 0947's.
+  **E28 — THE FRAGMENTED EDGES ARE REACHABLE: the ILP had the candidate and declined it. E26 said 1460
+  GT edges have both endpoints detected and matched with no predicted link, but "matched" does not imply
+  "on the solver's table" — an edge longer than the candidate gate was never offered. `kaggle/fragment_audit.py`
+  walks the cached validator geffs against GT (per-frame nearest match ≤5 µm, µm from voxel × (1.625,
+  0.40625, 0.40625)): of 22042 matched-endpoint GT edges, 417 are fragmented and **393 of them (94 %)
+  sit inside the 10 µm gate**; only 24 are out of reach. So the loss is a SOLVER-COST decision, not a
+  candidate-generation miss — which is what licenses the disappearance-weight arm rather than a gate
+  widening. And the shape names the direction: fragmented edges have median step **2.73 µm** against
+  **1.82 µm** for the edges that did link. The ILP is dropping the LONGER true steps, i.e. termination
+  is out-competing continuation exactly where continuation costs most. Raising `ILP_DISAPPEARANCE_WEIGHT`
+  above 2 is the mechanism-matched move; 1.4 (the hack kernel's value, E27) predicts MORE fragmentation
+  and is the control, not the candidate.**
   **E27 — donor triage 2026-09-19 22:50Z. `codezzzsleep/biohub-095-owned-validation` (claims 0.95) is a
   METRIC HACK, not a method: it appends a hub node at `t=-1000, z=y=x=-10000`, links the 1400 largest
   components' roots to it, then chains 5 synthetic fork triples (`MAX_COMPONENTS=1400`, `FORKS=5`) —

@@ -7,6 +7,10 @@ prediction reads: its CLI args (bar output naming), the BIOHUB_* env vars the sc
 each weights file. File-valued args/env enter the key as content fingerprints and the work dir as `<work>`, so
 runs in different work dirs share one cache.
 
+A second cache sits at the GPU/CPU seam: `predict_video` returns the candidate graph and everything below it
+(`build_graph` + `ILPSolver`) is pure CPU, so the candidate cache is keyed WITHOUT the `--ilp-*` weights and
+every ILP-cost arm after the first re-solves on CPU instead of re-predicting.
+
 The rest removes CPU work that serialized with the GPU (profiled: ILP solve, zarr frame reads and a Python
 double loop over the edge-probability matrix left the GPU idle between encode bursts), with identical outputs:
 video k's graph build + ILP solve + save run on a worker thread while the GPU predicts video k+1, the next
@@ -43,16 +47,22 @@ import concurrent.futures as _futures
 import time as _time
 
 
-def _local_prediction_cache(name):
+_ILP_ARGS = ("--ilp-edge-weight", "--ilp-appearance-weight", "--ilp-disappearance-weight", "--ilp-division-weight")
+
+
+def _local_prediction_cache(name, solved=True, suffix=".geff"):
     import hashlib, re
     source = Path(__file__).read_text(encoding="utf-8")
     named = set(re.findall(r"BIOHUB_[A-Z0-9_]+", source))
+    dropped = ("--method", "--slice") + ((), _ILP_ARGS)[not solved]
+    if not solved:
+        named = {key for key in named if not key.startswith("BIOHUB_ILP_")}
     argv, skip = [], False
     for arg in sys.argv[1:]:
         if skip:
             skip = False
             continue
-        if arg in ("--method", "--slice"):
+        if arg in dropped:
             skip = True
             continue
         argv.append(arg)
@@ -72,7 +82,25 @@ def _local_prediction_cache(name):
     env = sorted((k, portable(os.environ[k])) for k in named if k in os.environ)
     key = [argv, env, fingerprints]
     key = json.dumps(key + [_LOCAL_VARIANT] if _LOCAL_VARIANT else key)
-    return Path(os.environ["LOCAL_PREDICTION_CACHE"]) / hashlib.sha1(key.encode()).hexdigest()[:16] / f"{name}.geff"
+    root = Path(os.environ["LOCAL_PREDICTION_CACHE"]) / hashlib.sha1(key.encode()).hexdigest()[:16]
+    return root / f"{name}{suffix}"
+
+
+def _local_candidate_cache(name):
+    # Keyed WITHOUT the ILP cost weights: predict_video is the GPU half and knows nothing about the
+    # solver, so every ILP-weight arm shares one candidate graph -- first arm pays the GPU, rest are CPU.
+    return _local_prediction_cache(name, solved=False, suffix=".candidates.npz")
+
+
+def _save_candidates(path, coords, edges):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(path, coords=np.asarray(coords), edges=np.asarray(edges, dtype=np.float64).reshape(-1, 4))
+
+
+def _load_candidates(path):
+    stored = np.load(path)
+    edges = [(int(src), int(tgt), float(prob), float(dist)) for src, tgt, prob, dist in stored["edges"]]
+    return stored["coords"], edges
 
 
 def _retention_records(cached):
@@ -198,6 +226,14 @@ REUSE = (
     "            _restore_retention(_cached)\n"
     "            continue\n"
     "        _gpu_start = _time.perf_counter()\n"
+    "        _candidates = _local_candidate_cache(name)\n"
+    "        if _candidates.exists():\n"
+    "            coords, edges = _load_candidates(_candidates)\n"
+    "            _restore_retention(_candidates)\n"
+    "        else:\n"
+)
+SAVE_CANDIDATES = (
+    "            _save_candidates(_candidates, coords, edges)\n            _save_retention(name, _candidates)\n"
 )
 FINISH_HEAD = (
     "        def _finish(name, coords, edges, _cached, _gpu_s):\n            _post_start = _time.perf_counter()\n"
@@ -231,7 +267,8 @@ def apply(repo: Path) -> None:
     assert loop_start < post_start < loop_end, "predict loop layout changed"
     gpu_part = source[loop_start + len(LOOP_HEAD) : post_start]
     post_part = source[post_start:loop_end]
-    loop = LOOP_SETUP + LOOP_HEAD + REUSE + gpu_part + FINISH_HEAD + indent(post_part) + FINISH_TAIL + SUBMIT + DRAIN
+    gpu_branch = indent(gpu_part) + SAVE_CANDIDATES
+    loop = LOOP_SETUP + LOOP_HEAD + REUSE + gpu_branch + FINISH_HEAD + indent(post_part) + FINISH_TAIL + SUBMIT + DRAIN
     source = source[:loop_start] + loop + source[loop_end:]
     amp_dtype = AMP_DTYPES.get(os.environ.get("LOCAL_AMP", "0"))
     variants = ["batched_tta"] * (os.environ.get("LOCAL_BATCHED_TTA") == "1") + [AMP_VARIANTS[amp_dtype]] * bool(
