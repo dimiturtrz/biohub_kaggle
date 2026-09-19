@@ -100,6 +100,9 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   | E9 | DET 0.965→0.96 | thtennant det096 / beraterolelk | knob | beraterolelk tie ⇒ sub-floor |
   | E10 | runtime budget: frame cache 48, ILP timeout 1200, deadline degrade | thtennant fast | code | ENABLER — headroom for stacking E5–E8 in 9 h |
   | E11 | TabPFN division classifier | noisyislands | code | low ceiling (divisions ≤0.002); donor log shows only `LightGBM outer accuracy: 1.000` on 1082 division rows (saturated ⇒ likely leaky/trivial labels), no track score ⇒ UNMEASURED, don't port |
+  | E13 | XGBoost division classifier (13 GT-only features) | noisyislands xgboost-division-events | code | same family as E11; divisions ≤0.002 LB → skip |
+  | E14 | linker 'association MLP' on candidate distance only | noisyislands linker-association-mlp | code | pilot, weaker than 0947's tf_prob (E5 showed even rich descriptors add 0 past tf_prob) → skip |
+  | X1 | SCORER EXPLOIT, not an element: fake hub node t=−1000 → roots of top-1400 components + 5 chained off-image (−10000) fake divisions appended to submission | codezzzsleep 095-owned-validation (09-19) | — | **WON'T PORT**: games the metric, no tracking change; same family as the kirneo off-image hack (0 divJ for us); a host fix would void it on private |
   E12 probe (14:33Z): reid3 own divdiag — `retro6_nnk2` leaves OWNED at 6/12 (retro does not reach owned cases); steal never
   run by donor. Sized: owned 6/12 FN, divJ 0.23 → ≤~0.6 ⇒ ≤ +0.037 proxy IF steal is clean (adj cost unknown). Probe =
   `kaggle/donor_probe.py` (re-runs donor's OWN validator sweep with our configs, no slot) → kernel
