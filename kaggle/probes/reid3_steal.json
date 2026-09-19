@@ -1,0 +1,16 @@
+{
+  "candidates": {
+    "tight55": {"MOTION_RELINK_TIGHT_UM": 5.5},
+    "steal_r15": {"MOTION_RELINK_TIGHT_UM": 5.5, "SAFE_DIV_STEAL_RATIO": 1.5},
+    "steal_r20": {"MOTION_RELINK_TIGHT_UM": 5.5, "SAFE_DIV_STEAL_RATIO": 2.0},
+    "steal_r30": {"MOTION_RELINK_TIGHT_UM": 5.5, "SAFE_DIV_STEAL_RATIO": 3.0},
+    "steal_r20_noreattach": {"MOTION_RELINK_TIGHT_UM": 5.5, "SAFE_DIV_STEAL_RATIO": 2.0, "SAFE_DIV_STEAL_REATTACH": 0},
+    "steal_own30": {"MOTION_RELINK_TIGHT_UM": 5.5, "SAFE_DIV_STEAL_OWNER_UM": 3.0},
+    "steal_own45": {"MOTION_RELINK_TIGHT_UM": 5.5, "SAFE_DIV_STEAL_OWNER_UM": 4.5},
+    "reid8_tight55_relaxed9_steal_r20": {"MOTION_RELINK_TIGHT_UM": 5.5, "REID_WEIGHT": 8.0, "MOTION_RELINK_RELAXED_UM": 9.0, "SAFE_DIV_STEAL_RATIO": 2.0}
+  },
+  "diagnose": {
+    "steal_r20": {"MOTION_RELINK_TIGHT_UM": 5.5, "SAFE_DIV_STEAL_RATIO": 2.0},
+    "steal_own45": {"MOTION_RELINK_TIGHT_UM": 5.5, "SAFE_DIV_STEAL_OWNER_UM": 4.5}
+  }
+}
