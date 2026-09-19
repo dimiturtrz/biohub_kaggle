@@ -151,6 +151,16 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   the drift guard does not cover it), so `celltrack-public-0947-fast` (`kaggle/env_variant.py`) should
   emit a byte-identical submission in ~1600 s. A kernel RUN costs no submission slot, so this is a free
   probe: pushed 22:36Z, verify by diffing its `submission.csv` against 0947's.
+  **E29 — the ILP-cost axis is no longer GPU-priced. `predict_video` returns `(coords, edges)` — the
+  candidate graph with `edge_prob` — and everything under it (`build_graph` + `td.solvers.ILPSolver`) is
+  pure CPU, so the GPU half knows nothing about the solver weights. `local_predict_patch.py` now caches
+  the candidate graph on a key built WITHOUT the `--ilp-*` args (and without `BIOHUB_ILP_*`), so the
+  first arm pays ~55 min of prediction and every later cost arm re-solves in seconds plus the PP sweep.
+  A 4-arm disappearance sweep drops from ~3.7 h to ~1 h, and — the part that matters for rigor — the
+  matched control at the shipped weight 2.0 is now FREE, off the identical candidate set, instead of
+  being compared against a differently-seeded baseline. Staged as `logs/run_ilpdisapp.sh` (3.5 GPU,
+  then 2.0 / 1.4 / 6.0 on CPU). Note this does NOT reach the Kaggle side, which always predicts fresh;
+  it makes the local search cheap enough to spend one submission on a weight we actually chose.**
   **E28 — THE FRAGMENTED EDGES ARE REACHABLE: the ILP had the candidate and declined it. E26 said 1460
   GT edges have both endpoints detected and matched with no predicted link, but "matched" does not imply
   "on the solver's table" — an edge longer than the candidate gate was never offered. `kaggle/fragment_audit.py`
