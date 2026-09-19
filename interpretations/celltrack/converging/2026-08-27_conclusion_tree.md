@@ -44,6 +44,13 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   as V50 minus the surgery cell, so the surgery's measured price is **−0.032**. Fork linearization (drop every
   division) plus the 2-division rescue loses 0.032: the LB rewards the foundation's divisions, and "predict no
   divisions" is refuted on the LB, not just overfit. Final-2 = v1329f + one decorrelated candidate (not V50).
+- **Why the surgery looked good upstream: it is fitted to the 4 visible test movies (09-19).** Those movies ship
+  with GT under `train/`, so `tools/score_submission.py` scores kernel CSVs locally. V50 = **0.9605**, v1329f =
+  0.9263: adjJ is equal (0.927 vs 0.926), and the whole +0.034 is division_jaccard 0.33 vs 0.0. That is one
+  division TP out of **3 GT divisions** on the visible set. So V50's "0.9605" claim is a 3-division overfit that
+  reverses on the hidden movies (−0.032). The visible-4 score cannot rank division policies. It also cannot tune
+  the family's other knobs, because the pack's weights trained on all199, which includes these movies. The LB
+  is the only clean ruler for this family.
 
 ## ROOT
 
