@@ -105,6 +105,12 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   `kaggle/donor_probe.py` (re-runs donor's OWN validator sweep with our configs, no slot) → kernel
   `celltrack-reid3-steal-probe` v1: steal ratio 1.5/2/3, owner-um 3/4.5, no-reattach, composed w/ reid3 selected.
   Gate: div_tp up, div_fp flat, adj loss ≤0.0005.
+  LOCAL VALIDATOR (15:00Z): `kaggle/local_kernel.py` runs any kernel on the 5090 (remaps /kaggle paths; `--spec` =
+  donor_probe candidates; `--env KEY=VAL` pins env; kernel resume states cache the GPU predictions ⇒ re-runs = CPU PP
+  sweep only). Test predict 4 videos = 2.8 min locally. DENOMINATOR is the point: donor validator = 8 stems, 12 GT
+  divisions ⇒ a division knob moves 1 event = ±0.08 divJ = noise. Local lets N_PER_TYPE grow (pool 71 44b6 + 128
+  6bba). Caveat: primary weights' train split undocumented (deepcenter: 71/128 split) ⇒ validator may be in-sample;
+  use it to RANK PP configs, not as an LB estimate. First run = reid3 unchanged, fidelity check vs donor csv.
   Plan (rev 14:05Z): donor OUTPUTS are free evidence — `kaggle kernels output <owner>/<slug>` gives each donor's own
   validator/ppsweep/reid_report; read them BEFORE porting. E5/E8 retired by that read (above); E7 inconclusive.
   Remaining: E1–E3 (pending probes) → composite best-of(E1/E3) + E10 + E4. Donor divdiag (reid3, 8 held-out stems):

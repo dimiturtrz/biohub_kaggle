@@ -13,6 +13,7 @@ import argparse
 import json
 import logging
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -56,9 +57,16 @@ def kernel_source(kernel: Path) -> str:
     return FUTURE_IMPORT + source.replace(FUTURE_IMPORT, "")
 
 
-def stage(kernel: Path, spec: Path | None, work: Path) -> Path:
+def pin_env(source: str, overrides: dict[str, str]) -> str:
+    for key, value in overrides.items():
+        assignment = re.compile(rf"os\.environ\[(['\"]){key}\1\] = .*")
+        source = assignment.sub(lambda _, k=key, v=value: f"os.environ[{k!r}] = {v!r}", source)
+    return source
+
+
+def stage(kernel: Path, spec: Path | None, work: Path, overrides: dict[str, str]) -> Path:
     work.mkdir(parents=True, exist_ok=True)
-    source = kernel_source(kernel)
+    source = pin_env(kernel_source(kernel), overrides)
     if spec is not None:
         source = rewrite(source, json.loads(spec.read_text()))
     script = work / "kernel.py"
@@ -72,14 +80,16 @@ def main() -> None:
     parser.add_argument("--kernel", type=Path, required=True)
     parser.add_argument("--spec", type=Path)
     parser.add_argument("--work", type=Path, required=True)
+    parser.add_argument("--env", action="append", default=[], metavar="KEY=VALUE", help="pin a kernel env var")
     parser.add_argument("--stage-only", action="store_true")
     args = parser.parse_args()
     work = args.work.resolve()
-    script = stage(args.kernel, args.spec, work)
+    overrides = dict(pair.split("=", 1) for pair in args.env)
+    script = stage(args.kernel, args.spec, work, overrides)
     log.info("staged %s", script)
     if args.stage_only:
         return
-    env = {**os.environ, "PYTHONUNBUFFERED": "1", "MPLBACKEND": "Agg"}
+    env = {**os.environ, **overrides, "PYTHONUNBUFFERED": "1", "MPLBACKEND": "Agg"}
     subprocess.run([sys.executable, script.name], cwd=work, env=env, check=True)
 
 
