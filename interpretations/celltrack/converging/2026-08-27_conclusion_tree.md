@@ -104,6 +104,8 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   | E14 | linker 'association MLP' on candidate distance only | noisyislands linker-association-mlp | code | pilot, weaker than 0947's tf_prob (E5 showed even rich descriptors add 0 past tf_prob) → skip |
   | X1 | SCORER EXPLOIT, not an element: fake hub node t=−1000 → roots of top-1400 components + 5 chained off-image (−10000) fake divisions appended to submission | codezzzsleep 095-owned-validation (09-19) | — | **WON'T PORT**: games the metric, no tracking change; same family as the kirneo off-image hack (0 divJ for us); a host fix would void it on private |
   | E15 | none — verbatim fork | pawanmali zhincez947-fork-v1 | — | code + env + data sources byte-identical to our 0947 base → nothing to harvest |
+  | E16 | none — strict subset of 0947 (single seed, no TTA, no DeepCenter veto; thr 0.985, tighter repair caps) | binasalama learned-unet-transformer-ilp-gap-recovery (09-19 re-pull, 0-line diff vs stored) | none stated | inference-only "closing note" of its line → nothing to harvest |
+  | E17 | none — param deltas only: GAP_CLOSE 5.8 (0947 5.0), TIGHT 5.5 (6.0), DeepCenter div veto OFF (0947 ON) | gautiermarti deepcenter-unet3d (v29, same 3 mounts as 0947) | self-reported val n=4 0.943; table stops at v8 LB 0.934 | same lineage as 0947; its v30 "TTA link-logit fusion" is a note, not code; tight55 already in detthr probe |
   E12 probe (14:33Z): reid3 own divdiag — `retro6_nnk2` leaves OWNED at 6/12 (retro does not reach owned cases); steal never
   run by donor. Sized: owned 6/12 FN, divJ 0.23 → ≤~0.6 ⇒ ≤ +0.037 proxy IF steal is clean (adj cost unknown). Probe =
   `kaggle/donor_probe.py` (re-runs donor's OWN validator sweep with our configs, no slot) → kernel
