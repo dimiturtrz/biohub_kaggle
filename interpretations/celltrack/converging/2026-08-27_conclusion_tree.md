@@ -12,6 +12,22 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-19 23:35Z — where the campaign stands
+
+- **Board:** ours 0.947 (`celltrack-public-0947`, tied by `-gapfill`), then readmit 0.946, v1329f 0.939,
+  v50 0.907, our own banked 0.924. LB top 0.974. Deadline 09-29.
+- **Pending LB:** det096 (56370794), synthsec (56370924), fp16 (56372434). 5 fresh slots at 00:00 UTC.
+- **Runtime is solved and is no longer a reason to avoid anything (E31/E32).** `-fast` = 1590 s vs 6286 s,
+  byte-identical submission; hidden test is 4 videos at 9.93 predict-minutes, ~20x headroom in a 9 h kernel.
+- **The ensemble idea is dead for the donors we hold (E33).** v1329f loses 98.9 % of the 961 genuinely
+  contested parents; v50's inner `v1329_submission.csv` is byte-identical to v1329f so it is not an
+  independent third voter. Final-2 = 0947 + v1329f as private-LB VARIANCE hedging only, never a merge.
+- **The one live, un-run lever:** each fork carries ~3–4 k nodes the other has no node for within 5 µm
+  (0947-only 3118, v1329f-only 3806), and **both sets are fully track-embedded — mean degree 1.73/1.76,
+  ~0 % isolated — so neither is FP noise.** Which set is real is undecidable from submissions alone and
+  needs GT: run v1329f's detector on holdout20 and score the unique nodes against labels. That is the next
+  GPU run, and it is the only thing left that could plausibly be worth ≥1.5 %.
+
 ## NEWS 2026-09-18 — frontier went public; the tree's "no public >0.927" premise is OBSOLETE
 
 - Public kernels now plateau at **0.947**; alfonso1799 V50 claims **0.9605** (pilkwang UNet+node-transformer
