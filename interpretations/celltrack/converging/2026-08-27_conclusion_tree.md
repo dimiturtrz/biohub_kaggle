@@ -151,6 +151,23 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   the drift guard does not cover it), so `celltrack-public-0947-fast` (`kaggle/env_variant.py`) should
   emit a byte-identical submission in ~1600 s. A kernel RUN costs no submission slot, so this is a free
   probe: pushed 22:36Z, verify by diffing its `submission.csv` against 0947's.
+  **E26 — THE MISSING EDGES ARE OMISSIONS, NOT CONFUSIONS. `validator_results.csv` already carried the
+  decomposition and we had never summed it. Over the 40 held-out videos (base config, fp16 run):
+  GT edges 47170 · edge recall 0.9475 · edge_fn 2476 = 1016 lost to detection (41 %) + 1460 FRAGMENTED
+  (59 %) · `wrong_association_edges` = **74**. Mislinks are ~nil. The standing story — "association
+  under crowding / confusor disambiguation" — is not what the remaining loss is made of: 1460 GT edges
+  have BOTH endpoints detected and matched, and simply no predicted edge. That is 3.1 % of all edges,
+  the largest single addressable block we have measured, and it is a RECALL problem at the linker.
+  Mechanism candidate, never swept: `ILP_DISAPPEARANCE_WEIGHT = 2` (with appearance 0) prices ending a
+  track cheaply, so the ILP is free to drop a marginal link; with only 74 wrong edges there is enormous
+  headroom to pay more for continuation. It lives inside `predict_unet_transformer.py`, so it needs a
+  GPU re-run (~55 min/arm), queued behind the edge-weight arms. Division in the same table: recall
+  0.217 (26/120), precision 0.361 — measured at n=120 GT divisions, not the n=7 that the old
+  "division postproc dead" verdict rested on. Gate knobs are already swept flat (bead yesg, 9 knobs
+  ±0.003), so any division re-entry must be CANDIDACY, not gating.
+  CAUTION: the `spurious_pred_nodes` column sums to 1.72 M against 1.77 M predicted nodes and 836
+  missed GT nodes — it is not a per-node FP count. Do not build on that column without deriving it.**
+
   **E25 — `SECONDARY_DETECTION_WEIGHT` is INERT (local, fp16, N=20, 44 videos). 0.6 → adj 0.9021 /
   missed GT 418 · 0.8 (shipped) → 0.9018 / 446 · 0.95 → 0.9021 / 454. Spread 0.0003 = noise across a
   36-cell missed-GT swing: the blend moves detection RECALL and the score does not follow. Two readings,
