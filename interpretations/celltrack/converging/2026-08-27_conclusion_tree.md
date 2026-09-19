@@ -140,6 +140,14 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   Remaining: E1–E3 (pending probes) → composite best-of(E1/E3) + E10 + E4. Donor divdiag (reid3, 8 held-out stems):
   divJ 0.23, 9/12 FN, **6/12 = "2nd daughter OWNED by another track"** — the steal/reattach axis (SAFE_DIV_STEAL_*, off by
   default in reid3) is the division-side element to look at next.
+  **Division axis n=40 (18:12Z, reid3, 40 held-out / 60 GT div, `probes/reid3_divaxis.json`): FLAT.** base proxy 0.9161
+  (adj 0.9022, divJ 0.140, 12 TP / 26 FP / 48 FN). All 9 knobs within ±0.003: steal_r20 0.9160, steal_own45 0.9161,
+  rawsucc 0.9163, tight55 0.9163, dcdiv032 0.9153 (10 TP), diverge175 0.9146 (+10 FP), nnk2 0.9182, dcdiv018 0.9178,
+  reid8+relaxed9 0.9177; combo nnk2+dcdiv018+reid8 0.9193 (+0.0032 directional, +3 TP / +9 FP). 48/60 GT divisions
+  missed by EVERY knob → the n=8 steal hypothesis does not hold at n=40; division recall is upstream (detection /
+  association), not a postproc knob. Division term ceiling = 0.1·divJ ≈ 0.014 → axis CLOSED for PP.
+  **Detection threshold (same 40):** 0.955 adj 0.9008 vs 0.965 0.9022 (−0.0014): 17 fewer missed GT nodes, +20
+  fragmented edges, +12.9k pred nodes — extra nodes do not become links. 0.975 pending.
 - **synth_pre80 done 13:01Z**: synth val best 0.9783 (80 ep). Chained all199_from_synth80 started; ep1 val 0.9201 on
   the 4-movie split (not comparable to the 20-holdout A/B arms' 0.89–0.91). ~25 min/epoch.
 - **Forum 740145 (hengck23):** Kaggle GT sometimes sits on cell "corners" (Ultrack-derived); many FPs lie next to a GT
