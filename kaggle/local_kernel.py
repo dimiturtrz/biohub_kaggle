@@ -58,10 +58,20 @@ def kernel_source(kernel: Path) -> str:
     return FUTURE_IMPORT + source.replace(FUTURE_IMPORT, "")
 
 
+def guard_literal(value: str) -> str:
+    try:
+        return repr(float(value))
+    except ValueError:
+        return json.dumps(value)
+
+
 def pin_env(source: str, overrides: dict[str, str]) -> str:
+    """Pin kernel env vars, and the kernel's config-drift guard entry for each, so the guard expects the pin."""
     for key, value in overrides.items():
         assignment = re.compile(rf"os\.environ\[(['\"]){key}\1\] = .*")
         source = assignment.sub(lambda _, k=key, v=value: f"os.environ[{k!r}] = {v!r}", source)
+        guard_entry = re.compile(rf"^(    \"{key}\": )(?:[-0-9.eE]+|\"[^\"]*\"),$", re.MULTILINE)
+        source = guard_entry.sub(lambda m, v=value: f"{m.group(1)}{guard_literal(v)},", source)
     return source
 
 

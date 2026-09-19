@@ -1,0 +1,7 @@
+{
+  "candidates": {
+    "base": {},
+    "tight55": {"MOTION_RELINK_TIGHT_UM": 5.5}
+  },
+  "diagnose": {}
+}
