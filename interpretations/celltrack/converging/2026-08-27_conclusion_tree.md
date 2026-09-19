@@ -110,6 +110,7 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   | E19 | none — older 0947 ancestor (det 0.960, ILP div 1.2, safe-div thr 0.25) | chukkkk lb-942 | 0.942 | superseded by 0947 |
   | E20 | none — no model mounts, kinematic heuristic tracker | avikdas567 3d-kinematic | none | below learned base → skip |
   | E21 | = E2 (flow-seeded relink) + tight55 + safe-div 0.25 + validator off | thtennant flow2-v1 (09-19 re-list) | env | already inside gapfill 0.947 tie → skip |
+  | E23 | leonixis v1/v2/v3 pipelines: organizers' unet_transformer 40-ep from scratch (local 0.780, LB strict 0.871–0.913); p400/p314159 = pilkwang's exact SHAs | leonixis v1-infer (09-19 re-list) | weights | same recipe, far weaker than the pilkwang pair → no seat → skip |
   | E22 | none — pseudocode scaffold (ResUNet3D + MCMF linker + motion GPT), driver commented out, no weights/score | umarshad notebook82c6959503 | none | from-scratch, unrunnable → skip |
   E12 probe (14:33Z): reid3 own divdiag — `retro6_nnk2` leaves OWNED at 6/12 (retro does not reach owned cases); steal never
   run by donor. Sized: owned 6/12 FN, divJ 0.23 → ≤~0.6 ⇒ ≤ +0.037 proxy IF steal is clean (adj cost unknown). Probe =
@@ -168,6 +169,9 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   hikaggler's "N_pred moves LB" on our base) and `0947-synthsec` (secondary seed314159 → our all199_from_synth80
   ep2 ckpt, private dataset `dimiturnt/celltrack-synth80-ft2` — first structurally-different member; an ep2
   under-trained ckpt, so a loss = "under-trained seat", not "synth refuted"). Watcher `logs/kaggle/watch_0947_probes2.log`.
+  Both submitted 20:16/20:26Z. NB the kernel blends DETECTION as `0.2·primary + 0.8·secondary`
+  (`BIOHUB_SECONDARY_DETECTION_WEIGHT` 0.80), so synthsec swaps 80 % of the detector, not just an edge vote.
+  Local instrument `secdet_{0.95,0.6}` (fp16, N=20, vs fp16 base 0.9018) running 20:48Z — never swept before.
 - **synth_pre80 done 13:01Z**: synth val best 0.9783 (80 ep). Chained all199_from_synth80 started; ep1 val 0.9201 on
   the 4-movie split (not comparable to the 20-holdout A/B arms' 0.89–0.91). ~25 min/epoch.
 - **Forum 740145 (hengck23):** Kaggle GT sometimes sits on cell "corners" (Ultrack-derived); many FPs lie next to a GT
