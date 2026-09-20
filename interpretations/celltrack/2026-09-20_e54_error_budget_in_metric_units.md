@@ -210,6 +210,27 @@ neighbour.
 - **Any future proposal must say how many of the 105 it moves.** That is now a checkable claim, and the
   1.5 % bar translates to roughly **35 recovered GT edges** pooled.
 
+## Corollary: gap repair cannot score, and neither can `max_gap = 2`
+
+The partition found **0 GT edges with `dt ≠ 1`** — every ground-truth edge is consecutive-frame. That is
+not a curiosity, it retires two standing levers by argument, at the cost of zero submissions:
+
+- **Gap repair (E37's axis, the `gapfill` / `gaploose` kernels).** A bridge spans a frame where the
+  detection is missing, so it connects `t-1` to `t+1` and **cannot match any GT edge**. It does not
+  restore the two real GT edges either, because the intermediate node does not exist. Best case the
+  bridge is metric-invisible (E53); worst case both endpoints are annotated and it is a clean FP.
+- **`max_gap = 2`** (flagged as a proxy-blind lever in the constant audit) — same argument. Every edge it
+  admits is one GT never contains.
+
+**The LB already said so and we did not read it:** `gapfill` scored **0.947, identical to the base
+champion**, exactly the tie this predicts. **Pre-registered before the score lands:** `gaploose`, which
+raises the filler yield from 240 to 1165 edges, should come back **≤ 0.947**, and below it if any bridge
+lands on two annotated cells. If it comes back *above* 0.947 this argument is wrong and the dt=1 count
+needs re-measuring.
+
+Recovering a missed detection's *node* is a different proposal and is not covered by this — that is the
+26/105 detection slice, which E40/E41 priced separately.
+
 ## Caveat
 
 Four movies, and E51 applies: all four are affinity-in-sample, two are DeepCenter-in-sample. The *shape*

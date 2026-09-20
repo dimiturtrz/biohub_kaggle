@@ -12,6 +12,23 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-20 05:17Z — E55: gap repair cannot score (GT is all dt=1), and the LB already said so
+
+- E54 measured **0 GT edges with `dt != 1`**. So a gap-repair bridge connects `t-1` to `t+1` and
+  **matches no GT edge, ever** — best case metric-invisible (E53), worst case a clean FP when both
+  endpoints are annotated. It does not restore the two real GT edges either. **E37's repair axis and the
+  `max_gap = 2` lever are both retired by argument, for zero submission slots.**
+- **The board already told us:** `gapfill` = **0.947, an exact tie with the base champion**. That tie was
+  sitting there unread. **Pre-registered:** `gaploose` (filler 240 → 1165) returns **≤ 0.947**; above it
+  would refute this and force a re-measure of the dt=1 count.
+- **`fp16` = 0.945**, below the champion — E38's "no slot" call from the 0.9956 edge union, confirmed.
+  **Final-2 stays 0947 + v1329f.** det096 / synthsec / gaploose still pending.
+- **Standing question for every edge-adding proposal from now on: *can the edge it adds ever BE a GT
+  edge?*** Anything spanning more than one frame answers no. (Recovering a missed detection's NODE is a
+  different proposal — the 26/105 detection slice.)
+
+---
+
 ## NEWS 2026-09-20 05:13Z — E54c: the error is a SPLICE with an unlabelled REAL track
 
 - **0 of 126 slot-stealing rivals is an annotated cell** (`error_budget.py --thieves`). On E54's 76
