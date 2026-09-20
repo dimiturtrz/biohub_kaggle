@@ -46,13 +46,24 @@ w=0.15 and w=0.30 and costs 0.0005 at w=0.5. **The flat bidirectional arms were 
 scale mismatch** — that explanation is now closed, and the remaining explanation is that the reverse pass
 carries little the forward pass does not already have.
 
+## The full curve: a single peak at the symmetric mean, because the two directions are equally good
+
+| w (reverse share) | 0 (off) | 0.15 | 0.30 | **0.5** | 0.70 | 0.85 | 1.0 (reverse only) |
+|---|---|---|---|---|---|---|---|
+| proxy | 0.9343 | 0.9343 | 0.9361 | **0.9375** | 0.9352 | 0.9352 | 0.9338 |
+
+The far side was probed for completeness and it closes the mechanism. **Reverse-only scores 0.9338 against
+forward-only's 0.9343** — the two directions are individually equally informative, within a hair of each
+other and both below their equal blend. A weight is only worth moving off 0.5 when one side is the better
+estimator; here neither is, so **any asymmetry is a discard, not a prior**, and the curve falls off
+symmetrically to confirm it. The donors' 0.15 and 0.30 are not a sharper reading of the same signal — on
+our distribution they throw away half of a two-sided one.
+
 ## What this leaves
 
-The fuse axis is priced and it is not where the gap is. Bidirectional-on beats off by 0.0032 — real in
-sign, sub-floor in size, and already banked. The far side of the weight (w > 0.5, where the reverse pass
-would outweigh the forward one) is the only unmeasured part of this axis and is being probed for
-completeness, not as a candidate; w=1.0 doubles as a control on whether the reverse direction is as
-informative as the forward one.
+The fuse axis is priced end to end and it is not where the gap is. Bidirectional-on beats off by 0.0032 —
+real in sign, sub-floor in size, and already banked. Every cell of the axis lies within 0.0037 of every
+other, so there is nothing here to ship and nothing left to ask.
 
 **Carry forward:** a donor constant is a statement about the donor's distribution. Before porting one, ask
 what it reduces to at our numbers — here, arithmetic alone showed 0.15 means "off", which the sweep then
