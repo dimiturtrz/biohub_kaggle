@@ -22,10 +22,17 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 - **99 % of FPs (139/141) are incident to an endpoint of a GT edge the tracker failed to recover.** FP and
   FN are not independent axes — they are two views of the same **105 broken GT edges**, each costing
   ~**2.3 metric units** (105 FN + 139 FP). E47's ~2× asymmetry, derived, and general to every missed link.
-- **Budget:** pooled adjusted **0.8932** (raw 0.8915), tp 2022. 105 broken = **79 fragmented** (75 %,
-  and E43 says 99.51 % solver-reachable) + 26 lost-to-detection. **83 of the 105 are on the one dense
+- **Budget:** pooled adjusted **0.8932** (raw 0.8915), tp 2022. **83 of the 105 are on the one dense
   movie.** Perfect-fix ceilings OVERLAP and must not be added: all-105 → 0.9991; fp→0 alone +0.059;
   frag alone +0.035; detection alone +0.012.
+- **The 105, partitioned (`--shapes`): 76 (72 %) are PURE SELECTION** — every endpoint detected, the
+  candidate present, the solver ranked another partner above it. **50 are outright swaps** (both endpoints
+  linked elsewhere) + 13 source-rival + 13 target-rival. Only **26 detection**, **3 division**, and
+  **0 GT gaps** (`dt ≠ 1` never occurs). 76 vs a 35-edge bar → **`kiw1` licensed with 2× headroom.**
+- **The discriminator is MOTION.** Broken edges move **4.08 µm median vs 1.46 µm** recovered; **46 % > 5 µm
+  vs 2 %**. E45's "outranked band is fast cells" now holds on the champion's metric-visible errors. E46
+  says pairwise appearance is below chance at matched displacement → **no per-edge feature reaches these
+  76**; the cue must be multi-frame motion continuity. De-prices any further pairwise-feature arm.
 - **Consequences.** (1) Do NOT chase FP suppression as its own programme — 99 % are symptoms; deleting an
   FP without supplying the right link converts a 2.3-unit error into a 1.3-unit one at best. (2) Every
   future proposal must state **how many of the 105 it moves**; the 1.5 % bar ≈ **35 recovered GT edges**.
