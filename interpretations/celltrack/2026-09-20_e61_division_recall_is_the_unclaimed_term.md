@@ -280,6 +280,24 @@ Two consequences:
   donor's and was never fitted by us, which is the one thing keeping this from being a sweep-selected peak —
   and it should stay that way. The finding is the flag, not its value.
 
+## The budget-100 arm, scored: the fifth division costs more than it pays
+
+Widening the budget under c3 buys a fifth recovered division. Scored on the combined metric it loses on
+**both** terms:
+
+| arm | score | edge | division jaccard | forks emitted |
+| --- | --- | --- | --- | --- |
+| c3, shipped budget | **0.9359** | 0.9226 | 0.1333 | 36 / 7 / 33 |
+| c3, `max_added_forks=100` | 0.9312 | 0.9205 | 0.1064 | 94 / 51 / 100 |
+
+The division jaccard *falls* while its true positives rise, because the false positives rise faster — which
+is the arithmetic that priced budget widening out in the first place, now measured rather than argued. The
+edge term falls too, so the extra forks are also rewriting edges badly. Both halves of the metric agree, and
+the shipped budget stands.
+
+This closes the budget axis under c3 from both ends: uncapped reaches 6 divisions and is unscoreable at ~700
+forks a movie, 100 reaches 5 and is measurably worse, and 25 reaches 4 and is the best of the three.
+
 ## Secondary reading: the ruler itself
 
 The same run is the first test of whether division-bearing movie selection explains our top-end proxy offset.
