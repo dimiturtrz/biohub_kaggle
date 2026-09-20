@@ -9932,6 +9932,36 @@
     },
     {
       "kind": "calls",
+      "source": "celltrack.eval.proxy.TestMovieProxy.division_bearing",
+      "target": "celltrack.eval.proxy.TestMovieProxy.training_videos",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.proxy.TestMovieProxy.division_bearing",
+      "target": "core.data.split.Acquisitions.by_prefix",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.proxy.TestMovieProxy.division_bearing",
+      "target": "core.data.tracks.AnnotatedTracks.from_geff",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.proxy.TestMovieProxy.division_bearing",
+      "target": "core.paths.DataRoot.track_store",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.proxy.TestMovieProxy.division_bearing",
+      "target": "core.paths.DataRoot.videos",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
       "source": "celltrack.eval.proxy.TestMovieProxy.linker_ceiling",
       "target": "celltrack.linkers.linking.Linker.link",
       "weight": 1
@@ -25936,6 +25966,14 @@
       "label": "run",
       "level": "method",
       "parent": "celltrack.eval.proxy.LinkingPipeline",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.proxy.TestMovieProxy.division_bearing",
+      "label": "division_bearing",
+      "level": "method",
+      "parent": "celltrack.eval.proxy.TestMovieProxy",
       "role": null
     },
     {
