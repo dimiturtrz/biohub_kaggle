@@ -12,6 +12,35 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-20 09:38Z — CAMPAIGN CLOSED: ship 0.947. The last lever dies on an oracle we already measured
+
+Decision taken with the owner: **stop experimenting, ship what is banked.** GPU stood down.
+
+**bd `zpq7` (centre-offset head) is CLOSED — on a ceiling, not on a failed run.** The framing that it "can only
+be priced by training it" was too pessimistic about our own data: E59 had already re-solved the linker with
+**corrected GT coordinates**, which is perfect localization and strictly better than any trained head. It bought
+**+2 GT edges = +0.0015**. Against a ~35-edge bar (E54) and a 0.01–0.02 noise floor, the axis is an order of
+magnitude under the floor *at oracle*. A 0.67 h arm cannot buy a measurable number.
+
+The mechanism is not refuted — E57's diagnosis stands, broken-edge endpoints sit **4.08 µm** off versus 1.46 µm
+for recovered ones. What is refuted is that fixing localization **changes linker decisions**: E58 found the
+champion already holds **51 of 79** in-scope broken edges, so better coordinates mostly re-confirm edges it
+already has. Reopen only with a mechanism that turns localization into **new** edges, not better-placed
+existing ones.
+
+**FINAL SUBMISSION — one manual UI action, no API exists. Before 2026-09-29:**
+- `dimiturnt/celltrack-public-0947` — **0.947**, the champion
+- `dimiturnt/celltrack-public-v1329f` — **0.939**, the hedge
+
+v1329f is chosen over `readmit` (0.946) deliberately: readmit scores higher but **shares 0947's detector**, so it
+fails on the same inputs and decorrelates on nothing. A hedge earns its slot by failing *differently*, not by
+scoring second-best.
+
+**Closed axes, for the record:** detection, prune, gate, division, ensemble, gap-repair, linker knobs, CPU
+post-processing, kernel harvest (E60), and the discussion channel (07:20Z). Nothing offline remains.
+
+---
+
 ## NEWS 2026-09-20 07:20Z — the Kaggle DISCUSSION channel is unreachable at BOTH levels; the offline-harvest axis is now closed end to end
 
 The record had the forum *listing* closed as JS-rendered (NOTICE_BOARD:14, 09-19). Today's probe extends that:

@@ -23,11 +23,20 @@
 #   --hard-negative-weight 0.015 : recovered exact, AND == memory knife-edge (0.57 collapses). Do not raise.
 #
 # CARD-GATED: needs ~28GB, will not co-tenant with knee's raddino arm (to ~0900z). Launch after card frees.
+#
+# NORM FIX 2026-09-20: this script said `--norm group`, which would have silently voided the arm.
+# The checkpoint's own config is norm='batch' with 10 BatchNorm running_mean buffers
+# (downsample [1,2,2], head 'pack'); a GroupNorm backbone has no home for those buffers, so the
+# warm detector would have been discarded and the run would have produced a second invalid verdict
+# for the same reason the nce=0 run did. Also added --freeze-backbone-norm: freezing the detector's
+# WEIGHTS does not freeze its BN running stats, which model.train() keeps updating from small
+# batches (the documented BN-pollution trap). Verify in the log that the warm load reports 76
+# detector tensors before trusting any number this produces.
 set -euo pipefail
 LOG="logs/hoct_finer122_nce.log"
 uv run python -m celltrack.training.joint_detector \
-  --head hoct --norm group --downsample 1 2 2 \
-  --detector-from finer122_coadapt_long.pt --slack-links \
+  --head hoct --norm batch --downsample 1 2 2 \
+  --detector-from finer122_coadapt_long.pt --slack-links --freeze-backbone-norm \
   --contrastive-weight 1.5 --hard-negative-weight 0.015 --temperature 0.07 \
   --epochs 12 --evals-per-epoch 3 --patience-epochs 3 \
   --batch-size 4 --weights hoct_finer122_nce.pt --device cuda \
