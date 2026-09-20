@@ -45,6 +45,12 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   recall (0.8589 → 0.8293) because expensive termination makes nodes grab FP rivals. What stays live is
   the **11.95 % of true edges the affinity head ranks below a rival, by a median margin of 0.0985** —
   an affinity-*ranking* problem, reachable by a global solver or a better head, never by a cost knob.
+- **That surviving band is PAIRWISE-bound, and the next lever is tracklet-level (E45/E46).** The band is
+  a fast-cell population (5.7× enriched); on it, distance picks true 0.1767, oracle velocity buys +0.065,
+  and raw appearance reads **0.4853 vs a 0.8230 mutual-best control** — 0.4345 at matched displacement,
+  *below chance*. The confusor is a near-static lookalike: every local pairwise cue selects it. What the
+  pair cannot see is that the lookalike has no continuation, so the argued lever is the **two-pass
+  tracklet ILP (bd `kiw1`)**, not a better edge feature.
 - **Runtime is solved and is no longer a reason to avoid anything (E31/E32).** `-fast` = 1590 s vs 6286 s,
   byte-identical submission; hidden test is 4 videos at 9.93 predict-minutes, ~20x headroom in a 9 h kernel.
 - **The ensemble idea is dead for the donors we hold (E33).** v1329f loses 98.9 % of the 961 genuinely
@@ -195,6 +201,21 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   the drift guard does not cover it), so `celltrack-public-0947-fast` (`kaggle/env_variant.py`) should
   emit a byte-identical submission in ~1600 s. A kernel RUN costs no submission slot, so this is a free
   probe: pushed 22:36Z, verify by diffing its `submission.csv` against 0947's.
+
+  **E46 — THE BAND IS NOT APPEARANCE-BOUND, IT IS PAIRWISE-BOUND; THE CONFUSOR IS A NEAR-STATIC
+  LOOKALIKE.** E45 concluded the outranked band was appearance-bound, resting on an n=37 kill that marks
+  itself re-testable. Re-tested at n=1226 with the E43 denominator, CPU-only, raw NCC on cell-sized cubes
+  (`kaggle/outranked_band_appearance.py`): band picks true **0.4853**, mutual-best control **0.8230** —
+  so appearance works, and fails exactly where it is needed. Not fast-cell decorrelation either: at
+  MATCHED displacement ≥3.46, mutual-best holds **0.7182** (n=330) while the band falls to **0.4345**
+  (n=695), *below chance*. Below chance is the mechanism — the rival looks MORE like the source than the
+  true target does, which composes with E45's "true edge farther in 0.7984" into one picture: the
+  confusor is a near-static lookalike near where the cell was, while the true cell moved far and changed.
+  **Every local pairwise cue selects the same wrong target; three of four now measure below chance.** So
+  a learned embedding on the same pairwise view inherits the geometry — what separates true from
+  lookalike is that the lookalike has NO CONTINUATION, a tracklet-level fact. This closes the pairwise
+  axis on mechanism and promotes the two-pass tracklet ILP (bd `kiw1`, one of the jointly-necessary 0.945
+  levers) to the lever this axis argues for. Detail: `interpretations/celltrack/2026-09-20_e46_appearance_on_the_outranked_band.md`.
 
   **E45 — THE OUTRANKED BAND IS A FAST-CELL POPULATION (5.7× enriched), AND MOTION IS DEAD ON IT AT THE
   ORACLE.** E44 left the 11.95 % outranked band as the one live reading of the fragmentation block. This
