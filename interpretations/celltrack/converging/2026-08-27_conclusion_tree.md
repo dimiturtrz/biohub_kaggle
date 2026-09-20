@@ -12,6 +12,28 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-20 06:13Z — E58: the champion already holds 51 of 79 broken edges, one node to the side
+
+`representative_alternates.py` collects every predicted node inside the 7 µm ruler of a GT source and of a
+GT target and asks whether any predicted edge joins the sets. Recovered edges (control) read **1.000**;
+**broken edges read 0.646 — 51 of 79**. The tracker HAS the edge; the scorer's Hungarian represents those
+two cells by a different pair. Broken edges are duplicate-enriched too: 1.71 candidate nodes near the
+source vs 1.23. 51 clears E54's 35-edge bar.
+
+The obvious harvest is then killed by the same probe: the decoys that win the assignment carry
+**1.84 / 1.88 edges and 0 of 102 are isolated** — mid-track nodes of a second REAL track (the champion
+already prunes isolated ones). Deleting one loses ~1.85 edges to gain 1. Blanket merge is worse: **23 %**
+of all nodes (28197/122808) have a same-frame in-ruler neighbour. Node count itself is *not* the
+constraint — `jac*(1-0.1*(t_pred-t_true)/t_true)` is per-node, ~0.1/t_true each.
+
+This is **E54c at node resolution**: two genuine tracks within one ruler-width, the annotated cell
+represented by the unannotated track's node, because that node is mis-placed by ~4 µm (E57). **All CPU
+post-processing on this axis is closed.** Perturbing decoy coordinates to dodge the assignment would work
+and is a scorer exploit — not submitted. The honest version is the **center-offset head** (Campaign A),
+which needs training. Detail: `interpretations/celltrack/2026-09-20_e58_the_champion_already_holds_the_edge.md`.
+
+---
+
 ## NEWS 2026-09-20 06:06Z — the gate was never the blocker; widening it is strictly negative
 
 One 40 s CPU run, no solve. `cue_oracle.py` hardcodes `ASSOCIATION_GATE_UM = 10.0` — **our** linker's
