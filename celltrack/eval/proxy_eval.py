@@ -264,20 +264,26 @@ class TrackerProxyEval:
         """Log where division recall is lost, per movie and in total — detector cost against selection cost."""
         for stem, movie in reach.items():
             logger.info(
-                "  %-16s recovered=%-3d nodes_missing=%-3d no_fork=%-3d fork_rejected=%-3d spurious=%d",
+                "  %-16s recovered=%-3d nodes_missing=%-3d no_fork=%-3d (unproposable=%-3d no_kept_child=%-3d) "
+                "fork_rejected=%-3d spurious=%d",
                 stem,
                 movie.recovered,
                 movie.nodes_missing,
                 movie.no_fork,
+                movie.unproposable,
+                movie.no_kept_child,
                 movie.fork_rejected,
                 movie.spurious,
             )
         total = DivisionReach.total(reach.values())
         logger.info(
-            "  TOTAL recovered=%d nodes_missing=%d no_fork=%d fork_rejected=%d | selection_bound=%d of %d missed",
+            "  TOTAL recovered=%d nodes_missing=%d no_fork=%d (unproposable=%d no_kept_child=%d) fork_rejected=%d "
+            "| selection_bound=%d of %d missed",
             total.recovered,
             total.nodes_missing,
             total.no_fork,
+            total.unproposable,
+            total.no_kept_child,
             total.fork_rejected,
             total.selection_bound(),
             total.missed(),

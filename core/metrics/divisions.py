@@ -23,6 +23,8 @@ from core.data.tracks import Adjacency, TrackGraph
 from core.metrics.matching import UNMATCHED, DistanceMatcher
 
 _MIN_DAUGHTERS = 2
+_UNPARENTED = 0
+_SINGLE_CHILD = 1
 
 
 @dataclass(frozen=True)
@@ -81,15 +83,48 @@ class DivisionScoring:
         }
         pairing = self._maximum_matching(candidates)
         tally = dict.fromkeys(DivisionStage, 0)
+        unproposable = 0
+        no_kept_child = 0
         for divider in candidates:
-            tally[self._stage_of(divider, forks, set(pairing))] += 1
+            stage = self._stage_of(divider, forks, set(pairing))
+            tally[stage] += 1
+            if stage is DivisionStage.NO_FORK and self._daughters_all_claimed(divider):
+                unproposable += 1
+            if stage is DivisionStage.NO_FORK and self._no_kept_child(divider):
+                no_kept_child += 1
         return DivisionReach(
             recovered=tally[DivisionStage.RECOVERED],
             nodes_missing=tally[DivisionStage.NODES_MISSING],
             no_fork=tally[DivisionStage.NO_FORK],
             fork_rejected=tally[DivisionStage.FORK_REJECTED],
+            unproposable=unproposable,
+            no_kept_child=no_kept_child,
             spurious=len((evaluable | invalid) - set(pairing.values())),
         )
+
+    def _no_kept_child(self, divider: int) -> bool:
+        """Whether no predicted parent-side node carries exactly one child, so nothing can be forked off.
+
+        `AffinityDivisionRecovery` adds a second daughter beside a kept one: it skips any parent whose
+        out-degree is not one. A division whose parent track the linker ended (out-degree zero) is therefore
+        invisible to the stage even when both daughters sit beside it as orphans — the fix for those is a
+        candidacy that starts two daughters off a childless parent, which the stage cannot currently express.
+        """
+        parents, _ = self._window_support(divider)
+        return not any(int(self.predicted.out_degrees[row]) == _SINGLE_CHILD for row in parents)
+
+    def _daughters_all_claimed(self, divider: int) -> bool:
+        """Whether every predicted node standing in for this division's daughters already has a parent.
+
+        `AffinityDivisionRecovery` draws each proposed second daughter from the orphan pool — both its
+        candidacies gate on `gap.orphan` — so a division whose daughter lineages the linker has already
+        claimed lies outside that stage at every setting of its gates, ranking, candidacy and budget. Only
+        the lineage HEADS count: the stage proposes the node one frame past the parent, so an orphan
+        grandchild under a claimed daughter is not a proposal the stage could ever make.
+        """
+        matched = self._matched_window(divider)
+        heads = [self._rows_matching(matched, {child}) for child in self.annotated.successors[divider]]
+        return not any(any(int(self.predicted.in_degrees[row]) == _UNPARENTED for row in head) for head in heads)
 
     def _stage_of(self, divider: int, forks: set[int], recovered: set[int]) -> "DivisionStage":
         """How far one annotated division got before it was lost."""
@@ -108,13 +143,16 @@ class DivisionScoring:
         local = self._nearby_forks(parents, forks)
         return {fork for fork in local if self._local_topology_holds(fork, parents, daughters)}, local
 
-    def _window_support(self, divider: int) -> tuple[set[int], list[set[int]]]:
-        """The predicted nodes standing in for this division's parent side, and for each daughter lineage."""
+    def _matched_window(self, divider: int) -> Int[np.ndarray, "n"]:
+        """Each predicted node's annotated partner inside this division's window, or `UNMATCHED`."""
         window, window_rows = self._division_window(divider)
         inside = self.matcher.match(self.prediction, window).gt_rows
         found = inside != UNMATCHED
-        matched = np.where(found, window_rows[np.where(found, inside, 0)], UNMATCHED)
+        return np.where(found, window_rows[np.where(found, inside, 0)], UNMATCHED)
 
+    def _window_support(self, divider: int) -> tuple[set[int], list[set[int]]]:
+        """The predicted nodes standing in for this division's parent side, and for each daughter lineage."""
+        matched = self._matched_window(divider)
         children = self.annotated.successors[divider]
         if len(children) < _MIN_DAUGHTERS:
             return set(), []
@@ -254,6 +292,8 @@ class DivisionReach:
     nodes_missing: int
     no_fork: int
     fork_rejected: int
+    unproposable: int
+    no_kept_child: int
     spurious: int
 
     @classmethod
@@ -265,6 +305,8 @@ class DivisionReach:
             nodes_missing=sum(part.nodes_missing for part in parts),
             no_fork=sum(part.no_fork for part in parts),
             fork_rejected=sum(part.fork_rejected for part in parts),
+            unproposable=sum(part.unproposable for part in parts),
+            no_kept_child=sum(part.no_kept_child for part in parts),
             spurious=sum(part.spurious for part in parts),
         )
 

@@ -347,3 +347,143 @@ in-sample argument also still stands untouched.
 
 What the ruler unambiguously did buy is this page: the division term was invisible on `TEST_MOVIES` (3
 divisions, three of four movies at zero), and it is not invisible now.
+
+## The rest of the replica gap: the champion's gate constants do not transplant
+
+The correction above asked the obvious follow-up — if our replica was missing the champion's divergence
+gate, what else is it missing? The champion's `SAFE_DIV` bracket answers it:
+
+| constant | champion notebook | our `shipped()` | our `kernel_faithful` |
+|---|---|---|---|
+| parent gate | `SAFE_DIV_MAX_UM` 4.7 | 10.0 (inherits the linker gate) | 8.0 |
+| sister gate | `SAFE_DIV_SISTER_MAX_UM` 7.2 | 20.0 (2x parent) | 11.0 |
+| existing-child gate | `SAFE_DIV_EXISTING_CHILD_MAX_UM` 7.8 | `inf` | 10.0 |
+| per-frame cap | `SAFE_DIV_FRAME_FRAC_CAP` 0.008 | budget from `_DIVISION_RATE` | 0.0076 |
+| global cap | `SAFE_DIV_GLOBAL_FRAC_CAP` 0.004 | — | 0.00375 |
+
+Three different bracket, three ways. Our `kernel_faithful` path is faithful to *a* donor, but not to this
+one — which is itself worth recording, because `kernel_faithful` is named as though it replicates the
+champion and does not.
+
+Adopting the champion's numbers **loses recall**:
+
+| arm | recovered |
+|---|---|
+| c3, our gates (10.0 / 20.0 / inf) | **4** |
+| c3, champion gates (4.7 / 7.2 / 7.8) | 2 |
+| c3 + mutual-NN, champion gates | 2 |
+
+Two of 25 against four of 25 is integer scatter by our own noise rule, so the honest claim is *no gain,
+direction negative* — not "their gates are worse". But it is enough to kill the transplant, and it settles
+the `require_mutual_nearest` question that the wide-gate arm left open: under the tight bracket mutual-NN is
+**inert** (2 either way), where under ours it cost a division. It was never an independent gate; it was
+removing proposals the gates were already removing.
+
+The generalizable half: **a donor constant transplants only with the component it was fitted against.**
+`c3_divergence_um = 2.25` moved over because it is a threshold on a physical quantity — how far two
+daughters separate in one frame — which our detector measures the same way theirs does. The gate bracket did
+not move over, because it is fitted to the champion's *candidate distribution*: their detector and affinity
+put proposals at different distances than ours do. Reading a replica gap therefore has to be done per
+constant with a mechanism attached, never wholesale by diffing the env block. Diffing finds the candidates;
+only the mechanism says which are gaps and which are co-adaptations.
+
+## The instrument that reopens the axis: 11 of 19 are still in reach
+
+Every candidacy in `AffinityDivisionRecovery` draws its proposed second daughter from the orphan pool —
+`RunnerUpCandidacy` gates on `gap.orphan[runner_up]`, `GeometricCandidacy` on `gap.orphan[index]`. So a
+division whose daughter lineages the linker has already claimed is outside this stage at **every** setting of
+its gates, ranking, candidacy and budget. That is the mechanical explanation for the candidacy null recorded
+above: geometric and runner_up widen the search *inside the same pool*, which is why 1493 proposals against
+950 bought exactly zero recall.
+
+It also predicted something, so `DivisionReach.unproposable` was added to price it: the count of `no_fork`
+divisions where no daughter lineage contains an unparented node. **The prediction was that all of them would
+be unproposable. It is refuted:**
+
+```
+TOTAL recovered=4 nodes_missing=2 no_fork=19 (unproposable=8) fork_rejected=0
+```
+
+**8 of 19** are structurally out of reach — the daughter is already claimed, and only a re-parent could take
+her back, which is an ILP-level swap and not something this stage can express. That connects to
+[E54c](../../../interpretations/celltrack): every thief is an unannotated real track, so the swap is contested
+rather than free.
+
+**10 of 19 are not.** The orphan is present, the parent has its single child, the gates would admit a
+proposal — and no fork was emitted. `fork_rejected=0` throughout, so it is not that a fork was emitted in a
+shape the annotation refused. Those 10 are the tightest target left on the division axis, and they are worth
+roughly `14/(14+5+11) = 0.47` division jaccard against the current 0.1333 — about **+0.033 combined** at a
+perfect, FP-free recovery. The FP-free part will not hold, but even a third of it clears the 1.5% bar.
+
+The open question is which stage drops them. The c3 veto deletes 87% of proposals (950 to 119), so the first
+suspect is the gate itself vetoing true divisions — checkable by reading `unproposable` with c3 off, since
+the pool membership the count measures does not depend on the veto, while what survives to a fork does.
+
+### Two hypotheses for the 10, both refuted — and one instrument bug found in my own count
+
+The first suspect was the c3 veto deleting true divisions, since it removes 87% of proposals. Reading the
+count with the gate off settles it: `unproposable` is **8 with c3 on and 8 with c3 off**, exactly as it
+should be — the count is a property of the linker's output, not of the veto — while `no_fork` goes 19 to 22.
+So the gate **converts three** proposable-but-lost divisions into recovered ones. It is not vetoing truth.
+
+The second suspect was the parent side. `_gap_proposals` skips any parent whose out-degree is not one, so a
+division whose parent track the linker ended is invisible however many orphans surround it. `no_kept_child`
+prices that at **0 of 19, on every movie.** There is always a forkable node on the parent side. Refuted.
+
+The third thing found was a flaw in my own instrument, which mattered more than either hypothesis. The reach
+oracle builds a daughter lineage as `{child, *successors[child]}`, so a division whose daughter was claimed
+but whose *grandchild* was an orphan counted as proposable — while the stage can only ever propose the node
+one frame past the parent. Restricting the check to the lineage HEADS moves the count 8 to **9**, and the
+proposable set 11 to **10**. One division in the headline number was an artifact of the ruler. The finding
+survives, slightly smaller, which is the only reason it is worth reporting at all.
+
+What the 10 are NOT, now: not claimed (that is the 9), not parentless (that is 0), not c3-vetoed (the gate
+helps), not fork-rejected (0 throughout), and **not budget-lost** — c3 uncapped recovers 6, not 16, so
+admitting every proposal does not find them. That leaves the candidacy's own filters and `_within_gates` as
+the only places left in the proposal path.
+
+## The proposal path, priced to its ceiling: 7 of 25, and the other 10 need a different stage
+
+The last untried corner was candidacy crossed with an unbound budget. Geometric candidacy read
+*identical* to runner-up at budget 25 (4) and at budget 100 (5), so the earlier arms said candidacy
+does not bind. Uncapped it reaches **7**, where uncapped runner-up reached 6.
+
+```
+arm                                    forks emitted   recovered   spurious
+c3, shipped budget 25                      25 / 53          4          5
+c3, budget 100                                 —            5          —
+c3, uncapped, runner_up candidacy          ~700/movie       6          —
+c3, uncapped, geometric candidacy         3114 total        7         59
+```
+
+So candidacy and budget **interact**: geometric proposes reachable daughters that lose the ranking at
+every finite cut. That is a ranking fact inside a wider pool, not a pool-membership fact — and it is
+the opposite of what two cut sizes predicted on their own. Recorded as a caution about reading an
+interaction off single-axis arms.
+
+It is not shippable and was never going to be. 3114 emitted forks buy seven true divisions and 59
+*annotated* spurious ones; division jaccard falls to `7/(7+59+18) = 0.083` against the shipped c3 arm's
+`4/(4+5+21) = 0.133`. The 3114 also contains a large unannotated remainder that the division term
+cannot see at all ([[E53]]) but that the adjacency term pays for — which is exactly why the budget-100
+arm scored 0.9312 against 0.9359. The arm is an instrument, not a candidate.
+
+**What it prices is the stage's ceiling.** With the veto on, candidacy widened and the budget removed —
+every knob in the proposal path at its most permissive — the stage reaches 7 of 25. Of the 16 that
+remain, **10 are `unproposable`**: their second daughter is already parented by another predicted
+track, so no orphan-pool proposal can ever name it, at any setting. The residual **6** are proposable
+and still unreached, leaving only `_within_gates` and the candidacy's own probability filters as
+suspects — the whole rest of the path is now measured and eliminated.
+
+That splits the remaining division recall into two mechanisms, not one:
+
+- **6 divisions** are a gate/threshold problem inside a stage that already exists. Cheap to test.
+- **10 divisions** (40% of every miss) require *taking* a daughter from a track that currently claims
+  it. That is not a recovery stage at all — it is a re-parenting decision, and it belongs inside the
+  linker's own objective. [[E54c]] found the same shape from the other end: every "thief" was an
+  unannotated but genuinely long track, so the slot really is claimed and the ILP really is right
+  under its current objective. A division-aware objective is the only thing that reaches these.
+
+A perfect FP-free recovery of the 6 plus the 7 already reachable values at
+`13/(13+5+12) = 0.433` jaccard against the shipped 0.133, i.e. **~+0.030 combined** — and the FP-free
+part will not hold. The honest read is that the reachable half of the axis is worth a fraction of a
+bar, and the half that could carry it needs a linker change, not a post-processing change.

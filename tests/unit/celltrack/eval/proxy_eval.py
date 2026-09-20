@@ -129,7 +129,11 @@ class _FakeProxy:
         return {"movie": pipeline.config.threshold}
 
     def division_reach(self, pipeline: _FakePipeline) -> dict[str, DivisionReach]:
-        return {"movie": DivisionReach(recovered=1, nodes_missing=2, no_fork=3, fork_rejected=4, spurious=5)}
+        return {
+            "movie": DivisionReach(
+                recovered=1, nodes_missing=2, no_fork=3, fork_rejected=4, unproposable=1, no_kept_child=1, spurious=5
+            )
+        }
 
 
 class _Root:
@@ -194,8 +198,12 @@ def test_division_reach(monkeypatch: pytest.MonkeyPatch):
 def test_report_division_reach(caplog: pytest.LogCaptureFixture):
     """The total line prices the selection-side bound against every missed division, not against all of them."""
     reach = {
-        "44b6_a": DivisionReach(recovered=1, nodes_missing=2, no_fork=3, fork_rejected=0, spurious=1),
-        "6bba_b": DivisionReach(recovered=0, nodes_missing=1, no_fork=0, fork_rejected=2, spurious=4),
+        "44b6_a": DivisionReach(
+            recovered=1, nodes_missing=2, no_fork=3, fork_rejected=0, unproposable=2, no_kept_child=1, spurious=1
+        ),
+        "6bba_b": DivisionReach(
+            recovered=0, nodes_missing=1, no_fork=0, fork_rejected=2, unproposable=0, no_kept_child=0, spurious=4
+        ),
     }
     with caplog.at_level("INFO"):
         TrackerProxyEval.report_division_reach(reach)
