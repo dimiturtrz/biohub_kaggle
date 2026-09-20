@@ -517,3 +517,50 @@ pool the stage cannot see; the 5 need a cue that separates a true sister from a 
 same discrimination [[confusor]] measured to be pairwise-unresolvable — and exactly what the multi-frame
 c3 divergence already supplies as a veto rather than as a score. Ranking BY divergence, rather than
 vetoing on it, is the cheap arm that follows from this table.
+
+## The C3 veto is not free: it deletes six true divisions to buy its +0.0123
+
+The arm that removes the veto at maximum permissiveness — geometric candidacy, uncapped budget,
+`require_c3_divergence=false` — reads:
+
+```
+TOTAL recovered=13 nodes_missing=1 no_fork=11 (unproposable=10 no_kept_child=0) fork_rejected=0
+```
+
+against the same arm WITH the veto, which read `recovered=7 … fork_rejected=5`. Six divisions move
+from lost to recovered, and `fork_rejected` empties completely.
+
+**This overturns the reading in the section above.** I took `fork_rejected=5` under wide gates as
+evidence that the stage emits a fork at the right mother and picks the wrong second daughter — a
+RANKING failure. It is not. `FORK_REJECTED` is assigned post hoc, on the produced graph: it means a
+fork exists somewhere on this division's parent side whose topology does not match the annotation.
+Under gates opened by two orders of magnitude the stage emits 726 forks on one movie, so *some* fork
+lands near almost any mother. The stage that actually lost those five was the C3 gate, which vetoed
+the true pair before the ranking ever saw it.
+
+So the causal table splits differently:
+
+| count | cause | what could reach it |
+|-------|-------|---------------------|
+| 1 | daughter lineage never detected | the detector |
+| 7 | recovered under the veto | — |
+| 6 | **true fork vetoed by C3** | divergence as a SCORE, not a gate |
+| 10 | second daughter already parented (`unproposable`) | the steal stage |
+| 1 | still unexplained | — |
+
+The instrument's lesson generalises: **a stage label read off the OUTPUT graph is not a record of what
+the pipeline decided.** `fork_rejected` cannot distinguish "the true candidate was proposed and
+rejected" from "a different fork happened to land nearby". Only the A/B against the suspected stage
+separates them, which is why the veto-off arm is the measurement and the label was the hypothesis.
+
+### Why divergence belongs in the ranking
+
+The veto earns +0.0123 by suppressing false forks, and it costs six true ones. Those are not in
+tension if the same quantity orders the set instead of censoring it: a pair that does not move apart
+sorts last and the budget evicts it, while a true pair the gate would have deleted for falling a few
+tenths short of 2.25um stays reachable. `DivergingDaughterRanking` (commit `1c10595`) is that term,
+dimensionless so it can be weighed against the geometry without a fitted scale.
+
+The arm that tests it is `prefer_divergence=true` with `require_c3_divergence=FALSE` — soft where the
+champion is hard. Running the veto-on-plus-rank arm first only prices what the preference adds
+INSIDE the censored set, which is the smaller question.
