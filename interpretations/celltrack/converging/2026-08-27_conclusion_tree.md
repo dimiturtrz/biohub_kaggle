@@ -53,6 +53,15 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   argued levers are **segment-SELECTION ILP (bd `g89y`, prune the duplicate)** and the **two-pass
   tracklet ILP (bd `kiw1`, out-compete it with a sequence)** — never a better edge feature. (E46 is a
   replication of a 2026-08-23 memory that the index had dropped; see the E46 block.)
+- **The prune axis is priced, and COLLATERAL is what binds it (E47).** Oracle FP-deletion rescues 95.3 %
+  of the band (0.1195 → 0.0056, net **+0.1139** offline) — the ceiling is not the problem. But deleting a
+  real cell costs ~2× its own size (both its edges), so at 5 % collateral even a PERFECT pruner nets
+  +0.021, while at 2 % collateral FP-recall 0.75 earns **+0.035**. The requirement is ASYMMETRIC, not
+  aggressive. This retro-explains the LB-refuted recovery stack by mechanism: a threshold is
+  intensity-ordered, so it buys recall and collateral on the SAME axis ~1:1, and E41 puts the at-risk
+  real cells exactly there — it lands on the losing diagonal by construction, not by mistuning.
+  **Precondition before building `g89y`:** check whether hierarchy selection's survival decision
+  correlates with intensity; if it does, it inherits the same coupling.
 - **Runtime is solved and is no longer a reason to avoid anything (E31/E32).** `-fast` = 1590 s vs 6286 s,
   byte-identical submission; hidden test is 4 videos at 9.93 predict-minutes, ~20x headroom in a 9 h kernel.
 - **The ensemble idea is dead for the donors we hold (E33).** v1329f loses 98.9 % of the 961 genuinely
@@ -203,6 +212,24 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   the drift guard does not cover it), so `celltrack-public-0947-fast` (`kaggle/env_variant.py`) should
   emit a byte-identical submission in ~1600 s. A kernel RUN costs no submission slot, so this is a free
   probe: pushed 22:36Z, verify by diffing its `submission.csv` against 0947's.
+
+  **E47 — THE PRUNE AXIS IS PRICED: THE CEILING IS BIG (+0.1139) AND COLLATERAL IS WHAT SPENDS IT.**
+  E46 pointed at bd `g89y` because the confusor is an FP. "Prunable in principle" is not a licence to
+  build a GPU detector pass, so `kaggle/prune_operating_point.py` prices it on CPU from the cache first.
+  ORACLE (delete every unmatched detection): band 0.1195 → 0.0056, **95.3 % rescued, net +0.1139** offline
+  mutual-best — but it deletes 97.2 % of detections and keeps 0.37 % of candidate edges, so it licenses
+  nothing alone. The grid is the decision: **collateral enters at ~2× its own size** (a deleted cell
+  takes the true edge on BOTH sides), so `q=0.05` nets only **+0.021 even at perfect FP-recall**, while
+  `q=0.02` needs FP-recall ~0.5 to break even and earns **+0.035 at 0.75**. The spec is ASYMMETRIC — an
+  order of magnitude more careful with real cells than thorough with FPs. **This retro-explains the
+  LB-refuted recovery stack (≤0.900) by mechanism:** a threshold is intensity-ordered, so it buys recall
+  and collateral on the SAME axis at ~1:1, and E41 puts the at-risk real cells precisely there (2.4×
+  fainter, 46.9 % bottom decile) — it lands on the losing diagonal by construction, not by mistuning.
+  `g89y` survives ONLY because hierarchy selection picks among nested contours by consistency rather than
+  a global intensity cut; that is now the **cheap precondition to test before the build** — does its
+  survival decision correlate with intensity? +0.035 clears the 1.5 % bar with room and the oracle leaves
+  +0.11 of headroom, but this is the offline association proxy on OUR tunet caches (FP field 0.972),
+  not the LB. Detail: `interpretations/celltrack/2026-09-20_e47_what_a_pruner_must_achieve.md`.
 
   **E46 — THE BAND IS NOT APPEARANCE-BOUND, IT IS PAIRWISE-BOUND; THE CONFUSOR IS A NEAR-STATIC FP
   LOOKALIKE.** *Replication, not discovery:* `celltrack-confusor-pairwise-unresolvable-needs-multiframe`
