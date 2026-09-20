@@ -188,6 +188,45 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   emit a byte-identical submission in ~1600 s. A kernel RUN costs no submission slot, so this is a free
   probe: pushed 22:36Z, verify by diffing its `submission.csv` against 0947's.
 
+  **E43 — FRAGMENTATION IS A *SELECTION* FAILURE, NOT A CANDIDATE FAILURE. The 4.46 % block is on the
+  table and the solver declines it — so it is solver-reachable, and reachable WITHOUT A DETECTOR PASS.**
+  E42 closed the detection axis on the 0947 base, which left bd `d5er`'s fragmentation block as the
+  largest addressable population still standing: an edge whose **both endpoints are detected AND matched**
+  yet carries no predicted link. That is an omission, not a confusion — but "omission" hides two bugs
+  with opposite fixes, and nobody had separated them:
+
+  - **CANDIDATE** — the pair was never proposed. Then no solver knob reaches it; the fix is a wider gate.
+  - **SELECTION** — the pair was proposed, with an affinity, and the solver preferred to terminate. Then
+    the disappearance/termination cost reaches it, and the affinity head's *ranking* bounds how much.
+
+  The `real_scratch` cache settles this for free: it stores **487238 proposed edges with their
+  affinities**, so the candidate graph the linker saw is on disk. No GPU, no detector re-run.
+  Instrument: `kaggle/fragment_selection_gate.py` (CPU, ~1 min, 20 movies, n=12346 GT edges).
+
+  1. **The gate passes decisively — it is SELECTION.** Of GT edges whose endpoints both match at the
+     official 7 µm ruler (11938 = 96.70 %), **99.51 % already have a candidate edge with an affinity**.
+     Only **59 (0.48 % of all GT edges)** have none, and those are median **11.72 µm** displacement —
+     outside the 10 µm gate, i.e. gate-bound and far too small to matter. Candidate generation is NOT
+     the bug. Every fragmented edge was on the table.
+  2. **The affinity head is mostly right, and wrong by a thin margin.** The true edge is **mutual-best**
+     (top-ranked out of its source AND into its target) in **88.05 %** of cases. The **11.95 %** that are
+     outranked lose by a **median margin of only 0.0985** (true 0.285 vs rival 0.510). A thin margin is
+     precisely what a *global* solver flips and a greedy one cannot — which is the mechanism behind
+     `celltrack-linker-is-the-gap` (global ILP broke the 0.902 wall). It also means these are not
+     hopeless: they are near-misses, not confident errors.
+  3. **The weak tail is real and it is ranked-down, not just low.** **12.48 %** of true candidate edges
+     carry affinity **below coin-flip** (q10 = 0.433), and of those only **23.01 %** are mutual-best.
+     So a true edge scored under 0.5 usually *also* loses its ranking — low affinity and bad ranking are
+     the same population, not two independent taxes.
+
+  **What this licenses and what it does not.** The 11.95 % outranked band is larger than the 4.99 %
+  fragmentation rate, so fragmentation sits *inside* it — consistent, and it means the termination cost
+  is not the whole story. Raising it recovers a true edge that lost **to nothing**; it cannot fix one that
+  lost **to a rival** (that is a swap, and swaps show up as mislinks, of which d5er counts only 74).
+  **Caveats that must travel:** measured on OUR `real_scratch` cache (node recall 0.697–0.750), not the
+  0947 base (0.824); and the 7 µm matching here is nearest-detection, not the official metric's global
+  assignment.
+
   **E40 — THE DoG UNION IS DEAD ON THE CONDITIONAL, AND E27'S KILL WAS SCALE-BOUND. Five CPU-only
   instruments, no GPU.** E39 left detection as the only axis with a ≥1.5 % mechanism, priced as
   GPU-blocked. It is not: a union with an *independent* detector needs no local card (a Kaggle fork run
