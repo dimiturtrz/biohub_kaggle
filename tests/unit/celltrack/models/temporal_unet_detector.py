@@ -255,3 +255,15 @@ def test_mirror():
     for view in FlipView.tta_ensemble():
         z, y, x = view.mirror(position, extent)[0].long().tolist()
         assert view.apply(volume)[z, y, x] == volume[1, 0, 3]
+
+
+def test_forward_heads():
+    """One backbone pass feeds both heads; without an offset head the offsets are absent, not zeros."""
+    detector = TemporalUNetDetector(8, (8, 16), offset_head=True)
+    frames = torch.zeros((1, 2, 4, 4))
+
+    heads = detector.forward_heads(frames, single_frame=True)
+
+    assert heads.logits.shape == (1, 2, 4, 4)
+    assert heads.offsets is not None and heads.offsets.shape == (1, 3, 2, 4, 4)
+    assert TemporalUNetDetector(8, (8, 16)).forward_heads(frames, single_frame=True).offsets is None

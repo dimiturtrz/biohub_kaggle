@@ -184,3 +184,17 @@ def test_train_records_each_window(
     steps = {call[3] for call in mlflow_backend.calls if call[0] == "metric"}
     assert steps == {0, 2}  # the init eval at step 0, then the single two-step window
     assert ("end",) in mlflow_backend.calls
+
+
+def test_voxel_um():
+    """A training voxel is the imaging scale stretched by the run's downsample, per axis."""
+    config = TUNetTrainConfig(downsample=(1, 4, 4))
+
+    assert config.voxel_um() == (1.625, 1.625, 1.625)
+    assert TUNetTrainConfig(downsample=(1, 2, 2)).voxel_um() == (1.625, 0.8125, 0.8125)
+
+
+def test_offset_radius():
+    """The supervised half-window is one cell radius in each axis' own voxels, never below one."""
+    assert TUNetTrainConfig(downsample=(1, 4, 4)).offset_radius() == (2, 2, 2)
+    assert TUNetTrainConfig(downsample=(1, 2, 2)).offset_radius() == (2, 5, 5)

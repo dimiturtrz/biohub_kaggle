@@ -40,6 +40,9 @@ NORMS = ("batch", "group")
 # gives the InfoNCE term its own representation to reshape, separate from the 1-channel detection logit — so the
 # backbone learns cell-discriminating features under a strong gradient without trading the detection head away.
 _EMBED_CHANNELS = 64
+# The offset head regresses one micron displacement per spatial axis — (dz, dy, dx), the vector from a voxel to
+# the centre that owns it. Three because the volume is three-dimensional, not a tunable width.
+_AXES = 3
 
 
 @dataclass(frozen=True)
@@ -140,10 +143,29 @@ class _VideoSource:
     scale: tuple[float, float, float]
 
 
+@dataclass(frozen=True)
+class DetectorHeads:
+    """What one backbone pass yields: detection logits, and the offset field when the offset head is installed.
+
+    The two heads read the SAME features, so a trainer that wants both must not pay for two backbone passes —
+    this is the result of the single pass, with `offsets` None on a detector built without the head.
+    """
+
+    logits: Float[Tensor, "b z y x"]
+    offsets: Float[Tensor, "b three z y x"] | None
+
+
 class TemporalUNetDetector(nn.Module):
     """A `TemporalUNet3D` backbone plus a detection head — the pilkwang detector, ours to train and run."""
 
-    def __init__(self, out_channels: int = 32, layers: tuple[int, ...] = (32, 64, 128), norm: str = "batch") -> None:
+    def __init__(
+        self,
+        out_channels: int = 32,
+        layers: tuple[int, ...] = (32, 64, 128),
+        norm: str = "batch",
+        *,
+        offset_head: bool = False,
+    ) -> None:
         super().__init__()
         if norm not in NORMS:
             raise ValueError(f"norm must be one of {NORMS}, got {norm!r}")
@@ -165,6 +187,12 @@ class TemporalUNetDetector(nn.Module):
         # to carry the center-point contrastive gradient back into the backbone during training. A warm-start
         # checkpoint predates this head, so every loader below tolerates its absent key (strict=False).
         self.embed_head = nn.Conv3d(out_channels, _EMBED_CHANNELS, kernel_size=1)
+        # The center-offset head: three channels per voxel, the micron vector to the centre the voxel belongs to.
+        # Optional because it changes what the detector IS — a readout can cluster by predicted centre and split a
+        # blob the peak readout merges, so it is a different detector, not a training-only auxiliary like the
+        # embedding above. Persisted so a trained checkpoint rebuilds the head before its weights load; absent on
+        # every warm-start pack and every checkpoint that predates it, which strict=False already tolerates.
+        self.offset_head = nn.Conv3d(out_channels, _AXES, kernel_size=1) if offset_head else None
         # Whether the backbone's per-voxel time attention carries a frame-position embedding (motion sight).
         # False = the published order-blind backbone. `install_temporal_position` flips it and rewrites the
         # attention blocks; the flag is persisted so a trained checkpoint rebuilds the same blocks before loading.
@@ -248,15 +276,28 @@ class TemporalUNetDetector(nn.Module):
         convolutions the duplicate frame otherwise wastes; validated near-lossless on the dense movie (identical
         node count, 99.98% peak match) since only the first output frame is read either way.
         """
+        return self.forward_heads(frames, single_frame=single_frame).logits
+
+    def forward_heads(self, frames: Float[Tensor, "b z y x"], *, single_frame: bool = False) -> DetectorHeads:
+        """Every installed head's output from ONE backbone pass — the path a multi-term loss trains through.
+
+        `forward_batch` is this minus the offsets, kept as the name the whole tracker already calls, so adding a
+        head costs no second pass and changes no existing caller.
+        """
         window = frames.unsqueeze(1) if single_frame else torch.stack([frames, frames], dim=1)  # (B, T, Z, Y', X')
-        features = self.unet(window.unsqueeze(2))  # (B, T, C, Z, Y', X')
-        return self.detect_head(features[:, 0])[:, 0]  # (B, Z, Y', X')
+        features = self.unet(window.unsqueeze(2))[:, 0]  # (B, C, Z, Y', X')
+        return DetectorHeads(
+            self.detect_head(features)[:, 0],  # (B, Z, Y', X')
+            None if self.offset_head is None else self.offset_head(features),  # (B, 3, Z, Y', X')
+        )
 
     @classmethod
-    def from_pack(cls, pack: Path, map_location: str = "cpu") -> tuple[Self, DetectorRecipe]:
+    def from_pack(
+        cls, pack: Path, map_location: str = "cpu", *, offset_head: bool = False
+    ) -> tuple[Self, DetectorRecipe]:
         """Load pilkwang's published split — the `unet.*` + `detect_head.*` half of `edge_predictor_best.pth`."""
         config = json.loads((pack / "config.json").read_text())
-        detector = cls(config["unet_out_channels"], tuple(config["unet_layers"]))
+        detector = cls(config["unet_out_channels"], tuple(config["unet_layers"]), offset_head=offset_head)
         state = torch.load(pack / "edge_predictor_best.pth", map_location=map_location, weights_only=True)
         # strict=False: the fresh embed_head has no counterpart in the pilkwang pack (unet + detect_head only).
         detector.load_state_dict(
@@ -268,7 +309,14 @@ class TemporalUNetDetector(nn.Module):
     def from_checkpoint(cls, path: Path, map_location: str = "cpu") -> tuple[Self, DetectorRecipe]:
         """Rebuild a detector we trained: our checkpoint carries both the weights and the recipe."""
         blob = torch.load(path, map_location=map_location, weights_only=True)
-        detector = cls(int(blob["out_channels"]), tuple(blob["layers"]), norm=blob.get("norm", "batch"))
+        detector = cls(
+            int(blob["out_channels"]),
+            tuple(blob["layers"]),
+            norm=blob.get("norm", "batch"),
+            # Rebuilt BEFORE the load, or the head's weights would land nowhere and load silently under
+            # strict=False. Absent on every checkpoint written before the head existed.
+            offset_head=bool(blob.get("offset_head", False)),
+        )
         # strict=False: a checkpoint written before the embed head existed carries no embed_head.* key.
         detector.load_state_dict(cls._uncompiled(blob["state_dict"]), strict=False)
         return detector, DetectorRecipe.from_config(blob["recipe"])
@@ -286,6 +334,7 @@ class TemporalUNetDetector(nn.Module):
                 "out_channels": self.out_channels,
                 "layers": self.layers,
                 "norm": self.norm,
+                "offset_head": self.offset_head is not None,
                 "recipe": recipe.as_config(),
             },
             path,

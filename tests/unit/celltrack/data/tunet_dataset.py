@@ -9,6 +9,7 @@ import zarr
 
 from celltrack.data.tunet_dataset import FrameDataset, FrameTarget
 from core.data.video import ImageStatistics
+from core.paths import DataRoot
 
 
 def test_getitem(video_store: Path):
@@ -65,3 +66,13 @@ def test_batches(video_store: Path):
     frames, centres = batches[0]
     assert frames.ndim == 4  # (b, z, y, x)
     assert len(centres) == 2 and centres[0].tolist() == [[1, 2, 2]]
+
+
+def test_index(video_store: Path, geff_store: Path):
+    """Indexing a video yields one target per annotated timepoint, centres already in the downsampled grid."""
+    targets = FrameTarget.index(DataRoot(geff_store.parent), [video_store], downsample=(1, 2, 2))
+
+    assert [target.timepoint for target in targets] == [0, 1]
+    assert targets[0].coords.tolist() == [[0, 0, 0]]  # node 100 at (z, y, x) = (0, 0, 0)
+    assert targets[1].coords.tolist() == [[0, 2, 0], [1, 0, 2]]  # (0, 4, 0) and (1, 0, 4) halved in y/x
+    assert (targets[0].q_low, targets[0].q_high) == (10.0, 210.0)

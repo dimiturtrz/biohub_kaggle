@@ -12945,6 +12945,12 @@
     {
       "kind": "references",
       "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig",
+      "target": "celltrack.postproc.fork_ranking.ForkRanking",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig",
       "target": "core.geometry.Spacing",
       "weight": 1
     },
@@ -12967,9 +12973,27 @@
       "weight": 1
     },
     {
+      "kind": "construct",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig._decorated",
+      "target": "celltrack.postproc.fork_ranking.DivergingDaughterRanking",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig._decorated",
+      "target": "celltrack.postproc.fork_ranking.SurvivingDaughterRanking",
+      "weight": 1
+    },
+    {
       "kind": "calls",
       "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig.build",
       "target": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig._build_kernel_faithful",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig.build",
+      "target": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig._decorated",
       "weight": 1
     },
     {
@@ -12997,12 +13021,6 @@
       "weight": 1
     },
     {
-      "kind": "construct",
-      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig.build",
-      "target": "celltrack.postproc.fork_ranking.SurvivingDaughterRanking",
-      "weight": 1
-    },
-    {
       "kind": "calls",
       "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig.sister_gate",
       "target": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig.parent_gate",
@@ -13012,6 +13030,12 @@
       "kind": "holds",
       "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery",
       "target": "celltrack.affinity.EdgeAffinity",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery",
+      "target": "celltrack.postproc.affinity_division_recovery._DivisionEdits",
       "weight": 1
     },
     {
@@ -13101,6 +13125,18 @@
     {
       "kind": "calls",
       "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._division_edges",
+      "target": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._claim_probabilities",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._division_edges",
+      "target": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._claiming_rows",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._division_edges",
       "target": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._frames_ahead",
       "weight": 1
     },
@@ -13120,6 +13156,12 @@
       "kind": "calls",
       "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._division_edges",
       "target": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._successors",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._division_edges",
+      "target": "celltrack.postproc.affinity_division_recovery._DivisionEdits.of",
       "weight": 1
     },
     {
@@ -13267,6 +13309,36 @@
       "weight": 1
     },
     {
+      "kind": "references",
+      "source": "celltrack.postproc.affinity_division_recovery.StealCandidacy",
+      "target": "celltrack.postproc.fork_ranking.ForkCandidate",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.postproc.affinity_division_recovery.StealCandidacy",
+      "target": "celltrack.postproc.fork_ranking._Gap",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.postproc.affinity_division_recovery.StealCandidacy.candidates",
+      "target": "celltrack.postproc.fork_ranking.ForkCandidate.at_gap",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.postproc.affinity_division_recovery._DivisionEdits",
+      "target": "celltrack.postproc.affinity_division_recovery._DivisionEdits",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.postproc.affinity_division_recovery._DivisionEdits",
+      "target": "core.data.tracks.TrackGraph",
+      "weight": 1
+    },
+    {
       "kind": "holds",
       "source": "celltrack.postproc.division_recovery.DivisionRecovery",
       "target": "celltrack.detectors.center_prior.CenterConfirmer",
@@ -13400,6 +13472,30 @@
     },
     {
       "kind": "references",
+      "source": "celltrack.postproc.fork_ranking.DivergingDaughterRanking",
+      "target": "celltrack.postproc.fork_ranking.ForkCandidate",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.postproc.fork_ranking.DivergingDaughterRanking",
+      "target": "celltrack.postproc.fork_ranking.ForkRanking",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.postproc.fork_ranking.DivergingDaughterRanking.cost",
+      "target": "celltrack.postproc.fork_ranking.ForkCandidate.divergence_fraction",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.postproc.fork_ranking.DivergingDaughterRanking.cost",
+      "target": "celltrack.postproc.fork_ranking.ForkRanking.cost",
+      "weight": 1
+    },
+    {
+      "kind": "references",
       "source": "celltrack.postproc.fork_ranking.ForkCandidate",
       "target": "celltrack.postproc.fork_ranking.ForkCandidate",
       "weight": 1
@@ -13414,6 +13510,18 @@
       "kind": "calls",
       "source": "celltrack.postproc.fork_ranking.ForkCandidate.daughter_angle_cosine",
       "target": "celltrack.postproc.fork_ranking.ForkCandidate._displacements",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.postproc.fork_ranking.ForkCandidate.divergence_fraction",
+      "target": "celltrack.postproc.fork_ranking.ForkCandidate.divergence_um",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.postproc.fork_ranking.ForkCandidate.divergence_fraction",
+      "target": "celltrack.postproc.fork_ranking.ForkCandidate.sister_distance_um",
       "weight": 1
     },
     {
@@ -16843,6 +16951,18 @@
       "weight": 1
     },
     {
+      "kind": "calls",
+      "source": "core.metrics.divisions.DivisionScoring._daughters_all_claimed",
+      "target": "core.metrics.divisions.DivisionScoring._matched_window",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions.DivisionScoring._daughters_all_claimed",
+      "target": "core.metrics.divisions.DivisionScoring._rows_matching",
+      "weight": 1
+    },
+    {
       "kind": "construct",
       "source": "core.metrics.divisions.DivisionScoring._division_window",
       "target": "core.data.tracks.TrackGraph",
@@ -16910,6 +17030,24 @@
     },
     {
       "kind": "calls",
+      "source": "core.metrics.divisions.DivisionScoring._matched_window",
+      "target": "core.metrics.divisions.DivisionScoring._division_window",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions.DivisionScoring._matched_window",
+      "target": "core.metrics.matching.DistanceMatcher.match",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions.DivisionScoring._no_kept_child",
+      "target": "core.metrics.divisions.DivisionScoring._window_support",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
       "source": "core.metrics.divisions.DivisionScoring._stage_of",
       "target": "core.metrics.divisions.DivisionScoring._nearby_forks",
       "weight": 1
@@ -16929,19 +17067,13 @@
     {
       "kind": "calls",
       "source": "core.metrics.divisions.DivisionScoring._window_support",
-      "target": "core.metrics.divisions.DivisionScoring._division_window",
+      "target": "core.metrics.divisions.DivisionScoring._matched_window",
       "weight": 1
     },
     {
       "kind": "calls",
       "source": "core.metrics.divisions.DivisionScoring._window_support",
       "target": "core.metrics.divisions.DivisionScoring._rows_matching",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "core.metrics.divisions.DivisionScoring._window_support",
-      "target": "core.metrics.matching.DistanceMatcher.match",
       "weight": 1
     },
     {
@@ -16995,6 +17127,12 @@
     {
       "kind": "calls",
       "source": "core.metrics.divisions.DivisionScoring.reach",
+      "target": "core.metrics.divisions.DivisionScoring._daughters_all_claimed",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions.DivisionScoring.reach",
       "target": "core.metrics.divisions.DivisionScoring._fork_verdicts",
       "weight": 1
     },
@@ -17008,6 +17146,12 @@
       "kind": "calls",
       "source": "core.metrics.divisions.DivisionScoring.reach",
       "target": "core.metrics.divisions.DivisionScoring._maximum_matching",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions.DivisionScoring.reach",
+      "target": "core.metrics.divisions.DivisionScoring._no_kept_child",
       "weight": 1
     },
     {
@@ -20620,6 +20764,22 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.postproc.affinity_division_recovery.StealCandidacy",
+      "label": "StealCandidacy",
+      "level": "class",
+      "parent": "celltrack.postproc.affinity_division_recovery",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.affinity_division_recovery._DivisionEdits",
+      "label": "_DivisionEdits",
+      "level": "class",
+      "parent": "celltrack.postproc.affinity_division_recovery",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.postproc.affinity_division_recovery._FrameProposals",
       "label": "_FrameProposals",
       "level": "class",
@@ -20640,6 +20800,14 @@
       "label": "DivisionRecoveryConfig",
       "level": "class",
       "parent": "celltrack.postproc.division_recovery",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.fork_ranking.DivergingDaughterRanking",
+      "label": "DivergingDaughterRanking",
+      "level": "class",
+      "parent": "celltrack.postproc.fork_ranking",
       "role": "satellite"
     },
     {
@@ -28540,6 +28708,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig._decorated",
+      "label": "_decorated",
+      "level": "method",
+      "parent": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.postproc.affinity_division_recovery.AffinityDivisionConfig.build",
       "label": "build",
       "level": "method",
@@ -28590,6 +28766,22 @@
       "descendants": 0,
       "id": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._admitted_two_cap",
       "label": "_admitted_two_cap",
+      "level": "method",
+      "parent": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._claim_probabilities",
+      "label": "_claim_probabilities",
+      "level": "method",
+      "parent": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery._claiming_rows",
+      "label": "_claiming_rows",
       "level": "method",
       "parent": "celltrack.postproc.affinity_division_recovery.AffinityDivisionRecovery",
       "role": null
@@ -28732,6 +28924,38 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.postproc.affinity_division_recovery.StealCandidacy.candidates",
+      "label": "candidates",
+      "level": "method",
+      "parent": "celltrack.postproc.affinity_division_recovery.StealCandidacy",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.affinity_division_recovery._DivisionEdits._pairs",
+      "label": "_pairs",
+      "level": "method",
+      "parent": "celltrack.postproc.affinity_division_recovery._DivisionEdits",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.affinity_division_recovery._DivisionEdits.keeping",
+      "label": "keeping",
+      "level": "method",
+      "parent": "celltrack.postproc.affinity_division_recovery._DivisionEdits",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.affinity_division_recovery._DivisionEdits.of",
+      "label": "of",
+      "level": "method",
+      "parent": "celltrack.postproc.affinity_division_recovery._DivisionEdits",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.postproc.division_recovery.DivisionRecovery._confirmed_rows",
       "label": "_confirmed_rows",
       "level": "method",
@@ -28804,6 +29028,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.postproc.fork_ranking.DivergingDaughterRanking.cost",
+      "label": "cost",
+      "level": "method",
+      "parent": "celltrack.postproc.fork_ranking.DivergingDaughterRanking",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.postproc.fork_ranking.ForkCandidate._displacements",
       "label": "_displacements",
       "level": "method",
@@ -28830,6 +29062,14 @@
       "descendants": 0,
       "id": "celltrack.postproc.fork_ranking.ForkCandidate.daughter_angle_cosine",
       "label": "daughter_angle_cosine",
+      "level": "method",
+      "parent": "celltrack.postproc.fork_ranking.ForkCandidate",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.fork_ranking.ForkCandidate.divergence_fraction",
+      "label": "divergence_fraction",
       "level": "method",
       "parent": "celltrack.postproc.fork_ranking.ForkCandidate",
       "role": null
@@ -28870,6 +29110,14 @@
       "descendants": 0,
       "id": "celltrack.postproc.fork_ranking.ForkCandidate.split_imbalance",
       "label": "split_imbalance",
+      "level": "method",
+      "parent": "celltrack.postproc.fork_ranking.ForkCandidate",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.fork_ranking.ForkCandidate.taking",
+      "label": "taking",
       "level": "method",
       "parent": "celltrack.postproc.fork_ranking.ForkCandidate",
       "role": null
@@ -30684,6 +30932,14 @@
     },
     {
       "descendants": 0,
+      "id": "core.metrics.divisions.DivisionScoring._daughters_all_claimed",
+      "label": "_daughters_all_claimed",
+      "level": "method",
+      "parent": "core.metrics.divisions.DivisionScoring",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "core.metrics.divisions.DivisionScoring._division_window",
       "label": "_division_window",
       "level": "method",
@@ -30716,6 +30972,14 @@
     },
     {
       "descendants": 0,
+      "id": "core.metrics.divisions.DivisionScoring._matched_window",
+      "label": "_matched_window",
+      "level": "method",
+      "parent": "core.metrics.divisions.DivisionScoring",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "core.metrics.divisions.DivisionScoring._maximum_matching",
       "label": "_maximum_matching",
       "level": "method",
@@ -30726,6 +30990,14 @@
       "descendants": 0,
       "id": "core.metrics.divisions.DivisionScoring._nearby_forks",
       "label": "_nearby_forks",
+      "level": "method",
+      "parent": "core.metrics.divisions.DivisionScoring",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.divisions.DivisionScoring._no_kept_child",
+      "label": "_no_kept_child",
       "level": "method",
       "parent": "core.metrics.divisions.DivisionScoring",
       "role": null

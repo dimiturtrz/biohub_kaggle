@@ -28,24 +28,23 @@ from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import cast
 
-import numpy as np
 import torch
-import zarr
 from jaxtyping import Float, Int
 from torch import Tensor, nn
 from torch.nn.attention import SDPBackend, sdpa_kernel
 
 from celltrack.data.augmentation import Augmentation
 from celltrack.data.tunet_dataset import FrameDataset, FrameTarget
+from celltrack.detectors.detection import CELL_SCALE_UM
 from celltrack.detectors.tunet import DetectorRecipe, TemporalUNetDetector
+from celltrack.eval.kernel_reference import VOXEL_SCALE_UM
 from celltrack.eval.model_evaluator import EvalResult, ModelEvaluator
 from celltrack.eval.proxy import TEST_MOVIES, VALIDATION_MOVIES, TestMovieProxy
 from celltrack.losses.balanced_bce import BalancedBCE
+from celltrack.losses.center_offset import CenterOffsetLoss
 from celltrack.operating_point import TrackerConfig
 from celltrack.training.early_stop import EarlyStop
 from celltrack.training.run_tracking import RunSetup, TrainingRun, TrainingSplit
-from core.data.tracks import AnnotatedTracks
-from core.data.video import ImageStatistics
 from core.obs import Obs
 from core.paths import DataRoot
 
@@ -83,6 +82,11 @@ class TUNetTrainConfig:
     # only — BN leaks the train movies' running stats onto val frames across the microscope gap; a warm pack's
     # BN buffers cannot load a bufferless GroupNorm, so the swap is rejected at build under warm_start).
     norm: str = "batch"
+    # Weight on the center-offset term (`CenterOffsetLoss`), and the head that produces it. 0.0 keeps the
+    # shipped detection-only objective and builds no head at all, so the default run is byte-identical to
+    # every arm before this one. Above 0 the detector learns, per voxel, the micron vector to the centre it
+    # belongs to — the cue a peak readout structurally lacks when two cells' responses merge into one blob.
+    offset_weight: float = 0.0
     device: str = "cuda"
     # Fraction of total VRAM the allocator may hold. On Windows/WDDM a GPU over-commit does NOT OOM — it pages
     # over PCIe and CRAWLS while util still reads 100% (power draw is the honest tell). Capping the allocator
@@ -122,6 +126,27 @@ class TUNetTrainConfig:
     compile_backbone: bool = False  # torch.compile the U-Net (static 64^3 shape); one-time warmup, then fused kernels
     recipe: DetectorRecipe = field(default_factory=DetectorRecipe)
 
+    def voxel_um(self) -> tuple[float, float, float]:
+        """The micron size of one TRAINING voxel — the imaging scale stretched by this run's downsample.
+
+        Under the shipped (1, 4, 4) the grid is isotropic at 1.625 um, but the offset target must not assume
+        that: a re-pooled (1, 2, 2) run has a different y/x and the same regressed number would mean a
+        different displacement.
+        """
+        return cast(
+            tuple[float, float, float],
+            tuple(scale * step for scale, step in zip(VOXEL_SCALE_UM, self.downsample, strict=True)),
+        )
+
+    def offset_radius(self) -> tuple[int, int, int]:
+        """How far from a centre the offset term is supervised, in voxels — one cell radius, per axis.
+
+        DERIVED from the physical cell scale the detector's own Gaussian target uses, not chosen: beyond a cell
+        radius a voxel is not part of that cell, and with ~6% of cells annotated its true owner is probably not
+        in the annotation at all, so supervising further would teach a confidently wrong vector.
+        """
+        return cast(tuple[int, int, int], tuple(max(1, round(CELL_SCALE_UM / size)) for size in self.voxel_um()))
+
     @staticmethod
     def arg_parser() -> argparse.ArgumentParser:
         """The command-line surface of this config — one place so `main` stays a wiring shim, not a wall of flags."""
@@ -129,6 +154,12 @@ class TUNetTrainConfig:
         parser.add_argument("--steps", type=int, default=1500)
         parser.add_argument("--lr", type=float, default=1e-4)
         parser.add_argument("--neg-weight", type=float, default=1e-2)
+        parser.add_argument(
+            "--offset-weight",
+            type=float,
+            default=0.0,
+            help="weight on the center-offset term; 0 disables the head entirely (shipped objective)",
+        )
         # DERIVED, not swept: given bare, the flag takes the pipeline's own inference operating point — the
         # response at which the shipped tracker already calls the voxel a cell, so the voxels it spares are
         # exactly the detections our 1-2% annotation cannot adjudicate.
@@ -194,6 +225,14 @@ class TUNetTrainConfig:
         parser.add_argument("--resume", action="store_true", help="continue from the .resume.pt snapshot")
         parser.add_argument("--weights", type=str, default="detector_tunet_ours.pt")
         return parser
+
+
+@dataclass(frozen=True)
+class StepLoss:
+    """What one optimisation step cost, split by term so a log line can show whether each one is moving."""
+
+    total: float
+    offset: float  # microns of mean center-offset error, UNWEIGHTED — 0.0 when no offset head is installed
 
 
 @dataclass(frozen=True)
@@ -392,17 +431,20 @@ class TUNetDetectorTrainer:
         dataset = FrameDataset(
             targets, steps * batch, self.config.downsample, self.config.seed + seed_offset, self.config.augmentation
         )
-        running, done, t0 = 0.0, 0, time.perf_counter()
+        running, offsets, done, t0 = 0.0, 0.0, 0, time.perf_counter()
         for frames, centres in dataset.batches(self.config.threads, self.config.prefetch, batch):
-            running += self._step(detector, optimization, frames, centres)
+            step = self._step(detector, optimization, frames, centres)
+            running += step.total
+            offsets += step.offset
             done += 1
             if done % _HEARTBEAT_UPDATES == 0:
                 rate = done / (time.perf_counter() - t0)
                 logger.info(
-                    "  ..%d/%d in window | loss %.4f | %.1f it/s (%.0f frames/s)",
+                    "  ..%d/%d in window | loss %.4f (offset %.3f um) | %.1f it/s (%.0f frames/s)",
                     done,
                     steps,
                     running / done,
+                    offsets / done,
                     rate,
                     rate * batch,
                 )
@@ -414,10 +456,17 @@ class TUNetDetectorTrainer:
             if self.config.norm != "batch":
                 raise ValueError("norm='group' is from-scratch only: a pilkwang BN pack cannot warm-start GroupNorm")
             pack = DataRoot.from_config(_CONFIG).processed(_DATASET) / _PACK_REL
-            detector, _ = TemporalUNetDetector.from_pack(pack, map_location=self.config.device)
+            detector, _ = TemporalUNetDetector.from_pack(
+                pack, map_location=self.config.device, offset_head=self.config.offset_weight > 0.0
+            )
             logger.info("warm-started from pilkwang pack at %s", pack)
             return detector
-        return TemporalUNetDetector(self.config.out_channels, self.config.layers, norm=self.config.norm)
+        return TemporalUNetDetector(
+            self.config.out_channels,
+            self.config.layers,
+            norm=self.config.norm,
+            offset_head=self.config.offset_weight > 0.0,
+        )
 
     def _step(
         self,
@@ -425,20 +474,36 @@ class TUNetDetectorTrainer:
         optimization: _Optimization,
         frames: Float[Tensor, "b z y x"],
         centres: list[Int[Tensor, "n 3"]],
-    ) -> float:
-        """One optimisation step over a batch of frames and their GT voxel centres; returns the scalar loss."""
+    ) -> "StepLoss":
+        """One optimisation step over a batch of frames and their GT voxel centres; returns the loss terms."""
         frames = frames.to(self.config.device, non_blocking=True)
         # Under compile, pin SDPA to the math backend so inductor traces its (clean) composite backward, not the
         # efficient kernel whose compiled backward asserts on the temporal-attention strides. No-op when eager.
         attention = sdpa_kernel(SDPBackend.MATH) if self.config.compile_backbone else contextlib.nullcontext()
         with attention, torch.autocast(device_type="cuda", dtype=torch.bfloat16, enabled=self.config.device == "cuda"):
-            logits = detector.forward_batch(frames, single_frame=self.config.single_frame)
-            loss = BalancedBCE.of(logits, centres, self.config.neg_weight, self.config.ignore_ambiguous_above)
+            heads = detector.forward_heads(frames, single_frame=self.config.single_frame)
+            detection = BalancedBCE.of(
+                heads.logits, centres, self.config.neg_weight, self.config.ignore_ambiguous_above
+            )
+            offset = self._offset_loss(heads.offsets, centres)
+            loss = detection if offset is None else detection + self.config.offset_weight * offset
         optimization.zero_grad()
         loss.backward()
         nn.utils.clip_grad_norm_(detector.parameters(), self.config.grad_clip)
         optimization.step()
-        return float(loss.detach())
+        return StepLoss(float(loss.detach()), float(offset.detach()) if offset is not None else 0.0)
+
+    def _offset_loss(
+        self, offsets: Float[Tensor, "b three z y x"] | None, centres: list[Int[Tensor, "n 3"]]
+    ) -> Float[Tensor, ""] | None:
+        """The center-offset term in microns, or None when no offset head is installed.
+
+        Reported in microns unweighted, so the log says how far the predicted centre actually is — a number
+        comparable to the cell radius rather than to whatever `offset_weight` happens to be.
+        """
+        if offsets is None:
+            return None
+        return CenterOffsetLoss.of(offsets, centres, self.config.offset_radius(), self.config.voxel_um())
 
 
 def main() -> None:
@@ -448,6 +513,7 @@ def main() -> None:
         steps=args.steps,
         lr=args.lr,
         neg_weight=args.neg_weight,
+        offset_weight=args.offset_weight,
         ignore_ambiguous_above=args.ignore_ambiguous_above,
         device=args.device,
         vram_cap=args.vram_cap,
@@ -471,7 +537,6 @@ def main() -> None:
         recipe=replace(DetectorRecipe(), downsample=tuple(args.downsample)),
     )
     root = DataRoot.from_config(_CONFIG)
-    dz, dy, dx = config.downsample
 
     proc = root.processed(_DATASET)
     save_to = proc / args.weights
@@ -492,15 +557,8 @@ def main() -> None:
         split.validation,
         split.test,
     )
-    targets: list[FrameTarget] = []
     with Obs.timed(log, f"enumerating GT frames over {len(train_paths)} train videos"):
-        for path in Obs.progress(train_paths, "videos", len(train_paths)):
-            quantiles = cast(ImageStatistics, zarr.open_group(path, mode="r").attrs["image_statistics"])["quantiles"]
-            q_low, q_high = float(quantiles["0.001"]), float(quantiles["0.999"])
-            coordinates = AnnotatedTracks.from_geff(root.track_store(path)).graph.coordinates
-            for timepoint in np.unique(coordinates[:, 0]):
-                frame_coords = coordinates[coordinates[:, 0] == timepoint][:, 1:] // np.array([dz, dy, dx])
-                targets.append(FrameTarget(path, int(timepoint), q_low, q_high, frame_coords.astype(np.int64)))
+        targets = FrameTarget.index(root, Obs.progress(train_paths, "videos", len(train_paths)), config.downsample)
     logger.info("%d annotated frames", len(targets))
 
     logger.info("selecting through the shipped tracker on the %d validation movies", len(evaluator.proxy.paths))

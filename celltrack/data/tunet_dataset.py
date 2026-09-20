@@ -6,12 +6,12 @@ stream length is a fixed step count rather than the corpus size, so an epoch is 
 """
 
 from collections import deque
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from itertools import islice
 from pathlib import Path
-from typing import override
+from typing import cast, override
 
 import numpy as np
 import torch
@@ -21,6 +21,9 @@ from torch import Tensor
 from torch.utils.data import Dataset
 
 from celltrack.data.augmentation import _NO_AUGMENTATION, Augmentation
+from core.data.tracks import AnnotatedTracks
+from core.data.video import ImageStatistics
+from core.paths import DataRoot
 
 
 @dataclass(frozen=True)
@@ -32,6 +35,23 @@ class FrameTarget:
     q_low: float
     q_high: float
     coords: Int[np.ndarray, "n 3"]  # downsampled (z, y', x')
+
+    @classmethod
+    def index(cls, root: DataRoot, paths: Iterable[Path], downsample: tuple[int, int, int]) -> list["FrameTarget"]:
+        """Every annotated frame of `paths`, with its centres already in the downsampled grid the network sees.
+
+        Shared by the trainer and by anything measuring a trained head on the same frames, so a diagnostic
+        cannot silently index its inputs differently from the run it is diagnosing.
+        """
+        targets: list[FrameTarget] = []
+        for path in paths:
+            quantiles = cast(ImageStatistics, zarr.open_group(path, mode="r").attrs["image_statistics"])["quantiles"]
+            q_low, q_high = float(quantiles["0.001"]), float(quantiles["0.999"])
+            coordinates = AnnotatedTracks.from_geff(root.track_store(path)).graph.coordinates
+            for timepoint in np.unique(coordinates[:, 0]):
+                frame_coords = coordinates[coordinates[:, 0] == timepoint][:, 1:] // np.array(downsample)
+                targets.append(cls(path, int(timepoint), q_low, q_high, frame_coords.astype(np.int64)))
+        return targets
 
 
 class FrameDataset(Dataset[tuple[Tensor, Tensor]]):
