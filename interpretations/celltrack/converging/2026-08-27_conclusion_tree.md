@@ -12,6 +12,42 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-20 06:54Z — E59: the re-solve prices perfect localization at TWO edges, and 76/76 was a tautology
+
+E57 asked for a re-solve, because snapping a node onto its GT coordinate is a no-op for the metric by
+construction. `kaggle/localization_resolve.py` runs it. Arms differ in ONE thing — the coordinates the
+**linker** may see; every arm is scored on the **original** positions, so node matching, node-count term
+and estimated count are identical across arms and the whole delta lands on edges. The harness reproduces
+the champion at **2022 recovered / 105 broken**, E54's figures exactly.
+
+| arm (distance-Hungarian at the champion's 14 µm) | recovered | broken | score |
+|---|---|---|---|
+| champion edges (reference level) | 2022 | 105 | 0.8932 |
+| shrink 0.0 — control | 1951 | 176 | 0.8043 |
+| shrink 0.5 — half the error corrected | 1946 | 181 | 0.7990 |
+| shrink 1.0 — **perfect coordinates** | 1953 | **174** | 0.8059 |
+
+**+2 edges, +0.0015**, with the half-arm at −0.0053: non-monotone and under the floor, the shape of a null.
+The ranking oracle implied 76 edges ≈ **+0.036**; the re-solve returns 1/38th.
+
+**And row four was never evidence.** It ranks candidates by distance to `gt_xyz[target]` — the node the
+scorer matched to that target is within 7 µm of that point by construction, under a Hungarian that would
+have preferred any nearer rival. It asks "is the node matched to this cell the closest node to this cell?"
+The 4.08 vs 1.46 µm gap survives as a **correlation** (crowded regions produce both), not as a lever.
+
+**This does NOT close the centre-offset head** — and the reason is the instrument's own limit, one level
+above the one E57 named. Only **2172 of 122808** nodes (1.8 %) have a GT coordinate to snap onto, and
+E54c's thief is an **unannotated** track that keeps its wrong position in every arm. A trained head moves
+the whole field; this oracle corrects one side of a two-body problem, so +2 is a lower bound from a
+one-sided correction. What it *does* close is **pricing the head offline at all**: there is no GT for the
+nodes whose displacement does the damage. Train it and measure, or leave it — no third option.
+
+Net: *"localization is the only channel left"* loses its causal support and reverts to a plausible
+mechanism backed by a correlation, indistinguishable offline from the crowding story.
+Detail: `interpretations/celltrack/2026-09-20_e59_the_snap_oracle_cannot_price_localization.md`.
+
+---
+
 ## NEWS 2026-09-20 06:43Z — the public dense GT is NOT our embryos: axis CLOSED in one CPU hour
 
 The 06:40Z entry below is **resolved and partly wrong**, and the correction is worth more than the find.
