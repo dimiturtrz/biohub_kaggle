@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 from celltrack.postproc.fork_ranking import (
+    DivergingDaughterRanking,
     ForkCandidate,
     GeometryRanking,
     ProbabilityRanking,
@@ -157,3 +158,49 @@ def test_divergence_um_is_none_when_a_daughter_track_ends():
     """No t+2 node for a daughter means there is no growth to read — the C3 gate treats it as unproven."""
     fork = _fork_with_futures([[0, 0, 0], [0, 0, 1], [0, 0, 3]], kept_successor=3, child_successor=-1)
     assert fork.divergence_um() is None
+
+
+def test_divergence_fraction():
+    """The 4um growth over the wider (t+2) separation of 6um."""
+    fork = _fork_with_futures(
+        [[0, 0, 0], [0, 0, 1], [0, 0, 3], [0, 0, 0], [0, 0, 6]], kept_successor=3, child_successor=4
+    )
+    assert fork.divergence_fraction() == pytest.approx(4.0 / 6.0)
+
+
+def test_divergence_fraction_is_negative_when_the_daughters_close_in():
+    """A pair converging after the fork scores below zero, over the wider (t+1) separation."""
+    fork = _fork_with_futures(
+        [[0, 0, 0], [0, 0, 0], [0, 0, 4], [0, 0, 0], [0, 0, 1]], kept_successor=3, child_successor=4
+    )
+    assert fork.divergence_fraction() == pytest.approx(-3.0 / 4.0)
+
+
+class _ZeroRanking:
+    """A base ranking that costs nothing, so a decorator's own term is what the cost reads."""
+
+    def cost(self, candidate: ForkCandidate) -> float:
+        return 0.0
+
+
+def test_diverging_daughter_ranking_cost():
+    """A pair that flies apart pays almost nothing; one that holds its distance pays the full penalty."""
+    ranking = DivergingDaughterRanking(_ZeroRanking())
+    apart = _fork_with_futures(
+        [[0, 0, 0], [0, 0, 1], [0, 0, 3], [0, 0, 0], [0, 0, 6]], kept_successor=3, child_successor=4
+    )
+    held = _fork_with_futures(
+        [[0, 0, 0], [0, 0, 1], [0, 0, 3], [0, 0, 0], [0, 0, 2]], kept_successor=3, child_successor=4
+    )
+
+    assert ranking.cost(apart) == pytest.approx(1.0 - 4.0 / 6.0)
+    assert ranking.cost(held) == 1.0
+    assert ranking.cost(apart) < ranking.cost(held)
+
+
+def test_diverging_daughter_ranking_pays_the_full_penalty_when_a_daughter_track_ends():
+    """No t+2 node means no divergence to read, and unproven is not evidence — the same the gate gives it."""
+    ranking = DivergingDaughterRanking(_ZeroRanking())
+    unproven = _fork_with_futures([[0, 0, 0], [0, 0, 1], [0, 0, 3]], kept_successor=3, child_successor=-1)
+
+    assert ranking.cost(unproven) == 1.0

@@ -23,6 +23,9 @@ Orthogonal to all three, and composable with any of them, is what a fork IMPLIES
 * `SurvivingDaughterRanking` — a decorator penalising a proposed daughter that does not go on to survive as a
   track. A real mitosis leaves two lineages that persist; a false fork typically grafts a fragment. The linked
   graph already knows, so this costs no model, no training and no asset.
+* `DivergingDaughterRanking` — a decorator penalising a pair that does not move APART after the fork. The same
+  C3 signature the champion vetoes on, read as a score: a gate can only admit or reject the set, and the
+  divisions we still miss are ones where a fork IS emitted at the right mother and the wrong daughter wins.
 
 Every ranking speaks one direction: lower cost wins. The admission FLOOR (`min_second_prob`) and the budget live
 on the recovery stage, never here — a ranking only orders what it is handed.
@@ -35,6 +38,8 @@ import numpy as np
 from jaxtyping import Bool, Float, Int
 
 _DEGENERATE = 0.0
+# What a fork pays on a [0, 1] term it fails completely — a pair that does not move apart, or cannot be shown to.
+_FULL_PENALTY = 1.0
 _SHORTEST_TRACK = 1
 # A daughter whose track ends at the gap has no t+2 node to read a divergence from, and no node is its own
 # nearest neighbour — the same out-of-band row stands for both "no successor" and "no mutual match".
@@ -119,6 +124,23 @@ class ForkCandidate:
         if _NO_SUCCESSOR in {self.kept_successor, self.child_successor}:
             return None
         return self._distance(self.kept_successor, self.child_successor) - self.sister_distance_um()
+
+    def divergence_fraction(self) -> float | None:
+        """The daughters' separation growth as a fraction of where they end up — None if either track ends.
+
+        `divergence_um` in dimensionless form: the growth over the WIDER of the two separations, so it lands
+        in [-1, 1] — 0 for a pair holding its distance, towards 1 for one that starts touching and flies
+        apart, negative for one closing in. It needs no fitted scale, which is what lets divergence be a
+        SCORE rather than only the threshold the C3 gate applies — a micrometre growth cannot be weighed
+        against a dimensionless geometry term without inventing one.
+        """
+        divergence = self.divergence_um()
+        if divergence is None:
+            return None
+        widest = max(self.sister_distance_um(), self.sister_distance_um() + divergence)
+        if widest == _DEGENERATE:
+            return _DEGENERATE
+        return divergence / widest
 
     def parent_distance_um(self) -> float:
         """Mother to the proposed new daughter."""
@@ -212,6 +234,30 @@ class SplitSymmetryRanking:
     def cost(self, candidate: ForkCandidate) -> float:
         """Relative reach from the mother plus centroid imbalance — most opposite and closest sorts first."""
         return candidate.parent_distance_um() / self.parent_gate_um + candidate.split_imbalance()
+
+
+@dataclass(frozen=True)
+class DivergingDaughterRanking:
+    """Any ranking, penalised by how far the proposed pair falls short of moving APART after the fork.
+
+    The C3 signature the champion vetoes on, read as a score instead of a threshold. The veto is measured to
+    be the single largest division lever we have (+0.0123), but as a gate it only says admissible/not — and
+    the divisions still missed are ones where a fork IS emitted at the right mother and the wrong daughter
+    wins the sort. A gate cannot order the set it admits; this can.
+
+    Dimensionless by construction (`divergence_fraction`), so it lands in [0, 1] like the terms it decorates
+    and an equal weighting stays the untuned choice. A pair with no t+2 node on one side has no divergence to
+    read and pays the full penalty — the same treatment the gate gives it, since unproven is not evidence.
+    """
+
+    base: ForkRanking
+
+    def cost(self, candidate: ForkCandidate) -> float:
+        """The base ranking's cost plus how far this pair falls short of a full post-mitotic separation."""
+        fraction = candidate.divergence_fraction()
+        if fraction is None:
+            return self.base.cost(candidate) + _FULL_PENALTY
+        return self.base.cost(candidate) + _FULL_PENALTY - max(fraction, _DEGENERATE)
 
 
 @dataclass(frozen=True)

@@ -51,6 +51,7 @@ from celltrack.affinity import EdgeAffinity
 from celltrack.postproc.fork_ranking import (
     _NO_SUCCESSOR,
     _UNCLAIMED,
+    DivergingDaughterRanking,
     ForkCandidate,
     ForkRanking,
     GeometryRanking,
@@ -641,6 +642,11 @@ class AffinityDivisionConfig(BaseModel):
     # behaviour; it is a decorator rather than a fourth ranking because persistence is orthogonal to geometry —
     # any ranking can carry it, and none should have to restate another's terms to do so.
     require_persistence: bool = False
+    # Whether the chosen ranking is also penalised by a pair that does not move APART after the fork. The same
+    # C3 signature `require_c3_divergence` vetoes on, read as a SCORE — a gate cannot order the set it admits,
+    # and the divisions still missed are ones where a fork is emitted at the right mother and the wrong
+    # daughter wins the sort. Independent of the gate: either, both or neither.
+    prefer_divergence: bool = False
     # The frontier "divsub" safe-division gates, OFF by default so the shipped 0.900 recovery is unchanged. Turn
     # both on for the frontier arm: `--set division.require_mutual_nearest=true division.require_c3_divergence=true`.
     # `c3_divergence_um` is the minimum growth in the two daughters' separation from t+1 to t+2 (2.25um, the public
@@ -672,6 +678,12 @@ class AffinityDivisionConfig(BaseModel):
         """The mother's-own-link gate — unbounded unless one is set, the gate this stage has always run without."""
         return self.existing_child_gate_um if self.existing_child_gate_um is not None else math.inf
 
+    def _decorated(self, ranking: ForkRanking, min_track_length: int) -> ForkRanking:
+        """The configured ranking wrapped in whichever implication terms are switched on, in either order."""
+        if self.require_persistence:
+            ranking = SurvivingDaughterRanking(ranking, min_track_length)
+        return DivergingDaughterRanking(ranking) if self.prefer_divergence else ranking
+
     def build(
         self, spacing: Spacing, affinity: EdgeAffinity, min_track_length: int, gate_um: float
     ) -> AffinityDivisionRecovery:
@@ -689,11 +701,10 @@ class AffinityDivisionConfig(BaseModel):
             raise ValueError(
                 f"unknown division candidacy {self.candidacy!r}, expected one of {sorted(FORK_CANDIDACIES)}"
             )
-        ranking = FORK_RANKINGS[self.ranking](self, gate_um)
         return AffinityDivisionRecovery(
             spacing=spacing,
             affinity=affinity,
-            ranking=SurvivingDaughterRanking(ranking, min_track_length) if self.require_persistence else ranking,
+            ranking=self._decorated(FORK_RANKINGS[self.ranking](self, gate_um), min_track_length),
             candidacy=FORK_CANDIDACIES[self.candidacy](self),
             parent_gate_um=self.parent_gate(gate_um),
             sister_gate_um=self.sister_gate(gate_um),
