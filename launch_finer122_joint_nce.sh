@@ -16,6 +16,13 @@
 #   but nce-DARK, and sits at 0.6150: the same plateau signature nce fixes in the joint family. Nobody has
 #   run joint + finer122 + nce ON. That is this arm.
 #
+# --downsample 1 2 2 IS REQUIRED and is not implied by --init-weights. from_checkpoint rebuilds the MODEL
+# from the checkpoint's own config (layers, norm), but the decode GRID comes from the run's flags. Omitting
+# it built a (1,4,4) pipeline around the (1,2,2) checkpoint and BaseCalibration aborted at window 0:
+#   node ratio +1.03 outside [-0.50, +0.50]
+# The band is grid-scaled — 0.5 * (16 / dy*dx), so (1,2,2) allows +2.00 and +1.03 passes. The abort was the
+# grid mismatch, not the base. The relative-position flags likewise reproduce the coadapt_long recipe.
+#
 # Three deliberate choices:
 #   --init-weights  : whole model, TRAINABLE (unlike --detector-from, which freezes). Freezing costs ~0.05
 #                     (avl8 0.8024 frozen vs 0.8475/0.8567/0.8630 joint) — more than any head choice buys.
@@ -32,6 +39,8 @@ set -euo pipefail
 LOG="logs/finer122_joint_nce.log"
 uv run python -m celltrack.training.joint_detector \
   --init-weights finer122_coadapt_long.pt \
+  --downsample 1 2 2 \
+  --relative-position --relative-position-directional \
   --detected-videos 20 \
   --contrastive-weight 1.5 --hard-negative-weight 0.015 --temperature 0.07 \
   --lr 5e-5 \
