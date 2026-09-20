@@ -255,13 +255,19 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   abandon tracks it should continue, so 3/4/6 would buy edges back. The mechanism **backfires**: with a
   global assignment, expensive termination forces every node to link to *something*, and in a field
   carrying ~980 FP per frame against ~17 GT cells the something it grabs is an FP rival that steals the
-  true target. Recall and precision degrade together in that direction, so no precision measurement can
-  rescue it. The shipped weight of 2 already sits on the plateau — **this knob is spent, not mis-set.**
+  true target. The shipped weight of 2 already sits on the plateau — **this knob is spent, not mis-set.**
+
+  *Both axes degrade together, now measured rather than inferred.* Counting mislinks over the honest
+  denominator — links whose two endpoints are BOTH GT-matched detections — gives 14 (0.0013) at term
+  1.0, 18 (0.0017) at 1.5, 20 (0.0019) at 2.0, and 43 (0.0042) at 6.0. So climbing from the plateau to
+  6.0 costs 0.0296 recall AND multiplies mislinks by 2.4. There is no trade to exploit in either
+  direction. (Precision among real cells is near-perfect throughout — ~10.6 k GT-matched pairs linked
+  against tens of mislinks — which independently reproduces d5er's original "mislinks only 74".)
 
   *Two denominators, because the naive ones lie.* The sweep's first `mislinks` column (taken links that
   are not GT edges) sat at 0.98 for every value of `term` and measured nothing — almost every link is
-  FP-to-FP and was never a mistake about a real cell; the honest version counts only links whose two
-  endpoints are both GT-matched detections (`kaggle/termination_cost_sweep.py`). And the recall LEVEL
+  FP-to-FP and was never a mistake about a real cell; the honest version is the one above
+  (`kaggle/termination_cost_sweep.py`). And the recall LEVEL
   (0.859) is not comparable to the real tracker's 0.9475: this model has no distance gate and no
   division term. **The shape across `term` is the result; the level is not.** Caveat as E43: this is our
   tunet cache (node recall 0.697–0.750), not 0947's 0.824.
