@@ -119,6 +119,11 @@ informative at this timescale. (15 further edges have their true successor **out
 entirely** — unreachable by any solver at the champion's gate, since the matched predicted positions
 carry up to 7 µm of localization slack each.)
 
+**Gate widening is priced and closed** in the same instrument: at 12 µm only 3 remain unreachable, at
+15 µm none do — but **distance still ranks exactly 10 first** at every gate (10/61 → 10/73 → 10/76).
+Widening admits the missing edges into the candidate set without making any of them *rankable*, while
+admitting extra confusors at every other cell. No-op at best.
+
 With E46 (pairwise appearance below chance at matched displacement) this closes the cue inventory:
 **position, appearance and motion all fail to separate the true successor from its rival on these 61.**
 The information is not in the detected representation. That is the pairwise-unresolvable keystone

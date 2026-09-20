@@ -43,7 +43,10 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   remains is a joint-assignment argument (50/76 are swaps) — but the champion already solves a global
   ILP, so the COSTS are wrong, not the structure. Re-points at the dense-regime DETECTION model.
 - **15 of the 76 have their true successor outside the 10 µm gate** — unreachable by any solver; matched
-  predicted positions carry up to 7 µm localization slack each. Widening the gate is unpriced and cheap.
+  predicted positions carry up to 7 µm localization slack each. **GATE WIDENING PRICED AND CLOSED same
+  tick**: 12 µm → 3 unreachable, 15 µm → 0, but **distance still ranks exactly 10 first at every gate**
+  (10/61 → 10/73 → 10/76). Widening admits the edges without making them RANKABLE, while adding
+  confusors everywhere else. No-op at best.
 - **Consequences.** (1) Do NOT chase FP suppression as its own programme — 99 % are symptoms; deleting an
   FP without supplying the right link converts a 2.3-unit error into a 1.3-unit one at best. (2) Every
   future proposal must state **how many of the 105 it moves**; the 1.5 % bar ≈ **35 recovered GT edges**.
