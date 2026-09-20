@@ -204,7 +204,9 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
      missed) = 0.1562** against DoG's own 0.4141 marginal — DoG is **2.7× LESS** likely to find a cell
      the learned detector missed than to find an average cell. Shared blind spot, not complementary
      coverage. A union member must beat its own marginal on the conditional; this one is a third of it.
-     (A 20-movie widening is still running; the 8-movie conditional is what this rests on.)
+     **Widened 12.5× and it gets stronger, not weaker:** n=3206 over 20 movies, cache 0.6974, DoG 0.4498,
+     union 0.7396 (+0.0421), and the conditional **0.1392 against a 0.4498 marginal = 3.2× less likely**.
+     Not a small-sample verdict.
   3. **My own explanation for that was then falsified. The missed cells are VISIBLE.** I expected
      signal-absent (both detectors blind to dim cells), which would have closed the single-frame axis
      entirely. Measured local background-subtracted contrast at every GT centre: only **3.0 %** of
@@ -272,6 +274,42 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
     population (nodes blind at 7 µm, n=288 here) rather than the 2.87 µm population (n=3864) that is
     13× larger and mostly localization scatter. Targeting the wrong one of those two is the actual
     mistake E36 would have caused.
+
+  **E42 — THE 3.30 % LEVER IS REAL, AND IT LIVES IN THE FAINTEST DECILE — WHICH IS THE ONE LEVER
+  ALREADY LB-REFUTED. The detection axis closes on an ARGUMENT, not on "the GPU is parked".** E41(b)
+  localised the officially-costly population to the 288 GT nodes blind at 7 µm. Contrast measured at
+  those centres against an equal-sized found sample **from the same frames** (so illumination, depth and
+  movie are controlled):
+
+  | | blind at 7 µm (n=288) | found, same frames (n=288) |
+  |---|---|---|
+  | contrast q10/25/50/75/90 | −0.02 / 0.12 / **0.29** / 0.66 / 1.18 | 0.27 / 0.42 / **0.70** / 1.27 / 1.91 |
+  | no local intensity excess | **10.8 %** | 0.7 % |
+  | at/below found's 10th pct | **46.9 %** | — |
+  | touching the volume border | 9.7 % | — |
+
+  1. **These are a different population from E40's.** The 2.87 µm "missed" cells were only 3.0 %
+     excess-free at median contrast 1.29 — bright, and displaced. The 7 µm blind cells are 10.8 %
+     excess-free at median **0.29**, i.e. **2.4× fainter than what the detector finds in the very same
+     frame**. So the two rulers are not two readings of one gap; they name two unrelated failures, and
+     only this one costs score.
+  2. **Material exists — 89 % do have a local excess — so this is a detector SENSITIVITY gap, not
+     blindness.** But 46.9 % sit in the bottom decile of what the detector already accepts, which means
+     reaching them is a **threshold** move, not an architecture move.
+  3. **And the threshold move is the one thing already refuted on the real board.** The recovery-stack
+     arm is LB-refuted at ≤0.900 precisely because a threshold low enough to recover faint cells starves
+     precision, and the candidate distribution already carries ~980 FP/frame against ~17 GT/frame with a
+     +26 % surplus sizing a 5.5 % swap. Recovering 3.30 % of edges by admitting the faintest decile buys
+     them at an FP rate that the same measurements say costs more than it pays.
+  4. **What this does NOT close.** A detector that separates these cells *without* lowering the
+     threshold — better sensitivity at equal precision, i.e. a genuinely better dense-regime model — is
+     untouched by this and remains the standing frontier-replication bet. What closes is the cheap
+     version: no threshold sweep, no recovery stack, no post-hoc recall pass on the 0947 base is owed a
+     card. bd `lwrr` closes on that argument rather than on availability.
+  5. **Honest gap in the evidence:** the cached `.npz` carries coords and edges but **no confidence**, so
+     I could not draw the actual precision/recall trade at the threshold that would admit these 288 —
+     the FP cost above is carried over from the prior FP-competition and recovery-stack measurements,
+     not measured here. That is the one thing that would make this quantitative rather than argued.
 
   **E37(d) — THE REJECT HISTOGRAM, MEASURED. Pair existence is the binder, the peak-side gates are
   second, and loosening them takes the filler to its ceiling — where it is still ~1 %.** Both free
