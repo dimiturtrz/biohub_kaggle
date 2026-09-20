@@ -174,6 +174,53 @@ def report_shapes(tally, displacement):
         )
 
 
+def thief_kind(rival, pred_to_gt):
+    """Is the detection that stole a slot an ANNOTATED cell, or one the ground truth does not contain?"""
+    if rival is None:
+        return "slot left free"
+    return "annotated cell" if pred_to_gt.get(rival) is not None else "UNANNOTATED detection"
+
+
+def thieves(submission: Path, train_dir: Path, ruler_um: float):
+    """For every broken GT edge, what kind of detection took the source's slot and the target's slot?"""
+    nodes, edges = read_submission(submission)
+    tally: Counter[str] = Counter()
+    for dataset, table in nodes.items():
+        geff = train_dir / f"{dataset}.geff"
+        if not geff.exists():
+            continue
+        order = list(table)
+        index = {node_id: position for position, node_id in enumerate(order)}
+        predicted = np.array([table[node_id] for node_id in order], dtype=float)
+        graph = AnnotatedTracks.from_geff(geff).graph
+        truth = np.column_stack([graph.timepoints(), graph.positions().astype(float)])
+        pred_to_gt, gt_to_pred = match_bipartite(predicted, truth, ruler_um)
+
+        gt_edges = [(int(source), int(target)) for source, target in graph.edge_rows()]
+        gt_out: dict[int, list[int]] = {}
+        for source, target in gt_edges:
+            gt_out.setdefault(source, []).append(target)
+        pred_edges = {(index[source], index[target]) for source, target in edges[dataset]}
+        pred_out: dict[int, list[int]] = {}
+        pred_in: dict[int, list[int]] = {}
+        for source, target in pred_edges:
+            pred_out.setdefault(source, []).append(target)
+            pred_in.setdefault(target, []).append(source)
+
+        for source, target in gt_edges:
+            mapped_source, mapped_target = gt_to_pred.get(source), gt_to_pred.get(target)
+            if mapped_source is None or mapped_target is None or len(gt_out[source]) > 1:
+                continue
+            if (mapped_source, mapped_target) in pred_edges:
+                continue
+            took_source = thief_kind(next(iter(pred_out.get(mapped_source, [])), None), pred_to_gt)
+            took_target = thief_kind(next(iter(pred_in.get(mapped_target, [])), None), pred_to_gt)
+            tally[f"source went to {took_source:<22} | target taken by {took_target}"] += 1
+            tally[f"TOTAL source slot: {took_source}"] += 1
+            tally[f"TOTAL target slot: {took_target}"] += 1
+    return tally
+
+
 def measure(submission: Path, train_dir: Path, ruler_um: float):
     nodes, edges = read_submission(submission)
     rows = []
@@ -257,10 +304,14 @@ def main():
     parser.add_argument("--train", type=Path, required=True, help="directory of *.geff ground truth")
     parser.add_argument("--ruler", type=float, default=OFFICIAL_UM, help="node match radius in um")
     parser.add_argument("--shapes", action="store_true", help="partition the broken GT edges by failure shape instead")
+    parser.add_argument("--thieves", action="store_true", help="classify the detections that stole each broken slot")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(message)s", force=True)
-    if args.shapes:
+    if args.thieves:
+        for label, count in sorted(thieves(args.submission, args.train, args.ruler).items()):
+            log.info("%5d  %s", count, label)
+    elif args.shapes:
         report_shapes(*shapes(args.submission, args.train, args.ruler))
     else:
         report(measure(args.submission, args.train, args.ruler))

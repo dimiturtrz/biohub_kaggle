@@ -130,15 +130,48 @@ The information is not in the detected representation. That is the pairwise-unre
 re-confirmed with motion added and with an oracle, and it points back at the dense-regime detection
 model, not at the linker.
 
+### The thieves are ALL unannotated — the joint-assignment argument is dead too
+
+E54 left one reading standing: 50 of the 76 are swaps, so perhaps the thief is *someone else's* true
+successor and the failure is a genuine assignment conflict the ILP costs wrongly. `--thieves` classifies
+the detection that took each broken slot:
+
+| what took the slot | source slot | target slot |
+|---|---|---|
+| **an annotated cell** | **0** | **0** |
+| an unannotated detection | 63 | 63 |
+| nothing (slot left free) | 13 | 13 |
+
+**Zero on both sides.** No other annotated cell wants those slots, so there is no conflict to resolve:
+mutual exclusion has nothing to bite on and **re-costing the ILP cannot recover these edges**, because
+the rival is not claimed by anybody. The structure is not the problem and neither are the costs — the
+competitor simply should not be a candidate.
+
+Checked against the obvious harness suspect — "unannotated" here means unmatched by the one-to-one
+Hungarian, which a nearby-but-already-taken GT node would also produce. It is not that: the thieves sit a
+**median 6.92 µm (mean 7.45) from the nearest GT node of any kind, 0 % within 2 µm**, i.e. about one
+cell-separation away. They are real structures the annotators did not label, and they are nonetheless
+*nearer to the source* than the true successor is.
+
+And they are most likely **real cells the annotation does not cover**, not detector junk: E52 measured
+that only 1.39 % of predicted nodes match GT at all, so the annotation is sparse by design, and a
+detection sitting one cell-separation from the nearest labelled cell is exactly what an unlabelled
+neighbour looks like. That matters for what can fix this. If the thief is a genuine cell, **no
+detection-quality improvement removes it** — it *should* be detected. The remaining task is to tell which
+of several real cells is the continuation, and that is identity, which E46 measures as below chance
+pairwise. So the honest statement of the axis is narrower than "a better dense detector": what is missing
+is a representation in which the true successor is distinguishable from a real, equally-plausible
+neighbour.
+
 ## What this licenses
 
 - **One target: 105 broken GT edges, 76 of them pure selection**, 50 outright swaps. Recovering one pays
   ~2.3 units, not 1, because it deletes the paired FP too; the 1.5 % bar is ~35 edges.
 - **But no available cue ranks them.** Distance 10/61, oracle velocity 10/61, appearance below chance
   (E46). `kiw1`'s two-pass tracklet ILP was priced on the motion premise and that premise is now
-  oracle-refuted — **do not build it for this reason**. A joint-assignment argument is what is left (50
-  of 76 are swaps, where the thief is plausibly someone else's true successor), but the champion
-  *already* solves a global ILP, so the costs are wrong, not the structure.
+  oracle-refuted — **do not build it for this reason**. The joint-assignment fallback is refuted too:
+  **every thief is an unannotated detection (0/126 annotated)**, so no re-costing or second-pass
+  assignment can displace it. **The linker axis is closed on all three readings — cue, structure, cost.**
 - **15 more of the 76 have their true successor outside the 10 µm gate** — structurally unreachable.
   Widening the gate admits them and more confusors; unpriced, and cheap to price.
 - **This re-points at the dense-regime detection model** (the standing conclusion), because the

@@ -12,6 +12,25 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-20 05:10Z — E54c: every thief is unannotated, so the LINKER AXIS IS CLOSED
+
+- **0 of 126 slot-stealing rivals is an annotated cell** (`error_budget.py --thieves`). On E54's 76
+  selection failures: source slot 63 unannotated / 13 free / **0 annotated**; target slot identical. So
+  the 50 "swaps" are not assignment conflicts — **nothing else contests the slot**, mutual exclusion has
+  nothing to bite on, and **no ILP re-costing or second pass can displace the rival**. REFUTED.
+- Harness suspect cleared first: the thieves sit **median 6.92 µm from the nearest GT node of any kind,
+  0 % within 2 µm** — one cell-separation. Not mislocalized labelled cells.
+- **Linker axis now closed on all three readings**: cue (E54b oracle), structure (already a global ILP),
+  cost (nothing to trade against). Refuse any proposal that re-weights / re-solves / second-passes the
+  SAME candidate set.
+- **And it narrows the standing conclusion.** E52: only 1.39 % of predicted nodes match GT → annotation is
+  sparse → a detection one cell-separation from the nearest label is most likely a **real unlabelled
+  cell**. If so a better dense detector does **not** remove it; it *should* be detected. What is missing
+  is an **identity representation** separating the true successor from a real, equally-plausible
+  neighbour — which E46 measures below chance pairwise. That is the axis, stated honestly.
+
+---
+
 ## NEWS 2026-09-20 04:52Z — the error budget in metric units: ONE axis, 105 broken GT edges
 
 - **E54: `wrong-association = 0` on all four movies, verified by a direct recount.** Predicted edges with
