@@ -12,6 +12,34 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-21 01:20Z — the division re-parent is edge-FREE, which makes it the largest priced lever we hold
+
+No GPU, no run — a reading of the metric source that re-prices `hq93`'s one surviving remedy. E61 left the
+**10 of 25** missed divisions whose daughter is already claimed by another predicted track
+(`DivisionScoring._daughters_all_claimed`), and left the edge-side cost unpriced; the bead's own caveat
+guessed a fork rewrites edges and that this is what sank the global division-ILP at −0.055.
+
+`ChargedLinks._countable` (`core/metrics/edges.py:124-140`) settles it: a link counts when **the annotation
+continues through one of its endpoints**. A GT daughter is such a node, so the thief's link into her is
+charged today and, not being on an annotated edge, scores **FP**. Re-parenting deletes an FP and adds a TP.
+Unlike [[E58]]'s 1.85-GT-edges-lost-per-1-gained, this deletion is not *score*-selected — it is named by the
+division topology and wrong by construction.
+
+Ceiling on the division ruler (tp=1 fp=10 fn=24, denominator 35): the 10 re-parented → 11/35 = **+0.0286 on
+the combined score**, ~2× the 1.5% bar, with a positive-signed edge term. Every past division sweep was
+bounded at +0.0011 because all of them moved the fp side.
+
+**Two corrections this forces.** (1) "DIVISION axis CLOSED" stays retired — and now has a *sized* successor,
+not just a reopened door. (2) The −0.055 of the global division-ILP is re-read as a **precision** failure,
+not a structural cost of forking (that arm emitted 3114 forks for 7 recoveries). This does not license
+re-running it: the build is a linker candidacy that can choose to end a continuation in favour of a
+division, and it must be measured on the combined score — what makes a correct re-parent free is exactly
+what makes a wrong one expensive.
+
+Detail: `interpretations/celltrack/2026-09-20_e61_division_recall_is_the_unclaimed_term.md`.
+
+---
+
 ## NEWS 2026-09-21 00:40Z — E63: the offset head learns what the annotation can teach, which is not the thing it is for
 
 Campaign A — the last lever memory listed as open — is built, trained, measured and **CLOSED at the data**.

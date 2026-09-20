@@ -618,3 +618,45 @@ displacement stage cannot admit her without admitting the continuations she is i
 to its ceiling, the ranking is priced, the gate is the best available estimator of its own cue, and the 40%
 of misses that sit outside the stage stay outside it under an explicit displacement candidacy. What remains
 is a re-parenting decision inside the linker's objective, which is a different component and a different cost.
+
+## 2026-09-21 — pricing the re-parenting remedy, and retiring the edge-cost fear
+
+E61 closed the post-processing route and left one named remedy: the **10 of 25** missed divisions whose
+daughter is already parented by another predicted track (`DivisionScoring._daughters_all_claimed`,
+`core/metrics/divisions.py:116-127`). The orphan-pool stage cannot name them at any setting, so the decision
+has to move inside the linker objective. What was never priced is what that decision **costs on the edge
+side** — the bead's own caveat says a fork rewrites edges, and guesses that is what sank the global
+division-ILP at −0.055.
+
+It costs nothing. The edge scorer says so directly. `ChargedLinks._countable`
+(`core/metrics/edges.py:124-140`): *"A link is countable when the annotation continues through one of its
+endpoints."* A GT daughter is an annotated node the truth carries on through, so the thief's link into her
+is **charged**, and because it is not on an annotated edge it scores as a **false positive** today.
+Re-parenting her deletes that FP and adds a TP. Both moves are gains.
+
+That is the important structural difference from [E58](2026-09-20_e58_the_champion_already_holds_the_edge.md),
+which measured 1.85 GT edges lost per 1 gained for a *score-selected* deletion. This deletion is not
+score-selected; it is identified by the division topology itself, and the edge it removes is wrong by
+construction.
+
+Ceiling, on the same ruler (tp=1, fp=10, fn=24, denominator 35 throughout):
+
+| arm | division jaccard | Δ score (×0.1) |
+|---|---|---|
+| shipped | 1/35 = 0.0286 | — |
+| the 10 unproposable re-parented | 11/35 = 0.3143 | **+0.0286** |
+| + the 7 reachable at the ceiling arm | 18/35 = 0.5143 | +0.0486 |
+| perfect recall, fp unchanged | 25/35 = 0.7143 | +0.0686 |
+| perfect | 1.0 | +0.0971 |
+
+So the re-parenting sub-lever alone is **+0.029 — roughly twice the 1.5% bar — with a positive-signed edge
+term**, and it is the only division arm on record that is not bounded by the +0.0011 fp-side ceiling every
+past sweep was measuring against.
+
+**What this does not say.** The −0.055 of the global division-ILP is still unexplained, and this note does
+not license re-running it. That arm emitted forks *at volume* (cf. the E61 ceiling arm: 3114 forks for 7
+recoveries). The claim here is narrower and matches the mechanism: a **correct** re-parent is edge-free, so
+the −0.055 is a precision failure, not a structural cost of forking. Any build has to be a linker candidacy
+that can *choose* to end a continuation in favour of a division — and it must still be measured on the
+combined score, because the thing that makes the correct move free is exactly what makes a wrong one
+expensive.
