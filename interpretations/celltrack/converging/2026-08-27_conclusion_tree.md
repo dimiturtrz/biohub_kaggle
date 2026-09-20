@@ -12,6 +12,57 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-20 12:35Z — the nce flag was INERT in both arms; a month of head-axis reasoning chased a dead variable
+
+Ran the "never-run cell" (`hoct_finer122_nce`: frozen finer122 + fresh HOCT head + contrastive ON, 1.86 h).
+Best proxy **0.6239** against a 0.6877 gate — FAILED. But the failure refutes the 2026-08-28 *framing*, not
+the cell, and it re-validates a pile of verdicts that note had thrown out.
+
+**The contrastive term cannot train anything under a frozen trunk.** `joint_assembly.py:77` freezes the
+detector; `contrastive_site` defaults to `FEATURES` (`joint_config.py:291`); at `FEATURES` the term builds no
+projection and holds **zero parameters** (`contrastive_term.py:59-63`). `nce` moved 1.5399 → 1.5496 over
+72,096 steps. **avl8 was frozen too** — and its `nce` likewise barely moved (2.4670 → 2.3603). So nce was
+equally dark in the 0.79 arm and the 0.62 arm; it was **never the live variable**. No `--contrastive-site`
+rescues it (PROJECTION trains an auxiliary embedding the edge head never reads).
+
+**What separated them is the DETECTOR, and it is measurable before training.** Both arms init a *fresh
+untrained* head, so init proxy prices the detector alone:
+
+| run | detector | **init proxy** | best | gain from all training |
+|---|---|---|---|---|
+| avl8 | pilkwang_jm | **0.7875** | 0.8054 | **+0.018** |
+| today | finer122_coadapt_long | **0.6164** | 0.6239 | **+0.008** |
+
+The whole 0.79-vs-0.62 gap predates the first gradient step, and head training moves the number by under 0.02
+in the better arm — at the noise floor. Independent confirmation of the hmlo verdict: **the edge head is not a
+lever on this substrate; the detector sets the score.**
+
+**RE-VALIDATED** (the 2026-08-28 note wrongly voided these): `rzvw` 0.6187 · finer-coadapt faithful 0.779 ·
+finer122 HOCT head-only control · the HOCT HEAD-BOUND referee. None rode a crippled objective — avl8 rode the
+identical one to 0.79.
+
+**Scope of the inertness, audited:** a sweep of every log for `detector frozen` returns **six** runs ever
+(avl8, avl8hnfix, finer122_hoct_headonly, hoct_real_converge, jointarm_cheapfirstcut, hoct_finer122_nce).
+Everything else is JOINT, where the term is live — so [[celltrack-nce-lifts-joint-hn-knife-edge]] **holds**.
+The dead flag is a property of *head-only* runs, i.e. exactly the finer122 verdict family. And that sweep
+prices freezing itself: frozen head-only with a good detector tops out at **0.8024** (avl8) while joint runs
+reach **0.8475 / 0.8567 / 0.8630** (cellect_long, detcorpus_dw0, confB_ctrl2). **Freezing costs ~0.05 — more
+than any head choice has ever bought (+0.018).** The construction adopted to make arms cheap caps them below
+where the joint family already sits.
+
+Second confound, recorded so it is not mistaken for the cause: today's arm trained on GT pairs (in-gate mean
+**1.00**, rival **2.6%**) where avl8 used the detected-pair corpus (2.19 / **53.1%**) — the missing
+`--detected-videos`. That voids today's run as a *head*-axis test but not the detector read, which comes from
+the inits. Re-running it with the right corpus is **priced out**: avl8's best-case head gain of +0.018 from
+0.6164 lands ~0.635, still 0.05 short of the gate, for ~2 h of GPU.
+
+Full write-up: `interpretations/celltrack/2026-09-20_head_only_contrastive_is_structurally_inert.md`.
+
+**Lesson, general:** before attributing an A/B gap to the variable you changed, read the **init** numbers. If
+the arms already differ untrained, the variable you named is not what moved them.
+
+---
+
 ## NEWS 2026-09-20 09:38Z — CAMPAIGN CLOSED: ship 0.947. The last lever dies on an oracle we already measured
 
 Decision taken with the owner: **stop experimenting, ship what is banked.** GPU stood down.
