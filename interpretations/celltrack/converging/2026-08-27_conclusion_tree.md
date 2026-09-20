@@ -53,6 +53,19 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   argued levers are **segment-SELECTION ILP (bd `g89y`, prune the duplicate)** and the **two-pass
   tracklet ILP (bd `kiw1`, out-compete it with a sequence)** — never a better edge feature. (E46 is a
   replication of a 2026-08-23 memory that the index had dropped; see the E46 block.)
+- **The OFFLINE PRUNE AXIS IS CLOSED — the joint ceiling is 9× short (E49).** E48 killed two scores one
+  at a time; E49 gave the inference its best shot: eight features (intensity, the affinity field's
+  best-out/best-in/margin/degree, crowding, temporal support t±1), a GBM free to combine them, **split by
+  MOVIE**. Joint **AUC 0.6622 — only +0.026 over its best single feature — FP-recall 0.0846 at the
+  required 2 % collateral.** Not a tuning gap. The **nulls carry the news**: degree 0.4278, crowding
+  0.4815, **temporal support 0.4837/0.4838**. "A spurious detection has no continuation" — the strongest
+  remaining intuition, and the one bd `kiw1` runs on — is worth nothing, because E46's confusor is a
+  near-static lookalike sitting where the cell WAS and has the same t±1 neighbour a real cell has. The
+  pairwise-unresolvable finding and the temporal-support null are one fact seen twice. bd `g89y` is NOT
+  refuted by this: hierarchy selection scores nested contours the candidate set never contained, so it is
+  outside the measurement's reach — but it must now supply information that is not a function of any of
+  those eight, which is the sharpest form its precondition has taken.
+  Detail: `interpretations/celltrack/2026-09-20_e49_offline_prune_axis_is_closed.md`.
 - **The diagonal is now MEASURED, and no score we hold reaches the operating point (E48).** Center-voxel
   intensity: AUC 0.5221, and its **FP-recall equals its collateral to three decimals at every cut**
   (0.0222 at 0.02) — E47's q = r diagonal, literally, which upgrades the recovery-stack retro-explanation
