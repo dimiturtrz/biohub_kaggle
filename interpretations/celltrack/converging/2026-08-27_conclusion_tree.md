@@ -210,6 +210,20 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   (they cost nothing and give the exact reject histogram), but `gaploose` is now priced as a
   sub-bar directional arm, not a submission candidate on its own.
 
+  **E37(c) — AND A THIRD OF THOSE ENDS ARE NOT LOSSES AT ALL: CELLS LEAVE THE FIELD.** Dangling ends
+  are strongly enriched at the volume boundary against the node population they come from (within 6
+  voxels in y/x or 2 in z, on a ~63×254×254 volume): **0.791 vs 0.161** on `44b6_0113de3b`, **0.402
+  vs 0.119** on `6bba_05db0fb1`, **0.364 vs 0.201** on `6bba_05b6850b` — 1363 of the 3469 ends, ~39 %,
+  are cells exiting the imaged volume, which no tracker should link and no repair should invent.
+  The one exception is **`44b6_0b24845f`, flat at 0.21 vs 0.176**: its 1217 ends are genuinely
+  INTERIOR terminations, it holds the largest sub-threshold pool (26152 free peaks of the 39523) and
+  it took the largest share of the filler's gain (+287 of the +424 nodes). **So the repair headroom
+  is not spread over the test set; it is concentrated in one of the four videos**, which also caps
+  how much any post-processing change can move a four-video LB score. Correcting E37(b) downward
+  with this: the addressable interior ends are ~2100, of which only the in-gate subset is reachable
+  at all. Cheap rule earned here: **before sizing a repair, subtract the losses that are physically
+  correct — a track that walks out of the volume is not a broken track.**
+
   **E36 — THE OMISSION RESIDUE IS DETECTION, NOT ASSOCIATION, AND NODE RECALL AT 7 µm HIDES IT.
   Reverses the tree's standing "the lever is association, not detection" reading — for the 0947
   champion, measured, CPU-only.** E35 counted 713 in-gate fragmented GT edges and read 638 of them as
