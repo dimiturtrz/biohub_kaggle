@@ -167,6 +167,22 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   the drift guard does not cover it), so `celltrack-public-0947-fast` (`kaggle/env_variant.py`) should
   emit a byte-identical submission in ~1600 s. A kernel RUN costs no submission slot, so this is a free
   probe: pushed 22:36Z, verify by diffing its `submission.csv` against 0947's.
+  **E35 — THE DISAPPEARANCE SWEEP IS A 0.29 % EXPERIMENT; DON'T PAY THE GPU ARM. CPU instrument, run
+  before the run.** `fragment_audit.py` now decomposes each in-gate fragmented GT edge by what the
+  PREDICTED graph did with its two endpoints (`_verdict`): if the source ended its track and the target
+  took no parent, the solver paid a disappearance and the disappearance weight is the binding knob;
+  if either slot went to some other node, it is a competition failure no cost on disappearance can
+  repair. Over the 40 cached validator videos, 22037 matched GT edges, 421 fragmented, 397 in gate:
+  **`disappearance` 64 · `source_stole` 119 · `target_taken` 89 · `both_reassigned` 125.** Only **16 %**
+  of the recoverable omissions are disappearances — **64/22037 = 0.29 % of edges is the ENTIRE ceiling of
+  `logs/run_ilpdisapp.sh`**, five times under the 1.5 % bar, so the sweep is retired before it cost the
+  ~23 min GPU arm E34 priced. The other **333 = 1.5 % of edges** are slot competition — a node other
+  than the true one won the successor or the parent — which lands back on the confusor/association axis
+  the whole tree keeps converging to, and `both_reassigned` (125, the largest single class) implicates
+  detection duplicates on both ends rather than the solver. Total fragmentation is 1.9 %, so **1.5 % of
+  the available 1.9 % is competition: the omission story and the confusor story are the same story.**
+  Supersedes the E26/E28 reading of omission as absence — it is mostly DISPLACEMENT of the slot.
+
   **E34 — PLUMBING CORRECTION: E29's candidate cache has NEVER ONCE FIRED, so the "ILP arms are free"
   saving is projected, not banked. `find runs -name '*.candidates.npz'` returns **0 files** across all
   21 prediction-cache dirs (which hold 40 `.geff` + 40 `.retention.jsonl` each and no candidates). Cause

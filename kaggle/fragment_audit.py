@@ -68,7 +68,9 @@ def audit_video(truth_path: Path, predicted_path: Path) -> dict:
     }
     linked = {(pred_index[a], pred_index[b]) for a, b in pred_edges if a in pred_index and b in pred_index}
 
-    fragmented, present = [], []
+    outgoing, incoming = _orient(pred_pos, pred_edges, pred_index)
+
+    fragmented, present, verdicts = [], [], []
     for source, target in gt_edges:
         rows = (index.get(source, -1), index.get(target, -1))
         if -1 in rows:
@@ -77,8 +79,45 @@ def audit_video(truth_path: Path, predicted_path: Path) -> dict:
         if -1 in (matched[rows[0]], matched[rows[1]]):
             continue
         pair = (matched[rows[0]], matched[rows[1]])
-        (present if pair in linked or pair[::-1] in linked else fragmented).append(step)
-    return {"fragmented": fragmented, "present": present}
+        if pair in linked or pair[::-1] in linked:
+            present.append(step)
+            continue
+        fragmented.append(step)
+        if step <= GATE_UM:
+            verdicts.append(_verdict(pair, outgoing, incoming))
+    return {"fragmented": fragmented, "present": present, "verdicts": verdicts}
+
+
+def _orient(pred_pos: np.ndarray, pred_edges: np.ndarray, pred_index: dict) -> tuple[dict, dict]:
+    """Predicted edges split into successor / predecessor maps over row indices, ordered by time."""
+    outgoing: dict[int, list[int]] = {}
+    incoming: dict[int, list[int]] = {}
+    for a, b in pred_edges:
+        if a not in pred_index or b not in pred_index:
+            continue
+        first, second = pred_index[a], pred_index[b]
+        if pred_pos[first, 0] > pred_pos[second, 0]:
+            first, second = second, first
+        outgoing.setdefault(first, []).append(second)
+        incoming.setdefault(second, []).append(first)
+    return outgoing, incoming
+
+
+def _verdict(pair: tuple[int, int], outgoing: dict, incoming: dict) -> str:
+    """Why the solver declined an in-gate GT edge, read off the predicted graph alone.
+
+    `disappearance` means the source ended its track with nothing to pay for instead, so the
+    disappearance cost is the binding knob. `source_stole` / `target_taken` mean another node won the
+    slot, which is a competition failure no disappearance weight can repair.
+    """
+    source, target = pair
+    took = outgoing.get(source, [])
+    claimed = incoming.get(target, [])
+    if not took and not claimed:
+        return "disappearance"
+    if took and claimed:
+        return "both_reassigned"
+    return "source_stole" if took else "target_taken"
 
 
 def main() -> None:
@@ -91,6 +130,7 @@ def main() -> None:
     source = train_dir()
     fragmented: list[float] = []
     present: list[float] = []
+    verdicts: list[str] = []
     for predicted in sorted(args.cache.glob("*.geff"))[: args.limit]:
         truth = source / predicted.name
         if not truth.exists():
@@ -98,6 +138,7 @@ def main() -> None:
         result = audit_video(truth, predicted)
         fragmented += result["fragmented"]
         present += result["present"]
+        verdicts += result["verdicts"]
 
     steps = np.array(fragmented)
     report = {
@@ -111,6 +152,7 @@ def main() -> None:
             "within_gate": int((steps <= GATE_UM).sum()),
         },
         "linked_median_step_um": float(np.median(present)) if present else None,
+        "in_gate_verdicts": {name: verdicts.count(name) for name in sorted(set(verdicts))},
     }
     log.info(json.dumps(report, indent=2))
 
