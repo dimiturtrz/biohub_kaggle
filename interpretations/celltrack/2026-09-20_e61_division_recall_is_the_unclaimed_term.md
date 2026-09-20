@@ -170,6 +170,37 @@ The three rankings agreeing exactly is the sharper reading. Probability, geometr
 the same top-25 out of 950 says the cue itself, not its parameterisation, is what fails to separate. A
 fourth pairwise ranking would be a fifth measurement of the same null.
 
+## The second sweep: the cue that is not pairwise quadruples recall
+
+| arm | proposals (movie 1 / 2) | forks | recovered |
+|---|---|---|---|
+| shipped (`symmetry`) | 950 / 7534 | 25 / 53 | 1 |
+| `parent_gate_um=1.0` — the plumbing assert | **0 / 0** | 0 / 0 | **0** |
+| **`require_c3_divergence=true`** | **119 / 741** | 25 / 53 | **4** |
+| `+ require_mutual_nearest=true` | 111 / 606 | 25 / 53 | 3 |
+| `kernel_faithful=true` | 110 / 598 | **79 / 146** | 4 |
+
+The gate arm is the assert the earlier nulls needed: a 1um parent gate emits nothing at all, and the one
+division the shipped stage recovers duly disappears (`missed` rises 24 → 25). The instrument moves when the
+mechanism moves, so the four flat rankings were a real null.
+
+**`require_c3_divergence` takes `recovered` from 1 to 4.** It deletes 87% of the proposals — 950 down to
+119 — and the true ones are in what survives. That is the whole reading: with the budget cut unchanged at
+25, a filter that removes false proposals *is* the ranking lever, exactly as predicted, and the cue that
+works is the one the three flat rankings structurally lack. Two daughters separate from t+1 to t+2 and a
+mis-linked lookalike pair does not; pairwise distance cannot express that, and no reparameterisation of it
+ever will.
+
+Two arms of the same family are dominated and should not be carried forward:
+
+- **mutual-nearest *costs* a division** (4 → 3). It is one-directional — the candidate must be nearest to
+  the existing child — and a genuine sister in dense tissue sometimes is not.
+- **kernel-faithful matches c3's recall with three times the forks** (79 vs 25 on movie 1). Same recall,
+  strictly more false positives; the replica's value was never its selection.
+
+Recall is not yet the verdict — a fork rewrites edges, so the arm has to be read on the combined score, and
+that run plus c3's own uncapped ceiling are pending.
+
 ## Secondary reading: the ruler itself
 
 The same run is the first test of whether division-bearing movie selection explains our top-end proxy offset.
