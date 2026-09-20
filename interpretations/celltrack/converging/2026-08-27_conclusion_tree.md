@@ -12,11 +12,21 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
-## NEWS 2026-09-19 23:35Z — where the campaign stands
+## NEWS 2026-09-20 00:49Z — where the campaign stands
 
 - **Board:** ours 0.947 (`celltrack-public-0947`, tied by `-gapfill`), then readmit 0.946, v1329f 0.939,
-  v50 0.907, our own banked 0.924. LB top 0.974. Deadline 09-29.
-- **Pending LB:** det096 (56370794), synthsec (56370924), fp16 (56372434). 5 fresh slots at 00:00 UTC.
+  v50 0.907, our own banked 0.924. LB top 0.974. Deadline 09-29. **5 slots, reset 00:00 UTC.**
+- **Pending LB:** det096 (56370794), synthsec (56370924), fp16 (56372434). **fp16 is now decided
+  offline** — 0.9956 of the edge union with 0947, 257 disputed edges (E38) — its score is a formality.
+- **Post-processing on the 0947 base is priced out (E37).** The repair the E36 residue asks for is
+  already shipping in `-gapfill`; its ceiling is ~1.1 % more edges because only 935 bridgeable
+  end→start pairs exist, and 39 % of dangling ends are cells leaving the imaged volume. Two free
+  instrumented kernels (`gapdiag`, `gaploose`) are in flight to settle which gate discards the rest;
+  **neither is a submission candidate** at that ceiling.
+- **The final-2 hedge is real and keeps its slot (E38):** 0947 and v1329f dispute ~16 % of the edge
+  union (10356 / 10700 unique edges), so they are two genuinely different graphs, not one in two hats.
+- **The live lever is unchanged and GPU-priced:** detection recall of undetected cells, sized at 2.5 %
+  of edges by E36. The card is parked by explicit instruction; nothing below starts without asking.
 - **Runtime is solved and is no longer a reason to avoid anything (E31/E32).** `-fast` = 1590 s vs 6286 s,
   byte-identical submission; hidden test is 4 videos at 9.93 predict-minutes, ~20x headroom in a 9 h kernel.
 - **The ensemble idea is dead for the donors we hold (E33).** v1329f loses 98.9 % of the 961 genuinely
