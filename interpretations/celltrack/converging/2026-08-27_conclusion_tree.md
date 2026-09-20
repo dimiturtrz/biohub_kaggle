@@ -178,6 +178,82 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   emit a byte-identical submission in ~1600 s. A kernel RUN costs no submission slot, so this is a free
   probe: pushed 22:36Z, verify by diffing its `submission.csv` against 0947's.
 
+  **E37(d) — THE REJECT HISTOGRAM, MEASURED. Pair existence is the binder, the peak-side gates are
+  second, and loosening them takes the filler to its ceiling — where it is still ~1 %.** Both free
+  instrumented kernels returned (00:54Z). `gapdiag` (stock gates) emits a submission with node and
+  edge counts **identical** to `-gapfill` (123232 / 119036), so the instrumentation is score-neutral
+  and the fork is faithful. Summed over the four test movies, at g=3 (the loosest gate):
+
+  | | gapdiag (stock) | gaploose (loosened) |
+  |---|---|---|
+  | dangling ends considered | 5030 | 4873 |
+  | **ends with NO start inside the gate** | **2740 (54 %)** | **2703 (55 %)** |
+  | in-gate pairs (raw, many-to-many) | 1322 | 1130 |
+  | rejected by the context filter | 717 | 619 |
+  | rejected: no peak chain exists | 577 | 333 |
+  | **pairs accepted at g=3** | **27** | **148** |
+  | filler total: nodes / edges | 167 / 240 | **814 / 1165** |
+
+  1. **E37(b)'s offline ceiling is confirmed by the kernel's own counters: 54 % of dangling ends
+     have no candidate restart inside the euclidean gate at all**, three frames out. No knob reaches
+     those; the partner is not there to be found.
+  2. **Among the pairs that DO exist, the peak-side gates were genuinely binding** — loosening score
+     (0.5→0.35), radius (3.5→5.0 µm) and synthetic tolerance (0→1) cut `chain_none` 577→333 and took
+     accepted g=3 pairs 27→148, a **4.9× filler yield** (240→1165 edges). So the named suspect was
+     real; it was just never the ceiling.
+  3. **And it lands exactly on E37(b)'s predicted ceiling, which is the point.** gaploose's total
+     change over base is +1693 nodes / +1894 edges = **1.60 % of predicted edges**, against the
+     predicted perfect-filler cap of ~1870 edges / 1.6 %. The mechanism is now exhausted by
+     construction: there is no third arm here, because there is nothing left to collect.
+  4. **Corrections to E37 as first written:** the shipped `-gapfill` delta is +424 nodes / **+488**
+     edges, not +534; and only **167 / 240** of that is the low-detection filler — the rest comes
+     from the single-frame and gap-2 closers, which run in the same stage and which I had folded in.
+     The instrumented number is the attributable one.
+  5. **Submitted anyway, and deliberately** (slot spent 00:57Z, 4 remaining): the arm sits at its own
+     measured ceiling, no competing use existed for the slot, and it settles the one thing the
+     artefacts cannot — whether repair yield converts to score at all. Expect a tie or a small loss:
+     193 of its nodes are SYNTHETIC straight-line interpolations with no detector evidence behind
+     them. A tie would say the filler's edges are right and the axis is simply too small; a loss
+     would say the fabricated nodes cost more than the true ones earn.
+
+  **E39 — THE "ONLY LEVER LEFT WORTH ≥1.5 %" PRICES OUT AT ~0.9 %, AND IT CAN BE PRICED WITHOUT
+  THE GPU. The fork-unique nodes are 73–87 % LOCALIZATION BLIPS, not missed cells.** The 09-19 NEWS
+  block called the fork-unique node sets "the only thing left that could plausibly be worth ≥1.5 %"
+  and sent it to GT on holdout20 (bd `d8rs`, a GPU run). It can be decomposed GT-free first: assign
+  every node to its own fork's track (connected component of that fork's edges), match nodes to the
+  other fork per frame, and report each track's *unmatched fraction*
+  (`scratchpad/unique_tracks.py`, CPU, seconds). At MATCH_UM = 2.0 µm:
+
+  | | v1329f-only | 0947-only |
+  |---|---|---|
+  | unmatched nodes | 7987 | 7311 |
+  | **whole track invisible to the other fork** | **162 tracks / 1194 nodes (14.9 %)** | **54 / 415 (5.7 %)** |
+  | majority-unmatched | 115 / 980 (12.3 %) | 80 / 560 (7.7 %) |
+  | minority (blips inside a track both forks have) | 1992 / 5813 (**72.8 %**) | 1934 / 6336 (**86.7 %**) |
+
+  1. **Most fork-unique nodes are not missed cells — they are the same cell localized differently.**
+     A "blip" sits inside a track the other fork also has, and since BOTH forks' edges are all dt=1
+     with zero gaps, the other fork did not miss that frame: it placed the node >2 µm away. That is
+     a position disagreement, and it costs nothing at the official 7 µm matcher.
+  2. **The tolerance sweep proves the split rather than assuming it.** Re-run at the GT NN floor
+     (2.87 µm): the blip population collapses 7987 → 5947 and 7311 → 5275, while the whole-invisible
+     track count barely moves, 162 → 156 and 54 → 53. A real recall difference is tolerance-
+     insensitive; a localization difference is not. The two populations behave as claimed.
+  3. **So the union's ceiling is the whole-invisible tracks, and they are small.** 1194 nodes in 162
+     tracks is ~1 % of the node table and, at ~(len − 1) edges per track, **~1032 edges = 0.87 % of
+     the 118548 predicted** — *if every one of them is a true cell and the union costs nothing
+     elsewhere*. The reverse direction is 415 nodes / ~361 edges = 0.30 %. **Both are under the
+     1.5 % bar before any GT is consulted**, so bd `d8rs` cannot license a ≥1.5 % move and drops off
+     the critical path. (It stays worth running as an *instrument* if the card is ever free: which
+     fork's unique tracks are real is the cleanest read we have on which detector to build on.)
+  4. **The asymmetry is the interesting residue.** v1329f finds 3× as many whole cells 0947 misses
+     as the other way round (162 vs 54), yet scores 0.008 LOWER on the LB. Either those tracks are
+     false positives, or v1329f pays for them elsewhere — the same tension the E33 ensemble read
+     left open, now with a size on it.
+
+  Rule: **price a GPU run's ceiling from the artefacts it would be scoring before spending the
+  card on it.** Recorded 09-20.
+
   **E38 — fp16 IS PROVEN PRECISION-NEUTRAL WITHOUT ITS LB SCORE, AND THE FINAL-2 HEDGE IS REAL
   AFTER ALL — BUT ONLY ON THE HONEST DENOMINATOR.** Pairwise disagreement of every banked
   submission against 0947, via the instrument that already exists for exactly this
