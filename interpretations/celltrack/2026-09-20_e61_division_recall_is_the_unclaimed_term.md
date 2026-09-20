@@ -225,6 +225,24 @@ The standing warning applies to the submission decision and not to this measurem
 division term, which is the part the proxy was shown to measure faithfully and the LB-tracking public
 kernel never contested.
 
+## c3's own ceiling: 6, and the budget is still not the constraint
+
+Uncapped under c3 (`max_added_forks=100000`), `recovered` is **6** — against 4 at the shipped budget of 25.
+Getting those two extra divisions costs ~700 forks a movie instead of 25. So the budget does not bind under
+c3 either: it already admits 4 of the 6 that c3 can reach at all.
+
+The sharper number is the 17 that stay `no_fork` even with every proposal accepted. They are not outranked
+and not outbudgeted — **c3's own test deletes them, or `runner_up` candidacy never proposed them.** Two
+things follow, and both are flags rather than builds:
+
+- **c3 × geometric candidacy is untested.** The filter and the wider proposal pool have only ever been run
+  apart. Geometric candidacy alone recovered nothing because the budget threw its extras away; under c3 the
+  extras are pre-filtered, which is the configuration in which it could finally pay.
+- **c3's veto rejects on `divergence is None`** — a daughter whose track gaps or branches at t+2 is deleted
+  whatever its geometry — and `2.25um` is a donor constant, never derived for our spacing. Sweeping the
+  threshold to 0.0 separates *must be measurable* (the structural single-successor requirement) from *must
+  be large* (the magnitude). If 0.0 holds the recall, the magnitude was never the working part.
+
 ## Secondary reading: the ruler itself
 
 The same run is the first test of whether division-bearing movie selection explains our top-end proxy offset.
