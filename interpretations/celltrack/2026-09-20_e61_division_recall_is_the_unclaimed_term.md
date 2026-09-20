@@ -198,8 +198,32 @@ Two arms of the same family are dominated and should not be carried forward:
 - **kernel-faithful matches c3's recall with three times the forks** (79 vs 25 on movie 1). Same recall,
   strictly more false positives; the replica's value was never its selection.
 
-Recall is not yet the verdict — a fork rewrites edges, so the arm has to be read on the combined score, and
-that run plus c3's own uncapped ceiling are pending.
+## Scored on the combined metric: +0.0123, and the edge term went UP
+
+`--divisions 4 --per-movie --set division.require_c3_divergence=true` — same eight movies, same operating
+point, so the only difference is the cue:
+
+| term | shipped | c3 | Δ |
+|---|---|---|---|
+| division tp/fp/fn | 1 / 10 / 24 | **4 / 5 / 21** | — |
+| `division_jaccard` | 0.0286 | **0.1333** | **+0.0105** on the score |
+| mean `adjusted_edge_jaccard` | 0.9180 | 0.9198 | **+0.0018** |
+| **combined** | | | **≈ +0.0123** |
+
+The caveat this page has carried from the start — a fork rewrites edges, so recall must be paid for in the
+edge term — resolves the other way. Six of the eight movies' edge jaccard *improves*, because c3 halves
+the false forks (10 → 5) at the same time as it quadruples the true ones. It is not a recall method that
+buys divisions with edge damage; it is a precision filter that happens to raise recall, which is what a
+veto under a binding budget always was.
+
++0.0123 is under the 1.5% bar and must be reported as directional. But it is free (a post-processing flag
+on the banked champion, no retraining, no runtime), it is mechanism-named rather than swept, and it is the
+largest single move measured since 0.947. Per the standing rule it is kept and composed, not claimed.
+
+The standing warning applies to the submission decision and not to this measurement: the proxy blinds above
+0.900, and these movies read ~0.91. What licenses reading this one is that the gain is located in the
+division term, which is the part the proxy was shown to measure faithfully and the LB-tracking public
+kernel never contested.
 
 ## Secondary reading: the ruler itself
 
