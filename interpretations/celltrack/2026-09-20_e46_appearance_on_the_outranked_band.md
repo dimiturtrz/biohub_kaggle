@@ -1,9 +1,24 @@
 # E46 — the outranked band is not appearance-bound, it is *pairwise*-bound
 
-E45 closed the geometric cues on the 11.95 % outranked band and concluded it was appearance-bound.
-That conclusion rested on `celltrack-appearance-refuted-right-denominator`, a kill measured at **n=37**
-that explicitly marks itself re-testable. E43 hands us the same band at **n=1226** with a correct
-denominator, and the volumes are CPU-readable, so the re-test costs nothing but wall-clock.
+**Prior art first: this is a replication, not a discovery.** `celltrack-confusor-pairwise-unresolvable-needs-multiframe`
+(2026-08-23) already reached this conclusion, and reached it with the same qualitative signature —
+full-res appearance top-1 **0.115 against a 0.260 chance**, the source correlating *better* with the
+rival (+0.808) than with the true successor (+0.540), "a fast mover fled; a slower neighbour sits
+between", and "only GLOBAL MULTI-FRAME assignment breaks it". I did not surface it on the prior-art
+check because **it was missing from the memory index**; the index has been repaired. The cost of that
+miss was re-deriving a known result, and the process lesson is recorded with it: an unindexed memory is
+an unfindable one.
+
+What E46 legitimately adds over that result is power, breadth, a control, and one **correction**:
+
+- **n=37 on one movie → n=1226 across 20 movies**, on the E43 denominator (the outranked band as
+  defined by the fragmentation split), so the fact is corpus-level rather than one-movie.
+- **A displacement-matched control**, which the original lacked. Without it, "the true target looks
+  less like the source" is confounded — the band is a fast-cell population (E45), and appearance
+  decorrelates with motion on its own. The matched stratum is what turns the observation into a verdict.
+- **The rival's identity, measured**: the original assumed the confusor was a *distinct slower cell*
+  ("NMS can't remove it without merging real cells"). At n=992 it is an unmatched **FP in 0.9698** of
+  contests. That changes the licensed lever — see below.
 
 Instrument: `kaggle/outranked_band_appearance.py`. Normalized cross-correlation between a cell-sized
 cube (`±2, ±6, ±6` voxels, spacing `(1.625, 0.40625, 0.40625)` µm — the 2.87 µm GT nearest-neighbour
@@ -48,26 +63,50 @@ three of the four have now been measured *below* chance on this band.
 
 This retires the framing E45 left standing. The band is not waiting for a better appearance feature; a
 learned embedding trained on the same pairwise view inherits the same anti-informative geometry. What
-distinguishes the true target from the lookalike is not visible in the pair at all: it is that the
-lookalike **has no continuation** — it is an FP that does not extend into a track, whereas the true
-target does. That is a tracklet-level fact, available only to a solver that competes *sequences*, not
-edges.
+distinguishes the true target from the lookalike is not visible in the pair at all.
+
+## The lookalike is an FP, not a rival cell — and that decides the lever
+
+The 2026-08-23 result read the confusor as a real, slower neighbouring cell, which forecloses pruning:
+you cannot delete a cell without losing it. Measured on the same contests (`outranked_band_geometry.py`,
+question 4 — a detection counts as real if it matches a GT node within the official 7 µm):
+
+```
+RIVAL is an unmatched FP in 0.9698 of contests (n=992)   real GT-matched cell 30 (0.0302)
+```
+
+So the target that outranks the truth is, almost always, a **spurious duplicate** — consistent with
+E45's "true edge farther than its rival in 0.7984 of cases" (true median 4.12 vs rival 2.24 substrate
+units): it sits near where the cell *was*. The true cell moved far and changed appearance; the FP left
+behind did neither. That is why every local pairwise cue — affinity, distance, motion, appearance —
+selects the same wrong target, three of four now measured *below* chance.
+
+The caveat is the FP field: these caches carry our tunet's node recall (0.697–0.750), not 0947's 0.824,
+so duplicates are denser here than under the champion. 0.9698 is not a champion-calibrated number. The
+*sign* is what carries — an FP-dominated confusor population is prunable in principle, a cell one is not.
 
 ## What this licenses
 
 - **Closes** the pairwise-cue axis on the outranked band. Do not file another appearance, embedding,
   distance or velocity term for it — the mechanism says they all select the confusor.
-- **Promotes** the two-pass tracklet ILP (bd `kiw1`) from "a lever on the frontier's list" to the lever
-  this axis *argues for by mechanism*: it is the only open item that can use a candidate's own
-  continuation to disqualify it. This is also one of the jointly-necessary 0.945 levers in the
-  conclusion tree, tested only solo and killed.
+- **Points at `g89y` (Ultrack multi-hypothesis contour hierarchy + segment-SELECTION ILP) first**, not
+  at a better edge feature. The confusor is an intra-frame FP duplicate, and `g89y` is the only open
+  item that *removes* such a candidate structurally rather than by a threshold. This matters because
+  the threshold route is already refuted on the board: E36/E41 show raising the detector threshold to
+  kill FPs starves recall (the recovery stack, LB ≤ 0.900). Selection, not thresholding.
+- **Keeps the two-pass tracklet ILP (bd `kiw1`) as the second half of the same fix**: what marks an FP
+  duplicate is that it has **no continuation**, a tracklet-level fact invisible in the pair. It is one
+  of the jointly-necessary 0.945 levers in the conclusion tree, tested only solo and killed. The two
+  items attack the same population from the two sides — prune the hypothesis, or out-compete it with a
+  sequence — which is why the tree lists them as jointly necessary.
 - Sizes the prize honestly: the band is 11.95 % of true candidate edges, with the affinity margin at a
-  median 0.0985. A tracklet pass does not automatically win it — it is the only structure that *could*.
+  median 0.0985. Neither item automatically wins it — they are the only structures that *could*.
 
 ## Caveats
 
 - Raw NCC, not a learned embedding. The mechanism argument (anti-informative pairwise geometry) is what
   generalizes to embeddings; the number is not a bound on a learned feature by itself.
-- Caches carry our tunet's node recall (0.697–0.750), not 0947's 0.824, so the FP field here is denser
-  than the champion's. That makes the near-static-lookalike population, if anything, *more* prevalent
-  than it would be under 0947.
+- The FP-field caveat above applies to every number here, not just to 0.9698: these caches are our
+  tunet's, so the lookalike population is denser than 0947's.
+- The 0.0302 real-cell remainder is a floor, not zero. Those contests are genuine cell-vs-cell
+  competition that no pruning reaches — they need the solver.

@@ -10,6 +10,8 @@ cheaply they can kill the idea:
     2. DOES DISTANCE HELP? in the band, is the true edge closer than the rival that beat it?
     3. DOES VELOCITY?      using GT positions to build x_t + (x_t - x_{t-1}) -- an ORACLE, so it upper
                            bounds any learned motion feature.
+    4. WHAT IS THE RIVAL?  is the detection that outranked the true target a GT-matched cell, or an FP?
+                           A real cell can only be beaten by a better SOLVER; an FP can be PRUNED.
 
 Question 3 measures from the GT source position to detections, and the true detection was itself chosen
 as the one nearest the GT tail, so that frame is biased TOWARD the true edge. Read the velocity-minus-
@@ -71,6 +73,7 @@ def collect(cache_dir: Path, train_dir: Path, ruler_um: float):
 
         graph = AnnotatedTracks.from_geff(geff).graph
         matched = matched_detections(graph, coords, ruler_um)
+        real = {int(index) for index in matched if index >= 0}
         row = {int(node): i for i, node in enumerate(np.asarray(graph.node_ids))}
         positions = graph.positions().astype(np.float64)
         predecessor = {int(tail): int(head) for head, tail in np.asarray(graph.edges)}
@@ -91,7 +94,7 @@ def collect(cache_dir: Path, train_dir: Path, ruler_um: float):
             displacement["outranked"].append(distance)
             if rival_target == b:
                 continue
-            closer.append((distance, weight[(int(a), int(rival_target))][1]))
+            closer.append((distance, weight[(int(a), int(rival_target))][1], int(rival_target) not in real))
             before = predecessor.get(int(head))
             if before is None:
                 continue
@@ -137,6 +140,11 @@ def report(displacement, closer, velocity_true, static_true, margin_gain):
         (closer[decisive, 0] < closer[decisive, 1]).mean(),
         decisive.sum(),
         (closer[:, 0] > closer[:, 1]).mean(),
+    )
+    log.info(
+        "  RIVAL is an unmatched FP in %.4f of contests (n=%d) -- prunable, not a cell to be out-solved",
+        closer[:, 2].mean(),
+        len(closer),
     )
     log.info(
         "  ORACLE velocity picks true %.4f vs static %.4f (n=%d, GT-anchored frame -- read the DELTA)",
