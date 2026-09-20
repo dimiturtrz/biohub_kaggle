@@ -12,6 +12,29 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-20 04:52Z — the error budget in metric units: ONE axis, 105 broken GT edges
+
+- **E54: `wrong-association = 0` on all four movies, verified by a direct recount.** Predicted edges with
+  BOTH endpoints matched to annotated GT nodes but not a GT pair: 0 / 0 / 0 / 0. Among cells the
+  annotators labelled, the global ILP links them to each other correctly **every time**. Every one of the
+  141 FP edges is single-endpoint-matched — an annotated cell continued into a detection GT lacks.
+  **Retires a framing: the confusor is not a competition between two tracked cells.**
+- **99 % of FPs (139/141) are incident to an endpoint of a GT edge the tracker failed to recover.** FP and
+  FN are not independent axes — they are two views of the same **105 broken GT edges**, each costing
+  ~**2.3 metric units** (105 FN + 139 FP). E47's ~2× asymmetry, derived, and general to every missed link.
+- **Budget:** pooled adjusted **0.8932** (raw 0.8915), tp 2022. 105 broken = **79 fragmented** (75 %,
+  and E43 says 99.51 % solver-reachable) + 26 lost-to-detection. **83 of the 105 are on the one dense
+  movie.** Perfect-fix ceilings OVERLAP and must not be added: all-105 → 0.9991; fp→0 alone +0.059;
+  frag alone +0.035; detection alone +0.012.
+- **Consequences.** (1) Do NOT chase FP suppression as its own programme — 99 % are symptoms; deleting an
+  FP without supplying the right link converts a 2.3-unit error into a 1.3-unit one at best. (2) Every
+  future proposal must state **how many of the 105 it moves**; the 1.5 % bar ≈ **35 recovered GT edges**.
+  (3) Detection is genuinely smallest (26/105), consistent with E40/E41. (4) `kiw1` (two-pass tracklet
+  ILP) is the axis, now sized.
+- 85.8-99.8 % of predicted edges are metric-**invisible** — E53 restated as a measurement.
+- `kaggle/error_budget.py` · `interpretations/celltrack/2026-09-20_e54_error_budget_in_metric_units.md`.
+  Caveat: E51 in-sample, magnitudes are ceilings; the shape is structural.
+
 ## NEWS 2026-09-20 04:45Z — the prune axis was never a tracking axis (read from the scorer's source)
 
 - **E53: an edge between two UNANNOTATED detections is neither TP nor FP.** `metrics.py:55-114` and the
