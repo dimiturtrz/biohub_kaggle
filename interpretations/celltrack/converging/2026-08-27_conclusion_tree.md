@@ -12,6 +12,35 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-20 16:55Z — the champion's best division lever deletes six true divisions, and the label that hid it was post-hoc
+
+E61 priced the division-recovery stage to its ceiling and then found the ceiling was partly self-inflicted.
+Every knob at its most permissive reaches **7 of 25** missed divisions with `require_c3_divergence` ON;
+the same arm with the veto OFF reaches **13**, and `fork_rejected` goes 5 → **0**. The C3 gate buys its
+measured +0.0123 by censoring six true forks along with the false ones. The corrected split of all 25:
+1 undetected · 7 recovered under the veto · **6 vetoed true forks** · 10 structurally unproposable · 1 unexplained.
+
+**The instrument lesson generalises past divisions.** I had read `fork_rejected=5` as "the right mother forked
+and the wrong daughter won the sort" — a ranking failure. `core/metrics/divisions.py:129-136` assigns that
+stage **post hoc on the OUTPUT graph**: it means only that *some* fork landed near the parent, and under gates
+opened two orders of magnitude the stage emits 726 forks on one movie, so one lands near almost any mother.
+**A stage label read off the output is a hypothesis, not a record of what the pipeline decided** — only an A/B
+against the suspected stage separates censorship from coincidence.
+
+The built response is divergence as a **SCORE** (`DivergingDaughterRanking`, dimensionless `(s2-s1)/max(s1,s2)`,
+commit `1c10595`), soft where the champion is hard. Its first arm kept the veto ON and read **3 vs the shipped
+4** — expected, because inside a set the gate already filtered, divergence has fired for every member and the
+score orders a saturated variable. The arm that can say anything is veto-OFF + score-on, with a veto-off
+control beside it; both running. The other half of the miss — the 10 unproposable — is not a post-processing
+question at all: the stage draws its second daughter from the orphan pool only, so a division whose daughters
+the linker already claimed is outside it at every setting. That needs a re-parenting decision inside the
+linker's objective, which `candidacy=steal` is the first attempt at.
+
+Still **no submittable gain**; 0.947 stands. Detail:
+`interpretations/celltrack/2026-09-20_e61_division_recall_is_the_unclaimed_term.md`.
+
+---
+
 ## NEWS 2026-09-20 13:41Z — the finer122 joint+nce arm collapsed its detector, so the gate it was built to read never got a reading
 
 **HARNESS, not REFUTED.** `launch_finer122_joint_nce.sh` — the correctly-specified never-run cell (finer122
