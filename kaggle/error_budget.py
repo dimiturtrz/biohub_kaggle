@@ -266,6 +266,68 @@ def report_thieves(tally, persistence):
         )
 
 
+def broken_edges(submission: Path, train_dir: Path, ruler_um: float):
+    """Every GT edge a tracker FAILED to recover, keyed so two trackers can be compared edge by edge."""
+    nodes, edges = read_submission(submission)
+    broken, total = {}, 0
+    for dataset, table in nodes.items():
+        geff = train_dir / f"{dataset}.geff"
+        if not geff.exists():
+            continue
+        order = list(table)
+        index = {node_id: position for position, node_id in enumerate(order)}
+        predicted = np.array([table[node_id] for node_id in order], dtype=float)
+        graph = AnnotatedTracks.from_geff(geff).graph
+        truth = np.column_stack([graph.timepoints(), graph.positions().astype(float)])
+        _, gt_to_pred = match_bipartite(predicted, truth, ruler_um)
+        pred_edges = {(index[source], index[target]) for source, target in edges[dataset]}
+        gt_edges = [(int(source), int(target)) for source, target in graph.edge_rows()]
+        gt_out: dict[int, list[int]] = {}
+        pred_out: dict[int, list[int]] = {}
+        pred_in: dict[int, list[int]] = {}
+        for source, target in gt_edges:
+            gt_out.setdefault(source, []).append(target)
+        for source, target in pred_edges:
+            pred_out.setdefault(source, []).append(target)
+            pred_in.setdefault(target, []).append(source)
+        for source, target in gt_edges:
+            total += 1
+            mapped_source, mapped_target = gt_to_pred.get(source), gt_to_pred.get(target)
+            if (mapped_source, mapped_target) in pred_edges:
+                continue
+            delta_t = int(truth[target, 0] - truth[source, 0])
+            broken[dataset, source, target] = classify_broken(
+                (gt_out, pred_out, pred_in), source, mapped_source, mapped_target, delta_t
+            )
+    return broken, total
+
+
+def count_in(group, dataset):
+    return sum(1 for edge in group if edge[0] == dataset)
+
+
+def report_rivalry(ours, theirs, total, label="rival"):
+    """Does a second tracker break the SAME GT edges, or different ones? Only the second licenses a merge."""
+    log.info("=== %s", label)
+    log.info("GT edges compared            %5d", total)
+    log.info("champion broken %5d | rival broken %5d | union %5d", len(ours), len(theirs), len(ours | theirs))
+    log.info("broken by champion ONLY      %5d  <- a rival vote could RECOVER these", len(ours - theirs))
+    log.info("broken by rival ONLY         %5d  <- a rival vote could BREAK these", len(theirs - ours))
+    log.info("broken by BOTH               %5d  <- no vote helps", len(ours & theirs))
+    log.info(
+        "rival's breaks inside ours   %5.1f%% (100%% = nested, no decorrelation)",
+        100 * len(theirs & ours) / max(len(theirs), 1),
+    )
+    for dataset in sorted({edge[0] for edge in ours | theirs}):
+        log.info(
+            "  %-16s champion-only %3d  rival-only %3d  both %3d",
+            dataset,
+            count_in(ours - theirs, dataset),
+            count_in(theirs - ours, dataset),
+            count_in(ours & theirs, dataset),
+        )
+
+
 def measure(submission: Path, train_dir: Path, ruler_um: float):
     nodes, edges = read_submission(submission)
     rows = []
@@ -350,10 +412,25 @@ def main():
     parser.add_argument("--ruler", type=float, default=OFFICIAL_UM, help="node match radius in um")
     parser.add_argument("--shapes", action="store_true", help="partition the broken GT edges by failure shape instead")
     parser.add_argument("--thieves", action="store_true", help="classify the detections that stole each broken slot")
+    parser.add_argument("--rival", type=Path, nargs="+", help="other submission.csv files, compared GT edge by edge")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(message)s", force=True)
-    if args.thieves:
+    if args.rival:
+        shapes_by_edge, total = broken_edges(args.submission, args.train, args.ruler)
+        ours = set(shapes_by_edge)
+        rescued = []
+        for path in args.rival:
+            theirs, _ = broken_edges(path, args.train, args.ruler)
+            report_rivalry(ours, set(theirs), total, path.parent.name)
+            rescued.append(ours - set(theirs))
+        common = set.intersection(*rescued)
+        log.info("=== across %d rivals", len(rescued))
+        log.info("rescued by EVERY rival       %5d  <- a champion DEFECT, not one rival's luck", len(common))
+        log.info("rescued by ANY rival         %5d", len(set.union(*rescued)))
+        for shape, count in Counter(shapes_by_edge[edge] for edge in common).most_common():
+            log.info("  %3d  %s", count, shape)
+    elif args.thieves:
         report_thieves(*thieves(args.submission, args.train, args.ruler))
     elif args.shapes:
         report_shapes(*shapes(args.submission, args.train, args.ruler))
