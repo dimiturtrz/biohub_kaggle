@@ -235,9 +235,13 @@ The sharper number is the 17 that stay `no_fork` even with every proposal accept
 and not outbudgeted — **c3's own test deletes them, or `runner_up` candidacy never proposed them.** Two
 things follow, and both are flags rather than builds:
 
-- **c3 × geometric candidacy is untested.** The filter and the wider proposal pool have only ever been run
-  apart. Geometric candidacy alone recovered nothing because the budget threw its extras away; under c3 the
-  extras are pre-filtered, which is the configuration in which it could finally pay.
+- **c3 × geometric candidacy: run, and it recovers 4 — exactly c3 alone.** The filter and the wider
+  proposal pool had only ever been run apart, and the hypothesis was that geometric candidacy recovered
+  nothing only because the budget threw its extras away. It does not hold: with the extras pre-filtered by
+  c3 and the budget no longer spending itself on them, `recovered` does not move (`nodes_missing=2`,
+  `no_fork=19`, unchanged). **The candidacy pool is not what withholds the 17.** Whatever `runner_up`
+  fails to propose, `geometric` does not propose either — which leaves c3's own veto as the single named
+  cause, and makes the threshold sweep the only live question of the two.
 - **c3's veto rejects on `divergence is None`** — a daughter whose track gaps or branches at t+2 is deleted
   whatever its geometry — and `2.25um` is a donor constant, never derived for our spacing. Sweeping the
   threshold to 0.0 separates *must be measurable* (the structural single-successor requirement) from *must
