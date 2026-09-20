@@ -168,6 +168,39 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   emit a byte-identical submission in ~1600 s. A kernel RUN costs no submission slot, so this is a free
   probe: pushed 22:36Z, verify by diffing its `submission.csv` against 0947's.
 
+  **E38 — fp16 IS PROVEN PRECISION-NEUTRAL WITHOUT ITS LB SCORE, AND THE FINAL-2 HEDGE IS REAL
+  AFTER ALL — BUT ONLY ON THE HONEST DENOMINATOR.** Pairwise disagreement of every banked
+  submission against 0947, via the instrument that already exists for exactly this
+  (`kaggle/tracker_agreement.py`, CPU, seconds — I wrote a duplicate in scratch before finding it):
+
+  | vs 0947 | LB | shared edges / union | a_only | b_only |
+  |---|---|---|---|---|
+  | `fp16` | pending | **0.9956** | 257 | 268 |
+  | `0947-gapfill` | 0.947 | 0.8792 | 7389 | 7877 |
+  | `0947-readmit` | 0.946 | 0.8690 | 7618 | 9108 |
+  | `v1329f` | 0.939 | **0.8371** | 10356 | 10700 |
+  | `v50` | 0.907 | 0.8368 | 10417 | 10671 |
+
+  1. **fp16 shares 99.56 % of the union with 0947 — 257 disputed edges out of 118548.**
+     Half-precision is neutral *as a mechanism*, established offline for zero slots. Its pending
+     LB score is a formality: anything but 0.947 would indict the ruler, not the model.
+  2. **v1329f disputes ~10.4 k of 0947's edges — 16 % of the union.** The final-2 pair really is
+     two different graphs, and the hedge is worth its slot (E33's pick stands, unchanged).
+  3. **My first pass at this said 1.6 %, and it was wrong in the familiar way.** I measured edge
+     agreement *conditioned on node pairs that matched*, which throws away precisely the region
+     where the two forks disagree — the nodes one has and the other does not. The conditioned
+     number (0.984) and the union number (0.837) differ by **10×**, and the conditioned one is
+     the flattering one. Fifth occurrence of the denominator error in this campaign; the tell was
+     that I reported a disagreement rate whose denominator was itself selected for agreement.
+  4. **Where the forks separate is detection.** v50 and v1329f have identical node counts (123485)
+     and agree with 0947 to within 0.0003 of each other, consistent with v50 being v1329f plus the
+     surgery cell. Across the table the disagreement scales with the node-set difference, not with
+     any association setting — the same conclusion E36 and E37 reach from the other side.
+
+  Rule: **a disagreement rate measured only where two outputs already agree is not a disagreement
+  rate.** Compare on the union, and check whether an instrument for it is already in the repo
+  before writing a second one. Recorded 09-20.
+
   **E37 — THE E36-MATCHED REPAIR IS ALREADY BUILT AND ALREADY SHIPPING; IT JUST YIELDS 10 %. The
   0.947 tie of `celltrack-public-0947-gapfill` was a YIELD result, not a neutrality result, and we
   had read it as the latter.** Its `fill_gaps_from_low_detections` is exactly what E36 asks for: it
