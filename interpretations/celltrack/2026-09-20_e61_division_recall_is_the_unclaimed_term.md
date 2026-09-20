@@ -150,6 +150,26 @@ The reading that makes these ranking levers rather than precision knobs: under a
 ~950, a veto that deletes false proposals **promotes true ones into the cut**. A filter and a ranking are
 the same instrument once a budget binds.
 
+## The first sweep: four arms, four times `recovered=1`
+
+| arm | proposals (movie 1 / 2) | forks | recovered |
+|---|---|---|---|
+| `ranking=symmetry` (shipped) | 950 / 7534 | 25 / 53 | 1 |
+| `ranking=geometry` | 950 / 7534 | 25 / 53 | 1 |
+| `ranking=probability` | 950 / 7534 | 25 / 53 | 1 |
+| `require_persistence=true` | 950 / 7534 | 25 / 53 | 1 |
+| `candidacy=geometric` | **1493 / 15914** | 25 / 53 | 1 |
+
+The candidacy arm is the one that proves the instrument: the proposal pool doubles, so the override
+demonstrably reaches the stage, and the flat `recovered` is a real null rather than an inert flag. Every
+extra proposal it buys is discarded by the same budget cut — which is the ranking constraint restated, not
+a candidacy answer.
+
+The three rankings agreeing exactly is the sharper reading. Probability, geometry and symmetry are all
+**pairwise** functions of the same two distances, so they are three orderings of one cue. That they select
+the same top-25 out of 950 says the cue itself, not its parameterisation, is what fails to separate. A
+fourth pairwise ranking would be a fifth measurement of the same null.
+
 ## Secondary reading: the ruler itself
 
 The same run is the first test of whether division-bearing movie selection explains our top-end proxy offset.
