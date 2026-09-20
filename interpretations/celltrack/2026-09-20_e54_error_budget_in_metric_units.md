@@ -69,12 +69,47 @@ must not be added:
 | fragmentation → recovered (alone) | 0.9264 | +0.035 |
 | detection loss → recovered (alone) | 0.9030 | +0.012 |
 
+## What the 105 actually are
+
+Partitioned by what the tracker did instead, on the champion's own output:
+
+| shape | count | |
+|---|---|---|
+| **BOTH linked elsewhere (a swap)** | **50** | both endpoints detected; source took a rival AND target was taken by one |
+| source linked to a RIVAL, target orphaned | 13 | |
+| target taken by a RIVAL, source orphaned | 13 | |
+| both endpoints undetected | 11 | detection |
+| source undetected | 8 | detection |
+| target undetected | 7 | detection |
+| division parent | 3 | |
+| GT gap `dt ≠ 1` | **0** | confirms every GT edge is consecutive-frame |
+
+**76 of 105 (72 %) are pure selection failures** — every endpoint detected, the candidate present, the
+solver ranked another partner above it. Only 26 are detection and 3 are division. This is E43's
+"fragmentation is selection, not candidate" re-derived in metric units, and it is **more than twice the
+35-edge bar**, so `kiw1` is licensed with headroom.
+
+And the discriminator is motion:
+
+    displacement (um)   broken: median 4.08  mean 4.31   |   recovered: median 1.46  mean 1.52
+    fraction > 5 um     broken: 46 %                     |   recovered: 2 %
+
+**2.8× on the median, 23× on the >5 µm tail.** E45's "the outranked band is fast cells" now holds on the
+champion's metric-visible errors, not on a candidate band. The true successor is far, a nearer detection
+wins, and E46 showed the pairwise appearance cue is *below chance* at matched displacement — so no
+pairwise score can fix these 76. A cue that survives large single-frame displacement has to be motion
+continuity across several frames, which is exactly what a tracklet-level second pass supplies and what a
+per-edge solver structurally cannot.
+
 ## What this licenses
 
-- **One target: 105 broken GT edges, 79 of them fragmentations.** E43 already showed 99.51 % of
-  fragmented GT edges are solver-reachable — the candidates exist and the solver ranks them below a
-  rival. This is `kiw1`'s multi-frame identity problem, and it is now sized: recovering a fragmentation
-  pays ~2.3 units, not 1, because it deletes the paired FP too.
+- **One target: 105 broken GT edges, 76 of them pure selection.** The candidates exist and the solver
+  ranks them below a rival; 50 are outright swaps. This is `kiw1`'s multi-frame identity problem, now
+  sized: 76 against a 35-edge bar, and recovering one pays ~2.3 units, not 1, because it deletes the
+  paired FP too.
+- **The cue must tolerate displacement.** Broken edges move 2.8× further than recovered ones and 46 %
+  exceed 5 µm. Pairwise appearance is below chance there (E46), so the only remaining cue is multi-frame
+  motion continuity — which prices a tracklet second pass and de-prices any further per-edge feature.
 - **Do not chase "FP suppression" as a separate programme.** 99 % of FPs are symptoms. Deleting an FP
   edge without supplying the right one converts a 2.3-unit error into a 1.3-unit error at best, and risks
   collateral; supplying the right link collects both.

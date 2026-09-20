@@ -15,6 +15,7 @@ future proposal has to be cheaper than.
 
 import argparse
 import logging
+from collections import Counter
 from pathlib import Path
 
 import numpy as np
@@ -28,6 +29,7 @@ log = logging.getLogger(__name__)
 
 NODE_COUNT_PENALTY_A = 0.1
 UNREACHABLE = 1e6
+FAST_STEP_UM = 5.0
 
 
 def match_bipartite(predicted, truth, ruler_um):
@@ -93,6 +95,83 @@ def decompose(gt_edges, pred_edges, gt_to_pred, pred_to_gt):
         and pred_to_gt.get(target) not in (None, *outgoing.get(mapped, ()))
     )
     return recovered, fragmented, lost, wrong
+
+
+def classify_broken(links, source, mapped_source, mapped_target, delta_t):
+    """What the tracker did INSTEAD of a GT edge it failed to recover."""
+    gt_out, pred_out, pred_in = links
+    rules = (
+        (mapped_source is None and mapped_target is None, "both endpoints undetected"),
+        (mapped_source is None, "source undetected"),
+        (mapped_target is None, "target undetected"),
+        (len(gt_out[source]) > 1, "division parent"),
+        (delta_t != 1, f"GT gap dt={delta_t}"),
+        (
+            bool(pred_out.get(mapped_source)) and bool(pred_in.get(mapped_target)),
+            "BOTH linked elsewhere (swap)",
+        ),
+        (bool(pred_out.get(mapped_source)), "source linked to a RIVAL, target orphaned"),
+        (bool(pred_in.get(mapped_target)), "target taken by a RIVAL, source orphaned"),
+    )
+    return next((label for holds, label in rules if holds), "both free, solver declined the link")
+
+
+def shapes(submission: Path, train_dir: Path, ruler_um: float):
+    """Partition every GT edge into recovered, or the shape of its failure, with displacements."""
+    nodes, edges = read_submission(submission)
+    scale = SPACING.as_array()
+    tally: Counter[str] = Counter()
+    displacement: dict[str, list[float]] = {"broken": [], "recovered": []}
+    for dataset, table in nodes.items():
+        geff = train_dir / f"{dataset}.geff"
+        if not geff.exists():
+            continue
+        order = list(table)
+        index = {node_id: position for position, node_id in enumerate(order)}
+        predicted = np.array([table[node_id] for node_id in order], dtype=float)
+        graph = AnnotatedTracks.from_geff(geff).graph
+        truth = np.column_stack([graph.timepoints(), graph.positions().astype(float)])
+        pred_to_gt, gt_to_pred = match_bipartite(predicted, truth, ruler_um)
+
+        gt_edges = [(int(source), int(target)) for source, target in graph.edge_rows()]
+        gt_out: dict[int, list[int]] = {}
+        for source, target in gt_edges:
+            gt_out.setdefault(source, []).append(target)
+        pred_edges = {(index[source], index[target]) for source, target in edges[dataset]}
+        pred_out: dict[int, list[int]] = {}
+        pred_in: dict[int, list[int]] = {}
+        for source, target in pred_edges:
+            pred_out.setdefault(source, []).append(target)
+            pred_in.setdefault(target, []).append(source)
+
+        for source, target in gt_edges:
+            step = float(np.linalg.norm((truth[source, 1:] - truth[target, 1:]) * scale))
+            mapped_source, mapped_target = gt_to_pred.get(source), gt_to_pred.get(target)
+            if (mapped_source, mapped_target) in pred_edges:
+                tally["recovered"] += 1
+                displacement["recovered"].append(step)
+                continue
+            delta_t = int(truth[target, 0] - truth[source, 0])
+            tally[
+                "broken: " + classify_broken((gt_out, pred_out, pred_in), source, mapped_source, mapped_target, delta_t)
+            ] += 1
+            displacement["broken"].append(step)
+    return tally, displacement
+
+
+def report_shapes(tally, displacement):
+    for label, count in sorted(tally.items(), key=lambda item: -item[1]):
+        log.info("%5d  %s", count, label)
+    for kind, steps in displacement.items():
+        values = np.array(steps)
+        log.info(
+            "%-10s displacement um: median %.2f  mean %.2f  | > %.0f um: %.0f%%",
+            kind,
+            np.median(values),
+            values.mean(),
+            FAST_STEP_UM,
+            100 * (values > FAST_STEP_UM).mean(),
+        )
 
 
 def measure(submission: Path, train_dir: Path, ruler_um: float):
@@ -177,10 +256,14 @@ def main():
     parser.add_argument("--submission", type=Path, required=True, help="a cached champion submission.csv")
     parser.add_argument("--train", type=Path, required=True, help="directory of *.geff ground truth")
     parser.add_argument("--ruler", type=float, default=OFFICIAL_UM, help="node match radius in um")
+    parser.add_argument("--shapes", action="store_true", help="partition the broken GT edges by failure shape instead")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(message)s", force=True)
-    report(measure(args.submission, args.train, args.ruler))
+    if args.shapes:
+        report_shapes(*shapes(args.submission, args.train, args.ruler))
+    else:
+        report(measure(args.submission, args.train, args.ruler))
 
 
 if __name__ == "__main__":
