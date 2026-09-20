@@ -1,0 +1,61 @@
+{
+  "dataset_slug": "bhpepper/biohub-synthetic-5fold-ensemble-v1",
+  "n_folds": 5,
+  "mean_proxy_score": 0.9672408297977331,
+  "mean_recall": 0.9679180304704775,
+  "mean_parameter_drift_vs_synthetic_fold0": 0.0777337490890493,
+  "mean_parameter_drift_vs_stage1_base": 0.1640174069011303,
+  "folds": [
+    {
+      "fold": 0,
+      "filename": "synthetic_fold0_best.pth",
+      "size_bytes": 8357362,
+      "sha256": "5d50e387d70895430a9f48093cc25dc8db7f873571e905ae5ea59666d5773bca",
+      "best_epoch": 15,
+      "best_score": 0.9585062919968039,
+      "best_recall": 0.9590622502442057
+    },
+    {
+      "fold": 1,
+      "filename": "synthetic_fold1_best.pth",
+      "size_bytes": 8357783,
+      "sha256": "3e4e813b7ff8ab33904b5d62eff7457818ca2302c134a8cb0ea01d23071e7cab",
+      "best_epoch": 28,
+      "best_score": 0.9715894860935936,
+      "best_recall": 0.9722527472527472
+    },
+    {
+      "fold": 2,
+      "filename": "synthetic_fold2_best.pth",
+      "size_bytes": 8357362,
+      "sha256": "7f2ddff9b278da05839303e4b18c47cca56ac90ae85f1a34d057c9f53fa8f4d6",
+      "best_epoch": 14,
+      "best_score": 0.972022294660174,
+      "best_recall": 0.972831165097391
+    },
+    {
+      "fold": 3,
+      "filename": "synthetic_fold3_best.pth",
+      "size_bytes": 8357362,
+      "sha256": "94cfae47a598def04996a5d4878bbe385c3a16393eac916caa8244cde98adc48",
+      "best_epoch": 8,
+      "best_score": 0.9663894660997158,
+      "best_recall": 0.9671341306031145
+    },
+    {
+      "fold": 4,
+      "filename": "synthetic_fold4_best.pth",
+      "size_bytes": 8357362,
+      "sha256": "33f1f5091a920a398c7a633877fbb5043884fb71873684456f7416c77562d9f4",
+      "best_epoch": 23,
+      "best_score": 0.9676966101383776,
+      "best_recall": 0.9683098591549296
+    }
+  ],
+  "swa_model": {
+    "filename": "synthetic_5fold_swa.pth",
+    "size_bytes": 8355927,
+    "sha256": "0eacacaf0b43bfd5a063495d6991a4911cd045c37650363d5d8826a0e7ed3dd9",
+    "method": "Stage 2 Synthetic Fine-Tuning 5-Fold SWA Ensemble"
+  }
+}

@@ -12,6 +12,45 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-20 06:32Z — the published synth 5-fold does NOT price bd `rf80`, and our own parked weights beat it
+
+`bhpepper/biohub-synthetic-5fold-ensemble-v1` publishes an `ensemble_summary.json` (2 KB, free read) for a
+Stage-2 synthetic fine-tune of the 8.35 MB `edge_predictor`: 5 folds + an SWA member.
+
+| | value |
+|---|---|
+| mean proxy score | 0.9672 |
+| mean recall | 0.9679 |
+| fold spread (best 0.9720 / worst 0.9585) | **0.0135** |
+| best_epoch per fold | 15, 28, 14, 8, 23 |
+| param drift vs stage-1 base | 0.164 |
+
+Three free reads, no download of the 5×8.35 MB:
+
+1. **It cannot price `rf80`.** There is **no non-synthetic control arm** in the file — every number is a
+   synthetic fine-tune. A forum claim of +0.012 from synth pretrain stays unpriced; this publishes the
+   *level*, never the *delta*. (The same trap as our own 20+10-epoch A/B, which scored `acc*recall` with no
+   matched base.)
+2. **The recipe's own fold spread is 0.0135** — at or above our 0.01–0.02 noise floor. So even *with* a
+   control, a synth delta of the claimed +0.012 size would be unreadable against this recipe's own seed
+   scatter. `best_epoch` scattered 8→28 says the early-stop is picking noise, not a convergence point.
+3. **Our parked weights already beat it.** `rf80`'s note records `synth_pre80` finished 09-19 13:00Z at
+   **0.9783** (80 ep) and is sitting on disk at
+   `external/frontier_ds/biohub-tracking-support-pack-50ep-v1/repo/weights/synth_pre80/split_0/edge_predictor_best.pth`.
+   Different proxy, not strictly comparable — but there is no argument that their 0.9672 mean is a *better*
+   donor than a checkpoint we already own. **Donor triage: do not pull the weights.**
+
+Same verdict covers `easonyanyan/biohub-exposure-bias-weights-v1` (same 8.35 MB `edge_predictor` shape,
+four epoch checkpoints, no summary at all). Both are **edge-head** donors, and the edge head is not our
+failure mode: E54b row 4 gives **76/76** from plain distance once coordinates are right, E57 puts the broken
+endpoints **4.08 µm** off, E46 puts appearance below chance. A better edge head reading wrong coordinates is
+a pre-registered ~null on the axis we actually measured. `rf80` stays OPEN but demoted — and its remaining
+step (real-data fine-tune warm from `synth_pre80`) is GPU work, which is parked by owner directive.
+
+Cost: one 2 KB read. Zero GPU, zero submissions.
+
+---
+
 ## NEWS 2026-09-20 06:22Z — E6 (packet grouping) CLOSED by argument: the grouping is inert, the knobs are pre-registered nulls
 
 `newwang12/biohub-v1-grouped` re-ran 06:01Z today and sat at **DONOR-UNMEASURED — "would need a slot"**
