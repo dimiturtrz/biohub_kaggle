@@ -12,6 +12,43 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-21 00:40Z — E63: the offset head learns what the annotation can teach, which is not the thing it is for
+
+Campaign A — the last lever memory listed as open — is built, trained, measured and **CLOSED at the data**.
+The head is real (analytic null 5.85um → **2.90um**, monotone, backbone grad norm 1.26), but over 25 train
+videos / 2307 frames / 6609 centres the nearest-neighbour distance is **24.54um median**, only **1.3%** of
+pairs sit inside one supervision box, and only **2.4%** of multi-centre frames contain a Voronoi seam at
+all. ~98% of the supervision is isolated single cells, so the merged-blob case the head exists to resolve is
+not in the training signal. Ring stratification says the same thing from the other side: **0.364um** at the
+centre voxel, **7.961um** in the outer shell — worst exactly where a seam lives.
+
+Two method lessons outrank the verdict.
+
+**The matched control is what turns an attribution into a measurement.** The proxy decline under the head
+was first written up as the known warm-finetune collapse. The `offset_weight=0.0` control refutes that: it
+sits at **0.843–0.870** across seven reads while the offset arm sits at **0.795–0.821**, four matched reads
+entirely below the control's band. The term itself is the cost.
+
+**And the control then corrected me a second time.** Its 0.8704 read as a climb, so it was resumed to 12000
+steps — 0.8435 / 0.8628 / 0.8544 / 0.8509, no trend. So "the recipe gains +0.026" was reading the top of a
+band as a result; the honest statement is a **plateau near 0.855**, and a detector that is **not
+under-trained**. The reusable part is a ruler: a single detector-arm proxy eval carries **±0.027** of
+scatter, so the 0.01–0.02 floor — measured on the *tracker* proxy — does not transfer to this one. Any past
+detector A/B decided on one eval inside that band decided nothing.
+
+Live remedy, filed not started: supervise the offset field against **detected** cells (~980/frame) rather
+than annotated ones, the same shape as the `pmkf` finding (bd `vutl`). Offline-unpriceable per E59.
+
+Donor housekeeping the same night: **`evg0942` inventoried and closed as already-harvested.** Its header
+says `'public 0.939 base'`, its constants ARE ours (`SAFE_DIV_DIVERGE_UM=2.25` = our c3,
+`OUTPUT_LINEFIT_WEIGHT=0.8` = our smooth, `OUTPUT_MIN_TRACK_LEN=6`), and the one element that looked new —
+gap closing that INSERTS a synthetic node, so both new edges are dt=1 and GT-matchable, the hole E55 leaves
+open — is `SyntheticGap` in `celltrack/postproc/gap_closer.py`, already wired into the submission path. bd
+`nfpt` closed unstarted for the same reason: E61 already measured the c3 cue as a score (3 of 25) against
+the gate we ship (4 of 25).
+
+---
+
 ## NEWS 2026-09-20 18:10Z — E62: the donors' fuse weight reduces to switching the reverse pass off, and the alignment suspicion is closed
 
 Both frontier kernels that run a bidirectional edge fuse weight the reverse direction far below half —
