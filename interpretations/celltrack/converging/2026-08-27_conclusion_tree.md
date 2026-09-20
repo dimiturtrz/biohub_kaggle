@@ -12,6 +12,26 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-20 06:18Z — final-2 SETTLED: readmit is the better buy and the wrong hedge (bd `9c61`)
+
+E38's table (below, 06:00Z block) makes `readmit` look like the obvious second seat: LB **0.946**
+(−0.001, against v1329f's −0.008) at **0.8690** union agreement — **80 % of v1329f's decorrelation for an
+eighth of the LB cost**. Rejected anyway, on E38's own point 4.
+
+A variance hedge must not share the component that can fail. `readmit` is a 0947 **post-processing**
+variant: it re-adds peaks 0947's *own* detector scored ≥0.965 and discarded, so its extra nodes come from
+that detector's discard pile and inherit its calibration whole. `v1329f` is a different foundation with an
+independent node set (123485 vs 122808). E38 point 4 says disagreement scales with the **node-set**
+difference, not with any association setting, and E36/E37/E57/E58 all put the failure axis in
+detection/localization. So readmit's 13.1 % is post-processing edges hanging off the same, possibly
+mis-tuned, nodes — it hedges the part that is not at risk. The same argument rejects `gapfill` (0.8792,
+and E55 proves its dt>1 bridges can never be a TP) and `fp16` (0.9956 — no hedge at all).
+
+**Final 2 = `celltrack-public-0947` + `celltrack-public-v1329f`.** Zero runs, zero submissions. Caveat:
+readmit's node count is inferred from its mechanism, not measured — its submission.csv was never pulled.
+
+---
+
 ## NEWS 2026-09-20 06:13Z — E58: the champion already holds 51 of 79 broken edges, one node to the side
 
 `representative_alternates.py` collects every predicted node inside the 7 µm ruler of a GT source and of a
