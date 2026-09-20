@@ -12,6 +12,53 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-20 06:40Z — the competition GT is a SPARSE SUBSAMPLE of a DENSE public annotation
+
+Triaging the last three untriaged public kernels turned up `giorgosi/zsns00{4,5}` — not a tracker at all,
+but a **data harvester**. It pulls the source volumes from
+`public.czbiohub.org/royerlab/zebrahub/imaging/single-objective/` and, with them, a per-volume
+**`ZSNS00N_tracks.csv`**. Probed live (range request, no full download):
+
+```
+ZSNS001_tracks.csv   Content-Length: 890,580,527
+track_id,t,z,y,x,parent_track_id
+270656,99,357.12,172.527,578.163,270655
+228090,9,308.76,138.724,482.022,-1
+```
+
+**That is our exact GT schema — divisions and all — for the WHOLE embryo.** Track ids run past 312000.
+The competition's own GT is ~17 annotated cells per frame
+([[celltrack-pmkf-trains-gt-sparse-not-detected-crowd]]). Published (image.sc / FEBS): train spans **two
+embryos**, the hidden test is a **third**; `*_tracks.csv` exists for ZSNS001/003/004/005 (002 has none).
+
+**This reframes the entire chain the last six experiments built.** E54c found every thief to be a real,
+median-61-frame, **0/126-annotated** track; E58 found the decoy nodes to be mid-track members of a second
+real track. Those tracks are almost certainly *annotated in this CSV*. The labels we have been calling
+missing are published.
+
+**Two uses, and only one of them is ours:**
+
+- **LEGITIMATE — dense training supervision.** Register each `44b6_*` train crop against its source volume
+  and the sparse crop GT becomes dense. That feeds exactly the one live lever
+  ([[celltrack-campaign-a-offset-head-build-map]], the center-offset head): the reason a decoy sits 4.08 µm
+  off (E57) is that nothing ever supervised the cell it actually belongs to. Registration needs **no image
+  download** — the crop's `.geff` gives (t,z,y,x) of its annotated cells, and recovering an integer t-offset
+  plus a 3D translation that embeds that sparse point cloud in the dense one is pure CPU point-set
+  matching on the CSVs.
+- **REFUSED — test-side lookup.** The same registration run against the *test* crops would read the answer
+  out of a public file. Same class as the coordinate perturbation refused in E58, and not on the table.
+
+**Status: found, not spent.** The consumer is training, and the GPU is parked by owner directive with the
+entry deadline two days out. Recorded as the largest un-taken axis on the board, ahead of every knob —
+per the standing rule that data outsizes knobs. Bead filed. Crop-geometry note: the train zarr carries
+`scale [1.0, 1.625, 0.40625, 0.40625]` µm and **no translation transform**, so provenance is not in the
+metadata; it has to be recovered from the point clouds.
+
+Cost so far: one HTTP range request. ZSNS001's CSV is downloading to
+`D:/data/volumetric/microscopy/reference/zebrahub/` for the registration probe.
+
+---
+
 ## NEWS 2026-09-20 06:32Z — the published synth 5-fold does NOT price bd `rf80`, and our own parked weights beat it
 
 `bhpepper/biohub-synthetic-5fold-ensemble-v1` publishes an `ensemble_summary.json` (2 KB, free read) for a
