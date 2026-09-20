@@ -30,6 +30,7 @@ log = logging.getLogger(__name__)
 NODE_COUNT_PENALTY_A = 0.1
 UNREACHABLE = 1e6
 FAST_STEP_UM = 5.0
+BLIP_FRAMES = 3
 
 
 def match_bipartite(predicted, truth, ruler_um):
@@ -181,10 +182,29 @@ def thief_kind(rival, pred_to_gt):
     return "annotated cell" if pred_to_gt.get(rival) is not None else "UNANNOTATED detection"
 
 
+def track_lengths(node_count, pred_edges):
+    """Size of the predicted track each node belongs to -- a blip detection scores a few frames."""
+    parent = list(range(node_count))
+
+    def root(node):
+        while parent[node] != node:
+            parent[node] = parent[parent[node]]
+            node = parent[node]
+        return node
+
+    for source, target in pred_edges:
+        left, right = root(source), root(target)
+        if left != right:
+            parent[left] = right
+    size: Counter[int] = Counter(root(node) for node in range(node_count))
+    return [size[root(node)] for node in range(node_count)]
+
+
 def thieves(submission: Path, train_dir: Path, ruler_um: float):
     """For every broken GT edge, what kind of detection took the source's slot and the target's slot?"""
     nodes, edges = read_submission(submission)
     tally: Counter[str] = Counter()
+    persistence: dict[str, list[int]] = {"thief": [], "GT-matched node": [], "all predicted": []}
     for dataset, table in nodes.items():
         geff = train_dir / f"{dataset}.geff"
         if not geff.exists():
@@ -206,6 +226,9 @@ def thieves(submission: Path, train_dir: Path, ruler_um: float):
         for source, target in pred_edges:
             pred_out.setdefault(source, []).append(target)
             pred_in.setdefault(target, []).append(source)
+        lengths = track_lengths(len(order), pred_edges)
+        persistence["all predicted"] += lengths
+        persistence["GT-matched node"] += [lengths[node] for node in pred_to_gt]
 
         for source, target in gt_edges:
             mapped_source, mapped_target = gt_to_pred.get(source), gt_to_pred.get(target)
@@ -213,12 +236,34 @@ def thieves(submission: Path, train_dir: Path, ruler_um: float):
                 continue
             if (mapped_source, mapped_target) in pred_edges:
                 continue
-            took_source = thief_kind(next(iter(pred_out.get(mapped_source, [])), None), pred_to_gt)
-            took_target = thief_kind(next(iter(pred_in.get(mapped_target, [])), None), pred_to_gt)
+            rivals = (
+                next(iter(pred_out.get(mapped_source, [])), None),
+                next(iter(pred_in.get(mapped_target, [])), None),
+            )
+            took_source, took_target = (thief_kind(rival, pred_to_gt) for rival in rivals)
             tally[f"source went to {took_source:<22} | target taken by {took_target}"] += 1
             tally[f"TOTAL source slot: {took_source}"] += 1
             tally[f"TOTAL target slot: {took_target}"] += 1
-    return tally
+            persistence["thief"] += [
+                lengths[rival] for rival in rivals if rival is not None and pred_to_gt.get(rival) is None
+            ]
+    return tally, persistence
+
+
+def report_thieves(tally, persistence):
+    for label, count in sorted(tally.items()):
+        log.info("%5d  %s", count, label)
+    for population, values in persistence.items():
+        lengths = np.array(values)
+        log.info(
+            "%-18s n %6d  track length: median %4.0f  mean %5.1f | blips (<= %d frames) %3.0f%%",
+            population,
+            len(lengths),
+            np.median(lengths),
+            lengths.mean(),
+            BLIP_FRAMES,
+            100 * (lengths <= BLIP_FRAMES).mean(),
+        )
 
 
 def measure(submission: Path, train_dir: Path, ruler_um: float):
@@ -309,8 +354,7 @@ def main():
 
     logging.basicConfig(level=logging.INFO, format="%(message)s", force=True)
     if args.thieves:
-        for label, count in sorted(thieves(args.submission, args.train, args.ruler).items()):
-            log.info("%5d  %s", count, label)
+        report_thieves(*thieves(args.submission, args.train, args.ruler))
     elif args.shapes:
         report_shapes(*shapes(args.submission, args.train, args.ruler))
     else:

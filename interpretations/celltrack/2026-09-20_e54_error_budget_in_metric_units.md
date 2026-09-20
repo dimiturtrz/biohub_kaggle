@@ -142,10 +142,14 @@ the detection that took each broken slot:
 | an unannotated detection | 63 | 63 |
 | nothing (slot left free) | 13 | 13 |
 
-**Zero on both sides.** No other annotated cell wants those slots, so there is no conflict to resolve:
-mutual exclusion has nothing to bite on and **re-costing the ILP cannot recover these edges**, because
-the rival is not claimed by anybody. The structure is not the problem and neither are the costs — the
-competitor simply should not be a candidate.
+**Zero on both sides.** No *annotated* cell wants those slots.
+
+**Correction, from the follow-up measurement below: that is not the same as "no conflict exists", and I
+first wrote it as if it were.** The thieves turn out to be real, long-lived tracks, so the slot IS claimed
+— by the thief's own trajectory, which the ground truth simply does not label. The conflict is genuine and
+the ILP already constrains it correctly; what the solver cannot do is tell which of two real cells is the
+continuation. So the correct statement is **the structure is right and the discriminator is missing**, not
+"nothing contests the slot".
 
 Checked against the obvious harness suspect — "unannotated" here means unmatched by the one-to-one
 Hungarian, which a nearby-but-already-taken GT node would also produce. It is not that: the thieves sit a
@@ -153,7 +157,24 @@ Hungarian, which a nearby-but-already-taken GT node would also produce. It is no
 cell-separation away. They are real structures the annotators did not label, and they are nonetheless
 *nearer to the source* than the true successor is.
 
-And they are most likely **real cells the annotation does not cover**, not detector junk: E52 measured
+### The thieves are real cells, measured — not "most likely"
+
+The claim that the thief is an unlabelled cell rather than detector junk decides the axis, so it is worth
+more than a plausibility argument. Junk makes short predicted tracks; a real cell makes a long one.
+Component size of the predicted track each node belongs to:
+
+| population | n | median length | ≤ 3 frames | ≥ 50 frames |
+|---|---|---|---|---|
+| **thieves** | 126 | **61** | **0 %** | 67 % |
+| GT-matched nodes | 2 172 | 74 | 0 % | 74 % |
+| all predicted nodes | 122 808 | 44 | 0 % | 43 % |
+
+**Not one thief is a blip.** They are persistent tracked objects, *above* the average predicted node and
+close to annotated cells. So the tracker is not being fooled by noise; it is choosing between two real
+trajectories, and the annotation only labels one of them. The failure is a **splice between a labelled
+track and an unlabelled real one**.
+
+And they are therefore **real cells the annotation does not cover**, not detector junk: E52 measured
 that only 1.39 % of predicted nodes match GT at all, so the annotation is sparse by design, and a
 detection sitting one cell-separation from the nearest labelled cell is exactly what an unlabelled
 neighbour looks like. That matters for what can fix this. If the thief is a genuine cell, **no
@@ -169,9 +190,15 @@ neighbour.
   ~2.3 units, not 1, because it deletes the paired FP too; the 1.5 % bar is ~35 edges.
 - **But no available cue ranks them.** Distance 10/61, oracle velocity 10/61, appearance below chance
   (E46). `kiw1`'s two-pass tracklet ILP was priced on the motion premise and that premise is now
-  oracle-refuted — **do not build it for this reason**. The joint-assignment fallback is refuted too:
-  **every thief is an unannotated detection (0/126 annotated)**, so no re-costing or second-pass
-  assignment can displace it. **The linker axis is closed on all three readings — cue, structure, cost.**
+  oracle-refuted — **do not build it for this reason**.
+- **The remaining failure is a splice between a labelled track and an unlabelled real one.** Every thief
+  is unannotated (0/126) yet every thief is a long-lived real track (median 61 frames, 0 % blips). The
+  ILP's structure already constrains this correctly; what is missing is a **discriminator** that says
+  which of two real, equally-plausible cells is the continuation. Position, appearance (E46) and motion
+  (E54b) all fail at it.
+- **So detection quality is not the lever here and neither is the solver.** The thief *should* be
+  detected. Re-solving or re-weighting the same candidate set with the same features cannot help, because
+  the features do not separate the two.
 - **15 more of the 76 have their true successor outside the 10 µm gate** — structurally unreachable.
   Widening the gate admits them and more confusors; unpriced, and cheap to price.
 - **This re-points at the dense-regime detection model** (the standing conclusion), because the
