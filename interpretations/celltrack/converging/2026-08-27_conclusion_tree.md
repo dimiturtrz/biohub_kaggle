@@ -12,6 +12,34 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-20 13:41Z — the finer122 joint+nce arm collapsed its detector, so the gate it was built to read never got a reading
+
+**HARNESS, not REFUTED.** `launch_finer122_joint_nce.sh` — the correctly-specified never-run cell (finer122
+substrate, trunk trainable, contrastive ON, detected corpus) — read **proxy 0.0000 at BOTH eval windows**,
+from an init of 0.6150. Node recall went to exactly 0.000 while the emitted node count roughly DOUBLED
+(53k → 97k on `44b6_e57ff5c6`): the probability map saturates, NMS returns a lattice of peaks, and almost
+none of it lands within 7µm of a cell. `det` loss RISES across the windows (0.1460 → 0.1574) while the total
+falls — the optimizer buys contrastive progress with the detector. `sanity AUC` holds ~0.995, which is what
+says this is the detector and not the harness: the affinity head still discriminates on the same forward pass.
+
+The registered gate said "below 0.70 = the substrate is the bound and the finer122 axis closes for good".
+**It does not close.** The arm never tested the objective on a working detector; it tested whether
+`--contrastive-weight 1.5` at `--lr 5e-5` with an unfrozen trunk destroys a finer122 detector. It does, in
+947 steps. 1.5 was not a guess — it is the weight recovered exactly from the joint family where nce lifted
+0.61 → 0.87. What is new underneath it is the (1,2,2) decode, which quadruples the candidate count the term
+sums over. That is a *hypothesis* for the imbalance (nce 1.30 vs det 0.15), not a measured cause.
+
+Re-test, if ever: scale the weight by the grid ratio rather than picking a new one by feel, and assert node
+recall at the FIRST window so an arm like this dies in 4 minutes. **Not scheduled** — it is ~1.5h, not a
+submission arm by its own registration, and the ruler work outranks it. Detail:
+`interpretations/celltrack/2026-09-20_joint_nce_finer122_detector_collapse.md`.
+
+Unaffected: the 120× linker swap below, measured on this same run. It is a post-processing timing result,
+independent of detector quality — and it is the only reason two eval windows fit in 18 minutes instead of
+two hours, which is how the collapse was caught the same afternoon.
+
+---
+
 ## NEWS 2026-09-20 13:20Z — the thing eating the schedule was never the training: the flow solve was 120x off
 
 Timed a tracker pass by stage and found `LinkerStage` is **~75% of it**, and on the eval movies this arm
