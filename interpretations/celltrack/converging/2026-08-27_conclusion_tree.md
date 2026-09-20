@@ -37,6 +37,14 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   pass at those, not at the 2.87 µm set. A learning-free DoG union is separately dead on the conditional
   (0.156 vs its own 0.414 marginal). The card stays parked by explicit instruction; nothing starts
   without asking.
+- **The second addressable block is SOLVER-side and mostly spent (E43/E44).** Edge fragmentation is a
+  *selection* failure, not a candidate one: 99.51 % of fragmented GT edges already carry a proposed
+  candidate with an affinity (only 59 = 0.48 % have none, and those are median 11.72 µm — outside the
+  10 µm gate). So it needs no detector pass. But the obvious knob is spent: sweeping termination cost
+  shows a non-monotone curve peaking at 1.0–2.0, and raising it to d5er's proposed 3/4/6 **loses**
+  recall (0.8589 → 0.8293) because expensive termination makes nodes grab FP rivals. What stays live is
+  the **11.95 % of true edges the affinity head ranks below a rival, by a median margin of 0.0985** —
+  an affinity-*ranking* problem, reachable by a global solver or a better head, never by a cost knob.
 - **Runtime is solved and is no longer a reason to avoid anything (E31/E32).** `-fast` = 1590 s vs 6286 s,
   byte-identical submission; hidden test is 4 videos at 9.93 predict-minutes, ~20x headroom in a 9 h kernel.
 - **The ensemble idea is dead for the donors we hold (E33).** v1329f loses 98.9 % of the 961 genuinely
@@ -187,6 +195,81 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   the drift guard does not cover it), so `celltrack-public-0947-fast` (`kaggle/env_variant.py`) should
   emit a byte-identical submission in ~1600 s. A kernel RUN costs no submission slot, so this is a free
   probe: pushed 22:36Z, verify by diffing its `submission.csv` against 0947's.
+
+  **E45 — THE OUTRANKED BAND IS A FAST-CELL POPULATION (5.7× enriched), AND MOTION IS DEAD ON IT AT THE
+  ORACLE.** E44 left the 11.95 % outranked band as the one live reading of the fragmentation block. This
+  characterises it and then prices the cue it appears to ask for. All CPU, on the same cache.
+
+  *It is a displacement population.* Against a marginal outranked rate of 0.1195:
+
+  | | n | mean disp | q50 | q90 |
+  |---|---|---|---|---|
+  | ALL true candidate edges | 11879 | 1.726 | 1.414 | 3.464 |
+  | MUTUAL-BEST | 10459 | 1.441 | 1.414 | 2.828 |
+  | **OUTRANKED** | **1420** | **3.831** | **3.742** | **5.831** |
+
+  **P(outranked | displacement > the all-true q90 of 3.46) = 0.6769 against a 0.1195 marginal — 5.7×.**
+  The affinity head's ranking failure IS a fast-cell failure: where the cell moves far, a nearer rival
+  takes the link.
+
+  *So a distance prior is worse than nothing.* In the outranked band the true edge is **farther** than
+  its rival in 0.7984 of cases (true median 4.12 vs rival 2.24 voxels); among non-tied pairs distance
+  picks the true edge **0.1767 of the time against 0.5 chance**. Adding a distance cost to the linker
+  would actively select the confusor. This independently reproduces the below-chance signature already
+  recorded for motion-in-ILP, now localised to the band that actually matters.
+
+  *And velocity does not rescue it — tested at the ORACLE.* If the cell merely moved, the cue should be
+  distance from `x_t + (x_t - x_{t-1})`, built here from **GT** positions, so it upper-bounds any learned
+  motion feature. On the 950 band edges whose source has a GT predecessor: oracle velocity picks the true
+  target **0.6400**, static distance **0.5747** in the same frame — velocity buys **+0.065** — with a
+  median margin improvement of **+0.041 µm** and `frac>0 = 0.5053`, i.e. a coin flip on WHICH edges it
+  helps (the mean +0.645 is a tail artifact). **Caveat, and it runs in my favour:** this frame measures
+  from the GT source position to detections, and the true detection was itself selected as the one
+  nearest the GT tail, so it is biased TOWARD the true edge — which is why static reads 0.5747 here and
+  0.1767 on the unbiased cache column. The bias being optimistic is what makes the result usable: the
+  true ceiling is **at most** 0.64. An oracle that barely separates needs no learned version.
+
+  **Conclusion: the outranked band is not reachable by any geometric cue — not distance, not velocity,
+  not at the oracle.** It is an appearance/affinity-quality problem, consistent with
+  `celltrack-four-cues-fail-confusor-detection-side` and with the confusor sitting at the voxel
+  resolution limit. Do not re-file a motion or distance term for it. Note this also explains the older
+  "motion_distance lever aggregate-small" reading without contradicting it: aggregate-small is exactly
+  what a real effect concentrated on 11.95 % of edges looks like — here the concentration is real and
+  the cue is still dead, so the axis closes on mechanism rather than on dilution.
+
+  **E44 — THE TERMINATION KNOB POINTS THE WRONG WAY. Raising disappearance cost past ~1.5 LOSES GT
+  edges, so bd `d5er`'s proposed 3/4/6 direction is refuted on its own mechanism.** E43 put the
+  fragmentation block on a solver knob; this prices the knob. The cached candidate graph is pure dt=1,
+  so the faithful model is a per-frame-pair global assignment with a constant termination cost per
+  unmatched node (costs `-log(affinity)`, termination as a square augmentation, decomposed over the
+  connected components *of each frame pair* — components over the whole movie chain all 100 frames into
+  one blob and buy nothing). Sweeping `term` over 8 values, CPU-only, no detector pass:
+
+  | term | 0.25 | 0.5 | **1.0** | **1.5** | **2.0** | 3.0 | 4.0 | 6.0 |
+  |---|---|---|---|---|---|---|---|---|
+  | GT-edge recall | 0.7643 | 0.8455 | **0.8582** | **0.8589** | **0.8581** | 0.8532 | 0.8454 | 0.8293 |
+
+  The curve is **non-monotone with a broad shallow plateau at 1.0–2.0**, and every step above it costs
+  recall — 6.0 gives up 0.0296 against the peak, an order of magnitude over the 0.01–0.02 noise floor.
+  d5er's hypothesis was that cheap termination (`BIOHUB_ILP_DISAPPEARANCE_WEIGHT=2`) lets the solver
+  abandon tracks it should continue, so 3/4/6 would buy edges back. The mechanism **backfires**: with a
+  global assignment, expensive termination forces every node to link to *something*, and in a field
+  carrying ~980 FP per frame against ~17 GT cells the something it grabs is an FP rival that steals the
+  true target. Recall and precision degrade together in that direction, so no precision measurement can
+  rescue it. The shipped weight of 2 already sits on the plateau — **this knob is spent, not mis-set.**
+
+  *Two denominators, because the naive ones lie.* The sweep's first `mislinks` column (taken links that
+  are not GT edges) sat at 0.98 for every value of `term` and measured nothing — almost every link is
+  FP-to-FP and was never a mistake about a real cell; the honest version counts only links whose two
+  endpoints are both GT-matched detections (`kaggle/termination_cost_sweep.py`). And the recall LEVEL
+  (0.859) is not comparable to the real tracker's 0.9475: this model has no distance gate and no
+  division term. **The shape across `term` is the result; the level is not.** Caveat as E43: this is our
+  tunet cache (node recall 0.697–0.750), not 0947's 0.824.
+
+  *What survives.* E43's 11.95 % outranked band is untouched by this — those true edges lose to a
+  **rival**, not to termination, and a termination cost cannot flip a swap. That band, with its median
+  margin of 0.0985, remains the one live reading of the fragmentation block, and it is an
+  affinity-*ranking* problem (global solver, or a better head) rather than a cost knob.
 
   **E43 — FRAGMENTATION IS A *SELECTION* FAILURE, NOT A CANDIDATE FAILURE. The 4.46 % block is on the
   table and the solver declines it — so it is solver-reachable, and reachable WITHOUT A DETECTOR PASS.**
