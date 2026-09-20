@@ -12,7 +12,49 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
-## NEWS 2026-09-20 06:40Z — the competition GT is a SPARSE SUBSAMPLE of a DENSE public annotation
+## NEWS 2026-09-20 06:43Z — the public dense GT is NOT our embryos: axis CLOSED in one CPU hour
+
+The 06:40Z entry below is **resolved and partly wrong**, and the correction is worth more than the find.
+
+`kaggle/public_gt_registration.py`. A crop is anonymised — integer voxel coordinates, clock restarted at
+zero, no translation transform — but its GT chains run 40–100 frames, and a chain's sequence of step
+LENGTHS survives any unknown translation or rotation. Slide that sequence against every public track.
+
+**Positive control first.** Take real public tracks, round them onto the crop's voxel grid exactly as an
+anonymiser would, and feed them back in: **20 of 20 recovered**. The probe works under the quantisation
+the real question has to survive.
+
+| public volume | steps | tracks | crops matched (of 8 tested) |
+|---|---|---|---|
+| ZSNS001 | 20,092,258 | 1,454,396 | 1 — and only the weakest needle (spread 3.28 µm), 29 hits = chance |
+| ZSNS003 | 3,888,503 | 167,995 | **0** |
+| ZSNS004 | 5,225,573 | 285,300 | **0** |
+| ZSNS005 | — | — | **0** |
+
+Strides 2, 3 and 4 swept on ZSNS003 in case a competition frame advances several published timepoints:
+**0 at every stride.** A true source would give exactly one hit on a strong needle; instead the seven
+*strong* needles (spread 4.45–11.06 µm) score zero everywhere, and the single sub-threshold needle scores
+29 — the signature of chance, not provenance.
+
+**The two train embryos are not the publicly annotated ZSNS001/003/004/005.** Strictly: no public track
+reproduces a crop's motion signature to within one voxel. The imaging could still be shared with the
+coordinates re-curated, but nothing in the public files is usable as our labels.
+
+**Two things close at once.** The dense-supervision axis is dead — E54c's thieves and E58's decoys have no
+published track to inherit, so the centre-offset head must be trained on what we have. And the *leakage*
+route closes with it: not even the train crops resolve against the public set, so there was never an answer
+key to refuse. Good. Bead `03sn` closed.
+
+Two traps avoided, both worth keeping: the first run reported 2 of 8 matches, and both were chains whose
+every step sat inside one tolerance band — a needle with **no power**, matching any slow track in the
+embryo. And the first matcher slid its window across concatenated tracks, so a window could span two
+unrelated cells. Fixing those turned a 25 % "hit rate" into a clean zero.
+
+Cost: ~1.4 GB of public CSV, one CPU hour, zero GPU, zero submissions.
+
+---
+
+## NEWS 2026-09-20 06:40Z — the competition GT is a SPARSE SUBSAMPLE of a DENSE public annotation (SUPERSEDED — see 06:43Z)
 
 Triaging the last three untriaged public kernels turned up `giorgosi/zsns00{4,5}` — not a tracker at all,
 but a **data harvester**. It pulls the source volumes from
