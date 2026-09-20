@@ -12,6 +12,21 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-20 04:40Z — a harvested element was already in the champion; and a submission can't price a prune
+
+- **E52: SHORT5 is a NO-OP on our output.** `howonkang/biohub-0947-short5-prepp-r1` deletes every linked
+  component of ≤5 nodes from the raw geff. Minimum component size in the champion's submission is
+  **exactly 6** on all four movies — `OUTPUT_MIN_TRACK_LEN = 6` already binds, and no short division
+  component survives for `OUTPUT_KEEP_DIVISION_COMPONENTS = 1` to spare. Cuts at ≤2/≤3/≤5 remove **0
+  nodes**. Its only remaining claim is as a PRE-postprocessing pass (i.e. "repair is net-harmful on short
+  components"), which sits inside E37's ~1.1 % repair ceiling → sub-bar, no slot owed.
+  `interpretations/celltrack/2026-09-20_e52_short5_is_a_noop.md`
+- **The denominator rule this exposed — general.** Only **1.39 %** of predicted nodes match any GT cell at
+  2.87 µm (2.21 % at 7 µm). That is annotation SPARSITY (E51's fracs 0.0016–0.135), not a 98 % FP rate.
+  So **a cached submission cannot measure a pruner's FP-recall** — its negative class is "unannotated",
+  not "false". Collateral stays valid (denominator = matched GT). Price prunes on a candidate set with GT
+  correspondence, as E47–E49 did.
+
 ## NEWS 2026-09-20 04:30Z — the proxy is in-sample, and its own split cannot say how much
 
 - **E50 (`g89y` precondition): both gates FAIL under an intensity proxy, but the proxy is confounded.**
