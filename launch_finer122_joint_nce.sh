@@ -21,7 +21,13 @@
 # it built a (1,4,4) pipeline around the (1,2,2) checkpoint and BaseCalibration aborted at window 0:
 #   node ratio +1.03 outside [-0.50, +0.50]
 # The band is grid-scaled — 0.5 * (16 / dy*dx), so (1,2,2) allows +2.00 and +1.03 passes. The abort was the
-# grid mismatch, not the base. The relative-position flags likewise reproduce the coadapt_long recipe.
+# grid mismatch, not the base.
+#
+# The inverse holds for the HEAD, and passing --relative-position here is a second bug, not a fix: the head
+# config IS restored by from_checkpoint, so re-passing the flags wraps an already-wrapped head and dies with
+#   AttributeError: 'RelativePositionEdgeTransformer' object has no attribute 'blocks'
+# Rule for a chained run: pass what describes the PIPELINE (decode grid, corpus, loss weights); pass nothing
+# that describes the MODEL, which the checkpoint already carries.
 #
 # Three deliberate choices:
 #   --init-weights  : whole model, TRAINABLE (unlike --detector-from, which freezes). Freezing costs ~0.05
@@ -40,7 +46,6 @@ LOG="logs/finer122_joint_nce.log"
 uv run python -m celltrack.training.joint_detector \
   --init-weights finer122_coadapt_long.pt \
   --downsample 1 2 2 \
-  --relative-position --relative-position-directional \
   --detected-videos 20 \
   --contrastive-weight 1.5 --hard-negative-weight 0.015 --temperature 0.07 \
   --lr 5e-5 \
