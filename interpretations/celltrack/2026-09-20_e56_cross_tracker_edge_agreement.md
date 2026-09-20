@@ -110,6 +110,44 @@ The cost is now affordable for the first time: `twrp` verified the fast kernel a
 rival predict fits in the freed 4010s at ~930s. That is the one shape in which the 39 is worth spending
 anything on. Filed as bd `x6bd`; it blocks `kiw1`, which must **not** be built as a plain edge union.
 
+## Second addendum — node-free is not the same as free, and the census prices the difference
+
+The addendum above reads as though the 33 were a cheap harvest. They are not, and the number that says so
+took one CPU run. `kaggle/edge_transfer.py` asks the transfer question the way a *submission* would have
+to: align rival nodes onto champion nodes by distance alone, **no ground truth anywhere**, then sort every
+rival edge into unaligned / redundant / **clean** (both champion slots free) / **contested** (the champion
+already spends that slot on another partner).
+
+| ruler | unaligned | redundant | **clean** | **contested** |
+|---|---|---|---|---|
+| 2.87 µm | 7070 | 110273 | **11** | **1538** |
+| 7.0 µm (official) | 3831 | 112643 | **13** | **2405** |
+
+**Clean additions number 11–13 across four movies.** That is far below the noise floor and worth nothing.
+
+And the 33 are not among them. A `swap` label means both slots are taken; `source linked to a RIVAL` means
+the source's outgoing slot is taken; `target taken by a RIVAL` means the target's incoming slot is taken.
+**Every one of the three selection labels is, by definition, contested.** So the harvest is not "add 33
+edges". It is **"pick the right 33 out of 2405"** — a 1.4 % base rate — where each wrong pick breaks a
+GT edge *and* plants an FP, because E54 showed those are one axis.
+
+That is precisely the specification E48/E49 set for prune proposals, now binding on transfer proposals:
+their joint 8-feature GBM reached FP-recall 0.0846 against 0.75 required, nine times short, on an easier
+base rate than this one. **The discriminator is the whole task, and borrowing a rival's edges does not
+supply it** — it supplies 2405 suggestions of which 98.6 % are wrong.
+
+The honest correction to the first addendum: node-free was right, "alive" was too generous. The clause it
+added to E54's bar needs a second one. **Recover 35 GT edges without adding nodes *and* without a
+discriminator you have not demonstrated at the required precision.**
+
+One thing worth keeping from the census: **94.7 % of the rival's edges are redundant** (112643 of 118892
+at the official ruler). Two separately-trained families agree on nineteen edges in twenty. That is the
+same saturation the ensemble axis already closed, measured for the first time at edge resolution rather
+than through a score.
+
+**Verdict: the cross-tracker edge-transfer axis is CLOSED.** Cost to close it: one CPU run, zero
+submissions, zero GPU.
+
 ## Open
 
 Whether the v1329 family trained on these four movies is **unresolved** — the kernel's split file is

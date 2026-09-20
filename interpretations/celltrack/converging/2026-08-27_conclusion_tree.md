@@ -50,6 +50,21 @@ Full write-up: `interpretations/celltrack/2026-09-20_e56_cross_tracker_edge_agre
   **directional, composes.** **A RE-RANKING axis, not a merge axis** — the champion lacks the
   discriminator (E54c) and v1329 is an existence proof one exists; transfer needs no GT at test time.
   Affordable only because **twrp** freed 4010s (rival predict ~930s). bd `x6bd` blocks `kiw1`.
+- **SECOND ADDENDUM, same tick — AXIS CLOSED. Node-free is not the same as free.** `kaggle/edge_transfer.py`
+  asks the transfer question the way a *submission* must: align rival nodes onto champion nodes by
+  **distance alone, no GT**, then sort every rival edge. At the official 7 µm ruler: unaligned 3831,
+  redundant 112643, **CLEAN 13**, **CONTESTED 2405** (at 2.87 µm: 7070 / 110273 / 11 / 1538). Clean
+  additions are **11–13 across four movies** = sub-noise, worth nothing. **And the 33 are not among them**
+  — swap / source-rival / target-rival each mean a champion slot is ALREADY TAKEN, so all 33 are contested
+  **by definition**. The harvest is not "add 33 edges", it is **"pick the right 33 out of 2405"** = a
+  **1.4 % base rate**, each wrong pick breaking a GT edge *and* planting an FP (E54, one axis). Exactly
+  E48/E49's spec, now binding on transfer proposals: their GBM hit FP-recall 0.0846 vs 0.75 required on an
+  *easier* base rate. **Borrowing a rival's edges does not supply the discriminator — it supplies 2405
+  suggestions, 98.6 % wrong.** Corrects the first addendum: node-free right, "alive" too generous.
+- **Also banked from that census: 94.7 % of the rival's edges are REDUNDANT** (112643 / 118892). Two
+  separately-trained families agree on nineteen edges in twenty — the ensemble-saturation closure measured
+  at **edge resolution** for the first time, rather than through a score. Cost to close the whole axis:
+  **one CPU run, zero submissions, zero GPU.**
 
 ---
 
