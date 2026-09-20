@@ -12,6 +12,26 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-20 04:45Z — the prune axis was never a tracking axis (read from the scorer's source)
+
+- **E53: an edge between two UNANNOTATED detections is neither TP nor FP.** `metrics.py:55-114` and the
+  champion's faithful copy (`champion_submission.py:3584-3620`): an edge counts only if an endpoint
+  matched a GT node. A spurious detection away from annotated cells is **metric-invisible** except
+  through `adjusted = jac * (1 - 0.1*(t_pred - t_true)/t_true)`, where `t_true` is the geff's **estimated
+  true node count** and the term is SIGNED — `t_pred < t_true` multiplies the jaccard UP.
+- **Champion already sits at/below `t_true` on 3 of 4 movies** (25637/25755, 20729/32795, 6152/6362,
+  70290/69800) → no over-detection penalty left to recover.
+- **Re-reads the prune axis:** E47's +0.1139 oracle is mostly that multiplier, not recovered edges;
+  E48/E49's target label was not "is this an FP" but "did an annotator pick this cell" (98.4 % of their
+  rows were unlabelled REAL cells); E52's cut buys ≤ +0.009, under the noise floor, against ~2× that in
+  collateral. **Axis closed for a better reason than E48/E49 gave.**
+- **The label is partly predictable** — on the two sparsest movies annotation is a thin slab in y (GT std
+  5.7 / 8.4 µm vs 30.7 / 24.9 for all detections). **Not building it**: deleting real cells for the
+  node-count bonus games sparse GT and improves no tracking. Any future prune must name its channel —
+  recovered edges (real) or the multiplier (not). Real FP headroom = edges TOUCHING annotated cells, i.e.
+  the mislink/confusor problem (E45/E46).
+  `interpretations/celltrack/2026-09-20_e53_prune_axis_is_an_annotation_artifact.md`
+
 ## NEWS 2026-09-20 04:40Z — a harvested element was already in the champion; and a submission can't price a prune
 
 - **E52: SHORT5 is a NO-OP on our output.** `howonkang/biohub-0947-short5-prepp-r1` deletes every linked
