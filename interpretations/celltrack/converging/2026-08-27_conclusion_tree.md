@@ -12,6 +12,37 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-20 07:14Z — E60: the six top-voted unharvested kernels ARE our champion, with worse constants
+
+Six public kernels we had never pulled (263/97/82/78/58/30 votes), triaged by **diffing their `BIOHUB_*`
+env constants against the banked 0947** instead of reading four near-identical 222 KB notebooks — a
+megabyte of donor in one `comm`. Write-up: `interpretations/celltrack/2026-09-20_e60_the_frontier_moved_back_to_us.md`.
+
+| kernel (votes) | vs our 0947 |
+|---|---|
+| `biohub-harmonic-fusion` (263), `-v3` (78), `lineage-forge` (97), `lf-dctta` (82) | identical except `DET_THRESHOLD` 0.960→**0.965**, `PPSWEEP_SELECT_MARGIN` 0.0005→**0.001**, and **no `MOTION_RELINK_TIGHT_UM=5.5`**. Its own header: `'public 0.939 base'` |
+| `biohub-0-95` (58) | **SCORER EXPLOIT** — the kirneo hack again (hub@`t=-1000`, `MAX_COMPONENTS=1400`, `FORKS=5`), already at tree lines 701 / 1391-1396. Not portable, not submitted |
+| `biohub-lf-hoctveto-div-b` (30) | **`BIOHUB_HOCT_VETO=2`** — the only new element |
+
+**The bidirectional harmonic fusion is OURS, shipped, and already in the 0947 we hold.**
+`TrackerConfig.shipped()` carries `bidirectional_edges=True`; the fuse lives at
+`celltrack/edges/blended_edge_scoring.py:191-194`; priced −0.0027 under the assignment linker and **+0.004
+on the LB under flow** a month ago. Zero to harvest.
+
+**`HOCT_VETO` is pre-refuted, three legs, before any run.** It runs HOCT general_v0 (royerlab, arXiv
+2607.11754) over the champion's final nodes and drops every edge HOCT does not also propose. (1) Author's
+own number **+0.0040 [+0.0006, +0.0058]** — under our 0.01–0.02 floor. (2) It is an edge DELETION and **E54
+measured wrong-association = 0**: a dropped edge is a GT edge (loss) or an unannotated one (E53,
+metric-invisible); E47 caps the prune axis at **+0.021 even perfect**, E58 measured **1.85 lost per 1
+gained**. (3) Its stated gain is division-side, and the division axis is **LB-flat**. Filed and closed as
+bd `0jaw`, a do-not-re-harvest record.
+
+**Net: zero shippable elements, and one reframing** — the public list holds nothing we have not priced, and
+a public score above 0.947 is not by itself evidence of a better tracker. The remaining wall-clock belongs
+to the centre-offset head (Campaign A), which E59 proved cannot be priced offline at all.
+
+---
+
 ## NEWS 2026-09-20 06:54Z — E59: the re-solve prices perfect localization at TWO edges, and 76/76 was a tautology
 
 E57 asked for a re-solve, because snapping a node onto its GT coordinate is a no-op for the metric by
