@@ -298,6 +298,42 @@ the shipped budget stands.
 This closes the budget axis under c3 from both ends: uncapped reaches 6 divisions and is unscoreable at ~700
 forks a movie, 100 reaches 5 and is measurably worse, and 25 reaches 4 and is the best of the three.
 
+## CORRECTION: the champion already runs c3, so +0.0123 is a gap-closure, not a lever
+
+The banked 0.947 is a harvested **notebook** (`kaggle/kernels/celltrack-public-0947/`), not one of our
+python kernels, so it never mounts `TrackerConfig.shipped()`. Reading its own constants:
+
+```
+SAFE_DIV_REQUIRE_DIVERGENCE = os.environ.get('BIOHUB_SAFE_DIV_REQUIRE_DIVERGENCE', '1')
+SAFE_DIV_DIVERGE_UM'] = '2.25'
+```
+
+**The champion already has the C3 divergence gate on, at the same 2.25µm.** Everything measured above was
+our own tracker, whose `shipped()` had the flag off. So `+0.0123` is our pipeline closing a gap to the
+champion — it is NOT available on top of 0.947, and there is no submission in it.
+
+Two things I got wrong, in order:
+
+1. **I priced a flag without reading the champion's constant for it first.** That is the explicit rule from
+   E52 ("check the champion's constant first"), and skipping it turned a replication into a claimed win for
+   several hours of arms.
+2. **"Free on the banked champion" was the wrong denominator**, the same error CLAUDE.md names: the numbers
+   came from `proxy_eval` running *our* recipe, and I attributed them to the champion because our recipe is
+   the thing I call shipped.
+
+What survives, and it is the part worth keeping:
+
+- **The term arithmetic still stands.** Even at the c3-on counts (4/5/21, jaccard 0.1333) only **0.0133 of
+  an available 0.1** is claimed. The division term is still ~0.087 unclaimed, now measured on a
+  configuration the champion actually runs rather than on one it does not.
+- **Every closure above still holds** — budget (both ends), candidacy (both budgets), ranking, threshold.
+  They were measured on the c3-on configuration, which is the champion's configuration, so they transfer.
+- **The `tp=1, fp=10, fn=24` figure that opened this page is retired.** It describes our tracker with the
+  gate off, and no longer describes anything we ship or bank.
+
+The honest one-line summary of E61 is now: *the division term is the large unclaimed term, our replica was
+missing the champion's divergence gate and is now fixed, and nothing here beats 0.947.*
+
 ## Secondary reading: the ruler itself
 
 The same run is the first test of whether division-bearing movie selection explains our top-end proxy offset.
