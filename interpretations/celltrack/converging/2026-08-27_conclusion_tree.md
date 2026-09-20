@@ -167,21 +167,33 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   the drift guard does not cover it), so `celltrack-public-0947-fast` (`kaggle/env_variant.py`) should
   emit a byte-identical submission in ~1600 s. A kernel RUN costs no submission slot, so this is a free
   probe: pushed 22:36Z, verify by diffing its `submission.csv` against 0947's.
-  **E35 — THE DISAPPEARANCE SWEEP IS A 0.29 % EXPERIMENT; DON'T PAY THE GPU ARM. CPU instrument, run
-  before the run.** `fragment_audit.py` now decomposes each in-gate fragmented GT edge by what the
-  PREDICTED graph did with its two endpoints (`_verdict`): if the source ended its track and the target
-  took no parent, the solver paid a disappearance and the disappearance weight is the binding knob;
-  if either slot went to some other node, it is a competition failure no cost on disappearance can
-  repair. Over the 40 cached validator videos, 22037 matched GT edges, 421 fragmented, 397 in gate:
-  **`disappearance` 64 · `source_stole` 119 · `target_taken` 89 · `both_reassigned` 125.** Only **16 %**
-  of the recoverable omissions are disappearances — **64/22037 = 0.29 % of edges is the ENTIRE ceiling of
+
+  **E35 — THE DISAPPEARANCE SWEEP IS A 0.32 % EXPERIMENT; DON'T PAY THE GPU ARM. And the omission story
+  IS the confusor story: 86 % of recoverable omissions are slot COMPETITION. CPU instrument, run before
+  the run.** `fragment_audit.py` decomposes each in-gate fragmented GT edge by what the PREDICTED graph
+  did with its two endpoints (`_verdict`): if the source ended its track and the target took no parent,
+  the solver paid a disappearance and the disappearance weight is the binding knob; if either slot went
+  to some other node, it is a competition failure no cost on disappearance can repair. Over the 40
+  cached validator videos, **23080 matched GT edges, 739 fragmented (3.2 %), 713 in gate:
+  `disappearance` 75 · `source_stole` 195 · `target_taken` 172 · `both_reassigned` 271.** Only **11 %**
+  of the recoverable omissions are disappearances — **75/23080 = 0.32 % of edges is the ENTIRE ceiling of
   `logs/run_ilpdisapp.sh`**, five times under the 1.5 % bar, so the sweep is retired before it cost the
-  ~23 min GPU arm E34 priced. The other **333 = 1.5 % of edges** are slot competition — a node other
-  than the true one won the successor or the parent — which lands back on the confusor/association axis
-  the whole tree keeps converging to, and `both_reassigned` (125, the largest single class) implicates
-  detection duplicates on both ends rather than the solver. Total fragmentation is 1.9 %, so **1.5 % of
-  the available 1.9 % is competition: the omission story and the confusor story are the same story.**
-  Supersedes the E26/E28 reading of omission as absence — it is mostly DISPLACEMENT of the slot.
+  ~23 min GPU arm E34 priced. The other **638 = 2.8 % of edges** are slot competition — a node other than
+  the true one won the successor or the parent — which lands back on the confusor/association axis the
+  whole tree keeps converging to; `both_reassigned` (271, the largest single class) means BOTH endpoints
+  were re-used elsewhere. `_rival_gap` then sizes the winner: median **3.25 µm**, only **55/638 (8.6 %)
+  within 1.6 µm** (a decode duplicate of the true cell) and **330/638 (52 %) beyond 3 µm** — past the
+  2.87 µm GT nearest-neighbour floor, so **the slot-winner is usually a GENUINELY DIFFERENT CELL, not a
+  duplicate detection.** Finer decode / NMS is therefore NOT the repair for this residue; edge-affinity
+  discrimination is. Supersedes the E26/E28 reading of omission as absence — it is mostly DISPLACEMENT.
+  **Methodology correction (self-inflicted, third denominator slip this session):** the first pass used
+  greedy `cKDTree` NN at 5 µm, which lets several GT nodes claim one prediction and INVENTS fragments;
+  fragmentation swung 0.62 % → 0.92 % → 1.91 % across 2/3/5 µm. `match_nodes` now mirrors the official
+  ruler — `core/metrics/matching.py` `DistanceMatcher`, an OPTIMAL per-frame `linear_sum_assignment`
+  under `_MAX_DISTANCE_UM = 7.0`. All numbers above are at that faithful setting. The RETIREMENT was
+  stable across every tolerance tested (disappearance 21/85, 35/166, 64/397, 75/713 — always a small
+  minority); the magnitudes were not. **Rule earned: match with the metric's own matcher, or the rate
+  you report is a property of your tolerance, not of the tracker.**
 
   **E34 — PLUMBING CORRECTION: E29's candidate cache has NEVER ONCE FIRED, so the "ILP arms are free"
   saving is projected, not banked. `find runs -name '*.candidates.npz'` returns **0 files** across all

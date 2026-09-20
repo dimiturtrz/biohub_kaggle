@@ -17,14 +17,17 @@ from pathlib import Path
 import numpy as np
 import yaml
 import zarr
-from scipy.spatial import cKDTree
+from scipy.optimize import linear_sum_assignment
 
 log = logging.getLogger(__name__)
 
 REPO = Path(__file__).resolve().parents[1]
 SPACING_UM = np.array([1.625, 0.40625, 0.40625])
 GATE_UM = 10.0
-MATCH_UM = 5.0
+MATCH_UM = 7.0  # the official DistanceMatcher cap (core/metrics/matching.py)
+_FORBIDDEN = 1e6
+DUPLICATE_UM = 1.6  # one (1, 4, 4) voxel in y/x: closer than the decode grid can separate
+DISTINCT_UM = 3.0  # above the 2.87 µm GT nearest-neighbour floor, so a genuinely different cell
 
 
 def train_dir() -> Path:
@@ -44,16 +47,23 @@ def read_graph(path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
 
 
 def match_nodes(truth: np.ndarray, predicted: np.ndarray) -> np.ndarray:
-    """Nearest predicted node per GT node within MATCH_UM, frame by frame; -1 where unmatched."""
+    """One predicted node per GT node, frame by frame; -1 where unmatched.
+
+    Mirrors `core.metrics.matching.DistanceMatcher`: an OPTIMAL per-frame assignment under a µm cap,
+    not a nearest-neighbour lookup. Greedy matching lets several GT nodes claim the same prediction,
+    which invents fragmented edges wherever the detector merged two cells.
+    """
     matched = np.full(len(truth), -1, dtype=np.int64)
     for frame in np.unique(truth[:, 0]):
         gt_rows = np.flatnonzero(truth[:, 0] == frame)
         pred_rows = np.flatnonzero(predicted[:, 0] == frame)
         if len(pred_rows) == 0:
             continue
-        distance, nearest = cKDTree(predicted[pred_rows, 1:]).query(truth[gt_rows, 1:])
-        within = distance <= MATCH_UM
-        matched[gt_rows[within]] = pred_rows[nearest[within]]
+        cost = np.linalg.norm(truth[gt_rows, None, 1:] - predicted[None, pred_rows, 1:], axis=2)
+        cost[cost > MATCH_UM] = _FORBIDDEN
+        gt_local, pred_local = linear_sum_assignment(cost)
+        keep = cost[gt_local, pred_local] < _FORBIDDEN
+        matched[gt_rows[gt_local[keep]]] = pred_rows[pred_local[keep]]
     return matched
 
 
@@ -70,7 +80,7 @@ def audit_video(truth_path: Path, predicted_path: Path) -> dict:
 
     outgoing, incoming = _orient(pred_pos, pred_edges, pred_index)
 
-    fragmented, present, verdicts = [], [], []
+    fragmented, present, verdicts, gaps = [], [], [], []
     for source, target in gt_edges:
         rows = (index.get(source, -1), index.get(target, -1))
         if -1 in rows:
@@ -85,7 +95,10 @@ def audit_video(truth_path: Path, predicted_path: Path) -> dict:
         fragmented.append(step)
         if step <= GATE_UM:
             verdicts.append(_verdict(pair, outgoing, incoming))
-    return {"fragmented": fragmented, "present": present, "verdicts": verdicts}
+            gap = _rival_gap(pair, outgoing, incoming, pred_pos)
+            if gap is not None:
+                gaps.append(gap)
+    return {"fragmented": fragmented, "present": present, "verdicts": verdicts, "gaps": gaps}
 
 
 def _orient(pred_pos: np.ndarray, pred_edges: np.ndarray, pred_index: dict) -> tuple[dict, dict]:
@@ -101,6 +114,22 @@ def _orient(pred_pos: np.ndarray, pred_edges: np.ndarray, pred_index: dict) -> t
         outgoing.setdefault(first, []).append(second)
         incoming.setdefault(second, []).append(first)
     return outgoing, incoming
+
+
+def _rival_gap(pair: tuple[int, int], outgoing: dict, incoming: dict, pred_pos: np.ndarray) -> float | None:
+    """How far the node that WON the slot sits from the node that should have had it, in µm.
+
+    A gap under roughly one voxel diagonal means the winner is a duplicate detection of the true cell,
+    so the loss is a decode/NMS failure the association head never had a chance to avoid. A gap of
+    several µm means a genuinely different cell won, which is the confusor axis.
+    """
+    source, target = pair
+    rivals = [pred_pos[node, 1:] for node in outgoing.get(source, [])]
+    rivals += [pred_pos[node, 1:] for node in incoming.get(target, [])]
+    if not rivals:
+        return None
+    reference = pred_pos[target, 1:]
+    return float(min(np.linalg.norm(rival - reference) for rival in rivals))
 
 
 def _verdict(pair: tuple[int, int], outgoing: dict, incoming: dict) -> str:
@@ -120,6 +149,18 @@ def _verdict(pair: tuple[int, int], outgoing: dict, incoming: dict) -> str:
     return "source_stole" if took else "target_taken"
 
 
+def _gap_report(gaps: np.ndarray) -> dict:
+    """Split the slot-winners into duplicate detections of the true cell and genuinely other cells."""
+    if not len(gaps):
+        return {}
+    return {
+        "n": len(gaps),
+        "median": round(float(np.median(gaps)), 3),
+        "duplicate_under_1_6um": int((gaps <= DUPLICATE_UM).sum()),
+        "distinct_over_3um": int((gaps > DISTINCT_UM).sum()),
+    }
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser(description=__doc__)
@@ -131,6 +172,7 @@ def main() -> None:
     fragmented: list[float] = []
     present: list[float] = []
     verdicts: list[str] = []
+    gaps: list[float] = []
     for predicted in sorted(args.cache.glob("*.geff"))[: args.limit]:
         truth = source / predicted.name
         if not truth.exists():
@@ -139,6 +181,7 @@ def main() -> None:
         fragmented += result["fragmented"]
         present += result["present"]
         verdicts += result["verdicts"]
+        gaps += result["gaps"]
 
     steps = np.array(fragmented)
     report = {
@@ -153,6 +196,7 @@ def main() -> None:
         },
         "linked_median_step_um": float(np.median(present)) if present else None,
         "in_gate_verdicts": {name: verdicts.count(name) for name in sorted(set(verdicts))},
+        "rival_gap_um": _gap_report(np.array(gaps)),
     }
     log.info(json.dumps(report, indent=2))
 
