@@ -487,3 +487,33 @@ A perfect FP-free recovery of the 6 plus the 7 already reachable values at
 `13/(13+5+12) = 0.433` jaccard against the shipped 0.133, i.e. **~+0.030 combined** — and the FP-free
 part will not hold. The honest read is that the reachable half of the axis is worth a fraction of a
 bar, and the half that could carry it needs a linker change, not a post-processing change.
+
+## The residual six are a RANKING failure, not a gate: the wrong daughter wins
+
+With the gates opened to 1000 µm (parent, sister and existing-child all), candidacy geometric, budget
+removed and the veto on:
+
+```
+TOTAL recovered=7 nodes_missing=2 no_fork=11 (unproposable=10) fork_rejected=5
+```
+
+Recovery does not move — still 7. What moves is where the misses sit: `no_fork` falls 16 → 11 and
+`fork_rejected` rises 0 → 5. Opening the gates by two orders of magnitude does not find one extra
+division; it emits a fork at five of the right mothers and picks the **wrong second daughter** at every
+one. The gates were never what stood between us and those five.
+
+That closes the last suspect on the proposal path and splits all 25 missed divisions cleanly:
+
+| count | cause | what could reach it |
+|-------|-------|---------------------|
+| 2 | daughter lineage never detected | the detector |
+| 7 | already recovered under c3 + uncapped + geometric | — |
+| 10 | second daughter already parented by another track | a displacing (steal) stage |
+| 5 | fork emitted at the right mother, wrong daughter chosen | the RANKING |
+| 1 | still unexplained | — |
+
+Two levers, each with a named mechanism and neither of them a knob on the existing stage. The 10 need a
+pool the stage cannot see; the 5 need a cue that separates a true sister from a near one, which is the
+same discrimination [[confusor]] measured to be pairwise-unresolvable — and exactly what the multi-frame
+c3 divergence already supplies as a veto rather than as a score. Ranking BY divergence, rather than
+vetoing on it, is the cheap arm that follows from this table.
