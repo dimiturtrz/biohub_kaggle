@@ -584,3 +584,37 @@ in the set and the score is the thing that sorts them. That needs its own matche
 `require_c3_divergence=false` alone, same candidacy and budget — because dropping the veto changes the
 recovered set by itself, and an uncontrolled soft arm would credit the preference for what the relaxation did.
 Both are running.
+
+## Both halves close: the gate beats the score, and the steal pool dies at the gate
+
+Four cells settle the divergence question, all at shipped candidacy and budget:
+
+| `require_c3_divergence` | `prefer_divergence` | recovered of 25 |
+|---|---|---|
+| true | false | **4** (shipped) |
+| true | true | 3 |
+| false | true | 3 |
+| false | false | **1** |
+
+The score is a real cue — alone it recovers 3 where nothing recovers 1, so it carries two of the gate's three
+divisions by itself. It is also strictly dominated by the same cue used as a gate. That reverses the reading
+the permissive arm suggested: the veto's six deleted forks are a **ceiling-regime** phenomenon, where an
+uncapped geometric candidacy makes the veto the only thing rationing a flooded proposal set. At the operating
+point that ships, censorship costs nothing and the hard threshold is the better estimator. `prefer_divergence`
+stays in the code as an off-by-default term; it is not a ship.
+
+The steal half closes on its own evidence, against my stated mechanism. I predicted the capped steal arm's
+`recovered 4 → 2` came from steal candidates displacing true forks under a binding budget, and registered
+the uncapped arm as the test. Uncapped recovers **1**, worse than capped, with **4 spurious forks across
+eight movies** — a flood would have produced hundreds. So the proposals are not competing and losing; they
+are being destroyed by the physical gates and the C3 veto before they reach the ranking at all. `unproposable`
+falls only 10 → 8, and none of the two reached convert.
+
+That is the same finding E54c reached from the other end. A daughter another track already holds was claimed
+*because she looks like a continuation* — which is precisely the shape a division-shaped gate rejects. The
+displacement stage cannot admit her without admitting the continuations she is indistinguishable from.
+
+**E61 verdict: the division-recall term is not reachable from post-processing.** The proposal path is priced
+to its ceiling, the ranking is priced, the gate is the best available estimator of its own cue, and the 40%
+of misses that sit outside the stage stay outside it under an explicit displacement candidacy. What remains
+is a re-parenting decision inside the linker's objective, which is a different component and a different cost.
