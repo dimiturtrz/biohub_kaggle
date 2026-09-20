@@ -25,7 +25,7 @@ from pathlib import Path
 import numpy as np
 import torch
 from jaxtyping import Float
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from torch import Tensor
 
 from celltrack.edges.calibrated_fusion import CalibratedFusion, CalibratedFusionOptions
@@ -61,6 +61,16 @@ class EdgeBlendOptions(BaseModel):
     # fusion above. It supersedes both `align_seed_moments` (it calibrates internally) and the bidirectional
     # fuse (the gated dual-seed blend IS the fusion) — a run either takes the convex path or this one.
     calibrated_fusion: CalibratedFusionOptions | None = None
+    # How much of the bidirectional fuse the REVERSE direction carries. 0.5 is the plain harmonic mean the
+    # blend has always taken, and keeps the shipped path exactly as it is. Two independent frontier kernels
+    # weight it far lower — 0.15 and 0.30 — reading the reverse pass as a CORRECTION applied to the forward
+    # question rather than a co-equal answer to a different one, which is what a symmetric mean makes it.
+    reverse_weight: float = Field(default=0.5, ge=0.0, le=1.0)
+    # Whether the reverse logits are put on the forward logits' centre and spread before their softmax. The
+    # two directions normalise over different axes, so their raw scales need not agree; without this the fuse
+    # can move the whole probability mass under a fixed candidate threshold, which the frontier kernel guards
+    # against by re-mapping. A live suspect for why every bidirectional arm so far has read flat.
+    align_reverse_moments: bool = False
 
 
 _DEFAULT_OPTIONS = EdgeBlendOptions()
@@ -190,8 +200,23 @@ class BlendedEdgeTransformerScorer:
         forward = torch.softmax(blended, dim=0)
         if not self.bidirectional:
             return forward, carried
-        reverse = torch.softmax(self._reverse_logits(gap), dim=0).T
-        return self.fuse(forward, reverse), carried
+        reverse = self._reverse_probabilities(self._reverse_logits(gap), blended)
+        return self.fuse(forward, reverse, self.options.reverse_weight), carried
+
+    def _reverse_probabilities(
+        self, reverse_logits: Float[Tensor, "t s"], forward_logits: Float[Tensor, "s t"]
+    ) -> Float[Tensor, "s t"]:
+        """The reverse pass's probabilities in the forward orientation, optionally re-expressed in its units.
+
+        The softmax runs over the reversed matrix's own source axis, which is the forward matrix's target axis,
+        so the transpose puts a pair back where the fuse expects it. The alignment is applied to the LOGITS
+        rather than the probabilities: rescaling after the softmax would break the normalisation the reverse
+        direction's question is asked in, while rescaling before it is a temperature and a shift on the same
+        ranking — which is the whole point of putting the two directions on one scale before mixing them.
+        """
+        if self.options.align_reverse_moments:
+            reverse_logits = SeedMomentAlignment.align(reverse_logits, forward_logits)
+        return torch.softmax(reverse_logits, dim=0).T
 
     def _calibrated_probabilities(
         self, options: CalibratedFusionOptions, gap: EdgeGap, histories: tuple[GapHistory, ...]
@@ -266,8 +291,8 @@ class BlendedEdgeTransformerScorer:
         forward = torch.softmax(logits, dim=0)
         if not self.bidirectional:
             return forward
-        reverse = torch.softmax(self._reverse_seed_logits(scorer, gap), dim=0).T
-        return self.fuse(forward, reverse)
+        reverse = self._reverse_probabilities(self._reverse_seed_logits(scorer, gap), logits)
+        return self.fuse(forward, reverse, self.options.reverse_weight)
 
     def _seed_scored(
         self, gap: EdgeGap, histories: tuple[GapHistory, ...]
@@ -323,8 +348,8 @@ class BlendedEdgeTransformerScorer:
         return [reference, *(SeedMomentAlignment.align(other, reference) for other in logits[1:])]
 
     @staticmethod
-    def fuse(forward: Float[Tensor, "s t"], reverse: Float[Tensor, "s t"]) -> Float[Tensor, "s t"]:
-        """The harmonic mean of the two directions' probabilities — a pair scores high only if both agree.
+    def fuse(forward: Float[Tensor, "s t"], reverse: Float[Tensor, "s t"], weight: float = 0.5) -> Float[Tensor, "s t"]:
+        """The WEIGHTED harmonic mean of the two directions' probabilities — a pair scores high only if both agree.
 
         `forward` is normalised over the sources of each target (who is this cell's parent?); `reverse` is the
         same gap scored with the temporal pair swapped and transposed back, so it is normalised over the targets
@@ -336,9 +361,14 @@ class BlendedEdgeTransformerScorer:
         demands mutual consistency; an arithmetic mean would let the one confident direction carry the disagreed
         pair through at half its strength, which is exactly the failure mode.
 
+        `weight` is the reverse direction's share, `1/((1-w)/forward + w/reverse)`. At the default 0.5 this is
+        exactly the plain harmonic mean `2fr/(f+r)` the blend has always taken, so the shipped path is
+        unchanged; below it the reverse pass acts as a correction to the forward question rather than a
+        co-equal answer to a different one, which is how both frontier kernels that run this fuse use it.
+
         Zero-safe by construction: the denominator is floored, and a pair both directions call impossible fuses
         to 0 rather than 0/0. Flooring rather than `torch.where`-ing keeps a single expression, and `where`
         would evaluate the NaN branch anyway.
         """
-        total = forward + reverse
-        return 2.0 * forward * reverse / total.clamp(min=_DENOMINATOR_FLOOR)
+        total = (1.0 - weight) * reverse + weight * forward
+        return forward * reverse / total.clamp(min=_DENOMINATOR_FLOOR)

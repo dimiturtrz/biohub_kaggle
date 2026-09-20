@@ -92,6 +92,26 @@ def test_blended_edge_transformer_scorer_fuse():
     assert fused[0, 0] < forward[0, 0]  # dominated by the smaller direction, unlike an arithmetic mean
 
 
+def test_fuse_weight_is_the_reverse_direction_share():
+    """A weight below 0.5 leans the fuse back towards the forward direction, hand-computed at the frontier's."""
+    forward = torch.tensor([[0.8, 0.2]])
+    reverse = torch.tensor([[0.4, 0.6]])
+    weighted = BlendedEdgeTransformerScorer.fuse(forward, reverse, 0.15)
+    expected = torch.tensor([[1.0 / (0.85 / 0.8 + 0.15 / 0.4), 1.0 / (0.85 / 0.2 + 0.15 / 0.6)]])
+    assert torch.allclose(weighted, expected)
+    plain = BlendedEdgeTransformerScorer.fuse(forward, reverse)
+    assert weighted[0, 0] > plain[0, 0]  # forward is the confident side here, so leaning to it raises the fuse
+    assert weighted[0, 1] < plain[0, 1]  # and lowers it where forward is the doubting one — a lean, not a lift
+
+
+def test_fuse_at_half_weight_is_the_plain_harmonic_mean():
+    """The default leaves the shipped path arithmetically identical — the weight is an addition, not a change."""
+    forward = torch.tensor([[0.8, 0.2], [0.5, 0.1]])
+    reverse = torch.tensor([[0.4, 0.6], [0.3, 0.9]])
+    plain = 2.0 * forward * reverse / (forward + reverse)
+    assert torch.allclose(BlendedEdgeTransformerScorer.fuse(forward, reverse, 0.5), plain)
+
+
 def test_affinities_disabled_is_the_forward_blend(tmp_path: Path):
     """With fusion off the output is exactly today's: the seed-blended logits soft-maxed over the sources."""
     a, b = _tiny_scorer(0), _tiny_scorer(1)
