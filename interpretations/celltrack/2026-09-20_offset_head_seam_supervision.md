@@ -45,11 +45,33 @@ The control *improves* monotonically to +0.026 over init before its last-window 
 returns to init. The matched gap at 4500 is **−0.052**, far above the 0.01–0.02 noise floor. So the offset
 term at weight 0.01 costs the proxy on its own, and the recipe is not the culprit here.
 
-Two consequences. First, the auxiliary term competes with detection rather than regularising it — consistent
-with a head that reshapes shared features (grad norm 1.26) toward a Voronoi field that ~98% of frames only
-ever exercise on isolated cells. Second, **this same warm-finetune recipe works** (+0.026 from 0.8443),
-which the "warm-finetune recipe degrades proxy" memory would not have predicted; that memory is about the
-arms that carried a payload, not about the recipe alone. The recipe is exonerated; the payload is the cost.
+### Continuing the control to 12000 prices the scatter, and shrinks the claim
+
+The control's 0.8704 read as a climb, so it was resumed for 6000 more steps. It does not climb:
+
+| step | 6000 | 7500 | 9000 | 10500 |
+|---|---|---|---|---|
+| proxy | 0.8427 | 0.8435 | 0.8628 | 0.8544 |
+
+No trend, and with the earlier window the arm oscillates in a **0.843–0.870 band** — a peak-to-peak scatter
+of **0.027**, above the 0.01–0.02 floor this project uses for the *tracker* proxy. So two corrections to
+what is written above.
+
+First, "the recipe works, +0.026" was over-read: 0.8704 is the top of the scatter band, not a gain over
+0.8443. The honest statement is that the warm-finetune recipe leaves this detector on a **plateau near
+0.855**, neither improving nor collapsing it — which still refutes the recipe-collapse attribution, just
+more weakly than a +0.026 would. The detector is not under-trained; more steps at this architecture buy
+nothing.
+
+Second, the offset verdict *survives* the wider band and is the stronger for it: offsetA2's four matched
+reads (0.8194 / 0.7951 / 0.8182 / 0.8205) lie **entirely below** the control's band, 4 of 4, with no
+overlap. A gap that clears a 0.027 scatter is a real cost, not an eval draw. The auxiliary term competes
+with detection rather than regularising it — consistent with a head reshaping shared features (grad norm
+1.26) toward a Voronoi field that ~98% of frames only exercise on isolated cells.
+
+**The ruler finding is the reusable part.** A single detector-arm eval carries ±0.027 of scatter. Any past
+detector A/B decided on one eval inside that band decided nothing — the 0.01–0.02 floor was measured on the
+tracker proxy and does not transfer to this one.
 
 ## Stage 2 is refuted at the data, before it was built
 
