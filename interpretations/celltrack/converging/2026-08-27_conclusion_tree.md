@@ -12,6 +12,53 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-20 04:30Z — the proxy is in-sample, and its own split cannot say how much
+
+- **E50 (`g89y` precondition): both gates FAIL under an intensity proxy, but the proxy is confounded.**
+  Containment @2.87 µm **0.7498 < 0.824** detector; best FP-recall @2 % collateral **0.0203 vs 0.75**
+  (E47), with `height` a flat 0.0000 at every cut. Per the pre-registration this is NULL-leaning, NOT a
+  refutation of `g89y` — the real build uses a trained contour head. A fixed `FOREGROUND_QUANTILE = 0.98`
+  first produced a *fake* containment of 0.6047 by cutting above every GT cell on one bright-background
+  movie; `proxy_validity()` now refuses such a movie on its own arithmetic. Otsu admits the cells and
+  costs >3 min/frame — **no threshold is both valid and affordable.**
+  → `interpretations/celltrack/2026-09-20_e50_hierarchy_precondition.md`
+- **E51: the public affinity model trained on ALL 199 videos → every proxy movie is affinity-in-sample.**
+  Manifest is literally `unet_transformer_alltrain_seed314159_v1`, its 40 "test" videos a strict subset of
+  its 199 train. DeepCenter held out 128 — but the four proxy movies it DID train on are exactly the four
+  `44b6` ones, which are also the four sparsest annotations (frac ≤0.029). In-train adj_jac 0.9189 vs
+  held-out 0.8996 **attributes to nothing**: in-train ≡ `44b6` ≡ sparsest is perfectly collinear on this
+  split. **Mechanism for a rule we held only empirically** — local association headroom is optimistic, so
+  an offline association win need not transfer (dw0 +0.0267 local / −0.028 LB is the shape). It
+  *strengthens* E49: AUC 0.6380/0.6622 were in-sample, i.e. an optimistic ceiling that still failed 9×.
+  → `interpretations/celltrack/2026-09-20_e51_proxy_contamination.md`
+
+---
+
+## NEWS 2026-09-20 03:30Z — the board compressed; the last standing lever is runtime-clear
+
+- **The field moved and we did not.** Public LB re-listed: 0.974 / 0.973 / 0.969 / 0.968 / 0.967 /
+  0.966 — and **0.964 is only about rank 12**. Our banked 0.947 no longer sits near the top; the gap to
+  the front is ~0.027, which is far above the 0.01–0.02 noise floor and is the same dense-regime model
+  gap E42–E49 keep arriving at from new directions. Entry deadline **09-22**, final submission **09-29**.
+- **Donor `fabriciodasilva/biohub-dodecatiad` REJECTED on inspection, no run spent.** Read in full: DoG
+  blob detector + Hungarian/velocity linker + gap-close + a second-daughter division heuristic, on
+  numpy/scipy/zarr only. **No ultrack, motile, tracksdata, trackastra; no hierarchy, contour, watershed,
+  ILP, appearance, embedding or affinity anywhere in the file.** Every element is a strict subset of what
+  we already run, and its one detector idea is the axis E40 closed (DoG union 0.139 vs 0.450, n=3206).
+  Recorded in bd `r5ce` as do-not-re-harvest. Einstein criterion paid for itself: a read, not a run.
+- **`g89y`'s runtime gate is FOREGROUND-DEPENDENT, and my earlier "closed in its favour" was wrong.**
+  The 4.5 s/frame figure holds only at a 2 %-of-voxels foreground. That threshold is *invalid on some
+  movies*: where the background is bright and hazy (raw median 1115 vs 114), the GT cells sit BELOW the
+  cut, so 0 % of them can be contained — the number measures the threshold, not the hierarchy. Admitting
+  those cells (Otsu) inflates foreground to 21–48 % and costs **>3 min/frame** — ~20–40× — which blows
+  the ~27000 s headroom by 4×. So the honest statement is: hierarchy cost scales with foreground volume,
+  and the cheap regime is the one that misses cells. Budget is an argument against `g89y` again until
+  the trained contour head shows it can be both tight and cell-containing.
+- **Ultrack's own published mechanism is exactly g89y's claim** (Nature Methods 2025): candidate
+  segmentations from *multiple* algorithms, with temporal consistency used to **select** among them.
+  That is the one axis E48/E49 explicitly could not reach, because selection scores nested contours our
+  candidate set never contained. E50 (`kaggle/hierarchy_precondition.py`) is measuring it now.
+
 ## NEWS 2026-09-20 00:49Z — where the campaign stands
 
 - **Board:** ours 0.947 (`celltrack-public-0947`, tied by `-gapfill`), then readmit 0.946, v1329f 0.939,
