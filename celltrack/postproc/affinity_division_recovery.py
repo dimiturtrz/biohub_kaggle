@@ -50,6 +50,7 @@ from pydantic import BaseModel, ConfigDict
 from celltrack.affinity import EdgeAffinity
 from celltrack.postproc.fork_ranking import (
     _NO_SUCCESSOR,
+    _UNCLAIMED,
     ForkCandidate,
     ForkRanking,
     GeometryRanking,
@@ -90,6 +91,41 @@ _KERNEL_GLOBAL_EDGE_FRAC = 0.00375
 _ONE_FRAME = 1
 # The kernel floors both frac caps at one, so a small frame or a short movie can still admit a single fork.
 _MIN_CAP = 1
+
+
+@dataclass(frozen=True)
+class _DivisionEdits:
+    """What an accepted set of forks does to the edge list: the pairs to add, and the claims they displace.
+
+    An orphan-pool fork only ever adds, so `removed` is empty and this is the old return value. A displacing
+    fork cuts the incumbent's link in the same breath, which is what keeps the edge count fixed — the whole
+    reason its cost is bounded where an additive fork's is not.
+    """
+
+    added: Int[np.ndarray, "d 2"]
+    removed: Int[np.ndarray, "r 2"]
+
+    @classmethod
+    def of(cls, accepted: list["ForkCandidate"], graph: TrackGraph) -> "_DivisionEdits":
+        """Translate accepted forks from graph rows into the node-id pairs the edge list speaks."""
+        ids = graph.node_ids
+        added = [(int(ids[fork.parent]), int(ids[fork.child])) for fork in accepted]
+        removed = [
+            (int(ids[fork.displaced]), int(ids[fork.child])) for fork in accepted if fork.displaced != _UNCLAIMED
+        ]
+        return cls(added=cls._pairs(added), removed=cls._pairs(removed))
+
+    def keeping(self, edges: Int[np.ndarray, "e 2"]) -> Int[np.ndarray, "k 2"]:
+        """The edges that survive this edit — every one whose (source, target) pair is not displaced."""
+        if not len(self.removed):
+            return edges
+        displaced = {(int(source), int(target)) for source, target in self.removed.tolist()}
+        keep = np.array([(int(source), int(target)) not in displaced for source, target in edges.tolist()])
+        return edges[keep]
+
+    @staticmethod
+    def _pairs(rows: list[tuple[int, int]]) -> Int[np.ndarray, "p 2"]:
+        return np.array(rows, dtype=np.int64) if rows else np.empty((0, 2), dtype=np.int64)
 
 
 @dataclass(frozen=True)
@@ -154,12 +190,45 @@ class GeometricCandidacy:
         ]
 
 
+@dataclass(frozen=True)
+class StealCandidacy:
+    """The pool the orphan candidacies cannot see: targets another predicted track ALREADY parents.
+
+    Both orphan candidacies gate on `gap.orphan`, so a division whose second daughter the linker already
+    claimed is outside the stage at every setting of its gates, ranking and budget — measured at 10 of 25
+    missed divisions, 40% of the whole term. Reaching them means DISPLACING the incumbent: cut her edge, add
+    the mother's. That is edge-NEUTRAL, which is what makes it worth proposing at all; every additive fork
+    arm could only ever add false edges, and the uncapped ones duly traded edge jaccard for recall.
+
+    The pool is large, so the incumbent's own score is the admission floor: propose only where the mother
+    outscores the track that holds the daughter by `min_steal_margin`. The physical gates and the C3
+    divergence veto then apply unchanged — a displacing fork is still a fork, and still has to look like a
+    division.
+    """
+
+    min_steal_margin: float = 0.0
+
+    def candidates(
+        self, parent: int, kept: int, probabilities: Float[np.ndarray, "t"], gap: _Gap
+    ) -> list[ForkCandidate]:
+        return [
+            ForkCandidate.at_gap(parent, kept, int(target), float(probabilities[index]), gap).taking(
+                int(gap.claimed_by[index])
+            )
+            for index, target in enumerate(gap.targets.tolist())
+            if not gap.orphan[index]
+            and target != kept
+            and int(gap.claimed_by[index]) != parent
+            and float(probabilities[index]) - float(gap.claim_probability[index]) > self.min_steal_margin
+        ]
+
+
 # Which of a single-child parent's t+1 targets get PROPOSED as its second daughter, before the gates. Candidacy
 # is orthogonal to ranking: it decides the set the ranking then orders. The two choices differ only in whether the
 # learned head is consulted — `RunnerUpCandidacy` reads it, `GeometricCandidacy` does not — and both hand the
 # survivors to the same gates and the same budget. A closed union, not a `Protocol`: two candidacies exist and a
 # third extends this list explicitly (one Protocol subject already lives here — `ForkRanking`).
-ForkCandidacy = RunnerUpCandidacy | GeometricCandidacy
+ForkCandidacy = RunnerUpCandidacy | GeometricCandidacy | StealCandidacy
 
 
 @dataclass(frozen=True)
@@ -205,13 +274,13 @@ class AffinityDivisionRecovery:
 
     def transform(self, graph: TrackGraph) -> TrackGraph:
         """Return the graph with edge-head-proposed, geometry-ranked division edges added."""
-        recovered = self._division_edges(graph)
-        if not len(recovered):
+        edits = self._division_edges(graph)
+        if not len(edits.added):
             return graph
         return TrackGraph(
             node_ids=graph.node_ids,
             coordinates=graph.coordinates,
-            edges=np.concatenate([graph.edges, recovered]),
+            edges=np.concatenate([edits.keeping(graph.edges), edits.added]),
         )
 
     def budget(self, node_count: int, edge_count: int | None = None) -> int:
@@ -235,7 +304,7 @@ class AffinityDivisionRecovery:
             return derived
         return min(derived, round(edge_count * self.max_fork_edge_fraction))
 
-    def _division_edges(self, graph: TrackGraph) -> Int[np.ndarray, "d 2"]:
+    def _division_edges(self, graph: TrackGraph) -> "_DivisionEdits":
         """Every accepted fork as node-id pairs, ordered by the ranking's cost and cut at the budget."""
         adjacency = Adjacency.of(graph)
         positions_um = self.spacing.to_micrometres(graph.positions())
@@ -249,22 +318,52 @@ class AffinityDivisionRecovery:
                 continue
             sources = np.flatnonzero(timepoints == timepoint)
             targets = np.flatnonzero(timepoints == timepoint + 1)
+            claimed_by = self._claiming_rows(targets, adjacency)
             gap = _Gap(
                 targets=targets,
-                orphan=np.array([adjacency.in_degrees[row] == _UNPARENTED for row in targets], dtype=bool),
+                orphan=claimed_by == _UNCLAIMED,
                 positions_um=positions_um,
                 frames_ahead=frames_ahead,
                 successor=successor,
+                claimed_by=claimed_by,
+                claim_probability=self._claim_probabilities(claimed_by, sources, probability),
             )
             candidates = self._gap_proposals(sources, probability, adjacency, gap)
             frames.append(_FrameProposals(candidates, self._single_child_count(sources, adjacency)))
         accepted, cap = self._admit(frames, graph)
         proposed = sum(len(frame.candidates) for frame in frames)
         logger.info("division recovery: %d proposals, %d forks emitted (budget %d)", proposed, len(accepted), cap)
-        if not accepted:
-            return np.empty((0, 2), dtype=np.int64)
-        pairs = [(int(graph.node_ids[fork.parent]), int(graph.node_ids[fork.child])) for fork in accepted]
-        return np.array(pairs, dtype=np.int64)
+        return _DivisionEdits.of(accepted, graph)
+
+    @staticmethod
+    def _claiming_rows(targets: Int[np.ndarray, "t"], adjacency: Adjacency) -> Int[np.ndarray, "t"]:
+        """The source row already parenting each target, `_UNCLAIMED` where none does.
+
+        The linker admits one parent per node, so a claimed target has exactly one predecessor and this is a
+        lookup rather than a choice. `orphan` is derived from it, which keeps the two facts from drifting.
+        """
+        claiming = [adjacency.predecessors.get(int(row), ()) for row in targets]
+        return np.array([rows[0] if rows else _UNCLAIMED for rows in claiming], dtype=np.int64)
+
+    @staticmethod
+    def _claim_probabilities(
+        claimed_by: Int[np.ndarray, "t"],
+        sources: Int[np.ndarray, "s"],
+        probability: Float[np.ndarray, "s t"],
+    ) -> Float[np.ndarray, "t"]:
+        """How strongly the head scored each target's STANDING link, zero where the target is unclaimed.
+
+        A claim whose parent sits outside this gap's sources — the head scores only the rows it was given —
+        prices as zero, which lets any proposal outbid it. That is the permissive direction, and the gates
+        and the divergence veto still have to pass.
+        """
+        index_of = {int(row): index for index, row in enumerate(sources.tolist())}
+        scored = np.zeros(len(claimed_by), dtype=np.float64)
+        for target_index, parent_row in enumerate(claimed_by.tolist()):
+            source_index = index_of.get(parent_row)
+            if source_index is not None and source_index < len(probability):
+                scored[target_index] = float(probability[source_index, target_index])
+        return scored
 
     def _successors(self, adjacency: Adjacency, timepoints: Int[np.ndarray, "n"]) -> Int[np.ndarray, "n"]:
         """The daughters' t+2 rows, read the kernel's way under `kernel_faithful` and ours otherwise."""
@@ -475,6 +574,7 @@ FORK_CANDIDACIES: dict[str, Callable[["AffinityDivisionConfig"], ForkCandidacy]]
         min_kept_prob=config.min_kept_prob, min_second_prob=config.min_second_prob
     ),
     "geometric": lambda _: GeometricCandidacy(),
+    "steal": lambda config: StealCandidacy(min_steal_margin=config.min_steal_margin),
 }
 
 
@@ -501,6 +601,10 @@ class AffinityDivisionConfig(BaseModel):
     # frontier's `DivisionAwareLinker` candidacy — so a true sister the dense softmax ranks below a false one is
     # still proposed for the gates and ranking to judge. The floors below only bind the head-gated candidacy.
     candidacy: str = "runner_up"
+    # How far the proposing mother must OUTSCORE the track that currently holds a daughter, for the `steal`
+    # candidacy alone. Zero admits any strict improvement, which is the permissive end of a knob whose whole
+    # job is to shrink a pool of every claimed target in the movie down to the few worth displacing.
+    min_steal_margin: float = 0.0
     # OFF. A probability floor is a SECOND bound on speculation, and the budget is already the first — derived
     # from the measured division rate, so it admits exactly as many forks as there are divisions to find. The
     # one measurement we have of the floor is that it EXCLUDED the true case: at 0.5 the one recoverable

@@ -11,6 +11,8 @@ from celltrack.postproc.affinity_division_recovery import (
     AffinityDivisionRecovery,
     GeometricCandidacy,
     RunnerUpCandidacy,
+    StealCandidacy,
+    _DivisionEdits,
     _FrameProposals,
 )
 from celltrack.postproc.fork_ranking import (
@@ -280,6 +282,8 @@ def _one_gap() -> _Gap:
         positions_um=np.zeros((4, 3)),
         frames_ahead=np.array([9, 8, 7, 6]),
         successor=np.array([-1, -1, -1, -1]),
+        claimed_by=np.array([0, -1, 3]),
+        claim_probability=np.array([0.9, 0.0, 0.4]),
     )
 
 
@@ -309,6 +313,46 @@ def test_geometric_candidacy_candidates():
     proposed = GeometricCandidacy().candidates(parent=0, kept=1, probabilities=probabilities, gap=gap)
 
     assert [(candidate.parent, candidate.child) for candidate in proposed] == [(0, 2)]
+
+
+def test_steal_candidacy_candidates():
+    """Steal: the CLAIMED target is proposed, named as displacing the row that holds it — the orphan is not."""
+    gap = _one_gap()
+    probabilities = np.array([0.3, 0.9, 0.7])  # row 3's incumbent scored 0.4, so 0.7 outbids it
+
+    proposed = StealCandidacy().candidates(parent=0, kept=1, probabilities=probabilities, gap=gap)
+
+    assert [(candidate.parent, candidate.child, candidate.displaced) for candidate in proposed] == [(0, 3, 3)]
+
+
+def test_steal_candidacy_declines_a_daughter_its_incumbent_holds_more_strongly():
+    """Displacing is only worth proposing where the mother OUTSCORES the track that already has the daughter."""
+    gap = _one_gap()
+    probabilities = np.array([0.3, 0.9, 0.2])  # under the incumbent's 0.4
+
+    assert StealCandidacy().candidates(parent=0, kept=1, probabilities=probabilities, gap=gap) == []
+
+
+def test_division_edits_of():
+    """An accepted displacing fork becomes one added pair and one removed pair, in node-id space."""
+    graph = TrackGraph(
+        node_ids=np.array([10, 11, 12, 13]),
+        coordinates=np.zeros((4, 4)),
+        edges=np.array([[10, 11], [13, 12]], dtype=np.int64),
+    )
+    fork = ForkCandidate.at_gap(parent=0, kept=1, child=2, probability=0.5, gap=_one_gap()).taking(3)
+
+    edits = _DivisionEdits.of([fork], graph)
+
+    assert (edits.added.tolist(), edits.removed.tolist()) == ([[10, 12]], [[13, 12]])
+
+
+def test_division_edits_keeping():
+    """The displaced edge is dropped and every other edge survives, so the edit is edge-neutral."""
+    edges = np.array([[10, 11], [13, 12], [11, 14]], dtype=np.int64)
+    edits = _DivisionEdits(added=np.array([[10, 12]]), removed=np.array([[13, 12]]))
+
+    assert edits.keeping(edges).tolist() == [[10, 11], [11, 14]]
 
 
 def test_budget_derives_the_ceiling_from_the_measured_division_rate():

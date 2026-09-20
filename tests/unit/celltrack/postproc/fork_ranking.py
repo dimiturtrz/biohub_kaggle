@@ -107,7 +107,17 @@ def _one_gap() -> _Gap:
         positions_um=np.zeros((4, 3)),
         frames_ahead=np.array([9, 8, 7, 6]),
         successor=np.array([-1, -1, -1, -1]),
+        claimed_by=np.array([0, -1, 3]),
+        claim_probability=np.array([0.9, 0.0, 0.4]),
     )
+
+
+def test_taking():
+    """A fork declared as displacing names the source row it takes its daughter from, and changes nothing else."""
+    fork = ForkCandidate.at_gap(parent=0, kept=1, child=2, probability=0.5, gap=_one_gap())
+    taken = fork.taking(3)
+    assert (fork.displaced, taken.displaced) == (-1, 3)
+    assert taken.child == fork.child
 
 
 def test_at_gap():

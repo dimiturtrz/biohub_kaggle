@@ -28,7 +28,7 @@ Every ranking speaks one direction: lower cost wins. The admission FLOOR (`min_s
 on the recovery stage, never here — a ranking only orders what it is handed.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Protocol
 
 import numpy as np
@@ -39,6 +39,9 @@ _SHORTEST_TRACK = 1
 # A daughter whose track ends at the gap has no t+2 node to read a divergence from, and no node is its own
 # nearest neighbour — the same out-of-band row stands for both "no successor" and "no mutual match".
 _NO_SUCCESSOR = -1
+# A target no predicted track parents, and a fork that therefore displaces nobody — the same out-of-band row
+# stands for "this daughter is free" and "this candidate takes her from no one".
+_UNCLAIMED = -1
 
 
 @dataclass(frozen=True)
@@ -52,6 +55,13 @@ class _Gap:
     # Each node's first successor row (`_NO_SUCCESSOR` where its track ends), so a candidate can read where its
     # two daughters sit at t+2 and test whether they moved apart — the C3 post-mitotic divergence signature.
     successor: Int[np.ndarray, "n"]
+    # Which source row already parents each target (`_UNCLAIMED` where none does) and how strongly the head
+    # scored that standing link. Together they price DISPLACING the current parent: a claimed daughter is
+    # reachable only by cutting her existing edge, and only worth cutting where the proposing mother outscores
+    # the incumbent. `orphan` is the same fact as `claimed_by == _UNCLAIMED`, kept because it is read per-gap
+    # in the hot loop; these two carry the rest of the story the orphan flag throws away.
+    claimed_by: Int[np.ndarray, "t"]
+    claim_probability: Float[np.ndarray, "t"]
 
 
 @dataclass(frozen=True)
@@ -75,6 +85,14 @@ class ForkCandidate:
     # graph so the C3 divergence gate needs no extra lookup. Defaulted so a geometry-only fork still builds.
     kept_successor: int = _NO_SUCCESSOR
     child_successor: int = _NO_SUCCESSOR
+    # The source row this fork takes the daughter FROM, `_UNCLAIMED` for the orphan-pool forks that take her
+    # from no one. A displacing candidate is edge-NEUTRAL — one edge cut, one added — which is what separates
+    # its cost from an additive fork's.
+    displaced: int = _UNCLAIMED
+
+    def taking(self, displaced: int) -> "ForkCandidate":
+        """The same fork, declared as taking its daughter FROM the given source row rather than from no one."""
+        return replace(self, displaced=displaced)
 
     @classmethod
     def at_gap(cls, parent: int, kept: int, child: int, probability: float, gap: "_Gap") -> "ForkCandidate":
