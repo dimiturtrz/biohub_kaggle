@@ -564,3 +564,23 @@ dimensionless so it can be weighed against the geometry without a fitted scale.
 The arm that tests it is `prefer_divergence=true` with `require_c3_divergence=FALSE` — soft where the
 champion is hard. Running the veto-on-plus-rank arm first only prices what the preference adds
 INSIDE the censored set, which is the smaller question.
+
+## Divergence-as-a-score, measured inside the veto: 3 recovered against the shipped 4
+
+The first arm off the new `prefer_divergence` term kept `require_c3_divergence=true` — shipped candidacy,
+shipped budget, the preference added on top. It recovers **3** where the shipped champion setting recovers
+**4**. Directionally negative, and a one-division difference on 25 is well inside what a reordering can move
+by accident, so the number is not the finding. The reason it cannot be anything else is.
+
+The veto admits only pairs whose separation grows past 2.25µm. Inside that admitted set, divergence is a cue
+that has already fired for every member: the score is being asked to order candidates that are all on the
+same side of it, so what it mostly reads there is the residual spread of a saturated variable. Adding it to
+the ranking buys nothing and costs whatever the base ranking knew. The arm prices what the preference adds
+*inside the censored set*, which is the small question — and it answers it no.
+
+The arm that can say anything is the one where the score replaces the gate rather than decorating it:
+`require_c3_divergence=false` with `prefer_divergence=true`, so the six true forks the veto deletes are back
+in the set and the score is the thing that sorts them. That needs its own matched control —
+`require_c3_divergence=false` alone, same candidacy and budget — because dropping the veto changes the
+recovered set by itself, and an uncontrolled soft arm would credit the preference for what the relaxation did.
+Both are running.
