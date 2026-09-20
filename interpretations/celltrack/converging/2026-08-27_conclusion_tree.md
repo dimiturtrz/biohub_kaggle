@@ -168,6 +168,48 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   emit a byte-identical submission in ~1600 s. A kernel RUN costs no submission slot, so this is a free
   probe: pushed 22:36Z, verify by diffing its `submission.csv` against 0947's.
 
+  **E37 — THE E36-MATCHED REPAIR IS ALREADY BUILT AND ALREADY SHIPPING; IT JUST YIELDS 10 %. The
+  0.947 tie of `celltrack-public-0947-gapfill` was a YIELD result, not a neutrality result, and we
+  had read it as the latter.** Its `fill_gaps_from_low_detections` is exactly what E36 asks for: it
+  bridges a dangling track end at `t` to a dangling start at `t+g+1` through the detector's
+  SUB-THRESHOLD peaks, inserting real nodes where a cell was missed. Offline on the two cached
+  submissions, CPU-only: the base 0947 graph has **122808 nodes / 118548 edges, every edge dt=1, zero
+  gap edges, zero isolated nodes, and 4260 no-parent + 4384 no-child dangling ends**. The filler's
+  pool is ample — **39523 free sub-threshold peaks ≥ 0.5** across the four test videos, after
+  excluding those already on a node. Yet the fork's submission differs from the base by **+424 nodes
+  (+0.35 %) and +534 edges (+0.45 %)** — an order of magnitude below the 1.5 % bar, which is precisely
+  why the board returned the same 0.947 to four decimal places. The 3 % add cap (`~3700` nodes) is
+  NOT what binds; something upstream of it rejects ~90 % of the dangling pairs. The gate chain, in
+  order: the euclidean gate `GAPFILL_STEP_UM × (g+1)` (10 µm at g=1); `context_ok`'s direction test;
+  and `chain_for`, which needs a free peak within **`GAPFILL_PEAK_RADIUS_UM = 3.5 µm`** of the
+  straight-line sample at **EVERY** missing frame, since `GAPFILL_ALLOW_SYNTHETIC = 0`. E36 measured
+  the loose endpoints' nearest prediction at **4.892 µm median — past that 3.5 µm radius**, which
+  makes the radius the named suspect rather than a knob picked off a list. Two FREE kernel runs
+  (no submission slot, no local GPU) settle it: `celltrack-public-0947-gapdiag` adds a reject counter
+  at each gate at stock values, and `celltrack-public-0947-gaploose` runs the same counters with
+  `MIN_SCORE 0.5→0.35`, `PEAK_RADIUS 3.5→5.0 µm`, `ALLOW_SYNTHETIC 0→1`. **Rule: a tie against a
+  base is only evidence about a mechanism once you have measured how much of the mechanism reached
+  the output — diff the artefacts, don't read the score.** Pushed 00:36Z 09-20; bd E37.
+
+  **E37(b) — SELF-CORRECTION, SAME HOUR, AND IT CAPS THE ARM I JUST BUILT. The peak radius is not
+  what binds; the PAIRS do not exist.** Asking the base graph directly how many dangling ends have
+  ANY dangling start within the euclidean gate `5 µm × (g+1)`, by optimal assignment per frame:
+  **g=1 → 50 pairs, g=2 → 316, g=3 → 569, total 935**, against **3469 interior dangling ends and
+  3176 interior starts**. So a PERFECT filler at `MAX_GAP=3` could add at most ~935 bridges ≈ 1870
+  edges = **1.6 % of predicted edges**, and the shipped fork already banked 534 of them. The whole
+  remaining headroom on this mechanism is **~+1.1 %** — below the 1.5 % bar — and loosening the peak
+  radius can only ever collect part of it. My "yield is 10 %" reading used the dangling-end count as
+  the denominator when the reachable denominator is the in-gate pair count; against 935 the fork is
+  already running at roughly half. **The real shape of the loss is worse for post-processing and
+  better-aligned with E36: 2500 of the 3469 dangling ends have no plausible restart within three
+  frames at all.** Those tracks do not resume — the cell stops being detected for a long stretch, not
+  for a frame — so no bridging rule reaches them and no gate widening is licensed (5 µm/frame already
+  exceeds the GT median step of 1.82 µm and the 10 µm at g=1 is the max observed GT step). **This is
+  the same detector-weights conclusion E36 reached, now with a post-processing ceiling attached to
+  it: ~1.1 % is ALL that repair-side work can buy on the 0947 base.** The two free runs still finish
+  (they cost nothing and give the exact reject histogram), but `gaploose` is now priced as a
+  sub-bar directional arm, not a submission candidate on its own.
+
   **E36 — THE OMISSION RESIDUE IS DETECTION, NOT ASSOCIATION, AND NODE RECALL AT 7 µm HIDES IT.
   Reverses the tree's standing "the lever is association, not detection" reading — for the 0947
   champion, measured, CPU-only.** E35 counted 713 in-gate fragmented GT edges and read 638 of them as
