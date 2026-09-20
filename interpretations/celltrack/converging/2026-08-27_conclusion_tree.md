@@ -25,8 +25,15 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   **neither is a submission candidate** at that ceiling.
 - **The final-2 hedge is real and keeps its slot (E38):** 0947 and v1329f dispute ~16 % of the edge
   union (10356 / 10700 unique edges), so they are two genuinely different graphs, not one in two hats.
-- **The live lever is unchanged and GPU-priced:** detection recall of undetected cells, sized at 2.5 %
-  of edges by E36. The card is parked by explicit instruction; nothing below starts without asking.
+- **The last live lever is now UNDER-SIZED, not GPU-blocked (E40/E41).** E36 sized detection recall at
+  2.5 % of edges, on the mechanism that a GT node borrows a *neighbouring* cell's detection. Five
+  CPU-only instruments say otherwise: the missed cells are visible (only 3 % lack a local intensity
+  excess), they have no GT neighbour to merge with (24.8 µm away, same as found cells), and a matched
+  null (frame t+50) shows the detection 3.83 µm away is the cell's **own**, displaced — own-frame
+  closer than chance in 0.807 of cases. So 2.87 µm "recall" measures **localization scatter, not
+  missing cells**, and E36's 574-edge size needs re-deriving before it justifies a card. A learning-free
+  DoG union is separately dead on the conditional (0.156 vs its own 0.414 marginal). The card stays
+  parked by explicit instruction; nothing below starts without asking.
 - **Runtime is solved and is no longer a reason to avoid anything (E31/E32).** `-fast` = 1590 s vs 6286 s,
   byte-identical submission; hidden test is 4 videos at 9.93 predict-minutes, ~20x headroom in a 9 h kernel.
 - **The ensemble idea is dead for the donors we hold (E33).** v1329f loses 98.9 % of the 961 genuinely
@@ -177,6 +184,66 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   the drift guard does not cover it), so `celltrack-public-0947-fast` (`kaggle/env_variant.py`) should
   emit a byte-identical submission in ~1600 s. A kernel RUN costs no submission slot, so this is a free
   probe: pushed 22:36Z, verify by diffing its `submission.csv` against 0947's.
+
+  **E40 — THE DoG UNION IS DEAD ON THE CONDITIONAL, AND E27'S KILL WAS SCALE-BOUND. Five CPU-only
+  instruments, no GPU.** E39 left detection as the only axis with a ≥1.5 % mechanism, priced as
+  GPU-blocked. It is not: a union with an *independent* detector needs no local card (a Kaggle fork run
+  is free), and the gate — does the second detector find what the first missed — runs CPU-only against
+  the cached `real_scratch` coords and the train `.geff`s.
+
+  1. **E27's DoG kill was a SCALE artifact, and correcting it does not save the axis.** E27 refuted DoG
+     as *preprocessing* at the default 4 µm band; the band is the whole result. GT recall at cell
+     separation (2.87 µm): default `(2.83, 4.0, 5.66)` = **0.16–0.30** — E27's number — against a 2 µm
+     band `(1.4, 2.0, 2.83)` = **0.62–0.74**, versus the learned detector's 0.75 on the same frames. So
+     the learning-free detector is *competitive*, which is exactly what makes the next line decisive.
+  2. **But the errors are DEPENDENT, so the union pays nothing.** n=256 GT over 8 movies: cache 0.7500,
+     DoG 0.4141, union 0.7891 (+0.0391 marginal). The conditional kills it: **P(DoG finds it | cache
+     missed) = 0.1562** against DoG's own 0.4141 marginal — DoG is **2.7× LESS** likely to find a cell
+     the learned detector missed than to find an average cell. Shared blind spot, not complementary
+     coverage. A union member must beat its own marginal on the conditional; this one is a third of it.
+     (A 20-movie widening is still running; the 8-movie conditional is what this rests on.)
+  3. **My own explanation for that was then falsified. The missed cells are VISIBLE.** I expected
+     signal-absent (both detectors blind to dim cells), which would have closed the single-frame axis
+     entirely. Measured local background-subtracted contrast at every GT centre: only **3.0 %** of
+     missed cells have no local intensity excess, median contrast 1.29 vs 2.00 for found, and ~64 % are
+     as bright as routinely-found cells. Bright, not blind.
+  4. **Nor is it a merge with a neighbour.** n=3864 missed: **72.5 % have a detection within 5 µm**,
+     median distance **3.83 µm** — but nearest *GT* neighbour is 24.8 µm for missed cells vs 23.2 µm for
+     found. Identical. There is no second cell nearby to merge with.
+  5. **The matched null says the nearby detection is the cell's OWN.** With ~854 detections in a 104 µm
+     cube, 3.83 µm could be chance, so: score GT against detections from frame `(t+50) % 100` — same
+     count, same spatial distribution, same density, identity destroyed. REAL nearest median **3.83 µm**
+     vs NULL **7.53 µm**; own-frame closer in **0.807** of cases (0.5 = chance); REAL median dz −3.25
+     vs NULL +0.00. The association is real.
+
+  **E41 — WHAT THAT MEANS FOR E36, INCLUDING THE PART OF E40 THAT DOES NOT SURVIVE ITS OWN AUDIT.**
+
+  - **Self-correction first.** I read the missed-subset signature (median dz = −3.25 µm = exactly −2
+    z-voxels) as a discrete offset. It is **partly tautological**: one z-voxel is 1.625 µm, so
+    conditioning on `distance > 2.87 µm` mechanically selects |dz| ≥ 2 voxels whenever the error is
+    z-dominated. The per-axis voxel histogram over **all** GT (not the missed subset) is **unimodal at
+    0** — dz `−2:10.9 % −1:28.4 % 0:35.0 % +1:15.0 % +2:3.9 %` — so there is **no −2-voxel mode and no
+    plumbing bug**. I looked for one and it is not there.
+  - **What survives unconditioned is a systematic NEGATIVE-Z BIAS, ~2.5:1** (−1 vs +1: 28.4/15.0; −2 vs
+    +2: 10.9/3.9), mean dz −0.57 µm over all GT. dy/dx are near-symmetric by comparison. This is real
+    and not a selection artifact — but it is **0.35 of a z-voxel**, and the official matcher is at
+    7 µm, so a constant z correction is free to apply and there is **no mechanism by which it delivers
+    1.5 %**. Directional at best; recorded, not planned around.
+  - **The load-bearing consequence is for E36's MECHANISM, not its arithmetic.** E36 explained the
+    0.824-vs-0.998 recall gap as a GT node *borrowing a neighbouring cell's detection* and still
+    scoring found at 7 µm. On this cache that explanation **does not hold**: the nearest GT neighbour is
+    24.8 µm away, so there is no neighbour to borrow from, and the null shows the matched detection is
+    the cell's own, displaced. The 2.87 µm "recall" number is therefore measuring **localization
+    scatter, not missing cells** — it is a ruler-choice, and recall at the official 7 µm really is
+    ~1.0. **E36's 574-edge (2.5 %) detector-caused edge loss was derived from that mechanism and now
+    needs re-derivation before any GPU is spent on it.** bd `lwrr` is re-priced on that basis; bd
+    `1ocj` closes negative.
+  - **Caveats that must travel with this.** (a) The cache is `real_scratch` = OUR tunet detector, not
+    0947; this cache reads 0.697–0.750 where E36 reads 0.824, so the config differs and extending to
+    0947 is an inference, not a measurement. (b) REAL and NULL **mean** dz are near-identical (−1.19 vs
+    −1.27) while only the medians separate — the mean does not discriminate here and I have not
+    explained why. (c) Every displacement discussed is 3–4 µm, i.e. **inside** the official 7 µm
+    matcher, so nothing here claims a score effect on its own.
 
   **E37(d) — THE REJECT HISTOGRAM, MEASURED. Pair existence is the binder, the peak-side gates are
   second, and loosening them takes the filler to its ceiling — where it is still ~1 %.** Both free
