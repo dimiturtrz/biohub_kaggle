@@ -12,6 +12,37 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-20 05:36Z — E56: the broken-edge count is ANTI-correlated with the board
+
+Full write-up: `interpretations/celltrack/2026-09-20_e56_cross_tracker_edge_agreement.md`.
+
+- Built `error_budget.py --rival`: compares two cached submissions **GT edge by GT edge** over the same
+  2127 public-GT edges. **fp16 is the control and it behaves** — its broken set is **100 % nested** inside
+  the champion's, confirming E38's 0.9956 union at edge resolution. The instrument discriminates a
+  same-family variant from a decorrelated one.
+- The v1329 family rescues **39 champion-only edges**: ruler-stable (44/38/39/37 at 2.87/5/7/10 µm),
+  **33/39 selection** (17 swap, 9 source-rival, 7 target-rival), **33/39 inside the dense movie**
+  `6bba_05db0fb1`.
+- **CORRECTION to commit `0d7dc7d`**, which called v1329f and v50 "two unrelated recipes". They are not:
+  v50's `v1329_submission.csv` is **byte-identical** to v1329f's submission and both carry node count
+  123485. v50 = v1329 + one stage. **n = 1 family witness, not 2.**
+- **The deflation.** Broken GT edges vs LB across all four banked submissions:
+  105 → **0.947** · 104 → 0.945 · 78 → 0.939 · 77 → 0.907. **The champion breaks the MOST and scores the
+  BEST**; the ordering is exactly reversed. Not the E51 saturation story — these are the *same four
+  movies the board scores*. Our pooled harness sides with the count, not the board (champion 0.8932 vs
+  v1329f 0.9263, 0.033 the wrong way against the board's 0.008).
+- The confound is visible and uncontrolled: the rivals also carry **677 more nodes**, which E53's signed
+  node-count term prices. v50 sizes the sensitivity — same node count as v1329f, 90 fewer edges,
+  **−0.032**. So the reading is not "recovering GT edges hurts" but **"the score is not dominated by
+  GT-edge recovery, and this harness cannot separate the two effects."**
+- **E54's bar survives with an explicit clause: recover 35 GT edges *without adding nodes*.** That was
+  implicit before and is now measured. **A cross-tracker merge is NOT licensed by an edge-count win** —
+  adopting a rival's edge means adopting endpoints the champion lacks, i.e. the exact term the board
+  punishes. Never price a cross-tracker change with E54's ~2.3 units/edge; it was derived *within* one
+  tracker with node count held fixed.
+
+---
+
 ## NEWS 2026-09-20 05:17Z — E55: gap repair cannot score (GT is all dt=1), and the LB already said so
 
 - E54 measured **0 GT edges with `dt != 1`**. So a gap-repair bridge connects `t-1` to `t+1` and
