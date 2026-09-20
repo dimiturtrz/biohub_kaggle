@@ -28,6 +28,7 @@ MATCH_UM = 7.0  # the official DistanceMatcher cap (core/metrics/matching.py)
 _FORBIDDEN = 1e6
 DUPLICATE_UM = 1.6  # one (1, 4, 4) voxel in y/x: closer than the decode grid can separate
 DISTINCT_UM = 3.0  # above the 2.87 µm GT nearest-neighbour floor, so a genuinely different cell
+CONFIDENT_UM = 2.87  # the GT nearest-neighbour floor: inside it, a match cannot be a neighbouring cell
 
 
 def train_dir() -> Path:
@@ -80,7 +81,10 @@ def audit_video(truth_path: Path, predicted_path: Path) -> dict:
 
     outgoing, incoming = _orient(pred_pos, pred_edges, pred_index)
 
-    fragmented, present, verdicts, gaps = [], [], [], []
+    fragmented, present, verdicts, gaps, contests = [], [], [], [], []
+    residuals: list[float] = []
+    linked_residuals: list[float] = []
+    nearest: list[float] = []
     for source, target in gt_edges:
         rows = (index.get(source, -1), index.get(target, -1))
         if -1 in rows:
@@ -91,14 +95,36 @@ def audit_video(truth_path: Path, predicted_path: Path) -> dict:
         pair = (matched[rows[0]], matched[rows[1]])
         if pair in linked or pair[::-1] in linked:
             present.append(step)
+            linked_residuals += [float(np.linalg.norm(gt_pos[row, 1:] - pred_pos[matched[row], 1:])) for row in rows]
             continue
         fragmented.append(step)
         if step <= GATE_UM:
-            verdicts.append(_verdict(pair, outgoing, incoming))
+            endpoint_residuals = [float(np.linalg.norm(gt_pos[row, 1:] - pred_pos[matched[row], 1:])) for row in rows]
+            residuals += endpoint_residuals
+            confident = max(endpoint_residuals) < CONFIDENT_UM
+            if not confident:
+                nearest += [
+                    _nearest_prediction(gt_pos[row], pred_pos)
+                    for row, residual in zip(rows, endpoint_residuals, strict=True)
+                    if residual >= CONFIDENT_UM
+                ]
+            verdicts.append((_verdict(pair, outgoing, incoming), confident))
             gap = _rival_gap(pair, outgoing, incoming, pred_pos)
             if gap is not None:
                 gaps.append(gap)
-    return {"fragmented": fragmented, "present": present, "verdicts": verdicts, "gaps": gaps}
+            contest = _step_contest(pair, outgoing, incoming, pred_pos)
+            if contest is not None and confident:
+                contests.append(contest)
+    return {
+        "fragmented": fragmented,
+        "present": present,
+        "verdicts": verdicts,
+        "gaps": gaps,
+        "contests": contests,
+        "residuals": residuals,
+        "linked_residuals": linked_residuals,
+        "nearest": nearest,
+    }
 
 
 def _orient(pred_pos: np.ndarray, pred_edges: np.ndarray, pred_index: dict) -> tuple[dict, dict]:
@@ -132,6 +158,39 @@ def _rival_gap(pair: tuple[int, int], outgoing: dict, incoming: dict, pred_pos: 
     return float(min(np.linalg.norm(rival - reference) for rival in rivals))
 
 
+def _step_contest(
+    pair: tuple[int, int], outgoing: dict, incoming: dict, pred_pos: np.ndarray
+) -> tuple[float, float] | None:
+    """The declined true edge's step vs the step the edge that WON the slot actually took, in µm.
+
+    Prices the ILP distance prior directly: if the winner is systematically SHORTER, the solver is
+    over-trusting displacement and a distance reweight is a live knob. If the winner is longer or the
+    same, distance does not discriminate these cases and only edge affinity can move them.
+    """
+    source, target = pair
+    rivals = [float(np.linalg.norm(pred_pos[source, 1:] - pred_pos[node, 1:])) for node in outgoing.get(source, [])]
+    rivals += [float(np.linalg.norm(pred_pos[node, 1:] - pred_pos[target, 1:])) for node in incoming.get(target, [])]
+    if not rivals:
+        return None
+    return float(np.linalg.norm(pred_pos[source, 1:] - pred_pos[target, 1:])), min(rivals)
+
+
+def _contest_report(contests: list[tuple[float, float]]) -> dict:
+    """Does the winning edge undercut the true edge on displacement, and by how much?"""
+    if not contests:
+        return {}
+    true_step = np.array([entry[0] for entry in contests])
+    winner_step = np.array([entry[1] for entry in contests])
+    return {
+        "n": len(contests),
+        "true_median_um": round(float(np.median(true_step)), 3),
+        "winner_median_um": round(float(np.median(winner_step)), 3),
+        "winner_shorter_frac": round(float((winner_step < true_step).mean()), 4),
+        "winner_shorter_by_over_1um": int((true_step - winner_step > 1.0).sum()),
+        "winner_longer_by_over_1um": int((winner_step - true_step > 1.0).sum()),
+    }
+
+
 def _verdict(pair: tuple[int, int], outgoing: dict, incoming: dict) -> str:
     """Why the solver declined an in-gate GT edge, read off the predicted graph alone.
 
@@ -147,6 +206,24 @@ def _verdict(pair: tuple[int, int], outgoing: dict, incoming: dict) -> str:
     if took and claimed:
         return "both_reassigned"
     return "source_stole" if took else "target_taken"
+
+
+def _nearest_prediction(gt_node: np.ndarray, pred_pos: np.ndarray) -> float:
+    """Distance to the closest prediction in the node's own frame, ignoring who the assignment gave it to.
+
+    Separates a MISSING detection (nothing near the GT node at all — a recall loss) from a CONTESTED one
+    (a prediction is right there, but the per-frame assignment handed it to a different GT node).
+    """
+    same_frame = pred_pos[pred_pos[:, 0] == gt_node[0]]
+    if not len(same_frame):
+        return float("inf")
+    return float(np.linalg.norm(same_frame[:, 1:] - gt_node[1:], axis=1).min())
+
+
+def _verdict_report(verdicts: list[tuple[str, bool]]) -> dict:
+    """Verdict counts, plus the total, so a confident-match subset reads against its own denominator."""
+    names = [name for name, _ in verdicts]
+    return {"total": len(names), **{name: names.count(name) for name in sorted(set(names))}}
 
 
 def _gap_report(gaps: np.ndarray) -> dict:
@@ -171,8 +248,12 @@ def main() -> None:
     source = train_dir()
     fragmented: list[float] = []
     present: list[float] = []
-    verdicts: list[str] = []
+    verdicts: list[tuple[str, bool]] = []
     gaps: list[float] = []
+    contests: list[tuple[float, float]] = []
+    residuals: list[float] = []
+    linked_residuals: list[float] = []
+    nearest: list[float] = []
     for predicted in sorted(args.cache.glob("*.geff"))[: args.limit]:
         truth = source / predicted.name
         if not truth.exists():
@@ -182,6 +263,10 @@ def main() -> None:
         present += result["present"]
         verdicts += result["verdicts"]
         gaps += result["gaps"]
+        contests += result["contests"]
+        residuals += result["residuals"]
+        linked_residuals += result["linked_residuals"]
+        nearest += result["nearest"]
 
     steps = np.array(fragmented)
     report = {
@@ -195,8 +280,21 @@ def main() -> None:
             "within_gate": int((steps <= GATE_UM).sum()),
         },
         "linked_median_step_um": float(np.median(present)) if present else None,
-        "in_gate_verdicts": {name: verdicts.count(name) for name in sorted(set(verdicts))},
+        "in_gate_verdicts": _verdict_report(verdicts),
+        "confident_match_verdicts": _verdict_report([entry for entry in verdicts if entry[1]]),
         "rival_gap_um": _gap_report(np.array(gaps)),
+        "step_contest_um": _contest_report(contests),
+        "loose_endpoint_nearest_um": {
+            "n": len(nearest),
+            "median": round(float(np.median(nearest)), 3) if nearest else None,
+            "has_prediction_inside_floor": int((np.array(nearest) < CONFIDENT_UM).sum()) if nearest else 0,
+        },
+        "match_residual_um": {
+            "fragmented_median": round(float(np.median(residuals)), 3) if residuals else None,
+            "fragmented_p90": round(float(np.percentile(residuals, 90)), 3) if residuals else None,
+            "linked_median": round(float(np.median(linked_residuals)), 3) if linked_residuals else None,
+            "linked_p90": round(float(np.percentile(linked_residuals, 90)), 3) if linked_residuals else None,
+        },
     }
     log.info(json.dumps(report, indent=2))
 

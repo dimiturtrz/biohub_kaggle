@@ -168,6 +168,35 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   emit a byte-identical submission in ~1600 s. A kernel RUN costs no submission slot, so this is a free
   probe: pushed 22:36Z, verify by diffing its `submission.csv` against 0947's.
 
+  **E36 — THE OMISSION RESIDUE IS DETECTION, NOT ASSOCIATION, AND NODE RECALL AT 7 µm HIDES IT.
+  Reverses the tree's standing "the lever is association, not detection" reading — for the 0947
+  champion, measured, CPU-only.** E35 counted 713 in-gate fragmented GT edges and read 638 of them as
+  slot competition. That reading was still too generous to the association axis: it never checked
+  whether the GT endpoints were matched to the RIGHT prediction. They mostly are not. Match residual
+  (GT node → its assigned prediction) is **3.362 µm median / 6.148 p90 on fragmented edges vs 1.724 /
+  3.35 on linked ones** — the fragmented endpoints sit past the **2.87 µm GT nearest-neighbour floor**,
+  so the 7 µm matcher is pairing them with a NEIGHBOURING CELL's detection. Gating on a confident match
+  (both endpoints inside the floor) leaves **139 of 713**: `disappearance` 33 · `source_stole` 57 ·
+  `target_taken` 24 · `both_reassigned` 25. The other **574 (81 %)** are matcher stretch.
+  `_nearest_prediction` then settles what the stretch means, ignoring the assignment entirely: of the
+  **827 loose endpoints, only 7 have ANY prediction within 2.87 µm**, median nearest **4.892 µm**. So
+  they are **MISSING DETECTIONS (99.2 %), not contested ones** — no assignment or cost change can reach
+  them. **Sizing: detection-caused edge loss 574/23080 = 2.5 % of edges, which CLEARS the 1.5 % bar;
+  genuine association residue 106/23080 = 0.46 % and disappearance 33/23080 = 0.14 %, both far under
+  it.** The mechanism that hid this: the official node metric also matches at 7 µm, so a GT node whose
+  own cell was never detected still scores as a detected node by borrowing a neighbour's detection —
+  **node recall stays ~1.0 while every edge through that node dies.** That is exactly how
+  [[celltrack-local-official-metric-harness-reproduces-LB]]'s "recall 0.998 DEAD" survived: recall was
+  never measured at a tolerance that could see a cell-swap. Also finishes the distance-knob question
+  (bd P1, filed this session): on the confident 139 the winner is shorter in 72 % of cases, true step
+  5.139 µm vs winner 3.25 µm — but the population it governs is 0.46 % of edges, so an ILP distance
+  reweight joins the disappearance weight as sub-bar. **Every remaining ILP cost knob is retired by
+  size.** The live lever on the 0947 base is recall of *undetected cells in crowds* — which is the same
+  bottleneck A ([[celltrack-two-bottlenecks-detector-separation-head]], finer decode) the tree already
+  names, now sized on the CHAMPION rather than on our own detector, and now with an edge-loss price
+  attached. **Rule earned: when the metric's matcher is looser than the object's own separation, a
+  high recall is not evidence the object was found.**
+
   **E35 — THE DISAPPEARANCE SWEEP IS A 0.32 % EXPERIMENT; DON'T PAY THE GPU ARM. And the omission story
   IS the confusor story: 86 % of recoverable omissions are slot COMPETITION. CPU instrument, run before
   the run.** `fragment_audit.py` decomposes each in-gate fragmented GT edge by what the PREDICTED graph
