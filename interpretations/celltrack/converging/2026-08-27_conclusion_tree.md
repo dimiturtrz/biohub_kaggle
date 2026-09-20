@@ -187,7 +187,15 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   own cell was never detected still scores as a detected node by borrowing a neighbour's detection —
   **node recall stays ~1.0 while every edge through that node dies.** That is exactly how
   [[celltrack-local-official-metric-harness-reproduces-LB]]'s "recall 0.998 DEAD" survived: recall was
-  never measured at a tolerance that could see a cell-swap. Also finishes the distance-knob question
+  never measured at a tolerance that could see a cell-swap. **Measured directly: recall at cell
+  separation is 0.824** — 4292 of 24399 GT nodes (17.6 %) have NO prediction within 2.87 µm — against
+  the ~0.998 the 7 µm ruler reports. **It is FLAT across all nine full 40-video caches this project has
+  ever produced: 0.8173 – 0.8304, a 1.3-point spread**, so every post-processing and ILP knob we have
+  swept leaves it untouched; it is a detector-weights property, GPU-priced. Note the honest bound: the
+  metric LAUNDERS most of those misses, because the borrowed neighbour detection is itself correctly
+  linked in its own track, so the edge maps onto a linked pair and scores as present. **The realised
+  cost is the 574 edges (2.5 %), not the 4292 nodes (17.6 %)** — the node figure is the size of the
+  detector's real blindness, the edge figure is what the board can see. Also finishes the distance-knob question
   (bd P1, filed this session): on the confident 139 the winner is shorter in 72 % of cases, true step
   5.139 µm vs winner 3.25 µm — but the population it governs is 0.46 % of edges, so an ILP distance
   reweight joins the disappearance weight as sub-bar. **Every remaining ILP cost knob is retired by

@@ -85,6 +85,7 @@ def audit_video(truth_path: Path, predicted_path: Path) -> dict:
     residuals: list[float] = []
     linked_residuals: list[float] = []
     nearest: list[float] = []
+    unfound = sum(_nearest_prediction(node, pred_pos) >= CONFIDENT_UM for node in gt_pos)
     for source, target in gt_edges:
         rows = (index.get(source, -1), index.get(target, -1))
         if -1 in rows:
@@ -124,6 +125,8 @@ def audit_video(truth_path: Path, predicted_path: Path) -> dict:
         "residuals": residuals,
         "linked_residuals": linked_residuals,
         "nearest": nearest,
+        "gt_nodes": len(gt_pos),
+        "unfound_at_floor": int(unfound),
     }
 
 
@@ -254,6 +257,8 @@ def main() -> None:
     residuals: list[float] = []
     linked_residuals: list[float] = []
     nearest: list[float] = []
+    gt_nodes = 0
+    unfound = 0
     for predicted in sorted(args.cache.glob("*.geff"))[: args.limit]:
         truth = source / predicted.name
         if not truth.exists():
@@ -267,9 +272,14 @@ def main() -> None:
         residuals += result["residuals"]
         linked_residuals += result["linked_residuals"]
         nearest += result["nearest"]
+        gt_nodes += result["gt_nodes"]
+        unfound += result["unfound_at_floor"]
 
     steps = np.array(fragmented)
     report = {
+        "gt_nodes": gt_nodes,
+        "unfound_at_2_87um": unfound,
+        "recall_at_cell_separation": round(1 - unfound / gt_nodes, 4) if gt_nodes else None,
         "matched_gt_edges": len(fragmented) + len(present),
         "fragmented": len(fragmented),
         "linked": len(present),
