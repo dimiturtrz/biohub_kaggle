@@ -79,6 +79,37 @@ differs from v1329f by 90 edges and no nodes at all, and drops **0.032**. So the
   variant or a genuinely different tracker, and it answers in counts rather than in a score the board
   disagrees with.
 
+## Addendum — the 33 selection fixes are node-free BY CONSTRUCTION
+
+The clause above ("only worth building if it can take the selection fixes without the nodes") reads like
+an open question. It is not: the classifier already answers it, and the answer is free.
+
+`classify_broken` (`kaggle/error_budget.py:104-116`) tests its rules in order, and the three detection
+rules fire first. So a `swap` / `source linked to a RIVAL` / `target taken by a RIVAL` label is only
+reachable when **both** GT endpoints already matched a champion node. **All 33 selection failures connect
+two nodes the champion already has.** Adding those edges imports **zero** nodes. The 677-node penalty
+belongs to the rival's detector, not to the edges — the two were confounded in the table above, and they
+separate cleanly here.
+
+Better: a swap fix is edge-neutral too. The champion currently spends that slot on a wrong partner, so the
+repair removes one edge and adds one. And E54c measured the collateral at zero — **0 of 126 slot-stealing
+rivals is an annotated cell**, so the edge given up cannot be a GT edge.
+
+That puts the 33 squarely back in the within-tracker regime where E54's ~2.3 units/edge is the valid
+price: node count fixed, FP and FN moving together on one axis. **33 edges ≈ 1.4%** — just under the
+35-edge / 1.5% bar, and only under a perfect oracle that fixes all 33 and breaks none. Directional, not a
+result, and it composes with anything else on the same axis.
+
+**So the axis is alive, and it is a re-ranking axis, not a merge axis.** What the champion lacks is the
+discriminator (E54c), and the v1329 model is an existence proof that one exists — it makes the right call
+on these 33. Transfer is geometrically plausible without GT to mediate: both trackers matched the same GT
+node within the ruler, so their two nodes sit within 2x the ruler of each other, and a direct node-to-node
+match at test time is the same bipartite step already implemented.
+
+The cost is now affordable for the first time: `twrp` verified the fast kernel at **1580s vs 5590s**, so a
+rival predict fits in the freed 4010s at ~930s. That is the one shape in which the 39 is worth spending
+anything on. Filed as bd `x6bd`; it blocks `kiw1`, which must **not** be built as a plain edge union.
+
 ## Open
 
 Whether the v1329 family trained on these four movies is **unresolved** — the kernel's split file is
