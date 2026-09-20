@@ -12,6 +12,37 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-20 06:22Z — E6 (packet grouping) CLOSED by argument: the grouping is inert, the knobs are pre-registered nulls
+
+`newwang12/biohub-v1-grouped` re-ran 06:01Z today and sat at **DONOR-UNMEASURED — "would need a slot"**
+(E6, table row below). It does not need one. Reading it:
+
+1. **The packet grouping does nothing.** `GROUP_OVERRIDES = {'low': {}, 'middle': {}, 'high': {}}`, and
+   preflight *asserts* it empty. `graph_packet_features` / `classify_packets` (the xy radial-shell profile
+   and severity model) compute a per-packet label that is then applied to **no parameter**. The whole
+   grouping apparatus is instrumentation. Whatever the kernel scores, the grouping is not why.
+2. **The real delta is two knobs**, named in `EXPERIMENT_NAME = 'R3_zero_only_minlen4'`:
+   - `EXPERIMENT_ZERO_MAX_UM = 0.0` → in the patched `motion_relink_edges`, `if zero_max is not None and
+     prob == 0.0 and (zero_max == 0.0 or raw > zero_max): continue` — a **precision veto: never motion-relink
+     through a pair the learned edge model scored exactly 0.0**.
+   - `OUTPUT_MIN_TRACK_LEN = 4`. (`EXPERIMENT_KEEP_MIN_PROB = None` — the second knob is off.)
+
+**Both are nulls by results we already own.** The zero-prob veto only *removes* motion-relink edges, and
+E54 measured `wrong-association = 0` on all four public-GT movies — the pipeline never links two
+*annotated* cells wrongly — so every edge this veto can delete joins at least one unannotated node, which
+E53 showed is neither TP nor FP. Metric-invisible. And minlen4 is *looser* than the champion's own minimum
+component of **6** (E52), so it can only re-admit short tracks, priced by E53/E58 at the negligible
+per-node term. Pre-registered expected gain ≈ 0 on both; not run, not submitted.
+
+Incidental corroboration: this kernel's `BASE_PARAMETERS` carry `DET_THRESHOLD 0.965` and
+`OUTPUT_EDGE_MAX_UM 14.0` — the champion's constants, independently confirming the 14 µm candidate radius
+E58 read out of the staged kernel.
+
+Rule: **before pricing a donor element, check whether its headline mechanism is actually wired to
+anything.** The grouping had a classifier, a severity score and a receipt, and an empty override dict.
+
+---
+
 ## NEWS 2026-09-20 06:18Z — final-2 SETTLED: readmit is the better buy and the wrong hedge (bd `9c61`)
 
 E38's table (below, 06:00Z block) makes `readmit` look like the obvious second seat: LB **0.946**
@@ -495,7 +526,7 @@ Full write-up: `interpretations/celltrack/2026-09-20_e56_cross_tracker_edge_agre
   | E3 | readmit discarded detections (score ≥0.965, r 4 µm) | thtennant readmit | code | **LB 0.946 = TIE/−0.001** (probe 56354352) → sub-floor |
   | E4 | division precision: sister symmetry τ 0.6→0.4, sister-min 0 | thtennant divprec | knob | untested |
   | E5 | learned re-ID appearance descriptors as pair feature (sweep picks REID_WEIGHT 4.0) | arnav170 reid3 | code | **DONOR-NULL** (its own `reid_report.json`, 5656 held-out sources): GBM top-1 0.98568 = transformer top-1 0.98568 exactly; perm-importance tf_prob 0.202 AUC, every descriptor block ≤0.0014 ⇒ appearance adds nothing past tf_prob. Sweep adjJ +0.004 (8 vids) sub-floor; LOCAL re-run reproduces it (base 0.9260 → best reid8_tight55_relaxed9 0.9312, +0.005; proxy spread driven by 8-video divJ noise). Don't port. |
-  | E6 | packet grouping post-process (`grouped_postprocess`, xy radial shell profile) | newwang12 grouped | code | **DONOR-UNMEASURED**: its `submission_audit.json` = `graph_schema_pass`, `quality_validated: false`; `v9_division_gate.json` only checks division-COUNT retention (101/102 = 0.99) on 4 test clips — no score evidence either way. Would need a slot. |
+  | E6 | packet grouping post-process (`grouped_postprocess`, xy radial shell profile) | newwang12 grouped | code | **CLOSED 09-20 06:22Z, no slot spent**: the grouping is INERT (`GROUP_OVERRIDES` asserted empty — the classifier drives no parameter). Real delta = zero-prob motion-relink veto + `OUTPUT_MIN_TRACK_LEN` 4, both pre-registered nulls by E54 (`wrong-association = 0`) / E53 / E52. See NEWS 06:22Z. |
   | E7 | test-time denoising-AE prefilter (30 steps, α 0.17) | ghazarosbarseghyan91 dae | code | **DONOR-INCONCLUSIVE** (its validator vs reid3 `base` on the 4 shared stems): adjJ 0.8811 vs 0.8858 (−0.005), per-stem ±0.06, spurious −15 %, missed +1.25 ⇒ no carry evidence; low priority |
   | E8 | sub-voxel centroid refinement (`refine_all_centroids`) | evgendvorkin 0.927 | code | **MECHANISM-NULL, not submitted**: metric `DistanceMatching(max_distance=7.0 µm)` vs refine shift ≤ sub-voxel (<1 µm), and both donor + 0947 round output to int voxels. Ported anyway (`kaggle/element_transplant.py`, variant `celltrack-public-0947-refine`, smoke-tested) — the CLI is the reusable transplant harness. |
   | E9 | DET 0.965→0.96 | thtennant det096 / beraterolelk | knob | beraterolelk tie ⇒ sub-floor |
