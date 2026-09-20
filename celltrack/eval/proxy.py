@@ -23,6 +23,7 @@ from core.data.split import Acquisitions
 from core.data.tracks import AnnotatedTracks, TrackGraph
 from core.data.video import CellVideo
 from core.geometry import Spacing
+from core.metrics.divisions import DivisionReach, DivisionScoring
 from core.metrics.edges import EdgeCounts
 from core.metrics.matching import DistanceMatcher
 from core.metrics.score import SplitScore, VideoMetrics
@@ -125,6 +126,18 @@ class TestMovieProxy:
         matcher = DistanceMatcher(spacing=self.spacing)
         return {
             path.stem: VideoMetrics.of(pipeline.run(path.name, path), truth, matcher)
+            for path, truth in zip(self.paths, self.truths, strict=True)
+        }
+
+    def division_reach(self, pipeline: LinkingPipeline) -> dict[str, DivisionReach]:
+        """Each movie's missed divisions split by the stage that lost them — detector cost vs selection cost.
+
+        The division term is worth 0.1 of the score and its Jaccard is dominated by false negatives, so it
+        only moves on recall. This says where that recall would have to be bought before any method is built.
+        """
+        matcher = DistanceMatcher(spacing=self.spacing)
+        return {
+            path.stem: DivisionScoring.of(pipeline.run(path.name, path), truth.graph, matcher).reach()
             for path, truth in zip(self.paths, self.truths, strict=True)
         }
 

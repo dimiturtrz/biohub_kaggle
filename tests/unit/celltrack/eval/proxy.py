@@ -69,6 +69,33 @@ def test_metrics(monkeypatch: pytest.MonkeyPatch):
     assert pipeline.calls == [("a.zarr", Path("a.zarr")), ("b.zarr", Path("b.zarr"))]
 
 
+def test_division_reach(monkeypatch: pytest.MonkeyPatch):
+    """`division_reach` scores each movie's divisions against its own annotation graph, keyed by stem."""
+
+    class _Scoring:
+        def __init__(self, seen: tuple[object, object]) -> None:
+            self.seen = seen
+
+        def reach(self) -> tuple[object, object]:
+            return self.seen
+
+    monkeypatch.setattr(
+        proxy.DivisionScoring, "of", staticmethod(lambda graph, truth, matcher: _Scoring((graph, truth)))
+    )
+    pipeline = _StubPipeline()
+    subject = TestMovieProxy(
+        paths=(Path("a.zarr"), Path("b.zarr")),
+        truths=(
+            cast(AnnotatedTracks, _Truth(cast(TrackGraph, "truth-a"))),
+            cast(AnnotatedTracks, _Truth(cast(TrackGraph, "truth-b"))),
+        ),
+        spacing=Spacing(z=1.0, y=1.0, x=1.0),
+    )
+    result = subject.division_reach(pipeline)
+
+    assert result == {"a": ("graph:a.zarr", "truth-a"), "b": ("graph:b.zarr", "truth-b")}
+
+
 def test_load(monkeypatch: pytest.MonkeyPatch):
     """`load` picks the four movies out of the train set, reads their GEFF truths, and the shared spacing."""
 

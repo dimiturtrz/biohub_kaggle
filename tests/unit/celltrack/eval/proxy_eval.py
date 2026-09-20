@@ -12,6 +12,7 @@ from celltrack.eval.proxy_eval import ConfigOverride, TrackerProxyEval, _Args
 from celltrack.eval.sweep_tracking import SweepTracking
 from celltrack.operating_point import TrackerConfig
 from celltrack.tracker import CellTracker
+from core.metrics.divisions import DivisionReach
 from core.metrics.score import VideoMetrics
 from core.paths import DataRoot
 from tests.unit.celltrack.conftest import RecordingMlflow
@@ -127,6 +128,9 @@ class _FakeProxy:
     def metrics(self, pipeline: _FakePipeline) -> dict[str, float]:
         return {"movie": pipeline.config.threshold}
 
+    def division_reach(self, pipeline: _FakePipeline) -> dict[str, DivisionReach]:
+        return {"movie": DivisionReach(recovered=1, nodes_missing=2, no_fork=3, fork_rejected=4, spurious=5)}
+
 
 class _Root:
     """A data root exposing only `.processed`, which the mocked pipeline mount ignores."""
@@ -178,6 +182,24 @@ def test_breakdown(monkeypatch: pytest.MonkeyPatch):
     _patch(monkeypatch)
     result = TrackerProxyEval("cpu", (0.98, 0.99)).breakdown(cast(DataRoot, _Root()))
     assert result == {"movie": 0.98}
+
+
+def test_division_reach(monkeypatch: pytest.MonkeyPatch):
+    """`division_reach` mounts at the first swept threshold and returns each movie's recall decomposition."""
+    _patch(monkeypatch)
+    result = TrackerProxyEval("cpu", (0.98, 0.99)).division_reach(cast(DataRoot, _Root()))
+    assert result["movie"].selection_bound() == 7
+
+
+def test_report_division_reach(caplog: pytest.LogCaptureFixture):
+    """The total line prices the selection-side bound against every missed division, not against all of them."""
+    reach = {
+        "44b6_a": DivisionReach(recovered=1, nodes_missing=2, no_fork=3, fork_rejected=0, spurious=1),
+        "6bba_b": DivisionReach(recovered=0, nodes_missing=1, no_fork=0, fork_rejected=2, spurious=4),
+    }
+    with caplog.at_level("INFO"):
+        TrackerProxyEval.report_division_reach(reach)
+    assert "selection_bound=5 of 8 missed" in caplog.text
 
 
 def test_by_acquisition(monkeypatch: pytest.MonkeyPatch):

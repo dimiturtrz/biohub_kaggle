@@ -1419,6 +1419,12 @@
     {
       "kind": "import",
       "source": "celltrack.eval.proxy",
+      "target": "core.data.split",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.proxy",
       "target": "core.data.tracks",
       "weight": 1
     },
@@ -1432,6 +1438,12 @@
       "kind": "import",
       "source": "celltrack.eval.proxy",
       "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.proxy",
+      "target": "core.metrics.divisions",
       "weight": 1
     },
     {
@@ -1461,6 +1473,18 @@
     {
       "kind": "import",
       "source": "celltrack.eval.proxy_eval",
+      "target": "celltrack.detectors.center_prior",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.proxy_eval",
+      "target": "celltrack.edges.calibrated_fusion",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.proxy_eval",
       "target": "celltrack.eval.proxy",
       "weight": 1
     },
@@ -1479,7 +1503,19 @@
     {
       "kind": "import",
       "source": "celltrack.eval.proxy_eval",
+      "target": "celltrack.postproc.gap_closer",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.proxy_eval",
       "target": "celltrack.tracker",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.proxy_eval",
+      "target": "core.metrics.divisions",
       "weight": 1
     },
     {
@@ -2056,6 +2092,12 @@
       "kind": "import",
       "source": "celltrack.postproc.affinity_division_recovery",
       "target": "celltrack.affinity",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.postproc.affinity_division_recovery",
+      "target": "celltrack.postproc.fork_ranking",
       "weight": 1
     },
     {
@@ -9915,6 +9957,12 @@
     {
       "kind": "references",
       "source": "celltrack.eval.proxy.TestMovieProxy",
+      "target": "core.metrics.divisions.DivisionReach",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.proxy.TestMovieProxy",
       "target": "core.metrics.score.SplitScore",
       "weight": 1
     },
@@ -9958,6 +10006,24 @@
       "kind": "calls",
       "source": "celltrack.eval.proxy.TestMovieProxy.division_bearing",
       "target": "core.paths.DataRoot.videos",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.proxy.TestMovieProxy.division_reach",
+      "target": "celltrack.eval.proxy.LinkingPipeline.run",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.proxy.TestMovieProxy.division_reach",
+      "target": "core.metrics.divisions.DivisionScoring.of",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.eval.proxy.TestMovieProxy.division_reach",
+      "target": "core.metrics.matching.DistanceMatcher",
       "weight": 1
     },
     {
@@ -10089,6 +10155,12 @@
     {
       "kind": "references",
       "source": "celltrack.eval.proxy_eval.TrackerProxyEval",
+      "target": "core.metrics.divisions.DivisionReach",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.proxy_eval.TrackerProxyEval",
       "target": "core.metrics.score.SplitScore",
       "weight": 1
     },
@@ -10204,6 +10276,24 @@
       "kind": "construct",
       "source": "celltrack.eval.proxy_eval.TrackerProxyEval.config_at",
       "target": "celltrack.postproc.gap_closer.SyntheticGap",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.proxy_eval.TrackerProxyEval.division_reach",
+      "target": "celltrack.eval.proxy_eval.TrackerProxyEval._mount",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.proxy_eval.TrackerProxyEval.division_reach",
+      "target": "celltrack.eval.proxy_eval.TrackerProxyEval.config_at",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.proxy_eval.TrackerProxyEval.report_division_reach",
+      "target": "core.metrics.divisions.DivisionReach.total",
       "weight": 1
     },
     {
@@ -16699,6 +16789,18 @@
       "weight": 1
     },
     {
+      "kind": "references",
+      "source": "core.metrics.divisions.DivisionReach",
+      "target": "core.metrics.divisions.DivisionReach",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions.DivisionReach.missed",
+      "target": "core.metrics.divisions.DivisionReach.selection_bound",
+      "weight": 1
+    },
+    {
       "kind": "holds",
       "source": "core.metrics.divisions.DivisionScoring",
       "target": "core.data.tracks.Adjacency",
@@ -16719,7 +16821,19 @@
     {
       "kind": "references",
       "source": "core.metrics.divisions.DivisionScoring",
+      "target": "core.metrics.divisions.DivisionReach",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "core.metrics.divisions.DivisionScoring",
       "target": "core.metrics.divisions.DivisionScoring",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "core.metrics.divisions.DivisionScoring",
+      "target": "core.metrics.divisions.DivisionStage",
       "weight": 1
     },
     {
@@ -16767,31 +16881,67 @@
     {
       "kind": "calls",
       "source": "core.metrics.divisions.DivisionScoring._local_candidates",
-      "target": "core.metrics.divisions.DivisionScoring._division_window",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "core.metrics.divisions.DivisionScoring._local_candidates",
       "target": "core.metrics.divisions.DivisionScoring._local_topology_holds",
       "weight": 1
     },
     {
       "kind": "calls",
       "source": "core.metrics.divisions.DivisionScoring._local_candidates",
-      "target": "core.metrics.divisions.DivisionScoring._rows_matching",
+      "target": "core.metrics.divisions.DivisionScoring._nearby_forks",
       "weight": 1
     },
     {
       "kind": "calls",
       "source": "core.metrics.divisions.DivisionScoring._local_candidates",
-      "target": "core.metrics.matching.DistanceMatcher.match",
+      "target": "core.metrics.divisions.DivisionScoring._supported",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions.DivisionScoring._local_candidates",
+      "target": "core.metrics.divisions.DivisionScoring._window_support",
       "weight": 1
     },
     {
       "kind": "calls",
       "source": "core.metrics.divisions.DivisionScoring._local_topology_holds",
       "target": "core.metrics.divisions.DivisionScoring._maximum_matching",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions.DivisionScoring._stage_of",
+      "target": "core.metrics.divisions.DivisionScoring._nearby_forks",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions.DivisionScoring._stage_of",
+      "target": "core.metrics.divisions.DivisionScoring._supported",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions.DivisionScoring._stage_of",
+      "target": "core.metrics.divisions.DivisionScoring._window_support",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions.DivisionScoring._window_support",
+      "target": "core.metrics.divisions.DivisionScoring._division_window",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions.DivisionScoring._window_support",
+      "target": "core.metrics.divisions.DivisionScoring._rows_matching",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions.DivisionScoring._window_support",
+      "target": "core.metrics.matching.DistanceMatcher.match",
       "weight": 1
     },
     {
@@ -16828,6 +16978,42 @@
       "kind": "calls",
       "source": "core.metrics.divisions.DivisionScoring.of",
       "target": "core.data.tracks.Adjacency.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions.DivisionScoring.reach",
+      "target": "core.data.tracks.Adjacency.dividing_rows",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "core.metrics.divisions.DivisionScoring.reach",
+      "target": "core.metrics.divisions.DivisionReach",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions.DivisionScoring.reach",
+      "target": "core.metrics.divisions.DivisionScoring._fork_verdicts",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions.DivisionScoring.reach",
+      "target": "core.metrics.divisions.DivisionScoring._local_candidates",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions.DivisionScoring.reach",
+      "target": "core.metrics.divisions.DivisionScoring._maximum_matching",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "core.metrics.divisions.DivisionScoring.reach",
+      "target": "core.metrics.divisions.DivisionScoring._stage_of",
       "weight": 1
     },
     {
@@ -21154,8 +21340,24 @@
     },
     {
       "descendants": 0,
+      "id": "core.metrics.divisions.DivisionReach",
+      "label": "DivisionReach",
+      "level": "class",
+      "parent": "core.metrics.divisions",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
       "id": "core.metrics.divisions.DivisionScoring",
       "label": "DivisionScoring",
+      "level": "class",
+      "parent": "core.metrics.divisions",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.divisions.DivisionStage",
+      "label": "DivisionStage",
       "level": "class",
       "parent": "core.metrics.divisions",
       "role": "satellite"
@@ -25978,6 +26180,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.eval.proxy.TestMovieProxy.division_reach",
+      "label": "division_reach",
+      "level": "method",
+      "parent": "celltrack.eval.proxy.TestMovieProxy",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.eval.proxy.TestMovieProxy.linker_ceiling",
       "label": "linker_ceiling",
       "level": "method",
@@ -26092,6 +26302,22 @@
       "descendants": 0,
       "id": "celltrack.eval.proxy_eval.TrackerProxyEval.config_at",
       "label": "config_at",
+      "level": "method",
+      "parent": "celltrack.eval.proxy_eval.TrackerProxyEval",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.proxy_eval.TrackerProxyEval.division_reach",
+      "label": "division_reach",
+      "level": "method",
+      "parent": "celltrack.eval.proxy_eval.TrackerProxyEval",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.proxy_eval.TrackerProxyEval.report_division_reach",
+      "label": "report_division_reach",
       "level": "method",
       "parent": "celltrack.eval.proxy_eval.TrackerProxyEval",
       "role": null
@@ -30426,6 +30652,30 @@
     },
     {
       "descendants": 0,
+      "id": "core.metrics.divisions.DivisionReach.missed",
+      "label": "missed",
+      "level": "method",
+      "parent": "core.metrics.divisions.DivisionReach",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.divisions.DivisionReach.selection_bound",
+      "label": "selection_bound",
+      "level": "method",
+      "parent": "core.metrics.divisions.DivisionReach",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.divisions.DivisionReach.total",
+      "label": "total",
+      "level": "method",
+      "parent": "core.metrics.divisions.DivisionReach",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "core.metrics.divisions.DivisionScoring._branch_component",
       "label": "_branch_component",
       "level": "method",
@@ -30474,8 +30724,40 @@
     },
     {
       "descendants": 0,
+      "id": "core.metrics.divisions.DivisionScoring._nearby_forks",
+      "label": "_nearby_forks",
+      "level": "method",
+      "parent": "core.metrics.divisions.DivisionScoring",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "core.metrics.divisions.DivisionScoring._rows_matching",
       "label": "_rows_matching",
+      "level": "method",
+      "parent": "core.metrics.divisions.DivisionScoring",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.divisions.DivisionScoring._stage_of",
+      "label": "_stage_of",
+      "level": "method",
+      "parent": "core.metrics.divisions.DivisionScoring",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.divisions.DivisionScoring._supported",
+      "label": "_supported",
+      "level": "method",
+      "parent": "core.metrics.divisions.DivisionScoring",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.divisions.DivisionScoring._window_support",
+      "label": "_window_support",
       "level": "method",
       "parent": "core.metrics.divisions.DivisionScoring",
       "role": null
@@ -30492,6 +30774,14 @@
       "descendants": 0,
       "id": "core.metrics.divisions.DivisionScoring.of",
       "label": "of",
+      "level": "method",
+      "parent": "core.metrics.divisions.DivisionScoring",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "core.metrics.divisions.DivisionScoring.reach",
+      "label": "reach",
       "level": "method",
       "parent": "core.metrics.divisions.DivisionScoring",
       "role": null

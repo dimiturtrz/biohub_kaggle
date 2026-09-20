@@ -4,7 +4,7 @@ import numpy as np
 
 from core.data.tracks import TrackGraph
 from core.geometry import Spacing
-from core.metrics.divisions import DivisionCounts, DivisionScoring
+from core.metrics.divisions import DivisionCounts, DivisionReach, DivisionScoring
 from core.metrics.matching import DistanceMatcher
 
 MATCHER = DistanceMatcher(spacing=Spacing(z=1.0, y=1.0, x=1.0))
@@ -56,6 +56,42 @@ def test_counts_charges_a_fork_on_an_annotated_cell_that_does_not_divide():
     truth = graph_of([[0, 0, 0, 0], [1, 0, 0, 0], [2, 0, 0, 0]], [[0, 1], [1, 2]])
     prediction = graph_of([[0, 0, 0, 0], [1, 0, 0, 0], [2, 0, 0, 0], [2, 0, 30, 0]], [[0, 1], [1, 2], [1, 3]])
     assert DivisionScoring.of(prediction, truth, MATCHER).counts() == DivisionCounts(tp=0, fp=1, fn=0)
+
+
+def test_total():
+    """The ruler-wide split is the per-movie ones summed, stage by stage."""
+    parts = [DivisionReach(1, 2, 3, 4, 5), DivisionReach(10, 20, 30, 40, 50)]
+    assert DivisionReach.total(parts) == DivisionReach(11, 22, 33, 44, 55)
+
+
+def test_missed():
+    assert DivisionReach(recovered=1, nodes_missing=2, no_fork=3, fork_rejected=4, spurious=5).missed() == 9
+
+
+def test_selection_bound():
+    """Both node-bearing stages are recoverable by a decision over nodes we already predicted."""
+    reach = DivisionReach(recovered=1, nodes_missing=5, no_fork=3, fork_rejected=2, spurious=4)
+    assert reach.selection_bound() == 5
+
+
+def test_reach():
+    truth = dividing()
+    assert DivisionScoring.of(truth, truth, MATCHER).reach() == DivisionReach(
+        recovered=1, nodes_missing=0, no_fork=0, fork_rejected=0, spurious=0
+    )
+
+
+def test_reach_blames_the_detector_when_a_daughter_lineage_is_absent():
+    """One daughter never appears in the prediction, so no linking decision could have recovered the division."""
+    prediction = graph_of([*DIVIDING_NODES[:3], DIVIDING_NODES[4]], [[0, 1], [1, 2], [2, 3]])
+    assert DivisionScoring.of(prediction, dividing(), MATCHER).reach().nodes_missing == 1
+
+
+def test_reach_blames_selection_when_the_nodes_are_there_but_nothing_forks():
+    """Both daughters are predicted and merely linked into one track — a fork is a decision away."""
+    prediction = graph_of(DIVIDING_NODES, [[0, 1], [1, 2], [2, 4], [3, 5]])
+    reach = DivisionScoring.of(prediction, dividing(), MATCHER).reach()
+    assert (reach.nodes_missing, reach.no_fork) == (0, 1)
 
 
 def test_division_scoring_of():

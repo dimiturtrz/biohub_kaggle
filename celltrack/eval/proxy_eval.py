@@ -27,6 +27,7 @@ from celltrack.eval.sweep_tracking import SweepTracking
 from celltrack.operating_point import TrackerConfig
 from celltrack.postproc.gap_closer import ReuseConfig, SyntheticGap
 from celltrack.tracker import CellTracker
+from core.metrics.divisions import DivisionReach
 from core.metrics.score import SplitScore, VideoMetrics
 from core.paths import DataRoot
 
@@ -252,6 +253,36 @@ class TrackerProxyEval:
         faithful = fusion.model_copy(update={"kernel_faithful": True})
         return replace(config, edge_options=config.edge_options.model_copy(update={"calibrated_fusion": faithful}))
 
+    def division_reach(self, root: DataRoot) -> dict[str, DivisionReach]:
+        """Per-movie division recall split by the stage that lost it, at the first swept threshold."""
+        proxy, pipeline = self._mount(root)
+        config = self.config_at(self.thresholds[0], self.disappearance_costs[0])
+        return proxy.division_reach(pipeline.with_config(config))
+
+    @staticmethod
+    def report_division_reach(reach: dict[str, DivisionReach]) -> None:
+        """Log where division recall is lost, per movie and in total — detector cost against selection cost."""
+        for stem, movie in reach.items():
+            logger.info(
+                "  %-16s recovered=%-3d nodes_missing=%-3d no_fork=%-3d fork_rejected=%-3d spurious=%d",
+                stem,
+                movie.recovered,
+                movie.nodes_missing,
+                movie.no_fork,
+                movie.fork_rejected,
+                movie.spurious,
+            )
+        total = DivisionReach.total(reach.values())
+        logger.info(
+            "  TOTAL recovered=%d nodes_missing=%d no_fork=%d fork_rejected=%d | selection_bound=%d of %d missed",
+            total.recovered,
+            total.nodes_missing,
+            total.no_fork,
+            total.fork_rejected,
+            total.selection_bound(),
+            total.missed(),
+        )
+
     def breakdown(self, root: DataRoot) -> dict[str, VideoMetrics]:
         """Per-movie metrics of the tracker at its first swept threshold — separates recall from bonus-farming."""
         proxy, pipeline = self._mount(root)
@@ -285,6 +316,7 @@ class _Args:
     stems_label: str = field(default="test")
     divisions_per_prefix: int = field(default=0)
     per_movie: bool = field(default=False)
+    division_reach: bool = field(default=False)
     center_pack: Path | None = field(default=None)
     secondary_pack: Path = field(default=SECONDARY_PACK_DEFAULT)
     calibrated_fusion: bool = field(default=False)
@@ -358,6 +390,12 @@ class _Args:
         )
         parser.add_argument("--per-movie", action="store_true", help="also log each movie's raw Jaccard and node ratio")
         parser.add_argument(
+            "--division-reach",
+            action="store_true",
+            help="instead of sweeping, split the missed divisions by the stage that lost them: the nodes were "
+            "absent (detector cost) or present with no acceptable fork on them (selection cost)",
+        )
+        parser.add_argument(
             "--set",
             dest="overrides",
             action="append",
@@ -376,6 +414,7 @@ class _Args:
             overrides=tuple(parsed.overrides),
             stems_label=f"divisions-{parsed.divisions}" if parsed.divisions else ("cv-8" if parsed.cv else "test-4"),
             per_movie=parsed.per_movie,
+            division_reach=parsed.division_reach,
             center_pack=parsed.center_pack,
             secondary_pack=parsed.secondary_pack,
             calibrated_fusion=parsed.calibrated_fusion,
@@ -422,6 +461,9 @@ def main() -> None:
         )
     for prefix, split in evaluator.by_acquisition(breakdown).items():
         logger.info("  acquisition %-6s score=%.4f", prefix, split.score)
+    if args.division_reach:
+        evaluator.report_division_reach(evaluator.division_reach(root))
+        return
     tracking = SweepTracking(args.stems_label)
     first_cell = (args.thresholds[0], args.disappearance_costs[0])  # the cell `breakdown` was measured at
     for (threshold, cost), split in evaluator.scores(root).items():

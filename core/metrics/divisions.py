@@ -12,7 +12,9 @@ another parent, proves nothing about this division. Forks and divisions are fina
 neither can be counted twice.
 """
 
+from collections.abc import Iterable
 from dataclasses import dataclass
+from enum import Enum, auto
 
 import numpy as np
 from jaxtyping import Int
@@ -63,8 +65,51 @@ class DivisionScoring:
             fn=len(candidates) - len(pairing),
         )
 
+    def reach(self) -> "DivisionReach":
+        """Why each annotated division was missed — the decomposition a recall method needs before it is built.
+
+        `counts` says how many divisions were lost; it cannot say at which stage. The division Jaccard is
+        dominated by its false negatives (measured 2026-09-20: tp=1, fp=10, fn=24), so the term only moves on
+        recall — and recall is bought in a different place depending on whether the nodes are absent, or
+        present with no fork emitted on them, or forked in a shape the annotation refuses.
+        """
+        evaluable, invalid = self._fork_verdicts()
+        forks = set(self.predicted.dividing_rows().tolist())
+        candidates = {
+            divider: self._local_candidates(divider, forks)[0] - invalid
+            for divider in self.annotated.dividing_rows().tolist()
+        }
+        pairing = self._maximum_matching(candidates)
+        tally = dict.fromkeys(DivisionStage, 0)
+        for divider in candidates:
+            tally[self._stage_of(divider, forks, set(pairing))] += 1
+        return DivisionReach(
+            recovered=tally[DivisionStage.RECOVERED],
+            nodes_missing=tally[DivisionStage.NODES_MISSING],
+            no_fork=tally[DivisionStage.NO_FORK],
+            fork_rejected=tally[DivisionStage.FORK_REJECTED],
+            spurious=len((evaluable | invalid) - set(pairing.values())),
+        )
+
+    def _stage_of(self, divider: int, forks: set[int], recovered: set[int]) -> "DivisionStage":
+        """How far one annotated division got before it was lost."""
+        if divider in recovered:
+            return DivisionStage.RECOVERED
+        parents, daughters = self._window_support(divider)
+        if not self._supported(parents, daughters):
+            return DivisionStage.NODES_MISSING
+        return DivisionStage.NO_FORK if not self._nearby_forks(parents, forks) else DivisionStage.FORK_REJECTED
+
     def _local_candidates(self, divider: int, forks: set[int]) -> tuple[set[int], set[int]]:
         """Predicted forks that could recover this division, and every fork that was even looked at."""
+        parents, daughters = self._window_support(divider)
+        if not self._supported(parents, daughters):
+            return set(), set()
+        local = self._nearby_forks(parents, forks)
+        return {fork for fork in local if self._local_topology_holds(fork, parents, daughters)}, local
+
+    def _window_support(self, divider: int) -> tuple[set[int], list[set[int]]]:
+        """The predicted nodes standing in for this division's parent side, and for each daughter lineage."""
         window, window_rows = self._division_window(divider)
         inside = self.matcher.match(self.prediction, window).gt_rows
         found = inside != UNMATCHED
@@ -72,15 +117,20 @@ class DivisionScoring:
 
         children = self.annotated.successors[divider]
         if len(children) < _MIN_DAUGHTERS:
-            return set(), set()
+            return set(), []
         parents = self._rows_matching(matched, {divider, *self.annotated.predecessors[divider]})
         daughters = [self._rows_matching(matched, {child, *self.annotated.successors[child]}) for child in children]
-        if not parents or sum(bool(lineage) for lineage in daughters) < _MIN_DAUGHTERS:
-            return set(), set()
+        return parents, daughters
 
+    def _nearby_forks(self, parents: set[int], forks: set[int]) -> set[int]:
+        """The predicted forks sitting on this division's parent side."""
         reachable = parents | {successor for parent in parents for successor in self.predicted.successors[parent]}
-        local = reachable & forks
-        return {fork for fork in local if self._local_topology_holds(fork, parents, daughters)}, local
+        return reachable & forks
+
+    @staticmethod
+    def _supported(parents: set[int], daughters: list[set[int]]) -> bool:
+        """Whether the prediction even has the nodes a division needs — a parent and two daughter lineages."""
+        return bool(parents) and sum(bool(lineage) for lineage in daughters) >= _MIN_DAUGHTERS
 
     def _fork_verdicts(self) -> tuple[set[int], set[int]]:
         """Forks the annotation can judge at all, and forks whose own branch evidence rules them out."""
@@ -179,6 +229,52 @@ class DivisionScoring:
         for left in edges:
             augment(left, set())
         return left_to_right
+
+
+class DivisionStage(Enum):
+    """How far an annotated division got through the prediction before it was lost."""
+
+    RECOVERED = auto()
+    NODES_MISSING = auto()
+    NO_FORK = auto()
+    FORK_REJECTED = auto()
+
+
+@dataclass(frozen=True)
+class DivisionReach:
+    """The false negatives split by the stage that lost them — which buys what a recall method should attack.
+
+    `nodes_missing` is a detector cost: the parent or a daughter lineage is simply not in the prediction, so
+    no linking or post-processing decision could have recovered the division. `no_fork` and `fork_rejected`
+    are selection costs, and far cheaper to attack: the nodes are there, and either nothing forked on them or
+    the fork's shape did not satisfy the annotation.
+    """
+
+    recovered: int
+    nodes_missing: int
+    no_fork: int
+    fork_rejected: int
+    spurious: int
+
+    @classmethod
+    def total(cls, reaches: "Iterable[DivisionReach]") -> "DivisionReach":
+        """Sum a per-movie decomposition into one, so the split is read over the whole ruler."""
+        parts = list(reaches)
+        return cls(
+            recovered=sum(part.recovered for part in parts),
+            nodes_missing=sum(part.nodes_missing for part in parts),
+            no_fork=sum(part.no_fork for part in parts),
+            fork_rejected=sum(part.fork_rejected for part in parts),
+            spurious=sum(part.spurious for part in parts),
+        )
+
+    def missed(self) -> int:
+        """Every annotated division the prediction lost, at whatever stage."""
+        return self.nodes_missing + self.selection_bound()
+
+    def selection_bound(self) -> int:
+        """Divisions a perfect decision over the nodes already predicted could still recover."""
+        return self.no_fork + self.fork_rejected
 
 
 @dataclass(frozen=True)
