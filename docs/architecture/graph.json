@@ -10761,6 +10761,12 @@
     {
       "kind": "holds",
       "source": "celltrack.linkers.flow_linking.FlowLinker",
+      "target": "celltrack.linkers.flow_solving.FlowSolve",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.linkers.flow_linking.FlowLinker",
       "target": "celltrack.linkers.motion_prediction.MotionPrediction",
       "weight": 1
     },
@@ -10832,18 +10838,6 @@
     },
     {
       "kind": "calls",
-      "source": "celltrack.linkers.flow_linking.FlowLinker._network",
-      "target": "celltrack.linkers.flow_linking.FlowLinker._boundary_costs",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
-      "source": "celltrack.linkers.flow_linking.FlowLinker._network",
-      "target": "celltrack.linkers.flow_linking.FlowLinker._transitions",
-      "weight": 1
-    },
-    {
-      "kind": "calls",
       "source": "celltrack.linkers.flow_linking.FlowLinker._transitions",
       "target": "celltrack.linkers.flow_linking.FlowLinker._gated_cost",
       "weight": 1
@@ -10863,13 +10857,25 @@
     {
       "kind": "calls",
       "source": "celltrack.linkers.flow_linking.FlowLinker.link",
-      "target": "celltrack.linkers.flow_linking.FlowLinker._network",
+      "target": "celltrack.linkers.flow_linking.FlowLinker._boundary_costs",
       "weight": 1
     },
     {
       "kind": "calls",
       "source": "celltrack.linkers.flow_linking.FlowLinker.link",
       "target": "celltrack.linkers.flow_linking.FlowLinker._selected_links",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.linkers.flow_linking.FlowLinker.link",
+      "target": "celltrack.linkers.flow_linking.FlowLinker._transitions",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.linkers.flow_linking.FlowLinker.link",
+      "target": "celltrack.linkers.flow_solving.FlowSolve.selected",
       "weight": 1
     },
     {
@@ -10894,6 +10900,72 @@
       "kind": "calls",
       "source": "celltrack.linkers.flow_linking.FlowLinker.link",
       "target": "core.geometry.Spacing.to_micrometres",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.linkers.flow_solving.MinCostFlowSolve",
+      "target": "celltrack.linkers.flow_solving.FlowSolve",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.linkers.flow_solving.MinCostFlowSolve._add_arcs",
+      "target": "celltrack.linkers.flow_solving.MinCostFlowSolve._nodes",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.linkers.flow_solving.MinCostFlowSolve._add_arcs",
+      "target": "celltrack.linkers.flow_solving.MinCostFlowSolve._prices",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.linkers.flow_solving.MinCostFlowSolve._set_supplies",
+      "target": "celltrack.linkers.flow_solving.MinCostFlowSolve._nodes",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.linkers.flow_solving.MinCostFlowSolve._set_supplies",
+      "target": "celltrack.linkers.flow_solving.MinCostFlowSolve._prices",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.linkers.flow_solving.MinCostFlowSolve.or_network_simplex",
+      "target": "celltrack.linkers.flow_solving.NetworkSimplexSolve",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.linkers.flow_solving.MinCostFlowSolve.selected",
+      "target": "celltrack.linkers.flow_solving.MinCostFlowSolve._add_arcs",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.linkers.flow_solving.MinCostFlowSolve.selected",
+      "target": "celltrack.linkers.flow_solving.MinCostFlowSolve._arrays",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.linkers.flow_solving.MinCostFlowSolve.selected",
+      "target": "celltrack.linkers.flow_solving.MinCostFlowSolve._set_supplies",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.linkers.flow_solving.MinCostFlowSolve.selected",
+      "target": "celltrack.linkers.flow_solving.NetworkSimplexSolve",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.linkers.flow_solving.MinCostFlowSolve.selected",
+      "target": "celltrack.linkers.flow_solving.NetworkSimplexSolve.selected",
       "weight": 1
     },
     {
@@ -17091,7 +17163,7 @@
   ],
   "nodes": [
     {
-      "descendants": 134,
+      "descendants": 135,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -17619,7 +17691,7 @@
       "role": null
     },
     {
-      "descendants": 17,
+      "descendants": 18,
       "id": "celltrack.linkers",
       "label": "linkers",
       "level": "module",
@@ -17686,6 +17758,14 @@
       "descendants": 0,
       "id": "celltrack.linkers.flow_linking",
       "label": "flow_linking",
+      "level": "module",
+      "parent": "celltrack.linkers",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.linkers.flow_solving",
+      "label": "flow_solving",
       "level": "module",
       "parent": "celltrack.linkers",
       "role": null
@@ -19792,6 +19872,30 @@
       "label": "FlowLinker",
       "level": "class",
       "parent": "celltrack.linkers.flow_linking",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.linkers.flow_solving.FlowSolve",
+      "label": "FlowSolve",
+      "level": "class",
+      "parent": "celltrack.linkers.flow_solving",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.linkers.flow_solving.MinCostFlowSolve",
+      "label": "MinCostFlowSolve",
+      "level": "class",
+      "parent": "celltrack.linkers.flow_solving",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.linkers.flow_solving.NetworkSimplexSolve",
+      "label": "NetworkSimplexSolve",
+      "level": "class",
+      "parent": "celltrack.linkers.flow_solving",
       "role": "satellite"
     },
     {
@@ -26332,14 +26436,6 @@
     },
     {
       "descendants": 0,
-      "id": "celltrack.linkers.flow_linking.FlowLinker._network",
-      "label": "_network",
-      "level": "method",
-      "parent": "celltrack.linkers.flow_linking.FlowLinker",
-      "role": null
-    },
-    {
-      "descendants": 0,
       "id": "celltrack.linkers.flow_linking.FlowLinker._priced_affinity",
       "label": "_priced_affinity",
       "level": "method",
@@ -26368,6 +26464,78 @@
       "label": "link",
       "level": "method",
       "parent": "celltrack.linkers.flow_linking.FlowLinker",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.linkers.flow_solving.FlowSolve.selected",
+      "label": "selected",
+      "level": "method",
+      "parent": "celltrack.linkers.flow_solving.FlowSolve",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.linkers.flow_solving.MinCostFlowSolve._add_arcs",
+      "label": "_add_arcs",
+      "level": "method",
+      "parent": "celltrack.linkers.flow_solving.MinCostFlowSolve",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.linkers.flow_solving.MinCostFlowSolve._arrays",
+      "label": "_arrays",
+      "level": "method",
+      "parent": "celltrack.linkers.flow_solving.MinCostFlowSolve",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.linkers.flow_solving.MinCostFlowSolve._nodes",
+      "label": "_nodes",
+      "level": "method",
+      "parent": "celltrack.linkers.flow_solving.MinCostFlowSolve",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.linkers.flow_solving.MinCostFlowSolve._prices",
+      "label": "_prices",
+      "level": "method",
+      "parent": "celltrack.linkers.flow_solving.MinCostFlowSolve",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.linkers.flow_solving.MinCostFlowSolve._set_supplies",
+      "label": "_set_supplies",
+      "level": "method",
+      "parent": "celltrack.linkers.flow_solving.MinCostFlowSolve",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.linkers.flow_solving.MinCostFlowSolve.or_network_simplex",
+      "label": "or_network_simplex",
+      "level": "method",
+      "parent": "celltrack.linkers.flow_solving.MinCostFlowSolve",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.linkers.flow_solving.MinCostFlowSolve.selected",
+      "label": "selected",
+      "level": "method",
+      "parent": "celltrack.linkers.flow_solving.MinCostFlowSolve",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.linkers.flow_solving.NetworkSimplexSolve.selected",
+      "label": "selected",
+      "level": "method",
+      "parent": "celltrack.linkers.flow_solving.NetworkSimplexSolve",
       "role": null
     },
     {
