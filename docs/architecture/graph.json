@@ -1394,6 +1394,60 @@
     },
     {
       "kind": "import",
+      "source": "celltrack.eval.offset_precision",
+      "target": "celltrack.data.tunet_dataset",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.offset_precision",
+      "target": "celltrack.detectors.detection",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.offset_precision",
+      "target": "celltrack.detectors.tunet",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.offset_precision",
+      "target": "celltrack.eval.kernel_reference",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.offset_precision",
+      "target": "celltrack.eval.proxy",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.offset_precision",
+      "target": "celltrack.eval.stratification",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.offset_precision",
+      "target": "celltrack.losses.offset_target",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.offset_precision",
+      "target": "core.obs",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.offset_precision",
+      "target": "core.paths",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "celltrack.eval.prior_velocity_source",
       "target": "celltrack.data.joint_dataset",
       "weight": 1
@@ -1918,6 +1972,12 @@
       "kind": "import",
       "source": "celltrack.losses.center_embed",
       "target": "celltrack.losses.info_nce",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.losses.center_offset",
+      "target": "celltrack.losses.offset_target",
       "weight": 1
     },
     {
@@ -7478,6 +7538,24 @@
     },
     {
       "kind": "references",
+      "source": "celltrack.data.tunet_dataset.FrameTarget",
+      "target": "core.paths.DataRoot",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.tunet_dataset.FrameTarget.index",
+      "target": "core.data.tracks.AnnotatedTracks.from_geff",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.data.tunet_dataset.FrameTarget.index",
+      "target": "core.paths.DataRoot.track_store",
+      "weight": 1
+    },
+    {
+      "kind": "references",
       "source": "celltrack.detectors.center_prior.CenterPrior",
       "target": "celltrack.detectors.center_prior.CenterPriorRecipe",
       "weight": 1
@@ -8325,6 +8403,12 @@
     {
       "kind": "calls",
       "source": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer._gap_probabilities",
+      "target": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer._reverse_probabilities",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer._gap_probabilities",
       "target": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer.fuse",
       "weight": 1
     },
@@ -8338,6 +8422,12 @@
       "kind": "calls",
       "source": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer._reverse_logits",
       "target": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer._reverse_seed_logits",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer._reverse_probabilities",
+      "target": "celltrack.edges.seed_moment_alignment.SeedMomentAlignment.align",
       "weight": 1
     },
     {
@@ -8356,6 +8446,12 @@
       "kind": "calls",
       "source": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer._reverse_seed_logits",
       "target": "celltrack.models.edge_transformer.EdgeTransformerScorer._gap_logits",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer._seed_probabilities",
+      "target": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer._reverse_probabilities",
       "weight": 1
     },
     {
@@ -9860,6 +9956,84 @@
     },
     {
       "kind": "references",
+      "source": "celltrack.eval.offset_precision.FramePrediction",
+      "target": "celltrack.data.tunet_dataset.FrameTarget",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.offset_precision.FramePrediction",
+      "target": "celltrack.detectors.tunet.TemporalUNetDetector",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.eval.offset_precision.FramePrediction.stream",
+      "target": "celltrack.data.tunet_dataset.FrameDataset",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.offset_precision.FramePrediction.stream",
+      "target": "celltrack.data.tunet_dataset.FrameDataset.batches",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.offset_precision.OffsetPrecision",
+      "target": "celltrack.eval.offset_precision.FramePrediction",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.offset_precision.OffsetPrecision",
+      "target": "celltrack.eval.offset_precision.OffsetPrecision",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.eval.offset_precision.OffsetPrecision",
+      "target": "celltrack.eval.stratification.PrecisionRow",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.offset_precision.OffsetPrecision",
+      "target": "celltrack.losses.offset_target.OffsetTarget",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.eval.offset_precision.OffsetPrecision.of",
+      "target": "celltrack.eval.stratification.PrecisionRow",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.eval.offset_precision.OffsetPrecision.of",
+      "target": "celltrack.eval.stratification.Stratification",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.offset_precision.OffsetPrecision.of",
+      "target": "celltrack.eval.stratification.Stratification.add",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.offset_precision.OffsetPrecision.of",
+      "target": "celltrack.eval.stratification.Stratification.rows",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.offset_precision.OffsetPrecision.of",
+      "target": "celltrack.losses.offset_target.OffsetTarget.of",
+      "weight": 1
+    },
+    {
+      "kind": "references",
       "source": "celltrack.eval.prior_velocity_source.PriorVelocitySource",
       "target": "celltrack.data.joint_dataset.PairSample",
       "weight": 1
@@ -10312,6 +10486,18 @@
       "kind": "references",
       "source": "celltrack.eval.proxy_eval._Args",
       "target": "celltrack.eval.proxy_eval._Args",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.stratification.Stratification",
+      "target": "celltrack.eval.stratification.PrecisionRow",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.eval.stratification.Stratification.rows",
+      "target": "celltrack.eval.stratification.PrecisionRow",
       "weight": 1
     },
     {
@@ -11780,8 +11966,20 @@
     },
     {
       "kind": "calls",
+      "source": "celltrack.losses.center_offset.CenterOffsetLoss.of",
+      "target": "celltrack.losses.offset_target.OffsetTarget.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
       "source": "celltrack.losses.info_nce.InfoNCE.of",
       "target": "celltrack.losses.info_nce.InfoNCE._appearance",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.losses.offset_target.OffsetTarget",
+      "target": "celltrack.losses.offset_target.OffsetTarget",
       "weight": 1
     },
     {
@@ -12645,6 +12843,12 @@
     {
       "kind": "references",
       "source": "celltrack.models.temporal_unet_detector.TemporalUNetDetector",
+      "target": "celltrack.models.temporal_unet_detector.DetectorHeads",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.models.temporal_unet_detector.TemporalUNetDetector",
       "target": "celltrack.models.temporal_unet_detector.DetectorRecipe",
       "weight": 1
     },
@@ -12676,6 +12880,18 @@
       "kind": "calls",
       "source": "celltrack.models.temporal_unet_detector.TemporalUNetDetector.forward",
       "target": "celltrack.models.temporal_unet_detector.TemporalUNetDetector.forward_batch",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.models.temporal_unet_detector.TemporalUNetDetector.forward_batch",
+      "target": "celltrack.models.temporal_unet_detector.TemporalUNetDetector.forward_heads",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.models.temporal_unet_detector.TemporalUNetDetector.forward_heads",
+      "target": "celltrack.models.temporal_unet_detector.DetectorHeads",
       "weight": 1
     },
     {
@@ -16465,6 +16681,12 @@
       "weight": 1
     },
     {
+      "kind": "references",
+      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer",
+      "target": "celltrack.training.tunet_detector.StepLoss",
+      "weight": 1
+    },
+    {
       "kind": "holds",
       "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer",
       "target": "celltrack.training.tunet_detector.TUNetTrainConfig",
@@ -16486,6 +16708,24 @@
       "kind": "calls",
       "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._detector",
       "target": "core.paths.DataRoot.from_config",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._offset_loss",
+      "target": "celltrack.losses.center_offset.CenterOffsetLoss.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._offset_loss",
+      "target": "celltrack.training.tunet_detector.TUNetTrainConfig.offset_radius",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._offset_loss",
+      "target": "celltrack.training.tunet_detector.TUNetTrainConfig.voxel_um",
       "weight": 1
     },
     {
@@ -16522,6 +16762,18 @@
       "kind": "calls",
       "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._step",
       "target": "celltrack.losses.balanced_bce.BalancedBCE.of",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._step",
+      "target": "celltrack.training.tunet_detector.StepLoss",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.tunet_detector.TUNetDetectorTrainer._step",
+      "target": "celltrack.training.tunet_detector.TUNetDetectorTrainer._offset_loss",
       "weight": 1
     },
     {
@@ -16618,6 +16870,12 @@
       "kind": "calls",
       "source": "celltrack.training.tunet_detector.TUNetTrainConfig.arg_parser",
       "target": "celltrack.operating_point.TrackerConfig.shipped",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.tunet_detector.TUNetTrainConfig.offset_radius",
+      "target": "celltrack.training.tunet_detector.TUNetTrainConfig.voxel_um",
       "weight": 1
     },
     {
@@ -17523,7 +17781,7 @@
   ],
   "nodes": [
     {
-      "descendants": 135,
+      "descendants": 139,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -17947,7 +18205,7 @@
       "role": null
     },
     {
-      "descendants": 11,
+      "descendants": 13,
       "id": "celltrack.eval",
       "label": "eval",
       "level": "module",
@@ -18004,6 +18262,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.eval.offset_precision",
+      "label": "offset_precision",
+      "level": "module",
+      "parent": "celltrack.eval",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.eval.prior_velocity_source",
       "label": "prior_velocity_source",
       "level": "module",
@@ -18022,6 +18288,14 @@
       "descendants": 0,
       "id": "celltrack.eval.proxy_eval",
       "label": "proxy_eval",
+      "level": "module",
+      "parent": "celltrack.eval",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.stratification",
+      "label": "stratification",
       "level": "module",
       "parent": "celltrack.eval",
       "role": null
@@ -18203,7 +18477,7 @@
       "role": null
     },
     {
-      "descendants": 9,
+      "descendants": 11,
       "id": "celltrack.losses",
       "label": "losses",
       "level": "module",
@@ -18236,6 +18510,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.losses.center_offset",
+      "label": "center_offset",
+      "level": "module",
+      "parent": "celltrack.losses",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.losses.hard_negative_margin",
       "label": "hard_negative_margin",
       "level": "module",
@@ -18246,6 +18528,14 @@
       "descendants": 0,
       "id": "celltrack.losses.info_nce",
       "label": "info_nce",
+      "level": "module",
+      "parent": "celltrack.losses",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.losses.offset_target",
+      "label": "offset_target",
       "level": "module",
       "parent": "celltrack.losses",
       "role": null
@@ -20060,6 +20350,22 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.eval.offset_precision.FramePrediction",
+      "label": "FramePrediction",
+      "level": "class",
+      "parent": "celltrack.eval.offset_precision",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.offset_precision.OffsetPrecision",
+      "label": "OffsetPrecision",
+      "level": "class",
+      "parent": "celltrack.eval.offset_precision",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.eval.prior_velocity_source.PriorVelocitySource",
       "label": "PriorVelocitySource",
       "level": "class",
@@ -20105,6 +20411,22 @@
       "level": "class",
       "parent": "celltrack.eval.proxy_eval",
       "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.stratification.PrecisionRow",
+      "label": "PrecisionRow",
+      "level": "class",
+      "parent": "celltrack.eval.stratification",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.stratification.Stratification",
+      "label": "Stratification",
+      "level": "class",
+      "parent": "celltrack.eval.stratification",
+      "role": "primary"
     },
     {
       "descendants": 0,
@@ -20396,6 +20718,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.losses.center_offset.CenterOffsetLoss",
+      "label": "CenterOffsetLoss",
+      "level": "class",
+      "parent": "celltrack.losses.center_offset",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.losses.hard_negative_margin.HardNegativeMargin",
       "label": "HardNegativeMargin",
       "level": "class",
@@ -20408,6 +20738,14 @@
       "label": "InfoNCE",
       "level": "class",
       "parent": "celltrack.losses.info_nce",
+      "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.losses.offset_target.OffsetTarget",
+      "label": "OffsetTarget",
+      "level": "class",
+      "parent": "celltrack.losses.offset_target",
       "role": "primary"
     },
     {
@@ -20673,6 +21011,14 @@
       "level": "class",
       "parent": "celltrack.models.temporal_position_attention",
       "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.temporal_unet_detector.DetectorHeads",
+      "label": "DetectorHeads",
+      "level": "class",
+      "parent": "celltrack.models.temporal_unet_detector",
+      "role": "satellite"
     },
     {
       "descendants": 0,
@@ -21305,6 +21651,14 @@
       "level": "class",
       "parent": "celltrack.training.tracked_run",
       "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.tunet_detector.StepLoss",
+      "label": "StepLoss",
+      "level": "class",
+      "parent": "celltrack.training.tunet_detector",
+      "role": "satellite"
     },
     {
       "descendants": 0,
@@ -24796,6 +25150,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.data.tunet_dataset.FrameTarget.index",
+      "label": "index",
+      "level": "method",
+      "parent": "celltrack.data.tunet_dataset.FrameTarget",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.detectors.center_prior.CenterConfirmer.confirm",
       "label": "confirm",
       "level": "method",
@@ -25486,6 +25848,14 @@
       "descendants": 0,
       "id": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer._reverse_logits",
       "label": "_reverse_logits",
+      "level": "method",
+      "parent": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer._reverse_probabilities",
+      "label": "_reverse_probabilities",
       "level": "method",
       "parent": "celltrack.edges.blended_edge_scoring.BlendedEdgeTransformerScorer",
       "role": null
@@ -26292,6 +26662,70 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.eval.offset_precision.FramePrediction.shape",
+      "label": "shape",
+      "level": "method",
+      "parent": "celltrack.eval.offset_precision.FramePrediction",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.offset_precision.FramePrediction.stream",
+      "label": "stream",
+      "level": "method",
+      "parent": "celltrack.eval.offset_precision.FramePrediction",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.offset_precision.OffsetPrecision.__init__",
+      "label": "__init__",
+      "level": "method",
+      "parent": "celltrack.eval.offset_precision.OffsetPrecision",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.offset_precision.OffsetPrecision._confidence_index",
+      "label": "_confidence_index",
+      "level": "method",
+      "parent": "celltrack.eval.offset_precision.OffsetPrecision",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.offset_precision.OffsetPrecision._ring_count",
+      "label": "_ring_count",
+      "level": "method",
+      "parent": "celltrack.eval.offset_precision.OffsetPrecision",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.offset_precision.OffsetPrecision._ring_index",
+      "label": "_ring_index",
+      "level": "method",
+      "parent": "celltrack.eval.offset_precision.OffsetPrecision",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.offset_precision.OffsetPrecision.of",
+      "label": "of",
+      "level": "method",
+      "parent": "celltrack.eval.offset_precision.OffsetPrecision",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.offset_precision.OffsetPrecision.report",
+      "label": "report",
+      "level": "method",
+      "parent": "celltrack.eval.offset_precision.OffsetPrecision",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.eval.prior_velocity_source.PriorVelocitySource._blend",
       "label": "_blend",
       "level": "method",
@@ -26504,6 +26938,38 @@
       "label": "from_argv",
       "level": "method",
       "parent": "celltrack.eval.proxy_eval._Args",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.stratification.PrecisionRow.resolves_confusor",
+      "label": "resolves_confusor",
+      "level": "method",
+      "parent": "celltrack.eval.stratification.PrecisionRow",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.stratification.Stratification.__init__",
+      "label": "__init__",
+      "level": "method",
+      "parent": "celltrack.eval.stratification.Stratification",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.stratification.Stratification.add",
+      "label": "add",
+      "level": "method",
+      "parent": "celltrack.eval.stratification.Stratification",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.stratification.Stratification.rows",
+      "label": "rows",
+      "level": "method",
+      "parent": "celltrack.eval.stratification.Stratification",
       "role": null
     },
     {
@@ -27508,6 +27974,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.losses.center_offset.CenterOffsetLoss.of",
+      "label": "of",
+      "level": "method",
+      "parent": "celltrack.losses.center_offset.CenterOffsetLoss",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.losses.hard_negative_margin.HardNegativeMargin.mine",
       "label": "mine",
       "level": "method",
@@ -27536,6 +28010,46 @@
       "label": "of",
       "level": "method",
       "parent": "celltrack.losses.info_nce.InfoNCE",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.losses.offset_target.OffsetTarget.__init__",
+      "label": "__init__",
+      "level": "method",
+      "parent": "celltrack.losses.offset_target.OffsetTarget",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.losses.offset_target.OffsetTarget._ravel",
+      "label": "_ravel",
+      "level": "method",
+      "parent": "celltrack.losses.offset_target.OffsetTarget",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.losses.offset_target.OffsetTarget._window_offsets",
+      "label": "_window_offsets",
+      "level": "method",
+      "parent": "celltrack.losses.offset_target.OffsetTarget",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.losses.offset_target.OffsetTarget.of",
+      "label": "of",
+      "level": "method",
+      "parent": "celltrack.losses.offset_target.OffsetTarget",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.losses.offset_target.OffsetTarget.supervised_fraction",
+      "label": "supervised_fraction",
+      "level": "method",
+      "parent": "celltrack.losses.offset_target.OffsetTarget",
       "role": null
     },
     {
@@ -28526,6 +29040,14 @@
       "descendants": 0,
       "id": "celltrack.models.temporal_unet_detector.TemporalUNetDetector.forward_batch",
       "label": "forward_batch",
+      "level": "method",
+      "parent": "celltrack.models.temporal_unet_detector.TemporalUNetDetector",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.models.temporal_unet_detector.TemporalUNetDetector.forward_heads",
+      "label": "forward_heads",
       "level": "method",
       "parent": "celltrack.models.temporal_unet_detector.TemporalUNetDetector",
       "role": null
@@ -30452,6 +30974,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.training.tunet_detector.TUNetDetectorTrainer._offset_loss",
+      "label": "_offset_loss",
+      "level": "method",
+      "parent": "celltrack.training.tunet_detector.TUNetDetectorTrainer",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.training.tunet_detector.TUNetDetectorTrainer._restore",
       "label": "_restore",
       "level": "method",
@@ -30502,6 +31032,22 @@
       "descendants": 0,
       "id": "celltrack.training.tunet_detector.TUNetTrainConfig.arg_parser",
       "label": "arg_parser",
+      "level": "method",
+      "parent": "celltrack.training.tunet_detector.TUNetTrainConfig",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.tunet_detector.TUNetTrainConfig.offset_radius",
+      "label": "offset_radius",
+      "level": "method",
+      "parent": "celltrack.training.tunet_detector.TUNetTrainConfig",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.tunet_detector.TUNetTrainConfig.voxel_um",
+      "label": "voxel_um",
       "level": "method",
       "parent": "celltrack.training.tunet_detector.TUNetTrainConfig",
       "role": null
