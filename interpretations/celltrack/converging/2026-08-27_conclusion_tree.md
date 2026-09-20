@@ -25,15 +25,18 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   **neither is a submission candidate** at that ceiling.
 - **The final-2 hedge is real and keeps its slot (E38):** 0947 and v1329f dispute ~16 % of the edge
   union (10356 / 10700 unique edges), so they are two genuinely different graphs, not one in two hats.
-- **The last live lever is now UNDER-SIZED, not GPU-blocked (E40/E41).** E36 sized detection recall at
-  2.5 % of edges, on the mechanism that a GT node borrows a *neighbouring* cell's detection. Five
-  CPU-only instruments say otherwise: the missed cells are visible (only 3 % lack a local intensity
-  excess), they have no GT neighbour to merge with (24.8 µm away, same as found cells), and a matched
-  null (frame t+50) shows the detection 3.83 µm away is the cell's **own**, displaced — own-frame
-  closer than chance in 0.807 of cases. So 2.87 µm "recall" measures **localization scatter, not
-  missing cells**, and E36's 574-edge size needs re-deriving before it justifies a card. A learning-free
-  DoG union is separately dead on the conditional (0.156 vs its own 0.414 marginal). The card stays
-  parked by explicit instruction; nothing below starts without asking.
+- **The live lever is unchanged in SIZE and corrected in TARGET (E40/E41/E41(b)).** E36's 2.5 % of edges
+  is independently reproduced — 3.30 % on a cache whose recall is 0.697–0.750 vs E36's 0.824 — so the
+  lever is real and detection is still the axis. What was wrong is *which cells it points at*. E36's
+  mechanism (a GT node borrows a **neighbouring** cell's detection) fails: missed cells sit 24.8 µm from
+  the nearest GT neighbour, the same as found cells, and a matched null (frame t+50) shows the detection
+  3.83 µm away is the cell's **own**, displaced — own-frame closer than chance in 0.807 of cases, and
+  only 3 % of these cells lack any local intensity excess. So the 2.87 µm population (n=3864, 40.3 % of
+  edges — impossible against a 0.92 LB) is **localization scatter**, while the population that actually
+  costs score is the **288 nodes blind at the official 7 µm ruler (2.25 %)**, 13× smaller. Aim a recovery
+  pass at those, not at the 2.87 µm set. A learning-free DoG union is separately dead on the conditional
+  (0.156 vs its own 0.414 marginal). The card stays parked by explicit instruction; nothing starts
+  without asking.
 - **Runtime is solved and is no longer a reason to avoid anything (E31/E32).** `-fast` = 1590 s vs 6286 s,
   byte-identical submission; hidden test is 4 videos at 9.93 predict-minutes, ~20x headroom in a 9 h kernel.
 - **The ensemble idea is dead for the donors we hold (E33).** v1329f loses 98.9 % of the 961 genuinely
@@ -244,6 +247,31 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
     −1.27) while only the medians separate — the mean does not discriminate here and I have not
     explained why. (c) Every displacement discussed is 3–4 µm, i.e. **inside** the official 7 µm
     matcher, so nothing here claims a score effect on its own.
+
+  **E41(b) — SELF-CORRECTION WITHIN THE HOUR: E36's SIZE SURVIVES. I OVERCLAIMED. The mechanism was
+  wrong; the number was not.** E41 said the 574-edge (2.5 %) lever "needs re-deriving", implying it would
+  shrink. Re-derived (bd `og4x`, CPU-only, same cache): a GT edge counted dead when either endpoint has
+  nothing within the ruler —
+
+  | ruler | GT nodes with nothing in reach | GT edges killed |
+  |---|---|---|
+  | 2.87 µm | 3864 / 12777 = 30.2 % | 4976 / 12346 = **40.3 %** |
+  | 5.00 µm | 1062 = 8.3 % | 1502 = 12.2 % |
+  | 7.00 µm (official) | 288 = **2.25 %** | 408 = **3.30 %** |
+
+  - **40.3 % edge loss is impossible against a 0.92 LB**, which is the cleanest possible proof that 2.87 µm
+    is the wrong ruler — exactly what E41 argued.
+  - **But at the ruler that scores, the loss is 3.30 %**, on a cache reading recall 0.697–0.750 against
+    E36's 0.824. A better detector lands lower, i.e. **right on E36's 2.5 %.** So E36's *size* is
+    independently reproduced; only its *story* (borrowing a neighbour's detection) was wrong.
+  - **And this SHARPENS the lever rather than closing it.** The 2.25 % of GT nodes with nothing within
+    7 µm are genuinely, officially undetected — no displacement explanation available, since the ruler is
+    the official one. That is a real recall gap with real material behind it, and it is the same
+    population E40 measured as only 2.1 % blind at 10 µm. Detection stays the live axis, still
+    GPU-priced, still parked. bd `lwrr` is therefore **re-instated, not retired** — with the correct
+    population (nodes blind at 7 µm, n=288 here) rather than the 2.87 µm population (n=3864) that is
+    13× larger and mostly localization scatter. Targeting the wrong one of those two is the actual
+    mistake E36 would have caused.
 
   **E37(d) — THE REJECT HISTOGRAM, MEASURED. Pair existence is the binder, the peak-side gates are
   second, and loosening them takes the filler to its ceiling — where it is still ~1 %.** Both free
