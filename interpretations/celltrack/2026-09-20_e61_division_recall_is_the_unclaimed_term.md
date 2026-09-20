@@ -242,6 +242,10 @@ things follow, and both are flags rather than builds:
   `no_fork=19`, unchanged). **The candidacy pool is not what withholds the 17.** Whatever `runner_up`
   fails to propose, `geometric` does not propose either — which leaves c3's own veto as the single named
   cause, and makes the threshold sweep the only live question of the two.
+
+  Re-run at `max_added_forks=100` it recovers **5** — again exactly what c3 alone recovers at that budget.
+  The null therefore holds at two different cut sizes, so it is a property of the proposal pool and not an
+  artifact of the budget happening to truncate in the same place twice.
 - **c3's veto rejects on `divergence is None`** — a daughter whose track gaps or branches at t+2 is deleted
   whatever its geometry — and `2.25um` is a donor constant, never derived for our spacing. Sweeping the
   threshold to 0.0 separates *must be measurable* (the structural single-successor requirement) from *must
