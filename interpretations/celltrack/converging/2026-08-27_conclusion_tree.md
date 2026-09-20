@@ -12,13 +12,54 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
-## NEWS 2026-09-20 16:55Z — the champion's best division lever deletes six true divisions, and the label that hid it was post-hoc
+## NEWS 2026-09-20 18:10Z — E62: the donors' fuse weight reduces to switching the reverse pass off, and the alignment suspicion is closed
 
-E61 priced the division-recovery stage to its ceiling and then found the ceiling was partly self-inflicted.
-Every knob at its most permissive reaches **7 of 25** missed divisions with `require_c3_divergence` ON;
-the same arm with the veto OFF reaches **13**, and `fork_rejected` goes 5 → **0**. The C3 gate buys its
-measured +0.0123 by censoring six true forks along with the false ones. The corrected split of all 25:
-1 undetected · 7 recovered under the veto · **6 vetoed true forks** · 10 structurally unproposable · 1 unexplained.
+Both frontier kernels that run a bidirectional edge fuse weight the reverse direction far below half —
+evgendvorkin 0.30, `evg0942` 0.15 — while we take the plain harmonic mean, which is the same fuse at
+`w=0.5`. A month-old issue flagged the gap and was never run. Seven cells on test-4, with the shipped
+arithmetic as its own control: **w=0.5 0.9375 (best)** · w=0.30 0.9361 · w=0.15 **0.9343** · bidirectional
+off **0.9343**. The 0.15 cell returns the OFF cell to every digit — clamped 0.9317, bonus +0.0026 — and that
+is arithmetic, not a bug: `f*r/((1-w)r + wf) → f` as `w→0`. **On our candidate distribution the donor
+constant does not mean "weight the reverse lightly"; it means "do not run the reverse pass".** One line of
+algebra predicted that cell before the GPU did. Reduce a donor constant at our own numbers before spending
+time on it.
+
+`align_reverse_moments` — the reverse logits put on the forward centre and spread, as `evg0942` does — is
+**inert** (identical to 4dp at 0.15 and 0.30, −0.0005 at 0.5). It was built to test a real standing
+suspicion: that every bidirectional arm read flat because the fuse shifted probability mass under a fixed
+candidate threshold. **That explanation is now closed**; what remains is that the reverse pass carries
+little the forward pass does not. Full spread 0.0032, sub-floor — no lever either way, and the direction
+that would have been a win is the one we were already in. Closes bd `xoap` + `3gyw`. Detail:
+`interpretations/celltrack/2026-09-20_e62_bidirectional_fuse_weight.md`.
+
+A harness note worth carrying: the first run of this sweep produced nothing. `logger.info` writes to
+**stderr** while mlflow's chatter goes to stdout, so a stdout-only redirect left a log with every header
+present, no traceback, and no scores — 22 minutes of correct GPU work discarded. **A silent log reads
+exactly like a silent crash; check the first expected log line exists before trusting an arm.**
+
+---
+
+## NEWS 2026-09-20 16:55Z — division recall is not reachable from post-processing, and a ceiling number lied about where the cost was
+
+**(Revised 18:10Z with the closing arms — the first version of this entry headlined "the veto deletes six
+true divisions". That number was real but REGIME-SPECIFIC, and it does not survive at the operating point.)**
+
+E61 priced the division-recovery stage to its ceiling and then re-priced the winner where it actually runs.
+At the ceiling — every knob permissive, budget uncapped — `require_c3_divergence` ON reaches **7 of 25**
+missed divisions and OFF reaches **13**, with `fork_rejected` 5 → 0, which reads as the veto censoring six
+true forks. **At the SHIPPED operating point that cost is zero.** The decisive 2×2, recovered of 25:
+
+| `require_c3_divergence` | `prefer_divergence` | recovered |
+|---|---|---|
+| true | false | **4** (shipped) |
+| true | true | 3 |
+| false | true | 3 |
+| false | false | **1** |
+
+The gate beats the same cue used as a score, and both beat nothing. Under an uncapped geometric candidacy
+the veto was the only thing rationing a flooded proposal set; at shipped candidacy the hard threshold is
+simply the better estimator. **Price a stage's ceiling, then re-price the winner at the operating point —
+the two regimes disagreed here and the ceiling one was the misleading answer.**
 
 **The instrument lesson generalises past divisions.** I had read `fork_rejected=5` as "the right mother forked
 and the wrong daughter won the sort" — a ranking failure. `core/metrics/divisions.py:129-136` assigns that
@@ -27,14 +68,21 @@ opened two orders of magnitude the stage emits 726 forks on one movie, so one la
 **A stage label read off the output is a hypothesis, not a record of what the pipeline decided** — only an A/B
 against the suspected stage separates censorship from coincidence.
 
-The built response is divergence as a **SCORE** (`DivergingDaughterRanking`, dimensionless `(s2-s1)/max(s1,s2)`,
-commit `1c10595`), soft where the champion is hard. Its first arm kept the veto ON and read **3 vs the shipped
-4** — expected, because inside a set the gate already filtered, divergence has fired for every member and the
-score orders a saturated variable. The arm that can say anything is veto-OFF + score-on, with a veto-off
-control beside it; both running. The other half of the miss — the 10 unproposable — is not a post-processing
-question at all: the stage draws its second daughter from the orphan pool only, so a division whose daughters
-the linker already claimed is outside it at every setting. That needs a re-parenting decision inside the
-linker's objective, which `candidacy=steal` is the first attempt at.
+The built response was divergence as a **SCORE** (`DivergingDaughterRanking`, dimensionless
+`(s2-s1)/max(s1,s2)`, commit `1c10595`), soft where the champion is hard. It is a **real cue** — alone it
+recovers 3 where nothing recovers 1, carrying two of the gate's three — and is **strictly dominated by the
+same cue as a gate**. It ships OFF.
+
+The other half of the miss — the 10 unproposable — is not a post-processing question at all: the stage draws
+its second daughter from the orphan pool only, so a division whose daughters the linker already claimed is
+outside it at every setting. `candidacy=steal` attempted exactly that re-parenting and **dies at the GATE,
+not the budget**. I predicted the capped arm's recovered 4→2 came from steal candidates crowding out true
+forks under a binding budget, and registered the uncapped arm as the test: it recovers **1** — worse — with
+**4 spurious forks across eight movies**, where displacement would have produced hundreds. So the proposals
+never reach the ranking; the physical gates and C3 destroy them first. The mechanism is coherent with E54c:
+a daughter another track already holds was claimed *because she looks like a continuation*, which is
+precisely what a division-shaped gate exists to reject. What remains is re-parenting inside the **linker's
+objective** — a different component, a different cost.
 
 Still **no submittable gain**; 0.947 stands. Detail:
 `interpretations/celltrack/2026-09-20_e61_division_recall_is_the_unclaimed_term.md`.
