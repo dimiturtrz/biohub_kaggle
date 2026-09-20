@@ -19,9 +19,8 @@ optimiser keeps a true track intact across a crowded frame where the per-frame s
 the linker reduces exactly to `AssignmentLinker`, which is the A/B baseline the boundary cost is swept against.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-import networkx as nx
 import numpy as np
 from jaxtyping import Float, Int
 from scipy.spatial.distance import cdist
@@ -32,6 +31,7 @@ from celltrack.linkers.agreement_gating import AgreementGate
 from celltrack.linkers.assignment_linking import LINK_REWARD as _LINK_REWARD
 from celltrack.linkers.boundary_prior import BoundaryFactorSource
 from celltrack.linkers.evidence_ramp import EvidenceRamp
+from celltrack.linkers.flow_solving import FlowSolve, MinCostFlowSolve, Transition
 from celltrack.linkers.frame_gap import FrameGap
 from celltrack.linkers.motion_prediction import MotionPrediction
 from celltrack.linkers.mutual_bonus import MutualBonus
@@ -42,10 +42,6 @@ from core.geometry import Spacing
 # Micrometre-scale costs are rounded to integers for the network-simplex solver, which needs integer weights;
 # a 1000x scale keeps sub-micrometre and sub-percent-probability cost differences distinct after rounding.
 _COST_SCALE = 1000
-_SOURCE, _SINK = "source", "sink"
-
-# A flow node is either a boundary marker (`_SOURCE`/`_SINK`) or an `("in"|"out", detection_row)` split node.
-type _Node = str | tuple[str, int]
 
 
 @dataclass(frozen=True)
@@ -100,30 +96,21 @@ class FlowLinker:
     ramp: EvidenceRamp | None = None
     # Whether the priced probability is conditioned on the ADMISSIBLE parents (`AdmissibleAffinity`).
     admissible: bool = False
+    # WHICH ENGINE solves the network — never WHAT is solved. The default takes OR-tools where it is installed
+    # and the networkx network simplex where it is not; both return the same objective and the same edge set,
+    # 120x apart on the measured shape (`flow_solving`). Pin it to hold an engine fixed in a test.
+    solve: FlowSolve = field(default_factory=MinCostFlowSolve.or_network_simplex)
 
     def link(self, detections: TrackGraph) -> TrackGraph:
         """Select the min-cost set of 1-to-1 links over the whole video, coupled through the track-boundary cost."""
         positions_um = self.spacing.to_micrometres(detections.positions())
         timepoints = detections.timepoints()
-        network = self._network(len(detections.node_ids), positions_um, timepoints)
-        _, flow = nx.network_simplex(network)
-        edges = self._selected_links(flow, detections.node_ids)
-        return TrackGraph(node_ids=detections.node_ids, coordinates=detections.coordinates, edges=edges)
-
-    def _network(
-        self, count: int, positions_um: Float[np.ndarray, "n 3"], timepoints: Int[np.ndarray, "n"]
-    ) -> "nx.DiGraph[_Node]":
-        """The flow network: a unit-capacity node per detection, boundary arcs to source/sink, gated transitions."""
         appearance, disappearance = self._boundary_costs(positions_um, timepoints)
-        graph: nx.DiGraph[_Node] = nx.DiGraph()
-        for row in range(count):
-            graph.add_edge(("in", row), ("out", row), capacity=1, weight=0)  # 1-to-1: at most one link through a cell
-            graph.add_edge(_SOURCE, ("in", row), capacity=1, weight=appearance[row])  # appearance
-            graph.add_edge(("out", row), _SINK, capacity=1, weight=disappearance[row])  # disappearance
-        for source_row, target_row, weight in self._transitions(positions_um, timepoints):
-            graph.add_edge(("out", source_row), ("in", target_row), capacity=1, weight=weight)
-        graph.add_edge(_SINK, _SOURCE, capacity=count, weight=0)  # return arc closes the circulation
-        return graph
+        links = self.solve.selected(
+            len(detections.node_ids), appearance, disappearance, self._transitions(positions_um, timepoints)
+        )
+        edges = self._selected_links(links, detections.node_ids)
+        return TrackGraph(node_ids=detections.node_ids, coordinates=detections.coordinates, edges=edges)
 
     def _boundary_costs(
         self, positions_um: Float[np.ndarray, "n 3"], timepoints: Int[np.ndarray, "n"]
@@ -146,9 +133,9 @@ class FlowLinker:
 
     def _transitions(
         self, positions_um: Float[np.ndarray, "n 3"], timepoints: Int[np.ndarray, "n"]
-    ) -> list[tuple[int, int, int]]:
+    ) -> list[Transition]:
         """Every in-gate consecutive-frame `(source_row, target_row, integer_cost)` — the linkable transitions."""
-        transitions: list[tuple[int, int, int]] = []
+        transitions: list[Transition] = []
         for gap in FrameGap.sweep(positions_um, timepoints):
             if len(gap.sources) == 0 or len(gap.targets) == 0:
                 continue
@@ -204,17 +191,7 @@ class FlowLinker:
         return np.where(within_gate, cost, np.inf)
 
     @staticmethod
-    def _selected_links(flow: dict[_Node, dict[_Node, int]], node_ids: Int[np.ndarray, "n"]) -> Int[np.ndarray, "e 2"]:
-        """The transition arcs carrying a unit of flow, translated from rows back to node ids — the chosen links.
-
-        The flow dict also keys the string source/sink nodes, so a node is a transition endpoint only when it is
-        an `("out", row)` / `("in", row)` tuple; every other arc (boundary, node-capacity, return) is skipped.
-        """
-        edges = [
-            (int(node_ids[node[1]]), int(node_ids[target[1]]))
-            for node, targets in flow.items()
-            if isinstance(node, tuple) and node[0] == "out"
-            for target, sent in targets.items()
-            if isinstance(target, tuple) and target[0] == "in" and sent > 0
-        ]
+    def _selected_links(links: list[tuple[int, int]], node_ids: Int[np.ndarray, "n"]) -> Int[np.ndarray, "e 2"]:
+        """The selected transitions translated from detection rows back to node ids — the chosen links."""
+        edges = [(int(node_ids[source]), int(node_ids[target])) for source, target in links]
         return np.array(edges, dtype=np.int64) if edges else np.empty((0, 2), dtype=np.int64)

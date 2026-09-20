@@ -19,6 +19,11 @@ dependencies = [
     "mlflow>=3.14.0",
     "motile>=1.0.1",
     "networkx",    # the global min-cost-flow linker (celltrack/flow_linking.py) solves via network simplex
+    # The SAME flow network in C++ — 120x the network simplex on the measured 18k-detection shape, same
+    # objective and same selected edge set (celltrack/linkers/flow_solving.py). It is an accelerator, never a
+    # requirement: `fastest_solve` falls back to networkx where ortools is absent, which is what lets the
+    # submission kernel — whose wheel set is fixed — keep running the identical linker.
+    "ortools>=9.15",
     "tqdm",        # progress bars in core/obs.py
     # torch.compile's inductor BACKEND. The joint trainer compiles the backbone UNCONDITIONALLY
     # (joint_detector.py: "a crash is a bug to fix at its root, not a reason to run eager"), so Triton is a
