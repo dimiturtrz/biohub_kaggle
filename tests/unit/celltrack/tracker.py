@@ -613,3 +613,20 @@ def test_with_config_repoints_the_blend_weights(monkeypatch: pytest.MonkeyPatch)
     swapped = tracker.with_config(TrackerConfig(edge_blend=(0.5, 0.5)))
 
     assert cast(_StubEdgeScorer, swapped.edge_scorer).weights == (0.5, 0.5)
+
+
+def test_stage_breakdown_orders_the_fold_by_cost():
+    """The breakdown names the slowest stage FIRST — the line exists to point at an optimisation target.
+
+    `link+post` is logged as one pooled number, which was 11% of a pass when the fold was linking alone and
+    is now the majority of it. A breakdown in call order would leave the reader doing the arithmetic; ordering
+    by cost puts the stage that owns the time at the front, where it is read.
+    """
+    assert CellTracker._stage_breakdown([("Cheap", 0.5), ("Costly", 12.0), ("Middling", 3.0)]) == (
+        "Costly 12.0s | Middling 3.0s | Cheap 0.5s"
+    )
+
+
+def test_stage_breakdown_of_an_empty_fold():
+    """A tracker configured with no post-proc stages logs an empty breakdown rather than raising."""
+    assert CellTracker._stage_breakdown([]) == ""

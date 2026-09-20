@@ -14193,6 +14193,12 @@
     {
       "kind": "calls",
       "source": "celltrack.tracker.CellTracker.run_scored",
+      "target": "celltrack.tracker.CellTracker._stage_breakdown",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.tracker.CellTracker.run_scored",
       "target": "celltrack.tracker.CellTracker._stages",
       "weight": 1
     },
@@ -28800,6 +28806,14 @@
       "descendants": 0,
       "id": "celltrack.tracker.CellTracker._ranked",
       "label": "_ranked",
+      "level": "method",
+      "parent": "celltrack.tracker.CellTracker",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.tracker.CellTracker._stage_breakdown",
+      "label": "_stage_breakdown",
       "level": "method",
       "parent": "celltrack.tracker.CellTracker",
       "role": null

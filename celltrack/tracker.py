@@ -268,8 +268,12 @@ class CellTracker:
             ranker=self._ranked(video.spacing, nodes, affinity, mutual, video.volume_shape),
             veto=self.center_scorer.veto(video_key, path) if self.center_scorer is not None else None,
         )
+        elapsed: list[tuple[str, float]] = []
         for stage in self._stages(video.spacing, affinity, mutual, video.volume_shape, evidence):
+            stage_start = time.perf_counter()
             graph = stage.transform(graph)
+            elapsed.append((type(stage).__name__, time.perf_counter() - stage_start))
+        logger.info("%s: stages %s", video_key, self._stage_breakdown(elapsed))
         logger.info(
             "%s: detect %.1fs | affinity %.1fs | link+post %.1fs (%d nodes)",
             video_key,
@@ -279,6 +283,16 @@ class CellTracker:
             len(nodes.node_ids),
         )
         return TrackedVideo(graph=graph, detections=nodes, affinity=affinity)
+
+    @staticmethod
+    def _stage_breakdown(elapsed: list[tuple[str, float]]) -> str:
+        """The post-proc fold's cost per stage, slowest first — which stage owns `link+post`.
+
+        The aggregate `link+post` number was 11% of a video when the fold was linking alone; it is now the
+        majority of it, and one pooled number cannot say which of the accreted stages took it. Ordering by
+        cost puts the optimisation target at the front of the line rather than in the reader's arithmetic.
+        """
+        return " | ".join(f"{name} {seconds:.1f}s" for name, seconds in sorted(elapsed, key=lambda row: -row[1]))
 
     def fused_affinities(self, path: Path, nodes: TrackGraph, affinity: EdgeAffinity | None) -> EdgeAffinity | None:
         """The bidirectionally fused probabilities the linker's agreement knobs read — `None` when unused.
