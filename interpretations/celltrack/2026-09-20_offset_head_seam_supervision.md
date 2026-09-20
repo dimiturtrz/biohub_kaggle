@@ -27,9 +27,29 @@ Null stated before the GPU ran: a constant-zero predictor scores mean |d| over t
 Monotone, halves the null, no plateau at 6000 steps. Backbone grad norm 1.26 at launch, so the term reshapes
 *shared* features rather than decorating its own conv. The head is real.
 
-The proxy decline is the known warm-finetune recipe collapse (four prior arms collapsed identically with no
-offset head at all), not the offset term. A matched `offset_weight=0.0` control at identical settings is
-running to hold that attribution to a number rather than a memory.
+### The recipe-collapse attribution was wrong, and the control says so
+
+The proxy decline was first attributed to the known warm-finetune recipe collapse (four prior arms collapsed
+identically with no offset head at all). The matched `offset_weight=0.0` control — same warm start, same
+6000 steps, same eval cadence, only the offset term removed — refutes that:
+
+| step | ctrlNoOffset (w=0.0) | offsetA2 (w=0.01) |
+|---|---|---|
+| init | 0.8443 | 0.8443 |
+| 1500 | **0.8546** | 0.8194 |
+| 3000 | **0.8614** | 0.7951 |
+| 4500 | **0.8704** | 0.8182 |
+| 6000 | 0.8427 | 0.8205 |
+
+The control *improves* monotonically to +0.026 over init before its last-window dip; the offset arm never
+returns to init. The matched gap at 4500 is **−0.052**, far above the 0.01–0.02 noise floor. So the offset
+term at weight 0.01 costs the proxy on its own, and the recipe is not the culprit here.
+
+Two consequences. First, the auxiliary term competes with detection rather than regularising it — consistent
+with a head that reshapes shared features (grad norm 1.26) toward a Voronoi field that ~98% of frames only
+ever exercise on isolated cells. Second, **this same warm-finetune recipe works** (+0.026 from 0.8443),
+which the "warm-finetune recipe degrades proxy" memory would not have predicted; that memory is about the
+arms that carried a payload, not about the recipe alone. The recipe is exonerated; the payload is the cost.
 
 ## Stage 2 is refuted at the data, before it was built
 
