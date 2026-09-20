@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Protocol
 
 from celltrack.linkers.linking import Linker
+from core.data.split import Acquisitions
 from core.data.tracks import AnnotatedTracks, TrackGraph
 from core.data.video import CellVideo
 from core.geometry import Spacing
@@ -75,6 +76,32 @@ class TestMovieProxy:
         truths = tuple(AnnotatedTracks.from_geff(root.track_store(p)) for p in paths)
         spacing = CellVideo.from_ome_zarr(paths[0]).spacing
         return cls(paths=paths, truths=truths, spacing=spacing)
+
+    @staticmethod
+    def division_bearing(root: DataRoot, per_prefix: int = 4) -> tuple[str, ...]:
+        """The most division-rich held-out movies per acquisition — a ruler that can see the division term.
+
+        `TEST_MOVIES` carries ~7 divisions in total, so `division_jaccard` — a tenth of the official score —
+        is unmeasurable on it, and a proxy blind to a tenth of the formula cannot be expected to track the
+        board at the top end. The public 0.942 kernel reports proxy 0.9417 against LB 0.942 with a held-out
+        set built exactly this way: ranked so movies containing a GT division come first, a fixed count per
+        embryo-type prefix.
+
+        Ranked by division COUNT rather than their has-a-division flag — same order where the flag decides,
+        and it prefers the movie that measures the term more times where it does not. The pool excludes
+        `CV_MOVIES`, so this set stays independent of both the checkpoint-selection four and the four whose
+        score estimates the leaderboard.
+        """
+        pool = TestMovieProxy.training_videos(root.videos("train"))
+        divisions = {
+            video.stem: len(AnnotatedTracks.from_geff(root.track_store(video)).graph.division_parents())
+            for video in pool
+        }
+        chosen: list[str] = []
+        for group in Acquisitions.by_prefix(pool).values():
+            ranked = sorted((video.stem for video in group), key=lambda stem: (-divisions[stem], stem))
+            chosen.extend(ranked[:per_prefix])
+        return tuple(chosen)
 
     @staticmethod
     def training_videos(videos: Sequence[Path], held_out: tuple[str, ...] = CV_MOVIES) -> list[Path]:

@@ -283,6 +283,7 @@ class _Args:
     stems: tuple[str, ...]
     overrides: tuple[str, ...] = field(default=())
     stems_label: str = field(default="test")
+    divisions_per_prefix: int = field(default=0)
     per_movie: bool = field(default=False)
     center_pack: Path | None = field(default=None)
     secondary_pack: Path = field(default=SECONDARY_PACK_DEFAULT)
@@ -311,6 +312,13 @@ class _Args:
             help="comma-separated disappearance costs to sweep (default: the shipped operating point's)",
         )
         parser.add_argument("--cv", action="store_true", help="score the fixed-8 CV instead of the four test movies")
+        parser.add_argument(
+            "--divisions",
+            type=int,
+            default=0,
+            help="score the N most division-rich held-out movies per acquisition instead — the ruler that can "
+            "see the division term the test four are blind to (0 = off)",
+        )
         parser.add_argument(
             "--center-pack",
             type=Path,
@@ -364,8 +372,9 @@ class _Args:
             thresholds=tuple(float(value) for value in parsed.threshold.split(",")),
             disappearance_costs=tuple(float(value) for value in parsed.disappearance.split(",")),
             stems=CV_MOVIES if parsed.cv else TEST_MOVIES,
+            divisions_per_prefix=parsed.divisions,
             overrides=tuple(parsed.overrides),
-            stems_label="cv-8" if parsed.cv else "test-4",
+            stems_label=f"divisions-{parsed.divisions}" if parsed.divisions else ("cv-8" if parsed.cv else "test-4"),
             per_movie=parsed.per_movie,
             center_pack=parsed.center_pack,
             secondary_pack=parsed.secondary_pack,
@@ -381,11 +390,14 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     args = _Args.from_argv()
     root = DataRoot.from_config(args.config)
+    stems = (
+        TestMovieProxy.division_bearing(root, args.divisions_per_prefix) if args.divisions_per_prefix else args.stems
+    )
     evaluator = TrackerProxyEval(
         args.device,
         args.thresholds,
         args.disappearance_costs,
-        args.stems,
+        stems,
         args.overrides,
         center_pack=args.center_pack,
         secondary_pack=args.secondary_pack,
@@ -394,7 +406,7 @@ def main() -> None:
         frontier_replica=args.frontier_replica,
         kernel_faithful_replica=args.kernel_faithful_replica,
     )
-    logger.info("proxy=%s set=%s", args.stems_label, list(args.overrides))
+    logger.info("proxy=%s movies=%s set=%s", args.stems_label, list(stems), list(args.overrides))
     breakdown: dict[str, VideoMetrics] = evaluator.breakdown(root) if args.per_movie else {}
     for stem, metric in breakdown.items():
         logger.info(

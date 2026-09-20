@@ -168,3 +168,37 @@ def test_training_videos_takes_the_held_out_stems_it_is_given():
     """A caller can hold out a different set — the arithmetic still lives in one place."""
     videos = [Path("a_1.zarr"), Path("a_2.zarr")]
     assert TestMovieProxy.training_videos(videos, ("a_1",)) == [Path("a_2.zarr")]
+
+
+def _forking(divisions: int) -> TrackGraph:
+    """A graph whose every parent forks, so `division_parents` counts exactly `divisions` of them."""
+    edges = [[parent, 3 * parent + child] for parent in range(divisions) for child in (1, 2)]
+    return TrackGraph(
+        node_ids=np.arange(3 * divisions + 1),
+        coordinates=np.zeros((3 * divisions + 1, 4), dtype=int),
+        edges=np.array(edges, dtype=int).reshape(-1, 2),
+    )
+
+
+def test_division_bearing(monkeypatch: pytest.MonkeyPatch):
+    """Ranks each acquisition by how many divisions a movie carries, drops the held-out eight, takes N."""
+    counts = {"44b6_aa": 0, "44b6_bb": 9, "44b6_cc": 4, "6bba_dd": 2, "6bba_ee": 7}
+
+    class _Root:
+        def videos(self, split: str) -> list[Path]:
+            assert split == "train"
+            return [Path(f"{stem}.zarr") for stem in (*CV_MOVIES, *counts)]
+
+        def track_store(self, path: Path) -> Path:
+            return path.with_suffix(".geff")
+
+    monkeypatch.setattr(
+        proxy.AnnotatedTracks,
+        "from_geff",
+        staticmethod(lambda store: _Truth(_forking(counts[store.stem]))),
+    )
+
+    chosen = TestMovieProxy.division_bearing(cast(DataRoot, _Root()), per_prefix=2)
+
+    assert chosen == ("44b6_bb", "44b6_cc", "6bba_ee", "6bba_dd")
+    assert not set(chosen) & set(CV_MOVIES)
