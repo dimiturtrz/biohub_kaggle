@@ -40,6 +40,16 @@ Full write-up: `interpretations/celltrack/2026-09-20_e56_cross_tracker_edge_agre
   adopting a rival's edge means adopting endpoints the champion lacks, i.e. the exact term the board
   punishes. Never price a cross-tracker change with E54's ~2.3 units/edge; it was derived *within* one
   tracker with node count held fixed.
+- **ADDENDUM, same tick — the 33 selection fixes are node-free BY CONSTRUCTION, so the axis is alive.**
+  `classify_broken` tests rules in order with the detection rules first, so a swap/rival label is only
+  reachable when **both** GT endpoints already matched a champion node. All 33 connect nodes the champion
+  **already has**; importing them costs **zero** nodes. **The 677-node penalty belongs to the rival's
+  DETECTOR, not to the edges** — the two were confounded and separate cleanly. Swap fixes are edge-neutral
+  too, and E54c put the collateral at zero (0/126 thieves annotated). That returns the 33 to the
+  within-tracker regime where ~2.3 units/edge holds: **≈1.4%, just under the bar**, oracle-assumed →
+  **directional, composes.** **A RE-RANKING axis, not a merge axis** — the champion lacks the
+  discriminator (E54c) and v1329 is an existence proof one exists; transfer needs no GT at test time.
+  Affordable only because **twrp** freed 4010s (rival predict ~930s). bd `x6bd` blocks `kiw1`.
 
 ---
 
