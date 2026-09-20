@@ -124,6 +124,32 @@ ranking sees it?
 That check instruments the stage rather than the score, so it is CPU-only over one cached run. Nothing gets
 built until it answers.
 
+## The levers already exist, and were only ever arbitrated on the wrong half of the term
+
+An audit of `AffinityDivisionConfig` against the donor kernel (`research/frontier_kernels/evg0942`,
+public 0.942) finds every frontier division cue already built and reachable by flag:
+
+| flag | what it is | ever measured on recall? |
+|---|---|---|
+| `division.ranking` ∈ {probability, geometry, symmetry} | the three orderings over proposals | no |
+| `division.candidacy=geometric` | propose every unparented target, not just the head's runner-up | no |
+| `division.require_persistence` | penalise a daughter that does not survive as a track | no |
+| `division.require_mutual_nearest` | candidate must be the nearest unparented node **to the existing child** | no |
+| `division.require_c3_divergence` (2.25um) | the two daughters must **separate** from t+1 to t+2 | no |
+| `division.kernel_faithful` | byte-faithful replica of the donor's whole `add_safe_divisions_postlink` | no |
+
+Every prior arbitration of these ran on the LB or on `fp`, i.e. on the ±0.001 half of the term that E61
+prices out. None was ever read against `recovered`.
+
+`require_c3_divergence` is the one with a mechanism the shipped rankings structurally lack: it is
+**multi-frame**, where probability, geometry and symmetry are all pairwise. Two daughters move apart after
+mitosis and a mis-linked lookalike pair does not, which is exactly the discrimination the confusor work
+found pairwise cues cannot supply.
+
+The reading that makes these ranking levers rather than precision knobs: under a budget cut of 25 out of
+~950, a veto that deletes false proposals **promotes true ones into the cut**. A filter and a ranking are
+the same instrument once a budget binds.
+
 ## Secondary reading: the ruler itself
 
 The same run is the first test of whether division-bearing movie selection explains our top-end proxy offset.
