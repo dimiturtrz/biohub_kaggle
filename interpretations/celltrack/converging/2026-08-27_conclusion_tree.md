@@ -53,6 +53,17 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   argued levers are **segment-SELECTION ILP (bd `g89y`, prune the duplicate)** and the **two-pass
   tracklet ILP (bd `kiw1`, out-compete it with a sequence)** — never a better edge feature. (E46 is a
   replication of a 2026-08-23 memory that the index had dropped; see the E46 block.)
+- **The diagonal is now MEASURED, and no score we hold reaches the operating point (E48).** Center-voxel
+  intensity: AUC 0.5221, and its **FP-recall equals its collateral to three decimals at every cut**
+  (0.0222 at 0.02) — E47's q = r diagonal, literally, which upgrades the recovery-stack retro-explanation
+  from argument to measurement. Best incident affinity is better and still 13× short: AUC 0.6380,
+  FP-recall **0.0578 against the 0.75 required**. That failure was pre-registered with its reason — the
+  E46 lookalike's signature IS high affinity to the source, so a want-to-link score cannot demote it.
+  Read together: real-vs-FP status is not recoverable from anything DOWNSTREAM of the detector, which is
+  the dense-model-gap conclusion reached from a new direction (convergence, not a new finding). `g89y` is
+  sharpened, not closed — it must carry information neither score has, and the bar is a number, not a
+  direction. Caveat: the cache has no per-detection score column, so the detector score itself is
+  refuted only by analogy — measure it opportunistically on the next GPU pass.
 - **The prune axis is priced, and COLLATERAL is what binds it (E47).** Oracle FP-deletion rescues 95.3 %
   of the band (0.1195 → 0.0056, net **+0.1139** offline) — the ceiling is not the problem. But deleting a
   real cell costs ~2× its own size (both its edges), so at 5 % collateral even a PERFECT pruner nets
@@ -212,6 +223,28 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   the drift guard does not cover it), so `celltrack-public-0947-fast` (`kaggle/env_variant.py`) should
   emit a byte-identical submission in ~1600 s. A kernel RUN costs no submission slot, so this is a free
   probe: pushed 22:36Z, verify by diffing its `submission.csv` against 0947's.
+
+  **E48 — THE DIAGONAL, MEASURED: NEITHER SCORE WE HOLD REACHES E47'S OPERATING POINT.**
+  E47 argued that a threshold fails because its decision variable is intensity-ordered.
+  `kaggle/prune_score_quality.py` measures it on n=723133 detections (real 12482, FP 710651), scoring the
+  only two rankings the cache and volumes provide, at the collateral E47 requires (the cut is placed on
+  the real detections' own quantile, so collateral is exact by construction). **Center-voxel intensity:
+  AUC(real>FP) 0.5221**, and FP-recall **equals collateral at every cut** — 0.0222 at 0.02, 0.0476 at
+  0.05, 0.1011 at 0.10. That is the q = r diagonal exactly, which is what a coin-flip AUC means in
+  operating terms, and every point on it is a loss by E47's grid: the recovery stack sat there by
+  construction. **Best incident affinity: AUC 0.6380**, FP-recall **0.0578 against the 0.75 required —
+  13× short.** Pre-registered as a failure, with the reason stated first: the E46 lookalike's signature
+  is HIGH affinity to the source (it sits where the cell was), so a score that ranks by how much the
+  tracker wants to link cannot demote the one detection it most wants to link. Strong reading:
+  real-vs-FP is not recoverable from anything downstream of the detector — the dense-model-gap
+  conclusion from a new direction, a convergence to cite rather than a discovery to claim. For `g89y`
+  this raises the bar from "off the intensity axis" to a number: FP-recall 0.75 at 2 % collateral, which
+  every future prune proposal should be asked for FIRST — it is cheap and it killed two scores in an
+  afternoon. **Caveats:** the cache carries no per-detection score column (`coords` = `[t,z,y,x]`), so the
+  DETECTOR score the recovery stack actually thresholded is refuted only by analogy — get it on the next
+  GPU pass, do not wake the GPU for it; center-voxel is not integrated intensity (a better feature moves
+  0.5221 somewhat, not to the 0.9-plus the operating point implies); our tunet substrate, FP field 0.972.
+  Detail: `interpretations/celltrack/2026-09-20_e48_no_score_we_have_can_prune.md`.
 
   **E47 — THE PRUNE AXIS IS PRICED: THE CEILING IS BIG (+0.1139) AND COLLATERAL IS WHAT SPENDS IT.**
   E46 pointed at bd `g89y` because the confusor is an FP. "Prunable in principle" is not a licence to
