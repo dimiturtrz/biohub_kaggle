@@ -12,6 +12,44 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-20 05:58Z — E57: it was LOCALIZATION all along, and E54b had already proved it
+
+Read at the official 7 µm ruler, over the same 105 broken and 2022 recovered GT edges: a **broken** edge's
+endpoints sit **median 4.08 µm** from the cell (46 % beyond 5 µm), a **recovered** edge's **1.46 µm** (2 %).
+Three times worse, one denominator, no ruler swap. The official matcher forgives 7 µm — about one cell
+width — so a node half a cell off still counts as *detected*, and its dead edge is filed under
+**selection**. The detection/selection split E54 reported is a property of the **tolerance**, not of the
+tracker: 26/76 at 7 µm, 641/20 at 2.87 µm.
+
+The closer was banked five hours earlier and under-read. `cue_oracle.py`'s fourth row —
+**distance to the true GT position of the target ranks the true successor first 61/61**, against 10/61 for
+plain distance and 10/61 for oracle velocity. **With correct coordinates the simplest discriminator there
+is, is perfect.** E54c's "structure right, discriminator missing" therefore restates as **the
+discriminator is present and is being fed nodes a cell diameter off**. E54b even named the mechanism and
+left it: 15 more true successors fall *outside* the 10 µm gate because "matched predicted positions carry
+up to 7 µm localization slack each". `gate_um = 10` is the maximum **GT** step — right for clean
+coordinates, systematically undersized for the predicted ones it is actually applied to.
+
+A detector with **no weights at all** reaches part of the gap. `kaggle/classical_blindspot.py` harvests
+the multi-scale DoG from `fabriciodasilva/biohub-dodecatiad-cell-tracking` (CPU-only) — the one detector
+family that cannot share the learned pool's bias, which is what E36's *flat-across-nine-caches* 0.824
+demanded. Over all 292 frames of the four public-GT movies: champion recall **0.7747** at cell separation
+but **0.9863** at the official ruler; of the 494 cells missed at 2.87 µm, a model-free detection lands
+within ruler on **0.1336** against **0.0486** for a frame-shifted matched null → **excess +0.0850 = 42
+cells**, at **0.7× the champion's detection count**. Fewer detections, not more, so the rescue is not
+bought with false positives; and stride-5 gave +0.0909, so it is not a sampling artifact.
+
+**Node RECALL at the scorer's ruler is CLOSED** — six misses in 2193, model-free excess of one cell. The
+open channel is **LOCALIZATION**, which the 7 µm matcher is built not to see and which edges die on.
+Cheapest first: **widen `gate_um` and re-solve** (a constant, no training) · then a center-offset head
+priced against the 42 · **never** swap the detector wholesale (finer122 graft 0.7503, ILP swap 0.6555).
+Do not price this as 42 recovered edges: the snap-to-GT oracle is a **no-op by construction** — the
+broken/recovered verdict depends only on the node matching and the ILP has already run — so causality
+needs a re-solve. Three CPU runs, ~25 min, zero GPU, zero submissions.
+`interpretations/celltrack/2026-09-20_e57_localization_not_selection.md` · bd `n2xg`.
+
+---
+
 ## NEWS 2026-09-20 05:36Z — E56: the broken-edge count is ANTI-correlated with the board
 
 Full write-up: `interpretations/celltrack/2026-09-20_e56_cross_tracker_edge_agreement.md`.
