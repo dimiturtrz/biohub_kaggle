@@ -12,6 +12,23 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-20 06:06Z — the gate was never the blocker; widening it is strictly negative
+
+One 40 s CPU run, no solve. `cue_oracle.py` hardcodes `ASSOCIATION_GATE_UM = 10.0` — **our** linker's
+constant, not the champion's, which caps output edges at `OUTPUT_EDGE_MAX_UM = 14.0`. Re-ranked at
+10 / 14 / 20 µm: "true successor outside the gate" **15 → 1 → 0**, so E54b's fifteen were **already inside
+the gate the champion uses** and were mis-ranked, not un-gated — "unreachable by any solver" was an
+artifact of the instrument's own constant. Selection bucket grows 61 → **76**.
+
+And widening buys nothing: distance ranks the true successor first on **exactly 10 cases at every gate**
+(10/61, 10/75, 10/76 — absolute count FLAT, rate 0.164 → 0.132), oracle velocity *drops* 10 → 9. Every
+newly-admitted candidate is a rival. The ceiling row stays **76/76**: every selection failure is
+gate-reachable and plain distance solves all of them given correct coordinates. **bd `ittt` CLOSED**; the
+last route by which the gap could have been a linker constant is gone, and **localization is the only
+channel left**. Detail: `interpretations/celltrack/2026-09-20_e57_localization_not_selection.md`.
+
+---
+
 ## NEWS 2026-09-20 05:58Z — E57: it was LOCALIZATION all along, and E54b had already proved it
 
 Read at the official 7 µm ruler, over the same 105 broken and 2022 recovered GT edges: a **broken** edge's

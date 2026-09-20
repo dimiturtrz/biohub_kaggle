@@ -126,6 +126,39 @@ detection count), which is what makes the localization channel a lever rather th
 **Next, in cost order:** widen `gate_um` and re-solve (a constant, no training) · price a center-offset
 head against the 42 (bd Campaign A) · never swap the detector wholesale (finer122 graft 0.7503).
 
+## Addendum — the gate was never the blocker, and widening it is pure downside
+
+The section above named widening `gate_um` the cheapest unspent item on the board. It is now measured and
+it is dead, for one CPU run and no solve at all.
+
+`cue_oracle.py` hardcodes `ASSOCIATION_GATE_UM = 10.0`. That is **our** linker's constant, derived as the
+maximum ground-truth step. It is not the champion's: the 0947 kernel caps output edges at
+`OUTPUT_EDGE_MAX_UM = 14.0`, so its candidate radius is already at least 14. Re-ranking the same broken
+edges at the champion's own cap:
+
+| association gate | selection failures ranked | distance ranks true successor first | oracle true-trajectory velocity | true successor outside the gate |
+|---|---|---|---|---|
+| 10 µm (the script's default) | 61 | **10** | 10 | **15** |
+| 14 µm (the champion's cap) | 75 | **10** | 9 | **1** |
+| 20 µm | 76 | **10** | 9 | 0 |
+
+Two readings, both against the axis.
+
+**E54b's 15 "unreachable" successors are not unreachable.** They sit inside the gate the champion actually
+uses; the champion sees them and ranks a rival above them. The out-of-gate count was an artifact of the
+instrument's own constant, and the sentence it licensed — "unreachable by any solver" — was wrong about the
+tracker being priced. They belong in the selection bucket, which grows from 61 to 76.
+
+**Widening admits rivals and recovers nothing.** Distance ranks the true successor first on **exactly ten
+cases at every gate** — the absolute count does not move while the denominator grows, so the rate falls
+from 0.164 to 0.132 and every one of the fifteen newly-admitted cases is one distance gets wrong. Oracle
+velocity actually loses a case. A wider gate is a strictly larger rival pool over the same ten wins.
+
+What survives, and strengthens: the ceiling row stays perfect at **76 / 76**. Every selection failure the
+champion has is gate-reachable and is ranked first by plain distance once the coordinates are right. The
+last route by which the gap could have been a linker constant is now closed, and localization is the only
+channel left standing.
+
 ## Cost
 
-Three CPU runs, about twenty-five minutes, zero GPU, zero submissions.
+Four CPU runs, about twenty-six minutes, zero GPU, zero submissions.
