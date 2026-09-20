@@ -251,6 +251,35 @@ things follow, and both are flags rather than builds:
   threshold to 0.0 separates *must be measurable* (the structural single-successor requirement) from *must
   be large* (the magnitude). If 0.0 holds the recall, the magnitude was never the working part.
 
+## The threshold sweep: loosening the veto loses recall, which is the mechanism proving itself
+
+| `c3_divergence_um` | recovered |
+| --- | --- |
+| 0.0 — structure only, any measurable separation passes | 2 |
+| 1.0 | 2 |
+| **2.25 — shipped, the donor's constant** | **4** |
+| 4.0 | 3 |
+
+The curve is not monotone and it does not fall away from the magnitude — it falls away from the strictness.
+At 0.0 the requirement is purely structural (both daughters must have a single successor at t+2, so a
+divergence is computable at all) and recall collapses to 2, barely above the ungated baseline of 1.
+
+That is the predicted re-inflation, and it is the strongest evidence yet for *why* c3 works. Admitting every
+measurable divergence refills the proposal pool, the budget of 25 binds again, and the true forks are pushed
+back out of the cut — the same failure that made `probability`, `geometry` and `symmetry` read identically
+flat. **Under a binding budget the veto is not a filter that happens to precede a ranking; it IS the
+ranking.** Its strength is the parameter, and weakening it returns the system to the null.
+
+Two consequences:
+
+- **The `divergence is None` relaxation is priced out without being built.** Readmitting candidates whose
+  t+2 is a gap or a branch loosens the veto in exactly the direction the sweep already measured as losing.
+  The 19 `no_fork` divisions it would target are not reachable this way.
+- **Do not tune 2.25.** Four, three and two recovered divisions out of 25 is integer scatter well inside the
+  noise floor; the only difference here that clears it is c3 on (4) against c3 off (1). The constant is the
+  donor's and was never fitted by us, which is the one thing keeping this from being a sweep-selected peak —
+  and it should stay that way. The finding is the flag, not its value.
+
 ## Secondary reading: the ruler itself
 
 The same run is the first test of whether division-bearing movie selection explains our top-end proxy offset.
