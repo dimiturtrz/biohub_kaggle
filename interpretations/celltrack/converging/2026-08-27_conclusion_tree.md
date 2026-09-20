@@ -12,6 +12,32 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-20 13:20Z — the thing eating the schedule was never the training: the flow solve was 120x off
+
+Timed a tracker pass by stage and found `LinkerStage` is **~75% of it**, and on the eval movies this arm
+actually uses, **406.7s and 290.3s** per movie against `AffinityDivisionRecovery 1.4s | ShortTrackFilter 0.5s
+| DensityGapBridge 0.0s | LinefitSmoother 0.0s`. Four movies per eval window × 16 windows = the EVAL fold, not
+the gradient steps, is what a training arm spends its wall-clock on. Cause: `nx.network_simplex` is pure
+Python and scales ~n² on this shape (1.53s at 6k detections, 5.92s at 18k, 156,907 nodes on a real movie).
+
+The network is an assignment LP (unit capacities + bipartite incidence ⇒ totally unimodular), so a C++
+min-cost flow solves it **exactly**, not approximately. Two rewrites make OR-tools' non-negative-cost API
+accept a priced transition (`distance − bonus·P` is routinely negative): **forced units + a BYPASS arc**
+(without the bypass, isolation is taxed and the solver buys +1123 spurious links at 18k) and a **uniform
+shift** (exactly one arc consumes each unit at an in-node, so one constant on all three moves the objective
+by `shift·count` and cannot move the argmin). Verified: identical objective AND identical selected edge set,
+**5.92s → 0.05s (120×)** — `tests/unit/celltrack/linkers/flow_solving.py` asserts the edge-set equality over
+random layered shapes with costs spanning zero. networkx stays as the fallback because the submission kernel
+installs a fixed wheel set (see `bd` — shipping the ortools wheel in the kit is filed, not done).
+
+**What this changes: the PRICE of every future arm**, not any score. An eval window drops from ~20 min to
+~3 min, so a training arm is now gradient-bound instead of eval-bound. It does **not** unblock `kiw1`
+(two-pass ILP): that is gated on a discriminator over the 2405 CONTESTED edges at a 1.4% base rate, which is
+an accuracy problem, not a budget one. Landed `6ebed4c`; the running arm was restarted at 16:19 local to pick
+it up, since the old process had loaded the pre-swap code and was paying the 406.7s per movie in full.
+
+---
+
 ## NEWS 2026-09-20 12:35Z — the nce flag was INERT in both arms; a month of head-axis reasoning chased a dead variable
 
 Ran the "never-run cell" (`hoct_finer122_nce`: frozen finer122 + fresh HOCT head + contrastive ON, 1.86 h).
