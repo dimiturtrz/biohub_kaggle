@@ -95,21 +95,49 @@ And the discriminator is motion:
     fraction > 5 um     broken: 46 %                     |   recovered: 2 %
 
 **2.8× on the median, 23× on the >5 µm tail.** E45's "the outranked band is fast cells" now holds on the
-champion's metric-visible errors, not on a candidate band. The true successor is far, a nearer detection
-wins, and E46 showed the pairwise appearance cue is *below chance* at matched displacement — so no
-pairwise score can fix these 76. A cue that survives large single-frame displacement has to be motion
-continuity across several frames, which is exactly what a tracklet-level second pass supplies and what a
-per-edge solver structurally cannot.
+champion's metric-visible errors, not on a candidate band. The true successor is far and a nearer
+detection wins.
+
+### Motion continuity is dead too — refuted with an ORACLE
+
+The obvious reading of the displacement gap is that the cue must be multi-frame motion continuity, which
+a tracklet-level second pass supplies and a per-edge solver cannot. **I wrote that here, then tested it,
+and it is wrong.** For each broken edge with both endpoints detected and no division, rank every
+detection in the next frame within the 10 µm gate and ask whether the true successor comes first:
+
+| ranking | true successor ranked first |
+|---|---|
+| plain distance from the source | **10 / 61** |
+| velocity from the predicted tracklet (≤3 prior frames) | 8 / 61 |
+| **velocity from the TRUE GT trajectory (oracle)** | **10 / 61** |
+| distance to the true GT position of the target (sanity ceiling) | 61 / 61 |
+
+The oracle is the point. Handing the ranker the cell's *actual* past trajectory buys **nothing over plain
+distance** — so the predicted-tracklet result is not a polluted estimate, and no better velocity model,
+Kalman filter or tracklet second pass recovers these. Constant-velocity extrapolation is simply not
+informative at this timescale. (15 further edges have their true successor **outside the 10 µm gate
+entirely** — unreachable by any solver at the champion's gate, since the matched predicted positions
+carry up to 7 µm of localization slack each.)
+
+With E46 (pairwise appearance below chance at matched displacement) this closes the cue inventory:
+**position, appearance and motion all fail to separate the true successor from its rival on these 61.**
+The information is not in the detected representation. That is the pairwise-unresolvable keystone
+re-confirmed with motion added and with an oracle, and it points back at the dense-regime detection
+model, not at the linker.
 
 ## What this licenses
 
-- **One target: 105 broken GT edges, 76 of them pure selection.** The candidates exist and the solver
-  ranks them below a rival; 50 are outright swaps. This is `kiw1`'s multi-frame identity problem, now
-  sized: 76 against a 35-edge bar, and recovering one pays ~2.3 units, not 1, because it deletes the
-  paired FP too.
-- **The cue must tolerate displacement.** Broken edges move 2.8× further than recovered ones and 46 %
-  exceed 5 µm. Pairwise appearance is below chance there (E46), so the only remaining cue is multi-frame
-  motion continuity — which prices a tracklet second pass and de-prices any further per-edge feature.
+- **One target: 105 broken GT edges, 76 of them pure selection**, 50 outright swaps. Recovering one pays
+  ~2.3 units, not 1, because it deletes the paired FP too; the 1.5 % bar is ~35 edges.
+- **But no available cue ranks them.** Distance 10/61, oracle velocity 10/61, appearance below chance
+  (E46). `kiw1`'s two-pass tracklet ILP was priced on the motion premise and that premise is now
+  oracle-refuted — **do not build it for this reason**. A joint-assignment argument is what is left (50
+  of 76 are swaps, where the thief is plausibly someone else's true successor), but the champion
+  *already* solves a global ILP, so the costs are wrong, not the structure.
+- **15 more of the 76 have their true successor outside the 10 µm gate** — structurally unreachable.
+  Widening the gate admits them and more confusors; unpriced, and cheap to price.
+- **This re-points at the dense-regime detection model** (the standing conclusion), because the
+  discriminating information is absent from the detected representation, not mis-weighted by the linker.
 - **Do not chase "FP suppression" as a separate programme.** 99 % of FPs are symptoms. Deleting an FP
   edge without supplying the right one converts a 2.3-unit error into a 1.3-unit error at best, and risks
   collateral; supplying the right link collects both.

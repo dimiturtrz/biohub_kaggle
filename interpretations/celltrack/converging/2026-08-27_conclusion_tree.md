@@ -29,10 +29,21 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
   candidate present, the solver ranked another partner above it. **50 are outright swaps** (both endpoints
   linked elsewhere) + 13 source-rival + 13 target-rival. Only **26 detection**, **3 division**, and
   **0 GT gaps** (`dt ≠ 1` never occurs). 76 vs a 35-edge bar → **`kiw1` licensed with 2× headroom.**
-- **The discriminator is MOTION.** Broken edges move **4.08 µm median vs 1.46 µm** recovered; **46 % > 5 µm
-  vs 2 %**. E45's "outranked band is fast cells" now holds on the champion's metric-visible errors. E46
-  says pairwise appearance is below chance at matched displacement → **no per-edge feature reaches these
-  76**; the cue must be multi-frame motion continuity. De-prices any further pairwise-feature arm.
+- **Broken edges move 4.08 µm median vs 1.46 µm recovered; 46 % > 5 µm vs 2 %** — E45's "outranked band is
+  fast cells" now holds on the champion's metric-visible errors.
+- **MOTION CONTINUITY IS ORACLE-REFUTED** (`kaggle/cue_oracle.py`, same tick). Ranking every in-gate
+  candidate in the next frame: distance **10/61** · predicted-tracklet velocity **8/61** ·
+  **ORACLE velocity from the cell's TRUE GT trajectory 10/61** · true-GT-position ceiling 61/61.
+  **Handing the ranker the actual past trajectory buys nothing over plain distance** → the estimate is not
+  the problem, and no Kalman / tracklet second pass recovers these. I wrote the motion premise into E54
+  and refuted it 20 min later; the doc carries the correction.
+- **Cue inventory now CLOSED: position, appearance (E46, below chance) and motion all fail on these 61.**
+  The information is absent from the detected representation → pairwise-unresolvable keystone
+  re-confirmed with motion added AND an oracle. **Do not build `kiw1` on the motion argument.** What
+  remains is a joint-assignment argument (50/76 are swaps) — but the champion already solves a global
+  ILP, so the COSTS are wrong, not the structure. Re-points at the dense-regime DETECTION model.
+- **15 of the 76 have their true successor outside the 10 µm gate** — unreachable by any solver; matched
+  predicted positions carry up to 7 µm localization slack each. Widening the gate is unpriced and cheap.
 - **Consequences.** (1) Do NOT chase FP suppression as its own programme — 99 % are symptoms; deleting an
   FP without supplying the right link converts a 2.3-unit error into a 1.3-unit one at best. (2) Every
   future proposal must state **how many of the 105 it moves**; the 1.5 % bar ≈ **35 recovered GT edges**.
