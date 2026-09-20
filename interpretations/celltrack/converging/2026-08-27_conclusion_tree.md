@@ -12,6 +12,25 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-20 07:20Z — the Kaggle DISCUSSION channel is unreachable at BOTH levels; the offline-harvest axis is now closed end to end
+
+The record had the forum *listing* closed as JS-rendered (NOTICE_BOARD:14, 09-19). Today's probe extends that:
+an **individual thread fetched by id** (`discussion/741749`, the hikaggler 0.939 write-up already cited in our
+own notes) also returns **EMPTY**. Kaggle discussion pages are not server-rendered at any level, so no
+WebFetch/WebSearch path in this harness reaches a post body — only titles and third-party GitHub mirrors.
+
+Consequence, stated plainly so it is not re-probed: **the 0.964–0.974 band has no reachable public write-up.**
+Search re-surfaces only what NOTICE_BOARD already triaged (`JunhaoLiXD` 0.944, `kito2718` roadmap-only,
+`sota1111` eval-only, `royerlab/kaggle-cell-tracking-competition` = the host baseline + `metrics.md`, both
+already mined in `deep_dives/2026-07-31` and `2026-08-03`). I re-ran the listing fetch before finding that
+note — two wasted calls, and the reason the closure is now written at thread level too.
+
+With [[E60]] closing the kernel harvest and this closing the forum, **every offline source of a new element is
+exhausted.** What remains is not findable, only trainable: the centre-offset head (bd `zpq7`), which E59 proved
+cannot be priced offline. It needs the GPU, which is parked.
+
+---
+
 ## NEWS 2026-09-20 07:14Z — E60: the six top-voted unharvested kernels ARE our champion, with worse constants
 
 Six public kernels we had never pulled (263/97/82/78/58/30 votes), triaged by **diffing their `BIOHUB_*`
