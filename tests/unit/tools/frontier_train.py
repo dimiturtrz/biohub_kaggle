@@ -14,6 +14,7 @@ from tools.frontier_train import (
     patch_resume,
     restore_progress,
     save_progress,
+    unet_subtree,
 )
 
 MAX_DISTANCE = 0.6
@@ -120,6 +121,27 @@ def test_restore_progress_starts_from_zero_when_resume_is_not_asked_for(tmp_path
     save_progress(tmp_path, model, optimizer, done=7, best=0.9335)
 
     assert restore_progress(tmp_path, model, optimizer, resume=False) == RunProgress(done=0, best=0.0)
+
+
+def test_unet_subtree_keeps_only_the_unet_and_drops_its_prefix() -> None:
+    model, _ = _stepped()
+
+    subtree = unet_subtree(model.state_dict())
+
+    assert sorted(subtree) == ["bias", "weight"]
+    assert torch.equal(subtree["weight"], model.unet.weight)
+
+
+def test_unet_subtree_reads_a_data_parallel_checkpoint() -> None:
+    model, _ = _stepped()
+    parallel = {key.replace("unet.", "unet.module."): value for key, value in model.state_dict().items()}
+
+    assert sorted(unet_subtree(parallel)) == ["bias", "weight"]
+
+
+def test_unet_subtree_rejects_a_checkpoint_that_is_already_unet_only() -> None:
+    with pytest.raises(RuntimeError, match="not a full-model checkpoint"):
+        unet_subtree({"weight": torch.zeros(1)})
 
 
 _FAKE_TRAIN = """def train(output_dir, model, optimizer, n_epochs):

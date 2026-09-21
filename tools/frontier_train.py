@@ -1,7 +1,9 @@
 """Run the frontier ``train_unet_transformer.py`` with a strict FULL-model warm start.
 
 Its own ``--unet-weights`` loads non-strictly into the bare UNet, so a full checkpoint (``unet.``-prefixed keys
-plus detect head and transformer) silently loads nothing. ``--init-full <ckpt>`` loads every key strictly.
+plus detect head and transformer) silently loads nothing. ``--init-full <ckpt>`` loads every key strictly, and
+``--init-unet <ckpt>`` takes the ``unet.`` subtree out of that same full checkpoint and loads THAT strictly —
+a detector-only transfer without first carving a second file out of the checkpoint on disk.
 
     python tools/frontier_train.py --frontier-repo <repo> --init-full <ckpt> <trainer args>
 
@@ -258,21 +260,41 @@ def enable_tf32() -> None:
     torch.set_float32_matmul_precision("high")
 
 
-def _strict_init_class(base: type, checkpoint: Path) -> type:
-    class StrictInit(base):
+def unet_subtree(state: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+    """The UNet's own keys, un-prefixed, out of a full checkpoint: the ``--unet-weights`` file without the file."""
+    subtree = {
+        key.removeprefix(_SINGLE_PREFIX): value
+        for key, value in _single_gpu_keys(state).items()
+        if key.startswith(_SINGLE_PREFIX)
+    }
+    if not subtree:
+        raise RuntimeError(f"checkpoint holds no {_SINGLE_PREFIX!r} keys, so it is not a full-model checkpoint")
+    return subtree
+
+
+def _warm_init_class(base: type, checkpoint: Path, *, unet_only: bool) -> type:
+    """Warm-start at construction, strictly, so a key that fails to land raises instead of being silently skipped."""
+
+    class WarmInit(base):
         def __init__(self, *args: object, **kwargs: object) -> None:
             super().__init__(*args, **kwargs)
-            self.load_state_dict(torch.load(checkpoint, map_location="cpu", weights_only=True), strict=True)
-            log.warning("full-model init loaded strictly from %s", checkpoint)
+            loaded = torch.load(checkpoint, map_location="cpu", weights_only=True)
+            target, state = (self.unet, unet_subtree(loaded)) if unet_only else (self, loaded)
+            target.load_state_dict(state, strict=True)
+            log.warning(
+                "warm start: %d tensors loaded strictly into %s from %s", len(state), type(target).__name__, checkpoint
+            )
 
-    return StrictInit
+    return WarmInit
 
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--frontier-repo", type=Path, required=True)
-    parser.add_argument("--init-full", type=Path, default=None)
+    warm = parser.add_mutually_exclusive_group()
+    warm.add_argument("--init-full", type=Path, default=None)
+    warm.add_argument("--init-unet", type=Path, default=None, help="load only the unet. subtree of a full checkpoint")
     parser.add_argument("--bf16", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--tf32", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--resume", action="store_true", help="pick the run up from its last per-epoch snapshot")
@@ -285,8 +307,9 @@ def main() -> None:
     patch_fast_match(trainer)
     patch_step_guard(trainer, bf16=args.bf16 and torch.cuda.is_available())
     patch_resume(trainer, resume=args.resume)
-    if args.init_full is not None:
-        trainer.UNetNodeTransformer = _strict_init_class(trainer.UNetNodeTransformer, args.init_full)
+    for checkpoint, unet_only in ((args.init_full, False), (args.init_unet, True)):
+        if checkpoint is not None:
+            trainer.UNetNodeTransformer = _warm_init_class(trainer.UNetNodeTransformer, checkpoint, unet_only=unet_only)
     sys.argv = ["train_unet_transformer.py", *trainer_args]
     trainer.main()
 
