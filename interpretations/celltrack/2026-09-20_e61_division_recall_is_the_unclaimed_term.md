@@ -660,3 +660,28 @@ the −0.055 is a precision failure, not a structural cost of forking. Any build
 that can *choose* to end a continuation in favour of a division — and it must still be measured on the
 combined score, because the thing that makes the correct move free is exactly what makes a wrong one
 expensive.
+
+### 2026-09-21 20:50Z — CORRECTION: the arm was built and it is worth +0.0031, not +0.0286
+
+E64 ran it (`celltrack/eval/oracle_fork_arms.py --reparent`, scored through `celltrack/eval/official_ruler.py`
+on the six test movies). Two facts, one confirmed and one refuting the number above:
+
+- **the edge argument holds.** The move is edge-free as claimed, and measurably better than free:
+  eTP **+8**, eFP **−4**, eFN **−8**.
+- **the price does not.** 0.8463 → 0.8494, **+0.0031** — an order of magnitude under the +0.0286 projected
+  here, and under the noise floor.
+
+The error is the denominator. The table above prices on the ceiling arm's ruler (tp=1, fp=10, fn=24, 35
+units); at the **shipped** operating point the six movies hold **11** annotated divisions in total, and the
+re-parent completes a handful of them. The ceiling was not wrong on its own set — it was read on a set the
+shipped configuration does not produce.
+
+This is the second time in two days that a division number moved by an order of magnitude on re-pricing at
+the operating point (the first was the c3 veto's "deletes 6 true divisions", a ceiling-regime artefact).
+**A ceiling is a statement about one candidate distribution. Re-derive it at the point you would ship before
+planning on it.**
+
+The rest of E64 — the oracle fork cull at +0.1263, decomposing into +0.0977 division + +0.0286 edge, of which
+a blind arm reaches +0.0034 — lives in `interpretations/celltrack/2026-09-21_fork_axis_is_annotation_bound.md`.
+It leaves this file's closing paragraph standing unchanged: the build is a linker candidacy that can choose to
+end a continuation in favour of a division. Nothing in post-processing reaches it.

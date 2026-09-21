@@ -12,7 +12,47 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-21 20:50Z — E64: the fork axis is worth +0.1263 and the annotation holds every bit of it
+
+The arm below was built and run. It is **edge-free as argued** (eTP +8, eFP −4, eFN −8) and worth
+**+0.0031**, not the +0.0286 the projection implied — the ceiling was read on a *different* operating point,
+against a division ruler holding 35 units, while at the shipped point the annotation holds 11 divisions in
+total. **Re-price a ceiling at the operating point before planning on it** — the same lesson E61 already
+taught about the c3 veto, paid twice now.
+
+Beside it, the sharper measurement. An oracle that culls every predicted fork the annotation does not divide
+at, keeping the branch the annotation agrees with, moves the local official ruler **0.8463 → 0.9726
+(+0.1263)** — the largest number this project has measured offline. It decomposes into a **+0.0977 division
+term** and a **+0.0286 edge term**, and the whole of it is DISCRIMINATION: the identical cull run **blind**
+is **+0.0034**. The blind arm deletes all 254 charged false forks and still scores divJ **0.0000**, because
+the division term is a ratio `k/(11+m)` — deletion alone can never buy it.
+
+Graded on the champion's own predictions (`celltrack/eval/fork_rank_report.py`):
+
+- **which fork to cut** — every existing `fork_ranking` strategy and their compositions; best reaches div
+  Jaccard **0.10** vs the oracle's 1.00, worth **+0.008** on my T=4 labels, ~**+0.0036** on the metric's real
+  T=11. Ranking is not the bottleneck.
+- **which branch to keep** — of 7185 forks the annotation resolves exactly **245** to one branch (a fork with
+  no matched branch grades nothing; one with two is a real division where cutting is wrong either way).
+  Shipped rule (likeliest) **0.5878**, best of five GT-free cues **0.6000**, chance **0.50**. Three edges of
+  245 separate them.
+- **`survival` is the WORST of the five (0.5551).** E39's blip argument predicts it should win. So the surplus
+  branch at a resolved fork is not a blip — it *looks like a continuation*, which is
+  [[celltrack-confusor-pairwise-unresolvable-needs-multiframe]] arriving from a new direction.
+
+**Post-processing on this axis is CLOSED.** What remains is what E61 already named: re-parenting inside the
+LINKER, where ending a continuation in favour of a division is priced against the whole assignment. Any arm
+there must argue it changes the candidate distribution or the cost structure — not the choice rule, which is
+chance-bound. `BranchAccuracy.of` prices a future model-side branch scorer against 0.5878 in one CPU run.
+
+Detail: `interpretations/celltrack/2026-09-21_fork_axis_is_annotation_bound.md`.
+
+---
+
 ## NEWS 2026-09-21 01:20Z — the division re-parent is edge-FREE, which makes it the largest priced lever we hold
+
+**SUPERSEDED by the E64 entry above: the ceiling below was read at the wrong operating point. Measured
++0.0031, not +0.0286.**
 
 No GPU, no run — a reading of the metric source that re-prices `hq93`'s one surviving remedy. E61 left the
 **10 of 25** missed divisions whose daughter is already claimed by another predicted track
