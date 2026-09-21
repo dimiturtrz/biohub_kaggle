@@ -1,10 +1,20 @@
 from pathlib import Path
 from types import ModuleType
+from typing import override
 
 import pytest
 import torch
 
-from tools.frontier_train import _SLOW_MATCH, greedy_unique_match, patch_fast_match
+from tools.frontier_train import (
+    _SLOW_MATCH,
+    RESUME_NAME,
+    RunProgress,
+    greedy_unique_match,
+    patch_fast_match,
+    patch_resume,
+    restore_progress,
+    save_progress,
+)
 
 MAX_DISTANCE = 0.6
 
@@ -67,3 +77,104 @@ def test_patch_rejects_changed_upstream_source(tmp_path: Path) -> None:
 
     with pytest.raises(RuntimeError, match="no longer applies"):
         patch_fast_match(module)
+
+
+class _Wrapped(torch.nn.Module):
+    """The donor's shape: a ``unet`` attribute the DataParallel prefix logic keys off, plus a head beside it."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.unet = torch.nn.Linear(2, 2)
+        self.head = torch.nn.Linear(2, 1)
+
+    @override
+    def forward(self, image: torch.Tensor) -> torch.Tensor:
+        return self.head(self.unet(image))
+
+
+def _stepped() -> tuple[_Wrapped, torch.optim.Optimizer]:
+    """A model whose optimizer holds non-trivial moments, so a round trip that drops them is visible."""
+    model = _Wrapped()
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.1)
+    model(torch.ones(1, 2)).sum().backward()
+    optimizer.step()
+    return model, optimizer
+
+
+def test_save_progress_round_trips_the_moments_not_only_the_weights(tmp_path: Path) -> None:
+    model, optimizer = _stepped()
+    saved = save_progress(tmp_path, model, optimizer, done=7, best=0.9335)
+    restored = _Wrapped()
+    fresh = torch.optim.AdamW(restored.parameters(), lr=0.1)
+
+    progress = restore_progress(tmp_path, restored, fresh, resume=True)
+
+    assert saved == "ep7"
+    assert progress == RunProgress(done=7, best=0.9335)
+    assert torch.equal(restored.head.weight, model.head.weight)
+    assert fresh.state_dict()["state"][0]["exp_avg"].abs().sum() > 0
+
+
+def test_restore_progress_starts_from_zero_when_resume_is_not_asked_for(tmp_path: Path) -> None:
+    model, optimizer = _stepped()
+    save_progress(tmp_path, model, optimizer, done=7, best=0.9335)
+
+    assert restore_progress(tmp_path, model, optimizer, resume=False) == RunProgress(done=0, best=0.0)
+
+
+_FAKE_TRAIN = """def train(output_dir, model, optimizer, n_epochs):
+    best_score = 0.0
+    save_path = output_dir / "edge_predictor_best.pth"
+    pbar = tqdm(range(n_epochs), desc="Training", disable=False)
+    seen = []
+    for epoch in pbar:
+        is_best = True
+        best_score = float(epoch)
+        marker = "*" if is_best else " "
+        train_time = test_time = 0.0
+        seen.append(
+            f"{epoch}{marker}"
+            f"train={train_time:.1f}s test={test_time:.1f}s",
+        )
+    return seen
+"""
+
+
+def _resume_trainer(tmp_path: Path, source_text: str) -> ModuleType:
+    source = tmp_path / "fake_resume_trainer.py"
+    source.write_text(source_text)
+    module = ModuleType("fake_resume_trainer")
+    module.__file__ = str(source)
+    module.__dict__["tqdm"] = lambda iterable, **_: iterable
+    exec(compile(source_text, str(source), "exec"), module.__dict__)
+    return module
+
+
+def test_patch_resume_snapshots_every_epoch_and_names_it_in_the_epoch_line(tmp_path: Path) -> None:
+    module = _resume_trainer(tmp_path, _FAKE_TRAIN)
+    model, optimizer = _stepped()
+
+    patch_resume(module, resume=False)
+    seen = module.train(tmp_path, model, optimizer, 2)
+
+    assert (tmp_path / RESUME_NAME).exists()
+    assert [line.split("|")[-1].strip() for line in seen] == ["snapshot=ep1", "snapshot=ep2"]
+
+
+def test_patch_resume_picks_the_run_up_at_the_epoch_after_the_snapshot(tmp_path: Path) -> None:
+    module = _resume_trainer(tmp_path, _FAKE_TRAIN)
+    model, optimizer = _stepped()
+    patch_resume(module, resume=False)
+    module.train(tmp_path, model, optimizer, 2)
+
+    patch_resume(module, resume=True)
+
+    assert module.train(tmp_path, model, optimizer, 2) == []
+    assert module.train(tmp_path, model, optimizer, 4)[0].startswith("2")
+
+
+def test_patch_resume_rejects_changed_upstream_source(tmp_path: Path) -> None:
+    module = _resume_trainer(tmp_path, "def train(output_dir, model, optimizer, n_epochs):\n    return []\n")
+
+    with pytest.raises(RuntimeError, match="no longer applies"):
+        patch_resume(module, resume=False)

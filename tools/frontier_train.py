@@ -14,6 +14,11 @@ every later epoch reads ``det=nan`` with an exactly-zero edge loss (the empty-ma
 :func:`patch_step_guard` skips such a step and names what went non-finite first; ``--bf16`` autocasts the UNet
 encode and ``--tf32`` (on by default) enables the tensor-core matmul paths.
 
+It also persists model weights ALONE, only on improvement, so a 15h arm killed at hour 12 loses its optimizer
+moments and its epoch counter and can only restart from zero. :func:`patch_resume` writes a full snapshot every
+epoch and ``--resume`` picks the run up at the next epoch; the snapshot is unconditional because it is free, and
+resuming is opt-in because a fresh arm silently continuing a stale one is how an A/B gets contaminated.
+
 Every patch is applied to the imported module in memory: the checkout under ``external/`` stays pristine, and the
 patch travels with this file rather than with a disk edit that only one copy of the pack carries.
 """
@@ -23,6 +28,7 @@ import importlib
 import inspect
 import logging
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
 
@@ -80,6 +86,25 @@ _TIMING_SKIPPED = (
     '            f"total: {t_total:.1f}s | "\n'
     "            f\"skipped: loss={NONFINITE['loss']} grad={NONFINITE['grad']}\"\n"
 )
+
+_PROGRESS_INIT = """    best_score = 0.0
+    save_path = output_dir / "edge_predictor_best.pth"
+    pbar = tqdm(range(n_epochs), desc="Training", disable=False)
+"""
+_PROGRESS_RESTORED = """    save_path = output_dir / "edge_predictor_best.pth"
+    progress = restore_progress(output_dir, model, optimizer, resume=RESUME)
+    best_score = progress.best
+    pbar = tqdm(range(progress.done, n_epochs), desc="Training", disable=False)
+"""
+
+_EPOCH_MARKER = '        marker = "*" if is_best else " "\n'
+_EPOCH_SNAPSHOT = (
+    "        snapshot = save_progress(output_dir, model, optimizer, done=epoch + 1, best=best_score)\n"
+    '        marker = "*" if is_best else " "\n'
+)
+
+_LOG_TAIL = '            f"train={train_time:.1f}s test={test_time:.1f}s",\n'
+_LOG_TAIL_SNAPSHOT = '            f"train={train_time:.1f}s test={test_time:.1f}s | snapshot={snapshot}",\n'
 
 
 def greedy_unique_match(min_d: torch.Tensor, min_i: torch.Tensor, n_gt: int, max_distance: float) -> torch.Tensor:
@@ -144,6 +169,87 @@ def patch_step_guard(trainer: ModuleType, *, bf16: bool) -> None:
     exec(compile(source, trainer.__file__, "exec"), trainer.__dict__)
 
 
+RESUME_NAME = "edge_predictor.resume.pt"
+_PARALLEL_PREFIX = "unet.module."
+_SINGLE_PREFIX = "unet."
+
+
+@dataclass(frozen=True)
+class RunProgress:
+    """How far a run already got: epochs completed, and the best ``acc*recall`` it reached."""
+
+    done: int
+    best: float
+
+
+def _single_gpu_keys(state: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+    """Snapshots are stored single-GPU, like the donor's own best-checkpoint, so either process can read either."""
+    return {key.replace(_PARALLEL_PREFIX, _SINGLE_PREFIX, 1): value for key, value in state.items()}
+
+
+def _keys_for(model: torch.nn.Module, state: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+    """Re-add the DataParallel prefix only where this process wrapped the UNet."""
+    if not isinstance(model.unet, torch.nn.DataParallel):
+        return state
+    return {
+        (key.replace(_SINGLE_PREFIX, _PARALLEL_PREFIX, 1) if key.startswith(_SINGLE_PREFIX) else key): value
+        for key, value in state.items()
+    }
+
+
+def save_progress(
+    output_dir: Path, model: torch.nn.Module, optimizer: torch.optim.Optimizer, *, done: int, best: float
+) -> str:
+    """Write weights AND moments every epoch, through a temporary file so a kill mid-write leaves the last one."""
+    path = output_dir / RESUME_NAME
+    staged = path.with_suffix(".tmp")
+    torch.save(
+        {
+            "model": _single_gpu_keys(model.state_dict()),
+            "optimization": optimizer.state_dict(),
+            "done": done,
+            "best": best,
+        },
+        staged,
+    )
+    staged.replace(path)
+    return f"ep{done}"
+
+
+def restore_progress(
+    output_dir: Path, model: torch.nn.Module, optimizer: torch.optim.Optimizer, *, resume: bool
+) -> RunProgress:
+    """Epoch-granular: the moments and the epoch counter come back, the dataloader's shuffle order does not."""
+    path = output_dir / RESUME_NAME
+    if not resume or not path.exists():
+        return RunProgress(done=0, best=0.0)
+    state = torch.load(path, map_location="cpu", weights_only=False)
+    progress = RunProgress(done=int(state["done"]), best=float(state["best"]))
+    model.load_state_dict(_keys_for(model, state["model"]))
+    optimizer.load_state_dict(state["optimization"])
+    log.warning("resumed %s at epoch %d with best=%.4f", path, progress.done, progress.best)
+    return progress
+
+
+def patch_resume(trainer: ModuleType, *, resume: bool) -> None:
+    """Snapshot each epoch and start from the one after the last, so a long arm survives being killed."""
+    source = inspect.getsource(trainer.train)
+    replacements = [
+        (_PROGRESS_INIT, _PROGRESS_RESTORED),
+        (_EPOCH_MARKER, _EPOCH_SNAPSHOT),
+        (_LOG_TAIL, _LOG_TAIL_SNAPSHOT),
+    ]
+    for old, new in replacements:
+        if old not in source:
+            raise RuntimeError(f"frontier train changed; the resume patch no longer applies:\n{old}")
+        source = source.replace(old, new)
+    trainer.RESUME = resume
+    trainer.RunProgress = RunProgress
+    trainer.save_progress = save_progress
+    trainer.restore_progress = restore_progress
+    exec(compile(source, trainer.__file__, "exec"), trainer.__dict__)
+
+
 def enable_tf32() -> None:
     """Tensor-core matmul plus autotuned convolutions; the encode is ~73% of a step and all of it is conv/matmul."""
     torch.backends.cuda.matmul.allow_tf32 = True
@@ -169,6 +275,7 @@ def main() -> None:
     parser.add_argument("--init-full", type=Path, default=None)
     parser.add_argument("--bf16", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--tf32", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--resume", action="store_true", help="pick the run up from its last per-epoch snapshot")
     args, trainer_args = parser.parse_known_args()
 
     if args.tf32 and torch.cuda.is_available():
@@ -177,6 +284,7 @@ def main() -> None:
     trainer = importlib.import_module("train_unet_transformer")
     patch_fast_match(trainer)
     patch_step_guard(trainer, bf16=args.bf16 and torch.cuda.is_available())
+    patch_resume(trainer, resume=args.resume)
     if args.init_full is not None:
         trainer.UNetNodeTransformer = _strict_init_class(trainer.UNetNodeTransformer, args.init_full)
     sys.argv = ["train_unet_transformer.py", *trainer_args]
