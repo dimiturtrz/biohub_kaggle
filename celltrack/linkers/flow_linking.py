@@ -68,6 +68,12 @@ class FlowLinker:
     # daughter, the annotation starts — whereas a track ENDING mid-movie is the rarer event, so one price forces
     # the solver to treat "a cell appeared" and "a cell vanished" as equally implausible.
     appearance_cost: float | None = None
+    # Off by default (`None` = the shipped 1-to-1 network, arc for arc). Set, a detection may emit a SECOND
+    # outgoing link, priced at its own track-start charge plus this surcharge — so a division has to be paid for
+    # by a transition cost that beats the surcharge, and never by undercutting an appearance. It is the one move
+    # post-processing cannot make: a fork can only be proposed after the linker has already committed every cell
+    # to a single successor, which is why every division gate downstream is shown a continuation.
+    division_cost: float | None = None
     # Off by default: the same mutual-agreement admission filter `AssignmentLinker` takes. A transition the gate
     # excludes is simply absent from the network, so the flow must route the track through an admitted edge.
     agreement: AgreementGate | None = None
@@ -107,7 +113,11 @@ class FlowLinker:
         timepoints = detections.timepoints()
         appearance, disappearance = self._boundary_costs(positions_um, timepoints)
         links = self.solve.selected(
-            len(detections.node_ids), appearance, disappearance, self._transitions(positions_um, timepoints)
+            len(detections.node_ids),
+            appearance,
+            disappearance,
+            self._transitions(positions_um, timepoints),
+            None if self.division_cost is None else round(_COST_SCALE * self.division_cost),
         )
         edges = self._selected_links(links, detections.node_ids)
         return TrackGraph(node_ids=detections.node_ids, coordinates=detections.coordinates, edges=edges)

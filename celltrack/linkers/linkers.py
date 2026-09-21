@@ -84,6 +84,11 @@ class LinkerConfig(BaseModel):
     # daughter, the annotation starts) where ending mid-movie is rarer, so one price calls both equally
     # implausible. Flow-only: it is the sole linker whose network charges the two boundaries on separate arcs.
     appearance_cost: float | None = Field(None, ge=0)
+    # None = OFF, the shipped 1-to-1 network arc for arc. Set, the flow network offers every detection a SECOND
+    # outgoing arc priced at its own track-start charge plus this surcharge, so a division is selected by the
+    # global optimum rather than proposed after it. Flow-only, for the same reason `appearance_cost` is: it is
+    # the only linker whose network has a per-detection arc to duplicate.
+    division_cost: float | None = Field(None, ge=0)
     # None = OFF. A floor admits a candidate edge only where the bidirectionally fused probability clears it
     # (`AgreementGate`, which documents what a principled value would be derived from); the cost keeps ranking
     # whatever survives by the sharp forward probability. Setting it makes `build` require a fused affinity.
@@ -299,6 +304,12 @@ class LinkerConfig(BaseModel):
             message = (
                 f"linker {self.name!r} charges one price for a track boundary, so appearance_cost cannot affect "
                 f"it; choose one of {sorted(_APPEARANCE_READERS)} or drop the appearance_cost"
+            )
+            raise ValueError(message)
+        if self.division_cost is not None and self.name not in _APPEARANCE_READERS:
+            message = (
+                f"linker {self.name!r} gives a cell one outgoing link by construction, so division_cost cannot "
+                f"affect it; choose one of {sorted(_APPEARANCE_READERS)} or drop the division_cost"
             )
             raise ValueError(message)
         return self
@@ -554,6 +565,7 @@ _BUILDERS: dict[str, _Builder] = {
         affinity_bonus=config.effective_bonus,
         boundary_cost=config.disappearance_cost,
         appearance_cost=config.appearance_cost,
+        division_cost=config.division_cost,
         agreement=parts.agreement,
         mutual=parts.mutual,
         ranker=parts.ranker,

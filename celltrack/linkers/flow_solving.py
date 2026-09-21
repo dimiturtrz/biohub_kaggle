@@ -40,9 +40,26 @@ class FlowSolve(Protocol):
     """Select the min-cost set of transitions over the whole video, given the network's prices."""
 
     def selected(
-        self, count: int, appearance: list[int], disappearance: list[int], transitions: list[Transition]
+        self,
+        count: int,
+        appearance: list[int],
+        disappearance: list[int],
+        transitions: list[Transition],
+        division: int | None = None,
     ) -> list[tuple[int, int]]:
-        """The `(source_row, target_row)` transitions carrying a unit of flow at the optimum."""
+        """The `(source_row, target_row)` transitions carrying a unit of flow at the optimum.
+
+        `division` is the SURCHARGE over a track start for a second outgoing link, or `None` for the 1-to-1
+        network. A second unit entering a detection's out-node is what lets it emit two transitions, so a
+        division is a parallel arc rather than a post-hoc edit; `None` omits those arcs and the network is the
+        1-to-1 one, arc for arc.
+
+        WHY A SURCHARGE AND NOT A PRICE. The extra unit is not obliged to leave beside a sibling: a detection
+        with no parent can swallow it and fund its own track start, which prices an APPEARANCE at the division
+        arc. Charging `appearance[row] + division` makes that route cost exactly what the appearance arc costs,
+        so it is never the cheaper lie, and a real division then fires on the only thing that separates it — a
+        second transition whose own cost beats the surcharge. So `division` is what a daughter must out-earn.
+        """
         ...
 
 
@@ -55,17 +72,24 @@ class NetworkSimplexSolve:
     """
 
     def selected(
-        self, count: int, appearance: list[int], disappearance: list[int], transitions: list[Transition]
+        self,
+        count: int,
+        appearance: list[int],
+        disappearance: list[int],
+        transitions: list[Transition],
+        division: int | None = None,
     ) -> list[tuple[int, int]]:
         """Build the circulation, solve it, and read the transition arcs that carry flow."""
         graph: nx.DiGraph[_Node] = nx.DiGraph()
         for row in range(count):
-            graph.add_edge(("in", row), ("out", row), capacity=1, weight=0)  # 1-to-1: one link through a cell
+            graph.add_edge(("in", row), ("out", row), capacity=1, weight=0)  # one link INTO a cell, always
             graph.add_edge(_SOURCE, ("in", row), capacity=1, weight=appearance[row])
             graph.add_edge(("out", row), _SINK, capacity=1, weight=disappearance[row])
+            if division is not None:
+                graph.add_edge(_SOURCE, ("out", row), capacity=1, weight=appearance[row] + division)
         for source_row, target_row, weight in transitions:
             graph.add_edge(("out", source_row), ("in", target_row), capacity=1, weight=weight)
-        graph.add_edge(_SINK, _SOURCE, capacity=count, weight=0)  # the return arc closes the circulation
+        graph.add_edge(_SINK, _SOURCE, capacity=2 * count, weight=0)  # the return arc closes the circulation
         _, flow = nx.network_simplex(graph)
         return [
             (node[1], target[1])
@@ -97,9 +121,21 @@ class MinCostFlowSolve:
     """
 
     def selected(
-        self, count: int, appearance: list[int], disappearance: list[int], transitions: list[Transition]
+        self,
+        count: int,
+        appearance: list[int],
+        disappearance: list[int],
+        transitions: list[Transition],
+        division: int | None = None,
     ) -> list[tuple[int, int]]:
-        """Solve the shifted network and translate the transition arcs carrying flow back to row pairs."""
+        """Solve the shifted network and translate the transition arcs carrying flow back to row pairs.
+
+        A division arc feeds the OUT-node, and the uniform shift is carried only by the arcs that feed an
+        IN-node (appearance, bypass, transition). Every in-node still consumes exactly one unit — its demand is
+        -1 whether or not anything divides — so the shift still displaces the objective by exactly
+        `shift * count` and the division price enters unshifted. It must therefore be non-negative, which it is
+        by construction: it is a penalty for the second link, not a reward.
+        """
         # ortools is an optional accelerator, not a kernel dependency (see the module note), so it is imported
         # where it is used rather than at module scope, which would make this module unimportable without it.
         from ortools.graph.python import min_cost_flow  # noqa: PLC0415
@@ -115,11 +151,13 @@ class MinCostFlowSolve:
         self._add_arcs(solver, outs, rows, ones, [shift] * count)
         first_transition = solver.num_arcs()
         self._add_arcs(solver, sources + count, targets, [1] * len(sources), (costs + shift).tolist())
-        self._add_arcs(solver, [sink], [source], [count], [0])
+        if division is not None:
+            self._add_arcs(solver, np.full(count, source), outs, ones, (np.asarray(appearance) + division).tolist())
+        self._add_arcs(solver, [sink], [source], [2 * count], [0])
         self._set_supplies(solver, np.concatenate([outs, rows]), ones + [-1] * count)
         if solver.solve() != solver.OPTIMAL:
             logger.warning("min-cost flow did not solve to optimality; falling back to the network simplex")
-            return NetworkSimplexSolve().selected(count, appearance, disappearance, transitions)
+            return NetworkSimplexSolve().selected(count, appearance, disappearance, transitions, division)
         carried = np.flatnonzero([solver.flow(arc) for arc in range(first_transition, first_transition + len(sources))])
         return [(int(sources[index]), int(targets[index])) for index in carried]
 
