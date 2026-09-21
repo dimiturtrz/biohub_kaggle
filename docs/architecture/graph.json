@@ -1394,6 +1394,12 @@
     },
     {
       "kind": "import",
+      "source": "celltrack.eval.official_ruler",
+      "target": "core.paths",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "celltrack.eval.offset_precision",
       "target": "celltrack.data.tunet_dataset",
       "weight": 1
@@ -9956,6 +9962,48 @@
     },
     {
       "kind": "references",
+      "source": "celltrack.eval.official_ruler.MetricCounts",
+      "target": "celltrack.eval.official_ruler.MetricCounts",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.eval.official_ruler.OfficialRuler",
+      "target": "celltrack.eval.official_ruler.TrackingScore",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.eval.official_ruler.TrackingScore",
+      "target": "celltrack.eval.official_ruler.MetricCounts",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.official_ruler.TrackingScore",
+      "target": "celltrack.eval.official_ruler.TrackingScore",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.eval.official_ruler.TrackingScore.micro",
+      "target": "celltrack.eval.official_ruler.MetricCounts",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.official_ruler.TrackingScore.value",
+      "target": "celltrack.eval.official_ruler.MetricCounts.is_empty",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.official_ruler.TrackingScore.value",
+      "target": "celltrack.eval.official_ruler.MetricCounts.jaccard",
+      "weight": 1
+    },
+    {
+      "kind": "references",
       "source": "celltrack.eval.offset_precision.FramePrediction",
       "target": "celltrack.data.tunet_dataset.FrameTarget",
       "weight": 1
@@ -17835,7 +17883,7 @@
   ],
   "nodes": [
     {
-      "descendants": 140,
+      "descendants": 141,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -18259,7 +18307,7 @@
       "role": null
     },
     {
-      "descendants": 13,
+      "descendants": 14,
       "id": "celltrack.eval",
       "label": "eval",
       "level": "module",
@@ -18310,6 +18358,14 @@
       "descendants": 0,
       "id": "celltrack.eval.model_evaluator",
       "label": "model_evaluator",
+      "level": "module",
+      "parent": "celltrack.eval",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.official_ruler",
+      "label": "official_ruler",
       "level": "module",
       "parent": "celltrack.eval",
       "role": null
@@ -20408,6 +20464,30 @@
       "label": "ModelEvaluator",
       "level": "class",
       "parent": "celltrack.eval.model_evaluator",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.official_ruler.MetricCounts",
+      "label": "MetricCounts",
+      "level": "class",
+      "parent": "celltrack.eval.official_ruler",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.official_ruler.OfficialRuler",
+      "label": "OfficialRuler",
+      "level": "class",
+      "parent": "celltrack.eval.official_ruler",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.official_ruler.TrackingScore",
+      "label": "TrackingScore",
+      "level": "class",
+      "parent": "celltrack.eval.official_ruler",
       "role": "satellite"
     },
     {
@@ -26752,6 +26832,54 @@
       "label": "mount",
       "level": "method",
       "parent": "celltrack.eval.model_evaluator.ModelEvaluator",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.official_ruler.MetricCounts.__add__",
+      "label": "__add__",
+      "level": "method",
+      "parent": "celltrack.eval.official_ruler.MetricCounts",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.official_ruler.MetricCounts.is_empty",
+      "label": "is_empty",
+      "level": "method",
+      "parent": "celltrack.eval.official_ruler.MetricCounts",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.official_ruler.MetricCounts.jaccard",
+      "label": "jaccard",
+      "level": "method",
+      "parent": "celltrack.eval.official_ruler.MetricCounts",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.official_ruler.OfficialRuler.rows",
+      "label": "rows",
+      "level": "method",
+      "parent": "celltrack.eval.official_ruler.OfficialRuler",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.official_ruler.TrackingScore.micro",
+      "label": "micro",
+      "level": "method",
+      "parent": "celltrack.eval.official_ruler.TrackingScore",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.official_ruler.TrackingScore.value",
+      "label": "value",
+      "level": "method",
+      "parent": "celltrack.eval.official_ruler.TrackingScore",
       "role": null
     },
     {
