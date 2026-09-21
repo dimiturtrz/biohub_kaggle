@@ -14858,6 +14858,60 @@
     },
     {
       "kind": "references",
+      "source": "celltrack.training.detected_windows.CandidateSelection",
+      "target": "celltrack.training.detected_windows.CandidateFrame",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.detected_windows.CandidateSelection.frame",
+      "target": "celltrack.training.detected_windows.CandidateFrame",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.detected_windows.CandidateSelection.frame",
+      "target": "celltrack.training.detected_windows.CandidateSelection.match_to_ground_truth",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.detected_windows.CandidateSelection.frame",
+      "target": "celltrack.training.detected_windows.CandidateSelection.select",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.detected_windows.DetectedWindows",
+      "target": "celltrack.training.detected_windows.CandidateFrame",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.training.detected_windows.DetectedWindows._window",
+      "target": "celltrack.training.detected_windows.SparseEdgeTargets",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.detected_windows.DetectedWindows._window",
+      "target": "celltrack.training.detected_windows.SparseEdgeTargets.pairs",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.detected_windows.DetectedWindows.build",
+      "target": "celltrack.training.detected_windows.DetectedWindows._window",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.detected_windows.SparseEdgeTargets.pairs",
+      "target": "celltrack.training.detected_windows.SparseEdgeTargets._by_gt_id",
+      "weight": 1
+    },
+    {
+      "kind": "references",
       "source": "celltrack.training.edge_finetune.EdgeHardNegativeFinetuner",
       "target": "celltrack.eval.dense_diagnosis.DenseFateDiagnosis",
       "weight": 1
@@ -17781,7 +17835,7 @@
   ],
   "nodes": [
     {
-      "descendants": 139,
+      "descendants": 140,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -18765,7 +18819,7 @@
       "role": null
     },
     {
-      "descendants": 16,
+      "descendants": 17,
       "id": "celltrack.training",
       "label": "training",
       "level": "module",
@@ -18792,6 +18846,14 @@
       "descendants": 0,
       "id": "celltrack.training.corpus_audit",
       "label": "corpus_audit",
+      "level": "module",
+      "parent": "celltrack.training",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.detected_windows",
+      "label": "detected_windows",
       "level": "module",
       "parent": "celltrack.training",
       "role": null
@@ -21419,6 +21481,38 @@
       "level": "class",
       "parent": "celltrack.training.contrastive_term",
       "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.detected_windows.CandidateFrame",
+      "label": "CandidateFrame",
+      "level": "class",
+      "parent": "celltrack.training.detected_windows",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.detected_windows.CandidateSelection",
+      "label": "CandidateSelection",
+      "level": "class",
+      "parent": "celltrack.training.detected_windows",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.detected_windows.DetectedWindows",
+      "label": "DetectedWindows",
+      "level": "class",
+      "parent": "celltrack.training.detected_windows",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.detected_windows.SparseEdgeTargets",
+      "label": "SparseEdgeTargets",
+      "level": "class",
+      "parent": "celltrack.training.detected_windows",
+      "role": "primary"
     },
     {
       "descendants": 0,
@@ -30162,6 +30256,102 @@
       "label": "from_loss",
       "level": "method",
       "parent": "celltrack.training.contrastive_term.ContrastiveTermConfig",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.detected_windows.CandidateFrame.__len__",
+      "label": "__len__",
+      "level": "method",
+      "parent": "celltrack.training.detected_windows.CandidateFrame",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.detected_windows.CandidateSelection.frame",
+      "label": "frame",
+      "level": "method",
+      "parent": "celltrack.training.detected_windows.CandidateSelection",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.detected_windows.CandidateSelection.match_to_ground_truth",
+      "label": "match_to_ground_truth",
+      "level": "method",
+      "parent": "celltrack.training.detected_windows.CandidateSelection",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.detected_windows.CandidateSelection.select",
+      "label": "select",
+      "level": "method",
+      "parent": "celltrack.training.detected_windows.CandidateSelection",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.detected_windows.DetectedWindows._window",
+      "label": "_window",
+      "level": "method",
+      "parent": "celltrack.training.detected_windows.DetectedWindows",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.detected_windows.DetectedWindows.build",
+      "label": "build",
+      "level": "method",
+      "parent": "celltrack.training.detected_windows.DetectedWindows",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.detected_windows.SparseEdgeTargets.__getitem__",
+      "label": "__getitem__",
+      "level": "method",
+      "parent": "celltrack.training.detected_windows.SparseEdgeTargets",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.detected_windows.SparseEdgeTargets.__init__",
+      "label": "__init__",
+      "level": "method",
+      "parent": "celltrack.training.detected_windows.SparseEdgeTargets",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.detected_windows.SparseEdgeTargets.__iter__",
+      "label": "__iter__",
+      "level": "method",
+      "parent": "celltrack.training.detected_windows.SparseEdgeTargets",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.detected_windows.SparseEdgeTargets.__len__",
+      "label": "__len__",
+      "level": "method",
+      "parent": "celltrack.training.detected_windows.SparseEdgeTargets",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.detected_windows.SparseEdgeTargets._by_gt_id",
+      "label": "_by_gt_id",
+      "level": "method",
+      "parent": "celltrack.training.detected_windows.SparseEdgeTargets",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.detected_windows.SparseEdgeTargets.pairs",
+      "label": "pairs",
+      "level": "method",
+      "parent": "celltrack.training.detected_windows.SparseEdgeTargets",
       "role": null
     },
     {
