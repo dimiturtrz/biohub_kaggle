@@ -1172,6 +1172,18 @@
     },
     {
       "kind": "import",
+      "source": "celltrack.eval.candidate_coverage",
+      "target": "celltrack.eval.official_ruler",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.candidate_coverage",
+      "target": "core.paths",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "celltrack.eval.dense_diagnosis",
       "target": "celltrack.affinity",
       "weight": 1
@@ -1258,6 +1270,24 @@
       "kind": "import",
       "source": "celltrack.eval.fidelity_oracle",
       "target": "core.geometry",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.fork_rank_report",
+      "target": "celltrack.eval.official_ruler",
+      "weight": 2
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.fork_rank_report",
+      "target": "celltrack.postproc.fork_ranking",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.fork_rank_report",
+      "target": "core.paths",
       "weight": 1
     },
     {
@@ -1449,6 +1479,24 @@
     {
       "kind": "import",
       "source": "celltrack.eval.offset_precision",
+      "target": "core.paths",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.oracle_fork_arms",
+      "target": "celltrack.eval.official_ruler",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.oracle_fork_arms",
+      "target": "celltrack.postproc.division_reparent",
+      "weight": 1
+    },
+    {
+      "kind": "import",
+      "source": "celltrack.eval.oracle_fork_arms",
       "target": "core.paths",
       "weight": 1
     },
@@ -9001,6 +9049,30 @@
       "weight": 1
     },
     {
+      "kind": "references",
+      "source": "celltrack.eval.candidate_coverage.CandidateCoverage",
+      "target": "celltrack.eval.candidate_coverage.CoverageRow",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.candidate_coverage.CandidateCoverage.row",
+      "target": "celltrack.eval.candidate_coverage.CandidateCoverage.candidates_um",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.candidate_coverage.CandidateCoverage.row",
+      "target": "celltrack.eval.candidate_coverage.CandidateCoverage.count",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.eval.candidate_coverage.CandidateCoverage.row",
+      "target": "celltrack.eval.candidate_coverage.CoverageRow",
+      "weight": 1
+    },
+    {
       "kind": "holds",
       "source": "celltrack.eval.dense_diagnosis.AffinityIndex",
       "target": "celltrack.affinity.EdgeAffinity",
@@ -9698,6 +9770,270 @@
     },
     {
       "kind": "references",
+      "source": "celltrack.eval.fork_rank_report.BranchAccuracy",
+      "target": "celltrack.eval.fork_rank_report.Branch",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.fork_rank_report.BranchAccuracy",
+      "target": "celltrack.eval.fork_rank_report.BranchAccuracy",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.fork_rank_report.BranchAccuracy",
+      "target": "celltrack.eval.fork_rank_report.Branching",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.eval.fork_rank_report.Branching",
+      "target": "celltrack.eval.fork_rank_report.Branch",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.fork_rank_report.ForkGrading",
+      "target": "celltrack.eval.fork_rank_report.Branch",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.fork_rank_report.ForkGrading",
+      "target": "celltrack.eval.fork_rank_report.BranchAccuracy",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.eval.fork_rank_report.ForkGrading",
+      "target": "celltrack.eval.fork_rank_report.Branching",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.eval.fork_rank_report.ForkGrading",
+      "target": "celltrack.eval.fork_rank_report.LabelledFork",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.fork_rank_report.ForkGrading",
+      "target": "celltrack.eval.fork_rank_report.RankReport",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.fork_rank_report.ForkGrading",
+      "target": "celltrack.postproc.fork_ranking.ForkRanking",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.eval.fork_rank_report.ForkGrading._rankings",
+      "target": "celltrack.postproc.fork_ranking.DivergingDaughterRanking",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.eval.fork_rank_report.ForkGrading._rankings",
+      "target": "celltrack.postproc.fork_ranking.GeometryRanking",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.eval.fork_rank_report.ForkGrading._rankings",
+      "target": "celltrack.postproc.fork_ranking.ProbabilityRanking",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.eval.fork_rank_report.ForkGrading._rankings",
+      "target": "celltrack.postproc.fork_ranking.SplitSymmetryRanking",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.eval.fork_rank_report.ForkGrading._rankings",
+      "target": "celltrack.postproc.fork_ranking.SurvivingDaughterRanking",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.fork_rank_report.ForkGrading.gradings",
+      "target": "celltrack.eval.fork_rank_report.BranchAccuracy.of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.fork_rank_report.ForkGrading.gradings",
+      "target": "celltrack.eval.fork_rank_report.ForkGrading._branch_rules",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.fork_rank_report.ForkGrading.reports",
+      "target": "celltrack.eval.fork_rank_report.ForkGrading._rankings",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.fork_rank_report.ForkGrading.reports",
+      "target": "celltrack.eval.fork_rank_report.RankReport.of",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.eval.fork_rank_report.LabelledFork",
+      "target": "celltrack.postproc.fork_ranking.ForkCandidate",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.fork_rank_report.MatchedPair",
+      "target": "celltrack.eval.fork_rank_report.MovieGraph",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.fork_rank_report.MatchedPair.movie_graph",
+      "target": "celltrack.eval.fork_rank_report.MatchedPair._annotated_of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.fork_rank_report.MatchedPair.movie_graph",
+      "target": "celltrack.eval.fork_rank_report.MatchedPair._edges",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.fork_rank_report.MatchedPair.movie_graph",
+      "target": "celltrack.eval.fork_rank_report.MatchedPair._geometry",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.fork_rank_report.MatchedPair.movie_graph",
+      "target": "celltrack.eval.fork_rank_report.MatchedPair._gt_children",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.fork_rank_report.MatchedPair.movie_graph",
+      "target": "celltrack.eval.fork_rank_report.MatchedPair._gt_out_degree",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.eval.fork_rank_report.MatchedPair.movie_graph",
+      "target": "celltrack.eval.fork_rank_report.MovieGraph",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.fork_rank_report.MovieGraph",
+      "target": "celltrack.eval.fork_rank_report.Branching",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.fork_rank_report.MovieGraph",
+      "target": "celltrack.eval.fork_rank_report.LabelledFork",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.fork_rank_report.MovieGraph",
+      "target": "celltrack.postproc.fork_ranking.ForkCandidate",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.eval.fork_rank_report.MovieGraph._branching",
+      "target": "celltrack.eval.fork_rank_report.Branch",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.eval.fork_rank_report.MovieGraph._branching",
+      "target": "celltrack.eval.fork_rank_report.Branching",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.fork_rank_report.MovieGraph._branching",
+      "target": "celltrack.eval.fork_rank_report.MovieGraph._distance_um",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.eval.fork_rank_report.MovieGraph._candidate",
+      "target": "celltrack.postproc.fork_ranking.ForkCandidate",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.eval.fork_rank_report.MovieGraph.forks",
+      "target": "celltrack.eval.fork_rank_report.LabelledFork",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.fork_rank_report.MovieGraph.forks",
+      "target": "celltrack.eval.fork_rank_report.MovieGraph._branches_of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.fork_rank_report.MovieGraph.forks",
+      "target": "celltrack.eval.fork_rank_report.MovieGraph._branching",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.fork_rank_report.MovieGraph.forks",
+      "target": "celltrack.eval.fork_rank_report.MovieGraph._candidate",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.fork_rank_report.MovieGraph.forks",
+      "target": "celltrack.eval.fork_rank_report.MovieGraph.frames_ahead",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.fork_rank_report.RankReport",
+      "target": "celltrack.eval.fork_rank_report.LabelledFork",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.fork_rank_report.RankReport",
+      "target": "celltrack.eval.fork_rank_report.RankReport",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.fork_rank_report.RankReport",
+      "target": "celltrack.postproc.fork_ranking.ForkRanking",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.fork_rank_report.RankReport.best_budget",
+      "target": "celltrack.eval.fork_rank_report.RankReport.division_jaccard",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.fork_rank_report.RankReport.of",
+      "target": "celltrack.postproc.fork_ranking.ForkRanking.cost",
+      "weight": 1
+    },
+    {
+      "kind": "references",
       "source": "celltrack.eval.joint_eval.JointCheckpointEval",
       "target": "celltrack.eval.model_evaluator.ModelEvaluator",
       "weight": 1
@@ -10078,6 +10414,48 @@
       "kind": "calls",
       "source": "celltrack.eval.offset_precision.OffsetPrecision.of",
       "target": "celltrack.losses.offset_target.OffsetTarget.of",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.eval.oracle_fork_arms.OracleArms",
+      "target": "celltrack.postproc.division_reparent.ForkCull",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.oracle_fork_arms.OracleArms.cull",
+      "target": "celltrack.eval.oracle_fork_arms.OracleArms._annotated_of",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.oracle_fork_arms.OracleArms.cull",
+      "target": "celltrack.eval.oracle_fork_arms.OracleArms._edge_ranks",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.oracle_fork_arms.OracleArms.cull",
+      "target": "celltrack.eval.oracle_fork_arms.OracleArms._forks",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.oracle_fork_arms.OracleArms.cull",
+      "target": "celltrack.eval.oracle_fork_arms.OracleArms.divisions",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.oracle_fork_arms.OracleArms.cull",
+      "target": "celltrack.postproc.division_reparent.ForkCull.plan",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.eval.oracle_fork_arms.OracleArms.matched_of",
+      "target": "celltrack.eval.oracle_fork_arms.OracleArms._annotated_of",
       "weight": 1
     },
     {
@@ -13736,6 +14114,30 @@
     },
     {
       "kind": "references",
+      "source": "celltrack.postproc.division_reparent.ForkCull",
+      "target": "celltrack.postproc.division_reparent.ForkCull",
+      "weight": 1
+    },
+    {
+      "kind": "holds",
+      "source": "celltrack.postproc.division_reparent.ReparentPlan",
+      "target": "celltrack.postproc.division_reparent.Reparent",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.postproc.division_reparent.ReparentPlan",
+      "target": "celltrack.postproc.division_reparent.ReparentPlan",
+      "weight": 1
+    },
+    {
+      "kind": "construct",
+      "source": "celltrack.postproc.division_reparent.ReparentPlan._moves_under",
+      "target": "celltrack.postproc.division_reparent.Reparent",
+      "weight": 1
+    },
+    {
+      "kind": "references",
       "source": "celltrack.postproc.fork_ranking.DivergingDaughterRanking",
       "target": "celltrack.postproc.fork_ranking.ForkCandidate",
       "weight": 1
@@ -14950,6 +15352,24 @@
       "kind": "calls",
       "source": "celltrack.training.detected_windows.DetectedWindows.build",
       "target": "celltrack.training.detected_windows.DetectedWindows._window",
+      "weight": 1
+    },
+    {
+      "kind": "inherits",
+      "source": "celltrack.training.detected_windows.RatioMatchedSelection",
+      "target": "celltrack.training.detected_windows.CandidateSelection",
+      "weight": 1
+    },
+    {
+      "kind": "references",
+      "source": "celltrack.training.detected_windows.RatioMatchedSelection",
+      "target": "celltrack.training.detected_windows.RatioMatchedSelection",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.detected_windows.RatioMatchedSelection.carrying",
+      "target": "celltrack.training.detected_windows.RatioMatchedSelection.track_components",
       "weight": 1
     },
     {
@@ -17883,7 +18303,7 @@
   ],
   "nodes": [
     {
-      "descendants": 141,
+      "descendants": 145,
       "id": "celltrack",
       "label": "celltrack",
       "level": "module",
@@ -18307,7 +18727,7 @@
       "role": null
     },
     {
-      "descendants": 14,
+      "descendants": 17,
       "id": "celltrack.eval",
       "label": "eval",
       "level": "module",
@@ -18324,6 +18744,14 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.eval.candidate_coverage",
+      "label": "candidate_coverage",
+      "level": "module",
+      "parent": "celltrack.eval",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.eval.dense_diagnosis",
       "label": "dense_diagnosis",
       "level": "module",
@@ -18334,6 +18762,14 @@
       "descendants": 0,
       "id": "celltrack.eval.fidelity_oracle",
       "label": "fidelity_oracle",
+      "level": "module",
+      "parent": "celltrack.eval",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report",
+      "label": "fork_rank_report",
       "level": "module",
       "parent": "celltrack.eval",
       "role": null
@@ -18374,6 +18810,14 @@
       "descendants": 0,
       "id": "celltrack.eval.offset_precision",
       "label": "offset_precision",
+      "level": "module",
+      "parent": "celltrack.eval",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.oracle_fork_arms",
+      "label": "oracle_fork_arms",
       "level": "module",
       "parent": "celltrack.eval",
       "role": null
@@ -18795,7 +19239,7 @@
       "role": null
     },
     {
-      "descendants": 7,
+      "descendants": 8,
       "id": "celltrack.postproc",
       "label": "postproc",
       "level": "module",
@@ -18814,6 +19258,14 @@
       "descendants": 0,
       "id": "celltrack.postproc.division_recovery",
       "label": "division_recovery",
+      "level": "module",
+      "parent": "celltrack.postproc",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.division_reparent",
+      "label": "division_reparent",
       "level": "module",
       "parent": "celltrack.postproc",
       "role": null
@@ -20348,6 +20800,22 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.eval.candidate_coverage.CandidateCoverage",
+      "label": "CandidateCoverage",
+      "level": "class",
+      "parent": "celltrack.eval.candidate_coverage",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.candidate_coverage.CoverageRow",
+      "label": "CoverageRow",
+      "level": "class",
+      "parent": "celltrack.eval.candidate_coverage",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.eval.dense_diagnosis.AffinityIndex",
       "label": "AffinityIndex",
       "level": "class",
@@ -20436,6 +20904,70 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.Branch",
+      "label": "Branch",
+      "level": "class",
+      "parent": "celltrack.eval.fork_rank_report",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.BranchAccuracy",
+      "label": "BranchAccuracy",
+      "level": "class",
+      "parent": "celltrack.eval.fork_rank_report",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.Branching",
+      "label": "Branching",
+      "level": "class",
+      "parent": "celltrack.eval.fork_rank_report",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.ForkGrading",
+      "label": "ForkGrading",
+      "level": "class",
+      "parent": "celltrack.eval.fork_rank_report",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.LabelledFork",
+      "label": "LabelledFork",
+      "level": "class",
+      "parent": "celltrack.eval.fork_rank_report",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.MatchedPair",
+      "label": "MatchedPair",
+      "level": "class",
+      "parent": "celltrack.eval.fork_rank_report",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.MovieGraph",
+      "label": "MovieGraph",
+      "level": "class",
+      "parent": "celltrack.eval.fork_rank_report",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.RankReport",
+      "label": "RankReport",
+      "level": "class",
+      "parent": "celltrack.eval.fork_rank_report",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.eval.joint_eval.JointCheckpointEval",
       "label": "JointCheckpointEval",
       "level": "class",
@@ -20505,6 +21037,14 @@
       "level": "class",
       "parent": "celltrack.eval.offset_precision",
       "role": "primary"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.oracle_fork_arms.OracleArms",
+      "label": "OracleArms",
+      "level": "class",
+      "parent": "celltrack.eval.oracle_fork_arms",
+      "role": "satellite"
     },
     {
       "descendants": 0,
@@ -21292,6 +21832,30 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.postproc.division_reparent.ForkCull",
+      "label": "ForkCull",
+      "level": "class",
+      "parent": "celltrack.postproc.division_reparent",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.division_reparent.Reparent",
+      "label": "Reparent",
+      "level": "class",
+      "parent": "celltrack.postproc.division_reparent",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.division_reparent.ReparentPlan",
+      "label": "ReparentPlan",
+      "level": "class",
+      "parent": "celltrack.postproc.division_reparent",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.postproc.fork_ranking.DivergingDaughterRanking",
       "label": "DivergingDaughterRanking",
       "level": "class",
@@ -21582,6 +22146,14 @@
       "descendants": 0,
       "id": "celltrack.training.detected_windows.DetectedWindows",
       "label": "DetectedWindows",
+      "level": "class",
+      "parent": "celltrack.training.detected_windows",
+      "role": "satellite"
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.detected_windows.RatioMatchedSelection",
+      "label": "RatioMatchedSelection",
       "level": "class",
       "parent": "celltrack.training.detected_windows",
       "role": "satellite"
@@ -26356,6 +26928,46 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.eval.candidate_coverage.CandidateCoverage.candidates_um",
+      "label": "candidates_um",
+      "level": "method",
+      "parent": "celltrack.eval.candidate_coverage.CandidateCoverage",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.candidate_coverage.CandidateCoverage.count",
+      "label": "count",
+      "level": "method",
+      "parent": "celltrack.eval.candidate_coverage.CandidateCoverage",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.candidate_coverage.CandidateCoverage.row",
+      "label": "row",
+      "level": "method",
+      "parent": "celltrack.eval.candidate_coverage.CandidateCoverage",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.candidate_coverage.CoverageRow.candidates_per_gt_cell",
+      "label": "candidates_per_gt_cell",
+      "level": "method",
+      "parent": "celltrack.eval.candidate_coverage.CoverageRow",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.candidate_coverage.CoverageRow.recall",
+      "label": "recall",
+      "level": "method",
+      "parent": "celltrack.eval.candidate_coverage.CoverageRow",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.eval.dense_diagnosis.AffinityIndex.of",
       "label": "of",
       "level": "method",
@@ -26740,6 +27352,230 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.BranchAccuracy.accuracy",
+      "label": "accuracy",
+      "level": "method",
+      "parent": "celltrack.eval.fork_rank_report.BranchAccuracy",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.BranchAccuracy.lost_edges",
+      "label": "lost_edges",
+      "level": "method",
+      "parent": "celltrack.eval.fork_rank_report.BranchAccuracy",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.BranchAccuracy.of",
+      "label": "of",
+      "level": "method",
+      "parent": "celltrack.eval.fork_rank_report.BranchAccuracy",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.Branching.truth_index",
+      "label": "truth_index",
+      "level": "method",
+      "parent": "celltrack.eval.fork_rank_report.Branching",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.ForkGrading._branch_rules",
+      "label": "_branch_rules",
+      "level": "method",
+      "parent": "celltrack.eval.fork_rank_report.ForkGrading",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.ForkGrading._rankings",
+      "label": "_rankings",
+      "level": "method",
+      "parent": "celltrack.eval.fork_rank_report.ForkGrading",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.ForkGrading.charged_false",
+      "label": "charged_false",
+      "level": "method",
+      "parent": "celltrack.eval.fork_rank_report.ForkGrading",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.ForkGrading.gradings",
+      "label": "gradings",
+      "level": "method",
+      "parent": "celltrack.eval.fork_rank_report.ForkGrading",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.ForkGrading.reports",
+      "label": "reports",
+      "level": "method",
+      "parent": "celltrack.eval.fork_rank_report.ForkGrading",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.ForkGrading.resolved",
+      "label": "resolved",
+      "level": "method",
+      "parent": "celltrack.eval.fork_rank_report.ForkGrading",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.ForkGrading.total_true",
+      "label": "total_true",
+      "level": "method",
+      "parent": "celltrack.eval.fork_rank_report.ForkGrading",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.MatchedPair._annotated_of",
+      "label": "_annotated_of",
+      "level": "method",
+      "parent": "celltrack.eval.fork_rank_report.MatchedPair",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.MatchedPair._edges",
+      "label": "_edges",
+      "level": "method",
+      "parent": "celltrack.eval.fork_rank_report.MatchedPair",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.MatchedPair._geometry",
+      "label": "_geometry",
+      "level": "method",
+      "parent": "celltrack.eval.fork_rank_report.MatchedPair",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.MatchedPair._gt_children",
+      "label": "_gt_children",
+      "level": "method",
+      "parent": "celltrack.eval.fork_rank_report.MatchedPair",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.MatchedPair._gt_out_degree",
+      "label": "_gt_out_degree",
+      "level": "method",
+      "parent": "celltrack.eval.fork_rank_report.MatchedPair",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.MatchedPair.movie_graph",
+      "label": "movie_graph",
+      "level": "method",
+      "parent": "celltrack.eval.fork_rank_report.MatchedPair",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.MovieGraph._branches_of",
+      "label": "_branches_of",
+      "level": "method",
+      "parent": "celltrack.eval.fork_rank_report.MovieGraph",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.MovieGraph._branching",
+      "label": "_branching",
+      "level": "method",
+      "parent": "celltrack.eval.fork_rank_report.MovieGraph",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.MovieGraph._candidate",
+      "label": "_candidate",
+      "level": "method",
+      "parent": "celltrack.eval.fork_rank_report.MovieGraph",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.MovieGraph._distance_um",
+      "label": "_distance_um",
+      "level": "method",
+      "parent": "celltrack.eval.fork_rank_report.MovieGraph",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.MovieGraph.forks",
+      "label": "forks",
+      "level": "method",
+      "parent": "celltrack.eval.fork_rank_report.MovieGraph",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.MovieGraph.frames_ahead",
+      "label": "frames_ahead",
+      "level": "method",
+      "parent": "celltrack.eval.fork_rank_report.MovieGraph",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.RankReport.best_budget",
+      "label": "best_budget",
+      "level": "method",
+      "parent": "celltrack.eval.fork_rank_report.RankReport",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.RankReport.division_jaccard",
+      "label": "division_jaccard",
+      "level": "method",
+      "parent": "celltrack.eval.fork_rank_report.RankReport",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.RankReport.kept_at",
+      "label": "kept_at",
+      "level": "method",
+      "parent": "celltrack.eval.fork_rank_report.RankReport",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.RankReport.of",
+      "label": "of",
+      "level": "method",
+      "parent": "celltrack.eval.fork_rank_report.RankReport",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.fork_rank_report.RankReport.worst_rank",
+      "label": "worst_rank",
+      "level": "method",
+      "parent": "celltrack.eval.fork_rank_report.RankReport",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.eval.joint_eval.JointCheckpointEval.mounted",
       "label": "mounted",
       "level": "method",
@@ -26944,6 +27780,70 @@
       "label": "report",
       "level": "method",
       "parent": "celltrack.eval.offset_precision.OffsetPrecision",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.oracle_fork_arms.OracleArms._annotated_of",
+      "label": "_annotated_of",
+      "level": "method",
+      "parent": "celltrack.eval.oracle_fork_arms.OracleArms",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.oracle_fork_arms.OracleArms._edge_ranks",
+      "label": "_edge_ranks",
+      "level": "method",
+      "parent": "celltrack.eval.oracle_fork_arms.OracleArms",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.oracle_fork_arms.OracleArms._forks",
+      "label": "_forks",
+      "level": "method",
+      "parent": "celltrack.eval.oracle_fork_arms.OracleArms",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.oracle_fork_arms.OracleArms._never",
+      "label": "_never",
+      "level": "method",
+      "parent": "celltrack.eval.oracle_fork_arms.OracleArms",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.oracle_fork_arms.OracleArms.cull",
+      "label": "cull",
+      "level": "method",
+      "parent": "celltrack.eval.oracle_fork_arms.OracleArms",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.oracle_fork_arms.OracleArms.divisions",
+      "label": "divisions",
+      "level": "method",
+      "parent": "celltrack.eval.oracle_fork_arms.OracleArms",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.oracle_fork_arms.OracleArms.matched_of",
+      "label": "matched_of",
+      "level": "method",
+      "parent": "celltrack.eval.oracle_fork_arms.OracleArms",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.eval.oracle_fork_arms.OracleArms.predecessors_of",
+      "label": "predecessors_of",
+      "level": "method",
+      "parent": "celltrack.eval.oracle_fork_arms.OracleArms",
       "role": null
     },
     {
@@ -29772,6 +30672,46 @@
     },
     {
       "descendants": 0,
+      "id": "celltrack.postproc.division_reparent.ForkCull.plan",
+      "label": "plan",
+      "level": "method",
+      "parent": "celltrack.postproc.division_reparent.ForkCull",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.division_reparent.Reparent.is_theft",
+      "label": "is_theft",
+      "level": "method",
+      "parent": "celltrack.postproc.division_reparent.Reparent",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.division_reparent.ReparentPlan._moves_under",
+      "label": "_moves_under",
+      "level": "method",
+      "parent": "celltrack.postproc.division_reparent.ReparentPlan",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.division_reparent.ReparentPlan.of",
+      "label": "of",
+      "level": "method",
+      "parent": "celltrack.postproc.division_reparent.ReparentPlan",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.postproc.division_reparent.ReparentPlan.thefts",
+      "label": "thefts",
+      "level": "method",
+      "parent": "celltrack.postproc.division_reparent.ReparentPlan",
+      "role": null
+    },
+    {
+      "descendants": 0,
       "id": "celltrack.postproc.fork_ranking.DivergingDaughterRanking.cost",
       "label": "cost",
       "level": "method",
@@ -30432,6 +31372,30 @@
       "label": "build",
       "level": "method",
       "parent": "celltrack.training.detected_windows.DetectedWindows",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.detected_windows.RatioMatchedSelection.carrying",
+      "label": "carrying",
+      "level": "method",
+      "parent": "celltrack.training.detected_windows.RatioMatchedSelection",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.detected_windows.RatioMatchedSelection.select",
+      "label": "select",
+      "level": "method",
+      "parent": "celltrack.training.detected_windows.RatioMatchedSelection",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.detected_windows.RatioMatchedSelection.track_components",
+      "label": "track_components",
+      "level": "method",
+      "parent": "celltrack.training.detected_windows.RatioMatchedSelection",
       "role": null
     },
     {
