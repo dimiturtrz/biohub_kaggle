@@ -5,10 +5,20 @@ that a real source must REJECT the ~1000 false-positive candidates per frame tha
 put that crowd in front of the head at training time — every detection is a column, and the ones that match
 no GT node are supervised to link to nothing.
 
-Selection is K-capped because edge attention is O(K^2) in both VRAM and time. The cap keeps every
-GT-matched detection (the targets need them) and fills the remainder with the HIGHEST-SCORING unmatched
-ones, which are the hardest negatives. Edge attention is permutation-equivariant and set-size-agnostic, so
-an exclusion prior trained on the top-K hardest negatives carries to the full crowd at inference.
+Selection is K-capped because edge attention is O(K^2) in both VRAM and time.
+
+`CandidateSelection` caps by keeping every GT-matched detection and filling the remainder with the
+highest-scoring unmatched ones, on the argument that edge attention is permutation-equivariant and
+set-size-agnostic, so an exclusion prior trained on the top-K hardest negatives carries to the full crowd.
+MEASURED, and it does not: keeping all positives but only the top tenth of the negatives leaves ~4.6
+distractors per real cell in training against ~58 at inference on a dense movie. A head trained that way
+reads as near-perfect on its own windows (acc 0.9990, recall 0.9967) and then rejects almost everything
+at inference -- edge_jaccard 0.06 on the densest movie, with small edge-FP and huge edge-FN. Capping the
+candidates at inference instead does not rescue it, because the detector's score does not rank real cells
+above the crowd: the top 96 of a 962-candidate frame hold only 26% of the GT cells.
+
+`RatioMatchedSelection` caps the POSITIVES rather than the negatives, so the crowd a window shows is the
+crowd inference shows. What it gives up is supervision density per window, not the ratio.
 
 The external trainer's window type and positional-feature function are passed in rather than imported: this
 module owns the construction, not the donor's schema.
@@ -17,7 +27,7 @@ module owns the construction, not the donor's schema.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import override
 
 import numpy as np
@@ -87,6 +97,79 @@ class CandidateSelection:
         if len(unmatched) > fill:
             unmatched = unmatched[np.argsort(-score[unmatched])[:fill]]
         return np.sort(np.concatenate([matched, unmatched]))
+
+
+@dataclass(frozen=True)
+class RatioMatchedSelection(CandidateSelection):
+    """A K-capped selection that keeps the crowd-to-cell ratio inference will actually present.
+
+    The cap is spent on the negatives in `CandidateSelection`, which is what distorts the ratio. Here it is
+    spent on the positives instead: a fixed handful of GT cells is carried per window and the rest of the
+    cap goes to the crowd, so a window at K=96 carrying 2 cells shows ~47 distractors each -- the dense
+    regime -- rather than ~4.6.
+
+    Which cells are carried is chosen once per video, not once per frame. A cell dropped from one frame but
+    kept in the next would leave a source whose true target is absent from the window, and the loss would
+    teach that source to link to nothing; holding the choice fixed across the window makes a dropped cell
+    simply a cell outside the field of view, which is the situation the head already handles. Detections
+    matching a dropped cell are dropped too rather than demoted -- they are real cells, and supervising
+    them as negatives would teach the head to reject exactly what it is meant to find.
+    """
+
+    carried_gt_ids: frozenset[int] = frozenset()
+
+    @override
+    def select(
+        self,
+        score: Float[np.ndarray, " n"],
+        matched_gt: Int[np.ndarray, " n"],
+    ) -> Int[np.ndarray, " k"]:
+        carried = np.array([gt in self.carried_gt_ids for gt in matched_gt], dtype=bool)
+        positives = np.nonzero(carried)[0]
+        dropped_cells = (matched_gt >= 0) & ~carried
+        negatives = np.nonzero(~dropped_cells & ~carried)[0]
+        fill = max(self.keep - len(positives), 0)
+        if len(negatives) > fill:
+            negatives = negatives[np.argsort(-score[negatives])[:fill]]
+        return np.sort(np.concatenate([positives, negatives]))
+
+    def carrying(
+        self,
+        gt_ids: Int[np.ndarray, " m"],
+        gt_edges: GtEdges,
+        tracks_carried: int,
+        seed: int,
+    ) -> RatioMatchedSelection:
+        """Sample whole TRACKS this video's windows will carry. Seeded so a rebuild is the same dataset.
+
+        Sampling nodes would not survive a window: a node is one cell at one frame, so a node-level sample
+        carries a cell into frame t and drops it from t+1, which is the incoherence this strategy exists to
+        avoid. The GT graph stores no track id, so a track is taken as what it is -- a connected component
+        of the GT edges, divisions included, which keeps a mother and her daughters together.
+        """
+        component_of = self.track_components(gt_ids, gt_edges)
+        components = np.unique(list(component_of.values()))
+        generator = np.random.default_rng(seed)
+        chosen = set(generator.choice(components, size=min(tracks_carried, len(components)), replace=False).tolist())
+        carried = {node for node, component in component_of.items() if component in chosen}
+        return replace(self, carried_gt_ids=frozenset(carried))
+
+    def track_components(self, gt_ids: Int[np.ndarray, " m"], gt_edges: GtEdges) -> dict[int, int]:
+        """Component label per GT node id, by union-find over the GT edges."""
+        parent = {int(node): int(node) for node in gt_ids}
+
+        def find(node: int) -> int:
+            while parent[node] != node:
+                parent[node] = parent[parent[node]]
+                node = parent[node]
+            return node
+
+        for source, target in gt_edges:
+            if source in parent and target in parent:
+                root_source, root_target = find(int(source)), find(int(target))
+                if root_source != root_target:
+                    parent[root_target] = root_source
+        return {node: find(node) for node in parent}
 
 
 class SparseEdgeTargets(Sequence[torch.Tensor]):

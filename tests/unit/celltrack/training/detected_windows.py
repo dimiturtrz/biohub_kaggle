@@ -8,6 +8,7 @@ from celltrack.training.detected_windows import (
     CandidateFrame,
     CandidateSelection,
     DetectedWindows,
+    RatioMatchedSelection,
     SparseEdgeTargets,
 )
 
@@ -165,3 +166,28 @@ def test_build_stamps_each_frame_with_its_own_timepoint():
     windows = _windows().build(frames, set())
     assert windows[0].stamped[0][0, 0] == 0.0
     assert windows[0].stamped[1][0, 0] == 1.0
+
+
+def test_carrying():
+    base = RatioMatchedSelection(keep=4, gate_um=7.0)
+    edges = {(1, 2), (2, 3), (4, 5), (5, 6)}
+    ids = np.array([1, 2, 3, 4, 5, 6])
+    carried = base.carrying(ids, edges, tracks_carried=1, seed=0).carried_gt_ids
+    assert len(carried) == 3
+    assert carried in ({1, 2, 3}, {4, 5, 6})
+    assert base.carrying(ids, edges, tracks_carried=1, seed=0).carried_gt_ids == carried
+    assert base.carrying(ids, edges, tracks_carried=2, seed=0).carried_gt_ids == {1, 2, 3, 4, 5, 6}
+
+
+def test_track_components():
+    labels = RatioMatchedSelection(keep=4, gate_um=7.0).track_components(np.array([1, 2, 3, 4]), {(1, 2), (2, 3)})
+    assert labels[1] == labels[2] == labels[3]
+    assert labels[4] != labels[1]
+
+
+def test_ratio_matched_select_drops_uncarried_cells_instead_of_demoting_them():
+    selection = RatioMatchedSelection(keep=4, gate_um=7.0, carried_gt_ids=frozenset({7}))
+    score = np.array([0.9, 0.8, 0.7, 0.6, 0.5])
+    matched = np.array([3, 7, -1, -1, -1])
+    kept = selection.select(score, matched)
+    assert kept.tolist() == [1, 2, 3, 4]
