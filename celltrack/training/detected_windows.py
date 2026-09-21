@@ -162,10 +162,15 @@ class DetectedWindows[W]:
 
     Generic in the window type so the caller keeps its own -- the trainer's `FrameWindowData` here, a
     plain record in a test -- without this module importing the donor's schema.
+
+    A window carries its frames' `[t, z, y, x]` rows, NOT their positional embedding. The embedding is
+    ~64x the coordinates it is computed from (four axes x 32 sinusoidal dims against three float32
+    coordinates), so holding one per window for every video is what puts the trainer's resident set in
+    tens of GB. The window type decides when to embed; the cheapest moment is inside `__getitem__`,
+    where it costs a fraction of a millisecond against a 15-second training step.
     """
 
     window_size: int
-    pos_features: Callable[[Float[np.ndarray, "n 4"]], Float[np.ndarray, "n f"]]
     window_factory: Callable[..., W]
 
     def build(self, frames: Sequence[CandidateFrame | None], gt_edges: GtEdges) -> list[W]:
@@ -180,11 +185,11 @@ class DetectedWindows[W]:
         return windows
 
     def _window(self, start: int, populated: list[CandidateFrame], gt_edges: GtEdges) -> W:
-        pos_feats = []
+        stamped = []
         coords = []
         for offset, frame in enumerate(populated):
-            stamped = np.column_stack([np.full(len(frame), start + offset, dtype=np.float32), frame.coords])
-            pos_feats.append(torch.from_numpy(self.pos_features(stamped)))
+            timepoint = np.full(len(frame), start + offset, dtype=np.float32)
+            stamped.append(np.column_stack([timepoint, frame.coords]).astype(np.float32))
             coords.append(torch.from_numpy(frame.coords.astype(np.float32)))
 
         pairs = []
@@ -197,7 +202,7 @@ class DetectedWindows[W]:
         return self.window_factory(
             t_start=start,
             n_frames=self.window_size,
-            pos_feats=pos_feats,
+            stamped=stamped,
             coords=coords,
             node_counts=[len(frame) for frame in populated],
             targets=SparseEdgeTargets(pairs, shapes),

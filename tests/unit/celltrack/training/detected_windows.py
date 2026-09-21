@@ -132,18 +132,14 @@ def test_candidate_frame_len():
 class _Window:
     t_start: int
     n_frames: int
-    pos_feats: list[torch.Tensor]
+    stamped: list[np.ndarray]
     coords: list[torch.Tensor]
     node_counts: list[int]
     targets: SparseEdgeTargets
 
 
-def _pos_features(stamped: np.ndarray) -> np.ndarray:
-    return stamped.astype(np.float32)
-
-
 def _windows(window_size: int = 2) -> DetectedWindows[_Window]:
-    return DetectedWindows(window_size=window_size, pos_features=_pos_features, window_factory=_Window)
+    return DetectedWindows(window_size=window_size, window_factory=_Window)
 
 
 def test_build():
@@ -167,5 +163,5 @@ def test_build_skips_a_span_with_a_missing_frame():
 def test_build_stamps_each_frame_with_its_own_timepoint():
     frames = [_frame([[0.0, 0.0, 0.0]], [1]), _frame([[1.0, 0.0, 0.0]], [2])]
     windows = _windows().build(frames, set())
-    assert windows[0].pos_feats[0][0, 0].item() == 0.0
-    assert windows[0].pos_feats[1][0, 0].item() == 1.0
+    assert windows[0].stamped[0][0, 0] == 0.0
+    assert windows[0].stamped[1][0, 0] == 1.0
