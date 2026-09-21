@@ -12,6 +12,32 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-22 00:05Z — the three pending arms scored, and two of them are EXACT ties
+
+| submission | public LB | vs base 0.947 |
+|---|---|---|
+| `det096` (detection threshold 0.96) | **0.947** | 0.000 |
+| `gaploose` (gapfill at its repair ceiling: min_score 0.35, peak_radius 5.0um, allow_synthetic, filler 240 -> 1165 edges) | **0.947** | 0.000 |
+| `synthsec` (synthetic secondary head) | 0.926 | **-0.021** |
+
+Two exact ties are more informative than a small loss would be.
+
+**`gaploose` adds 925 edges and the metric does not notice.** Not "costs a little" — costs NOTHING, to three
+digits, while quintupling the filler. That is E55 confirmed end-to-end on the real ruler: a bridge edge
+t-1 -> t+1 can never BE an annotated edge (every GT edge has dt=1), so it is neither charged nor credited. The
+gap-repair axis is not merely priced out, it is INVISIBLE. Do not spend another arm on gapfill parameters.
+
+**`det096` is a tie, not a loss.** Memory carried "threshold move LB-refuted" from an earlier arm; at 0.96 the
+move is free. The detector's operating point is on a FLAT stretch of the LB, which is the same message E40/E41
+gave from the other side (the "missed" cells are displaced, not absent — so a threshold that admits more of
+them admits displaced duplicates that the matcher then discards). Threshold is not a lever in either direction.
+
+**Final-2 pick unchanged.** There are now FOUR arms sitting at exactly 0.947 (base, `gapfill`, `det096`,
+`gaploose`) and all four share the champion's detector, so none of them decorrelates from any other — a tie
+on the public LB between arms with a shared component is one submission, not four. `celltrack-public-v1329f`
+(0.939, different detector) stays the hedge for exactly the reason recorded before: rank a hedge by WHICH
+component decorrelates, never by score proximity or disagreement percentage.
+
 ## NEWS 2026-09-21 20:50Z — E64: the fork axis is worth +0.1263 and the annotation holds every bit of it
 
 The arm below was built and run. It is **edge-free as argued** (eTP +8, eFP −4, eFN −8) and worth
