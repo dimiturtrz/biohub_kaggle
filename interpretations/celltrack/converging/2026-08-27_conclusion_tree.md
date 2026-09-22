@@ -12,6 +12,43 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-22 09:22Z — E66: the safe-division axis is GATE-bound not budget-bound, and two graded LB arms are flying
+
+`kaggle kernels output` on the banked champion hands over `run_stats.csv` — every safe-division counter,
+per movie. The axis has been argued about from the outside for weeks; this prices it from the inside.
+Four test-proxy movies: 730 geometric candidates → deepcenter veto **rejects 414 (57%)** → 316 accepted →
+167 symmetry-rejected → 149 candidates → **124 divisions added**, and `safe_division_skipped_cap = 0` on
+every movie. The chain reconciles to the digit, so the reading is not a guess.
+
+Two consequences. **The frac caps never bind** (0.008 / 0.004), so a gate loosened upstream reaches the
+output — same shape E61 found for `candidacy=steal`, now read off counters instead of inferred from a
+score. And **the champion already injects 124 divisions the local proxy prices at nothing** (`div_jac ≈ 0`
+there), so this is the one gate where a submission buys information rather than confirming a proxy.
+
+`SAFE_DIV_DIVERGE_UM = 2.25` turns out to be **c3** — the donor's derived physical quantity, already
+shipped at its derived value — and its pool is 4172, ten times bigger. Left alone anyway: buying candidates
+by lowering a derived constant is the exact knob-twiddle the donor-constant rule forbids. The threshold is
+not derived, so it is the gate that may move.
+
+**Sign verified before spending anything, and it was backwards from how I first stated it.**
+`deepcenter_accept_repair_point` rejects when `score < threshold` → higher is STRICTER. My staged arm had
+been 0.20 → 0.25, described as "loosens the veto"; it would have tightened it. Restaged at 0.15. The donor
+`evg0942` ships 0.25 and scores 0.942 to our 0.947 — weak and confounded, but the same direction.
+
+In flight, a graded pair on one pool so the day reads sign AND magnitude: `…-safediv015` (0.20 → 0.15,
+admits the band) and `…-dcvetooff` (`VETO=0`, admits all 414). Each differs from the champion in exactly one
+setting per `tools.kernel_env_diff`; `PP_CANDIDATES` touches neither key, so the kernel's own sweep cannot
+overwrite the pin. Both flat against 0.947 ⇒ the division post-processing block is metric-invisible at any
+looseness and the axis closes for good. Detail: `interpretations/celltrack/2026-09-22_safe_division_gate_budget.md`.
+
+Also this tick: the 3-leg pmkf chain's leg1 scored its first **full official** eval — **0.5699** against the
+champion's 0.8463 on the same ruler (edge 0.5696, div 0.0035). The detected-crowd recipe is 0.28 below, not
+a candidate; the earlier per-leg micro deltas (+0.0988 → +0.0131, collapsing 7.5x) were never going to
+close that. The waiter armed on `logs/pmkf_chain_legs.log` was watching a 0-byte file and could never have
+fired — the legs log to `logs/pmkf_leg_<ts>.log`; stopped it and read the ledger directly.
+
+---
+
 ## NEWS 2026-09-22 09:05Z — E65: the 0.942 public kernel is our 0947 with two constants changed, and the division axis re-closed
 
 Two closures this tick, both by reading before running.
