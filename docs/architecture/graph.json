@@ -15765,6 +15765,12 @@
     {
       "kind": "calls",
       "source": "celltrack.training.joint_checkpoint.JointCheckpoint.restore",
+      "target": "celltrack.training.joint_checkpoint.JointCheckpoint._restore_head",
+      "weight": 1
+    },
+    {
+      "kind": "calls",
+      "source": "celltrack.training.joint_checkpoint.JointCheckpoint.restore",
       "target": "celltrack.training.joint_checkpoint.OptimizationState.load_state_dict",
       "weight": 1
     },
@@ -31634,6 +31640,14 @@
       "label": "velocity",
       "level": "method",
       "parent": "celltrack.training.joint_assembly.JointAssembly",
+      "role": null
+    },
+    {
+      "descendants": 0,
+      "id": "celltrack.training.joint_checkpoint.JointCheckpoint._restore_head",
+      "label": "_restore_head",
+      "level": "method",
+      "parent": "celltrack.training.joint_checkpoint.JointCheckpoint",
       "role": null
     },
     {
