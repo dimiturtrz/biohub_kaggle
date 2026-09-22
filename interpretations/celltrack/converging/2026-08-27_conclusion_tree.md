@@ -12,6 +12,46 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-22 09:05Z — E65: the 0.942 public kernel is our 0947 with two constants changed, and the division axis re-closed
+
+Two closures this tick, both by reading before running.
+
+**The `evg0942` harvest is empty, and the emptiness is the finding.** `research/frontier_kernels/evg0942/`
+(`biohub-0-942-lb-proxy-score-0-9417`, same author as the already-harvested `0-927-lb`) had sat un-diffed
+since 2026-09-20. Parsing every `os.environ["BIOHUB_*"]` out of both and differencing the SETS:
+
+| | count | |
+|---|---|---|
+| they set, we do not | **0** | no element to harvest |
+| both set, different value | **2** | `DEEPCENTER_CHECKPOINT` (a path), `DEEPCENTER_SAFE_DIV_THRESHOLD` ours 0.20 vs theirs **0.25** |
+| we set, they do not | 8 | `MOTION_RELINK_TIGHT_UM=6.0`, `GAP2_MAX_STEP_UM=4.4`, `GAP_CLOSE_REUSE_UM=3.2`, + artifact plumbing |
+
+So a 0.942 public kernel is our banked 0.947 **minus** three post-processing constants, with a looser
+deepcenter division veto. It is behind us by 0.005 and there is nothing in it we do not already run —
+including `BIOHUB_EDGE_FEATURE_TTA=1`, the one element that looked new in the raw diff (dihedral-averaging
+the UNet *feature* map that feeds edge scoring, not just the detection logits). That flag is already on in
+`celltrack-public-0947`. This is the third time E60's pattern holds: **a public score at or near ours is our
+own kernel re-published, and the diff to run is env-constant SETS, never the notebook.** The only open
+question the diff raises is a single constant in the direction the loser moved it, which is not a submission.
+
+**`hq93` (division recall, +0.0971 headroom) dropped P0 → P3.** The lever E61 named — re-parenting inside
+the linker objective — exists, is built, and already ran: `LinkerConfig.division_cost` opens a parallel
+`SOURCE → ("out", row)` arc priced `appearance[row] + surcharge`, and on `--divisions 4` it moved the **fn**
+side for the first time on record (24 → 21; every earlier division experiment could only move fp, ceiling
++0.0011), 0.9243 → 0.9296. It then lost on its denominator: on sets not selected for divisions,
+`div_jac = 0.0000` in *every* arm including baseline, so the arc's cost appears naked — default proxy
+**−0.0027**, CV-8 **−0.0018**, monotone in how much fork it buys. Both ends hang on one quantity nothing
+local measures: the division-bearing fraction of the hidden corpus, weighted by `tp+fp+fn` per video. The arc
+stays as code (it is the only construct that can express a fork) and is re-tested only if the detection side
+moves. **A headroom can be real, correctly located, and unclaimable** — the ruler that can see the term is a
+set selected to contain it.
+
+Also closed: `4u5v` — the confusor-eval substrate guard is verified landed (`synthetic_confusor_eval.py:147`,
+mirror at `synthetic_scene.py:431`, pinned by `test_score_rejects_mismatched_substrate`). That guard rejects
+exactly the checkpoint `wfh5` named as its gate, so `wfh5`'s gate was repointed to the `ModelEvaluator` native
+proxy — where the verdict it already returned (native inv 1.00 → 0.61, **selection flat at 0.6081**) is the
+affirmative case for a two-pass solver: the head learned the discrimination and selection did not spend it.
+
 ## NEWS 2026-09-22 08:23Z — the detected-crowd arm scored its FIRST epoch for two runs; fixing that bought +0.0988
 
 Once the memory work let the arm run ten epochs, it scored **0.3765**. That number is not a ten-epoch
