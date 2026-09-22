@@ -60,15 +60,27 @@ same trained state closes the bracket:
 | 0.999 | 0.5241 | 0.8605 | +0.382 |
 | 0.9995 | 0.3866 | 0.5499 | −0.410 |
 
-A clean single-peaked curve, **0.5303 at 0.9985**, cliff on both sides. So read at its *own* operating point,
-warm co-adapt training at (1,2,2) tops out **below the untrained warm init's 0.6408** — the training makes the
-seat worse, and that is now a statement about the recipe rather than about a mis-set constant. The two are no
-longer confounded, which is the whole value of the correction. (The init number is itself being re-swept, since
-0.6408 was also read at 0.96875; if it rises, the gap only widens.)
+A clean single-peaked curve, **0.5303 at 0.9985**, cliff on both sides.
 
-**What this does NOT claim.** The finer seat reads 0.53–0.64 against a champion at **~0.9375 on this same
-proxy**. Fixing the threshold makes the seat *measurable* for the first time; it does not make it competitive,
-and nothing here is a submission path. The claim is narrower and stronger than a win:
+**RETRACTED 14:44Z — that was read off three 500-step arms with a converged checkpoint of the same recipe
+sitting on disk.** Sweeping `finer122_coadapt_long.resume.pt` (the converged co-adapt referee arm, also never
+read at a correct threshold) gives 0.6442 @0.96875 → 0.6530 @0.98 → 0.6917 @0.99 → **0.7563 @0.9985**, monotone
+rising and not yet turned over. That **beats the untrained graft**, so warm co-adapt at (1,2,2) *does* beat not
+training once converged and read correctly. The 500-step arms' 0.53 is a **step count, not a recipe verdict** —
+the sentence this block originally carried ("the training makes the seat worse") was one sweep from being
+written into the tree as a finding.
+
+The mechanism survives that retraction and is in fact confirmed twice over, on the **asymmetry**: the converged
+arm's optimum moves (0.96875 → ≥0.9985) because a head trained at (1,2,2) sees the 4×-denser target and
+recalibrates, while the untrained graft's optimum **stays at the shipped 0.96875** (0.7267 → 0.7179 @0.975 →
+0.7160 @0.985 → 0.7122 @0.99, monotone falling) because it is still a (1,4,4)-calibrated head. Predicted, not
+fitted. *(Loose end, not to be conflated: the graft reads 0.7267 where 0.6408 was recorded at the same
+threshold. Different measurement, not a threshold effect; unexplained.)*
+
+**What this does NOT claim.** The best finer point is **0.7563** against a champion at **~0.9375 on this same
+proxy** — still ~0.18 short. The direction changed; the gap did not. Fixing the threshold makes the seat
+*measurable* for the first time; it does not make it competitive, and nothing here is a submission path. The
+claim is narrower and stronger than a win:
 **the finer seat has never once been measured on its own operating point**, so none of its recorded kills
 mean what they say. Standing rule earned the hard way — [[celltrack-constant-audit-faithful-maxgap2-lever]],
 [[celltrack-donor-constants-dont-transplant-without-their-component]] — now has a third instance: **a
