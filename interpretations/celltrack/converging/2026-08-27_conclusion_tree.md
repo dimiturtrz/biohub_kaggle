@@ -35,11 +35,34 @@ does not — the same shape as *donor constants don't transplant without their c
 control — `champion_submission.py:1467` only does `IndexedRXGraph.from_geff`, there is no solver call in the
 extract — so pass-1 stays library-internal and pass-2 can only act on the output graph.
 
-`wfh5` re-scoped accordingly: contraction + dt=1 re-selection only, and the first kernel run is an
-**instrument** (counters for tracklets contracted, meta-nodes, and dt=1 edges whose selection *flipped* vs
-single-pass, with a no-op fallback) rather than a scoring attempt. If zero edges flip, the axis closes on one
-run instead of on a number nobody can read. Cost of this audit: zero runs; it saved a blind 3-4h kernel run
-aimed at two dead legs.
+### and then the third leg closes too, on numbers we already owned
+
+Re-scoping the bead to the dt=1 leg was still one step short. Pulling E58 to write the instrument's counters
+is what killed it, on the same corpus E54's bar was measured on:
+
+- **E54 measured wrong-association = 0.** A re-selection pass exists to fix mis-selected edges. There are
+  none to fix.
+- **E58: of the 79 in-scope broken GT edges, the champion already links 51** between *other* nodes inside the
+  same 7 µm rulers. Those are not selection failures — the scorer's Hungarian represents the GT cell with a
+  **different real track's** node (its decoys carry 1.84–1.88 edges, 0 of 102 isolated). Contraction changes
+  which *edges* are picked; it cannot change which *node* the Hungarian matches. Wrong layer.
+- **Ceiling arithmetic: 79 − 51 = 28 edges, against E54's 35-edge bar.** Even a perfect dt=1 re-selection over
+  everything that remains misses the 1.5% bar. Same denominator for bar and ceiling, so this comparison is
+  legitimate.
+
+**`wfh5` → AUDIT-FLAT, P3.** All three legs priced out before a line was written. And the tree's own lever
+list needs the correction: *two-pass tracklet ILP* was carried in as one of three jointly-necessary 0.945
+levers **on the donor's authority**, and it does not transplant — their carry needs multi-frame GT gaps and
+mis-selected associations, and our corpus has neither (dt=1-only GT, wrong-association = 0). The remaining
+0.945 levers are variable-appearance and finer decode; the third seat is empty, not merely untested.
+
+What this does *not* rule out: contraction as a **training-time** signal (tracklet context inside the model,
+where it can move localization rather than selection) is untouched by this — the kill is of post-hoc
+contraction over a solved graph. Consistent with E58's own verdict that the one live axis is the
+center-offset head, which a CPU cannot reach.
+
+Cost of this audit: **zero runs**, and it retired a P1 build plus the blind 3-4h kernel run it would have
+opened with.
 
 ---
 
