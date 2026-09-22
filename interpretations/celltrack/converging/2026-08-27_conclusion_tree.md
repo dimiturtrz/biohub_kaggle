@@ -12,6 +12,47 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-22 13:52Z — the public ceiling is BELOW us, and the LB top is not reachable from any kernel
+
+The LB moved while the loop optimised knobs. Top 12 on 2026-09-22: **0.974 / 0.973 / 0.970 / 0.968 / 0.968 /
+0.967 / 0.967 / 0.967 / 0.966 / 0.966 / 0.964 / 0.964**, eight of them submitted **today**. That is not one
+outlier to dismiss as a metric hack — it is a crowded tier **0.017–0.027 above our banked 0.947**.
+
+Two kernels were missing from the 41-entry harvest inventory, both by `amanatar`, both fresh:
+
+| kernel | votes | last run | vs our 0947 | its own comment |
+|---|---|---|---|---|
+| `biohub-geometric-fusion` | 100 | 2026-09-21 | 111 vs 113 keys; **3** new elements, 1 constant delta | `LB 0.913` |
+| `biohub-metric-hack-last-call` | 25 | 2026-09-22 | + 11 keys on the above | `LB 0.913` |
+
+`geometric-fusion` — the **most-voted kernel in the competition**, posted yesterday — differences to our
+champion at `BIOHUB_LEAF_PRUNE_MIN_EDGE_PROB=0.0`, `BIOHUB_PPSWEEP_EXTENDED=1`,
+`BIOHUB_PPSWEEP_PREFIX_GUARD=1`, and `DEEPCENTER_SAFE_DIV_THRESHOLD` 0.20 vs 0.25. Everything else is
+artifact-path plumbing. This is the **fourth** independent confirmation of
+[[celltrack-e60-frontier-kernels-are-our-champion-downgraded]].
+
+And the hack is not readable either: `metric-hack-last-call` adds 11 keys of prune/repair plumbing with
+**every actuating value shipped at `0.0`** — `SEG_PRUNE_MIN_PROB`, `OUTPUT_MIN_EDGE_PROB`,
+`LINEFIT_MAX_SHIFT_UM`, `COUNT_EXCESS_FRAC`, `MOTION_RELINK_VEL_EMA`, `REPAIR_PARENT_MAX_UM`,
+`GAP_CLOSE_DIV_UM` all zero. The author published the wiring and withheld the constants.
+
+**What this settles.** The public kernel axis is **closed end to end**: the best public work sits at 0.913
+declared / 0.947 realised, we are at the top of it, and no published element remains unharvested. The
+0.964+ tier comes from something nobody has released. So the remaining week cannot be spent reading kernels,
+and it cannot be spent on post-processing either — prune (E47/48/52/53), gap repair (E55), division (E61),
+selection (E43/44), gate (E57) and edge deletion (E58) are each priced shut with a ceiling. **The only axis
+this tree still lists as open and sized for 0.02+ is the dense-regime detector/model gap** — finer decode
+plus centre-offset, the pair the 0.945 argument calls jointly necessary. The entry below is the first
+un-confounded measurement on that seat in the project's history, and it exists because two recorded
+"refutations" turned out to be from-scratch runs.
+
+Floor is handled and needs no further work: final-2 stays `celltrack-public-0947` + `celltrack-public-v1329f`
+(E67 measured the decorrelation, 0.9299 node Jaccard at 7 µm). Submissions are not the scarce resource — 5/day
+against 7 days is 35, and the final-2 pick is already argued. **Card time is the scarce resource, and it
+belongs on the model axis.**
+
+---
+
 ## NEWS 2026-09-22 13:29Z — the finer-grid ceiling was the HEAD, and an untrained warm init proves it in 0.27h
 
 The finer-decode seat had two converged numbers against it — `finer122_coadapt_long` **0.6150** (3.8h, early
@@ -45,19 +86,38 @@ while the density stays pinned at +8. Edge loss is tiny and flat (0.0048) the wh
 what is failing.
 
 The from-scratch runs converge to ratio **+1.18 / +0.99 against the same target**, so the target is sound.
-The collision is geometric: a detection head trained at (1,4,4) paints a blob of fixed *physical* size across
-**4× the voxels** at (1,2,2), so the per-voxel balanced BCE against the finer target is enormous on contact,
-and `lr × 9.2` wrecks the head inside one window. Detection was *already good* at init (ratio +0.42) — the
-detection TERM is what breaks it, not the grid and not the head.
+Detection was *already good* at init (ratio +0.42), so what the training does is destroy a working head.
+
+**CORRECTION 13:52Z — the gradient-magnitude story above is refuted by its own follow-up.** The first
+explanation was geometric: a head trained at (1,4,4) paints a blob of fixed *physical* size across 4× the
+voxels at (1,2,2), the per-voxel balanced BCE is enormous on contact (det loss 9.2), and `lr × 9.2` wrecks
+the head in one window. Arm 2 damped exactly that term — `--det-weight 0.1` — and the collapse is
+**identical**: raw det loss still **9.1223** at window 1, ratio still **+7.95**, proxy declining monotonically
+0.0770 → 0.0683 → 0.0594 → 0.0540 with `best` stuck at the init value. Ten times less gradient, same
+explosion. Magnitude is not the binding mechanism.
+
+What the numbers actually say: **node recall sits flat at 0.91–0.95 while the node count goes 8×.** That is
+not a learned change, it is a **threshold shift** — the head still finds the same cells, it just fires far
+more widely. A channel-wise scale is the shortest path to that signature, and the code names the channel-wise
+scale that is still free to move: `freeze_backbone_norm` suppresses the running-stat update and the
+batch-stat normalisation, but its own docstring (`joint_assembly.py:133-136`) says *"the affine weight/bias
+keep `requires_grad` and still train"*. γ/β scale whole channels. So the flag exonerated above is exonerated
+only for the **init eval** — it does not freeze the detector during training, and `--det-weight` cannot reach
+γ because 10× less gradient still moves it over 500 steps.
 
 Two harness notes worth keeping. `--patience 5` at `--eval-every 500` killed this at step 2500 of 36048 —
 **0.07 of a 2-epoch schedule**; the long from-scratch run needed 4.33 epochs to reach its best. And
 `--freeze-backbone-norm` is exonerated here: the init eval runs BN in eval mode on the same frozen stats and
 returns 0.6408, so frozen BN is not what the training broke.
 
-**Arm 2 launched 13:30Z** — same command plus `--det-weight 0.1 --patience 12`, damping the one term whose
-gradient is measured to do the damage. If it also collapses, the next form is `--lora` (freeze the pack base,
-adapt low-rank only), which is exactly the re-test the frozen finer graft was flagged for.
+**Arm 2 ran and was killed at 13:52Z**, refuted on its own pre-registration at window 1 (see the correction
+above) and declining monotonically with `best` never leaving the init value. **Arm 3 is up:** `--lora`, which
+freezes the pack base *outright* — BN affine included — and trains low-rank adapters only. It is the test
+that discriminates the BN-affine hypothesis from everything else, and it is exactly the re-test the frozen
+finer graft was already flagged for (`celltrack-finer-graft-frozen-refuted`: "LoRA-retestable"). Same init,
+`0.6408`. Pass = ratio holds near +0.4 and proxy climbs off 0.6408, and the finer seat has a live warm arm
+for the first time. Fail = the seat closes on a mechanism rather than a confound, which is itself worth the
+0.3h with a week to the deadline.
 
 ---
 
