@@ -64,8 +64,9 @@ A clean single-peaked curve, **0.5303 at 0.9985**, cliff on both sides.
 
 **RETRACTED 14:44Z — that was read off three 500-step arms with a converged checkpoint of the same recipe
 sitting on disk.** Sweeping `finer122_coadapt_long.resume.pt` (the converged co-adapt referee arm, also never
-read at a correct threshold) gives 0.6442 @0.96875 → 0.6530 @0.98 → 0.6917 @0.99 → **0.7563 @0.9985**, monotone
-rising and not yet turned over. That **beats the untrained graft**, so warm co-adapt at (1,2,2) *does* beat not
+read at a correct threshold) gives 0.6442 @0.96875 → 0.6530 @0.98 → 0.6917 @0.99 → 0.7613 @0.995 → **0.7935
+@0.997** → 0.7563 @0.9985 → 0.6889 @0.999 → 0.5186 @0.9995. That **beats the untrained graft**, so warm
+co-adapt at (1,2,2) *does* beat not
 training once converged and read correctly. The 500-step arms' 0.53 is a **step count, not a recipe verdict** —
 the sentence this block originally carried ("the training makes the seat worse") was one sweep from being
 written into the tree as a finding.
@@ -77,8 +78,16 @@ recalibrates, while the untrained graft's optimum **stays at the shipped 0.96875
 fitted. *(Loose end, not to be conflated: the graft reads 0.7267 where 0.6408 was recorded at the same
 threshold. Different measurement, not a threshold effect; unexplained.)*
 
-**What this does NOT claim.** The best finer point is **0.7563** against a champion at **~0.9375 on this same
-proxy** — still ~0.18 short. The direction changed; the gap did not. Fixing the threshold makes the seat
+The peak carries its own corroboration: at 0.997 the density ratio is **+0.026**, i.e. the decoded node count
+essentially *matches GT*. The principled operating point and the empirical optimum coincide, which is what
+distinguishes a corrected constant from a tuned one. On the same weights the shipped constant sits at ratio
++0.528. Sibling read: `hoct_finer122_nce` peaks at **0.6960 @0.99**, *below* plain converged co-adapt — HOCT
+does not help at (1,2,2).
+
+**Net for the day on this seat, zero training, weights that already existed: recorded 0.6408 → 0.7935.**
+
+**What this does NOT claim.** The best finer point is **0.7935** against a champion at **~0.9375 on this same
+proxy** — still ~0.14 short, and no local arm closes 0.14 in seven days. The direction changed; the gap did not. Fixing the threshold makes the seat
 *measurable* for the first time; it does not make it competitive, and nothing here is a submission path. The
 claim is narrower and stronger than a win:
 **the finer seat has never once been measured on its own operating point**, so none of its recorded kills
