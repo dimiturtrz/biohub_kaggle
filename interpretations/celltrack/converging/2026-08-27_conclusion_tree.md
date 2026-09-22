@@ -98,6 +98,14 @@ not a result.**
 
 ### ADDENDUM 15:20Z — the audit is complete, and the selector that stopped these runs was the same constant
 
+> **RETRACTED IN PART at 19:15Z — read the 19:15Z addendum below before using anything here.** Every
+> threshold number in this entry was swept on `TEST_MOVIES` (`joint_eval --movies` DEFAULT) while the
+> selector this entry accuses reads `VALIDATION_MOVIES`. The over-firing mechanism SURVIVES the re-do on the
+> correct set (optimum 0.997 on both; 2.18x GT node count at the shipped constant) but is worth **+0.0747,
+> not the +0.164 claimed here**, and the title's claim — that the constant *stopped* the runs — is
+> **unproven**: the flat curve it rests on was the saturated set, and on the validation four the curve rises
+> monotonically.
+
 Every finer-grid checkpoint on disk, re-read at a grid-correct threshold. **Nothing beats the converged
 co-adapt arm**, and HOCT does not help at (1,2,2) — every HOCT-finer variant reads below plain co-adapt:
 
@@ -2569,3 +2577,52 @@ gain last time. Spec (so the launch is designed, not improvised):
 motion-in-ILP · division postproc/FP-fork · directional-PE (detection-side) · consensus copy-ensemble ·
 link-loss form family solo ·
 appearance/pair_context/view_tta · finer sub-1.6µm as recall.
+
+### ADDENDUM 19:15Z — I swept the wrong movie set, and the correction keeps the mechanism but kills the verdict
+
+The 15:20Z entry said the mis-calibrated detection threshold both mis-read the finer family and early-stopped
+it. Chasing an apparent 0.6566-vs-0.7935 disagreement between the trainer's in-run proxy and the offline
+sweep turned up the real structure, and it refutes half of what I wrote this morning.
+
+**The two paths are one scalar on two disjoint movie sets, by design.** `joint_detector.py:631` mounts
+`TestMovieProxy.load(root, VALIDATION_MOVIES)`; `joint_eval.py:66` defaults `--movies` to `TEST_MOVIES`. Both
+reach `SplitScore.of` through `ModelEvaluator._score`. `proxy.py:49` defines `VALIDATION_MOVIES` as
+`CV_MOVIES - TEST_MOVIES` — the four DENSELY annotated train videos — precisely so selection pressure is not
+applied against our sparse annotation of the test four. So there was never a ruler bug: 0.6566 is validation,
+0.7935 is test. The long-open graft loose end (0.6408 vs 0.7267 at one threshold) is almost certainly the
+same split, not a measurement fault.
+
+**And `proxy.py:33-35` states the trap in the source:** the dense four are where "a threshold sweep is not
+recall-saturated on them the way it is on the sparse-annotated test four". Every finer-grid threshold number
+on record was produced by `joint_eval`'s DEFAULT — the saturated set — and then quoted against a selector
+that reads the other one.
+
+Re-swept, same checkpoint (`finer122_coadapt_long.resume.pt`), `--movies` = the validation four, no training:
+
+| threshold | faithful (VALIDATION) | node ratio |
+|---|---|---|
+| 0.96875 (shipped) | 0.5820 | **+1.180** |
+| 0.98 | 0.5845 | +1.129 |
+| 0.99 | 0.5964 | +0.995 |
+| 0.995 | 0.6278 | +0.512 |
+| **0.997** | **0.6567** | **+0.102** |
+| 0.999 | 0.6311 | −0.376 |
+
+**What survives.** The optimum is 0.997 on BOTH sets, and at the shipped constant the dense set carries a
+node ratio of +1.180 — **2.18x the GT node count**. Over-firing is real on the set that is threshold-
+sensitive, so it is not an artifact of saturation. The sweep's 0.6567 @0.997 also reproduces the trainer's
+logged `init proxy 0.6566` to four decimals, which is the cross-check that the two paths are the same scalar.
+
+**What changes.** The gain from the constant is **+0.0747, not +0.164**; the larger figure was test-set
+specific and is retired. And the early-stop claim is **downgraded to unproven**: it rested on the curve being
+flat near the shipped point (0.6442 -> 0.6530), which was the saturated set. On validation the curve rises
+monotonically, and a ruler that is offset but monotone can still register a gain — so `6 evals no gain` is
+not shown to have been caused by the threshold. The constant is mis-set. It is not established that it
+truncated anything.
+
+**Standing rule this earns:** never quote a `joint_eval` number without naming its movie set, and never
+explain a TRAINER decision with a default-set sweep. `--movies 44b6_341df25f,44b6_e57ff5c6,6bba_969618f6,6bba_fc83837d`
+is the selector's own ruler. (`--downsample` is rejected by `joint_eval` — the grid comes from the checkpoint.)
+
+The seat's bound is untouched by all of this: still ~0.14 short of the champion, still not a submission path,
+final-2 still `0947` + `v1329f`.
