@@ -24,10 +24,18 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 _ASSIGNMENT = re.compile(r"os\.environ\[['\"](BIOHUB_[A-Z0-9_]+)['\"]\]\s*=\s*['\"]([^'\"]*)['\"]")
+_GET_DEFAULT = re.compile(r"os\.environ\.get\(\s*['\"](BIOHUB_[A-Z0-9_]+)['\"]\s*,\s*['\"]([^'\"]*)['\"]\s*\)")
 
 
 def kernel_settings(path: Path) -> dict[str, str]:
-    """Every `BIOHUB_*` setting a kernel assigns, notebook or script.
+    """Every `BIOHUB_*` setting a kernel EFFECTIVELY runs with, notebook or script.
+
+    A kernel carries its constants in two places, and reading only one of them is a denominator error:
+    an explicit `os.environ[KEY] = value` at the top, and the default of the `os.environ.get(KEY,
+    default)` that consumes it. A donor that ships a constant purely as a reader default is invisible to
+    an assignment-only parse -- which is how a kernel reading 70 keys and assigning 8 came back as
+    "8 settings, nothing to harvest". The assignment wins where both exist, because that is what the
+    interpreter does.
 
     A notebook's cell sources are JSON-escaped, so they are decoded before matching -- matching the raw
     file instead needs a pattern that tolerates backslashes and silently returns nothing when it does not.
@@ -36,7 +44,21 @@ def kernel_settings(path: Path) -> dict[str, str]:
     if path.suffix == ".ipynb":
         cells = json.loads(text)["cells"]
         text = "".join("".join(cell.get("source", [])) for cell in cells)
-    return dict(_ASSIGNMENT.findall(text))
+    return dict(_GET_DEFAULT.findall(text)) | dict(_ASSIGNMENT.findall(text))
+
+
+def shadowed_settings(path: Path) -> dict[str, tuple[str, str]]:
+    """Keys whose pin differs from the fallback the consumer would otherwise use.
+
+    Quoting the fallback as though it were the running value is the plumbing trap in its purest form: the
+    champion assigns `SAFE_DIV_MAX_UM = 9.0` while its consumer reads `os.environ.get(..., '4.7')`, and an
+    interpretation written off the second number describes a kernel nobody ran.
+    """
+    text = path.read_text(encoding="utf-8", errors="ignore")
+    if path.suffix == ".ipynb":
+        text = "".join("".join(c.get("source", [])) for c in json.loads(text)["cells"])
+    fallbacks, pins = dict(_GET_DEFAULT.findall(text)), dict(_ASSIGNMENT.findall(text))
+    return {k: (v, fallbacks[k]) for k, v in pins.items() if k in fallbacks and fallbacks[k] != v}
 
 
 def log_difference(ours: dict[str, str], theirs: dict[str, str]) -> None:
@@ -61,6 +83,11 @@ def main() -> None:
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     ours, theirs = kernel_settings(args.ours), kernel_settings(args.theirs)
+    for label, path in (("ours", args.ours), ("theirs", args.theirs)):
+        shadowed = shadowed_settings(path)
+        logger.info("=== %s: PIN SHADOWS A DIFFERENT FALLBACK (quote the pin) ===", label)
+        for key, (pin, fallback) in sorted(shadowed.items()):
+            logger.info("  %s: PIN=%s (consumer fallback %s)", key, pin, fallback)
     if not ours or not theirs:
         raise SystemExit(
             f"no BIOHUB_* assignments parsed (ours={len(ours)} theirs={len(theirs)}); an empty side makes "

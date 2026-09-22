@@ -33,6 +33,28 @@ are worth *something*, because 0.947 is the banked score with them in — only t
 deepcenter threshold the one gate on the axis where a submission buys real information rather than
 confirming a proxy.
 
+## Correction: the gate constants above were read off the fallbacks, not the pins
+
+A kernel carries each constant twice — an `os.environ[KEY] = value` pin near the top and the default of
+the `os.environ.get(KEY, default)` that consumes it — and the pin wins. This document originally quoted the
+fallbacks. The champion's *running* safe-division geometry is considerably wider than stated:
+
+| constant | fallback (quoted here at first) | pin (what ran) |
+|---|---|---|
+| `SAFE_DIV_MAX_UM` | 4.7 | **9.0** |
+| `SAFE_DIV_SISTER_MAX_UM` | 7.2 | **14.0** |
+| `SAFE_DIV_FRAME_FRAC_CAP` | 0.008 | **0.0076** |
+| `SAFE_DIV_GLOBAL_FRAC_CAP` | 0.004 | **0.00375** |
+| `SAFE_DIV_SISTER_SYMMETRY_TAU` | 0.0 | **0.6** |
+| `PP_SELECT_MARGIN` | 0.002 | **0.001** |
+
+Nothing in the counter table or the in-flight arms changes — counters are measured, and the arms write
+pins, which win. The mechanism gets *stronger*: with the geometry already wide, the champion pinned the
+deepcenter veto **above** its own consumer fallback (0.12 → 0.20), so the 0.15 arm walks back toward the
+library's value rather than inventing a number. `tools/kernel_env_diff.py` now parses `get` defaults as
+effective settings and prints a `PIN SHADOWS A DIFFERENT FALLBACK` section, so a fallback cannot be quoted
+as a pin again. Forty-one keys in the champion shadow this way.
+
 ## The gate that can move, and the one that cannot
 
 `SAFE_DIV_DIVERGE_UM = 2.25` is **c3**, the donor's physical divergence quantity, already transplanted at
