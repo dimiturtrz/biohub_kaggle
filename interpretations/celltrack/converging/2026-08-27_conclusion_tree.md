@@ -12,6 +12,55 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-22 13:29Z — the finer-grid ceiling was the HEAD, and an untrained warm init proves it in 0.27h
+
+The finer-decode seat had two converged numbers against it — `finer122_coadapt_long` **0.6150** (3.8h, early
+stopped at 4.33 epochs) and `finer122_coadapt_v3` **0.5881** (1.70h) — and both were read as "finer decode
+costs association". Both logs open with `init proxy 0.0000 | node R 0.000 | 0 nodes`. **They were from
+scratch, both.** The warm form (bd `cvsb`) had never run, and `joint_assembly.py:185` explains why it is
+legal: the grid guard is on `--detector-from` only; the `--warm-start` branch hands the pack detector *and*
+transformer to `JointModel(.., downsample)` with no check at all.
+
+Run it, and the first eval is the whole finding:
+
+```
+init proxy 0.6408 (sel 0.6408) | node R 0.948 ratio +0.42 | mislinks 176 | sanity AUC 1.0000
+```
+
+**The pilkwang head, untrained, decoded on (1,2,2), scores above 3.8h of from-scratch co-adaptation.** The
+finer grid never broke the pack head. What those two runs measured was a from-scratch head too weak to learn
+association at 8× candidate density — a head-strength ceiling wearing a grid-cost costume.
+
+### the training then destroyed it, and the mechanism is physical
+
+| step | det loss | node R | ratio | proxy |
+|---|---|---|---|---|
+| init | — | 0.948 | **+0.42** | **0.6408** |
+| 500 | **9.2000** | 0.947 | +7.79 | 0.0820 |
+| 1000 | 0.3948 | 0.949 | +8.06 | 0.0659 |
+| 2500 | 0.1387 | 0.950 | +8.13 | 0.0808 |
+
+One 500-step window takes it to **8× over-detection**, and it never returns: the loss recovers (9.2 → 0.14)
+while the density stays pinned at +8. Edge loss is tiny and flat (0.0048) the whole way — association is not
+what is failing.
+
+The from-scratch runs converge to ratio **+1.18 / +0.99 against the same target**, so the target is sound.
+The collision is geometric: a detection head trained at (1,4,4) paints a blob of fixed *physical* size across
+**4× the voxels** at (1,2,2), so the per-voxel balanced BCE against the finer target is enormous on contact,
+and `lr × 9.2` wrecks the head inside one window. Detection was *already good* at init (ratio +0.42) — the
+detection TERM is what breaks it, not the grid and not the head.
+
+Two harness notes worth keeping. `--patience 5` at `--eval-every 500` killed this at step 2500 of 36048 —
+**0.07 of a 2-epoch schedule**; the long from-scratch run needed 4.33 epochs to reach its best. And
+`--freeze-backbone-norm` is exonerated here: the init eval runs BN in eval mode on the same frozen stats and
+returns 0.6408, so frozen BN is not what the training broke.
+
+**Arm 2 launched 13:30Z** — same command plus `--det-weight 0.1 --patience 12`, damping the one term whose
+gradient is measured to do the damage. If it also collapses, the next form is `--lora` (freeze the pack base,
+adapt low-rank only), which is exactly the re-test the frozen finer graft was flagged for.
+
+---
+
 ## NEWS 2026-09-22 10:48Z — the two-pass ILP lever is two-thirds already-refuted, and the live third was never the plan
 
 The tree names **two-pass tracklet ILP** as one of the three jointly-necessary 0.945 levers, and `wfh5` is the
