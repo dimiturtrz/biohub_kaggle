@@ -31,7 +31,7 @@ from __future__ import annotations
 from typing import cast, override
 
 import torch
-from jaxtyping import Float
+from jaxtyping import Bool, Float
 from torch import Tensor, nn
 from torch.utils.checkpoint import checkpoint
 
@@ -175,16 +175,21 @@ class HoctEdgeTransformer(nn.Module):
             v: Float[Tensor, "h e dh"],
             magnitude: Float[Tensor, "h 1 1"],
             dline: Float[Tensor, "r e"],
-            neighbour: Float[Tensor, "r e"],
+            neighbour: Bool[Tensor, "r e"],
         ) -> Float[Tensor, "h r dh"]:
-            """One tile of query rows attended over every edge — the unit the backward pass recomputes."""
+            """One tile of query rows attended over every edge — the unit the backward pass recomputes.
+
+            The biases arrive narrow (fp16 distance, bool mask) because they are dense ``(e, e)``; widening
+            them here keeps that conversion at tile size.
+            """
             scores = torch.einsum("hid,hjd->hij", q, k) / self.head_dim**0.5
-            scores = scores + magnitude * dline.unsqueeze(0) + neighbour.unsqueeze(0)
+            scores = scores + magnitude * dline.unsqueeze(0).to(scores.dtype)
+            scores = scores.masked_fill(~neighbour.unsqueeze(0), _NEG_INF)
             return torch.einsum("hij,hjd->hid", scores.softmax(dim=-1), v)
 
         @override
         def forward(
-            self, edges: Float[Tensor, "e d"], dline: Float[Tensor, "e e"], neighbour: Float[Tensor, "e e"]
+            self, edges: Float[Tensor, "e d"], dline: Float[Tensor, "e e"], neighbour: Bool[Tensor, "e e"]
         ) -> Float[Tensor, "e d"]:
             """Attend each edge to its spatial neighbours, biased by the segment distance to each one.
 
@@ -240,25 +245,29 @@ class HoctEdgeTransformer(nn.Module):
 
     def _edge_biases(
         self, p0: Float[Tensor, "e 3"], p1: Float[Tensor, "e 3"]
-    ) -> tuple[Float[Tensor, "e e"], Float[Tensor, "e e"]]:
+    ) -> tuple[Float[Tensor, "e e"], Bool[Tensor, "e e"]]:
         """The two ``(e, e)`` pairwise biases the edge blocks read: segment distance, and the locality mask.
 
         Both are functions of the COORDINATES alone — no parameter feeds them, so they carry no gradient and
         the parametric solve's dozen temporaries have no reason to stay alive. Built one row tile at a time
         under ``no_grad``, the peak is the two results plus a single tile, instead of a dozen dense planes
         (which is the 1.70 GiB allocation that OOMed the detected-crowd arm at ~21k gated edges).
+
+        The two results then BECOME the peak — 7.3 GiB of fp32 at the ~31k edges the crowd regime really gates,
+        which is the allocation that OOMed it next. So they are stored at the width each actually needs: a
+        micrometre distance whose only use is scaling a learned bias keeps every digit that matters in fp16,
+        and a hard in-or-out mask is one bit, not a float. 7.3 GiB becomes 2.8; ``_attend`` widens its own tile.
         """
         count = p0.shape[0]
         midpoint = 0.5 * (p0 + p1)
-        dline = p0.new_empty((count, count))
-        neighbour = p0.new_empty((count, count))
+        dline = p0.new_empty((count, count), dtype=torch.float16)
+        neighbour = p0.new_empty((count, count), dtype=torch.bool)
         rows = self._EdgeAttentionBlock.attention_rows(count, _BIAS_TEMPORARIES, p0.element_size())
         with torch.no_grad():
             for lo in range(0, count, rows):
                 hi = min(lo + rows, count)
-                dline[lo:hi] = self._segment_distance(p0[lo:hi], p1[lo:hi], p0, p1)
-                gap = torch.cdist(midpoint[lo:hi], midpoint)
-                neighbour[lo:hi] = torch.where(gap <= self.neighbour_um, 0.0, _NEG_INF)
+                dline[lo:hi] = self._segment_distance(p0[lo:hi], p1[lo:hi], p0, p1).half()
+                neighbour[lo:hi] = torch.cdist(midpoint[lo:hi], midpoint) <= self.neighbour_um
         return dline, neighbour
 
     def __init__(  # noqa: PLR0913 — mirrors SimpleNodeTransformer's constructor kwargs; a drop-in must match them

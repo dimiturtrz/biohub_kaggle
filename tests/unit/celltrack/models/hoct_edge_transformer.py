@@ -33,6 +33,7 @@ _SMALL_HEADS = 4
 _SMALL_BLOCKS = 2
 _TOL = 1e-4
 _ROPE_DIM = 12
+_DLINE_TOL = 1e-3  # dline is stored fp16: the bias it scales needs micrometre digits, not float32 ones
 _rows = HoctEdgeTransformer._EdgeAttentionBlock.attention_rows
 
 
@@ -92,7 +93,7 @@ def test_edge_attention_block_forward() -> None:
     n_edges = 5
     edges = torch.randn(n_edges, _SMALL_HIDDEN)
     dline = torch.rand(n_edges, n_edges)
-    neighbour = torch.zeros(n_edges, n_edges)
+    neighbour = torch.ones(n_edges, n_edges, dtype=torch.bool)
     out = block.forward(edges, dline, neighbour)
     assert out.shape == (n_edges, _SMALL_HIDDEN)
 
@@ -109,7 +110,7 @@ def test_edge_attention_tiling_matches_untiled(monkeypatch: pytest.MonkeyPatch) 
     n_edges = 16
     edges = torch.randn(n_edges, _SMALL_HIDDEN)
     dline = torch.rand(n_edges, n_edges)
-    neighbour = torch.where(torch.rand(n_edges, n_edges) < 0.5, 0.0, _NEG_INF)
+    neighbour = torch.rand(n_edges, n_edges) < 0.5
     untiled = block.forward(edges, dline, neighbour)
 
     one_row = _SMALL_HEADS * n_edges * edges.element_size()
@@ -132,11 +133,11 @@ def test_edge_biases(monkeypatch: pytest.MonkeyPatch) -> None:
     p0, p1 = torch.rand(12, 3) * 20, torch.rand(12, 3) * 20
     expected_dline = HoctEdgeTransformer._segment_distance(p0, p1, p0, p1)
     midpoint = 0.5 * (p0 + p1)
-    expected_neighbour = torch.where(torch.cdist(midpoint, midpoint) <= head.neighbour_um, 0.0, _NEG_INF)
+    expected_neighbour = torch.cdist(midpoint, midpoint) <= head.neighbour_um
 
     monkeypatch.setattr(hoct_edge_transformer, "_SCORE_TILE_BYTES", _BIAS_TEMPORARIES * 12 * 4 * 5)  # 5 rows/tile
     dline, neighbour = head._edge_biases(p0, p1)
-    torch.testing.assert_close(dline, expected_dline)
+    torch.testing.assert_close(dline.float(), expected_dline, atol=_DLINE_TOL, rtol=_DLINE_TOL)
     torch.testing.assert_close(neighbour, expected_neighbour)
     assert not dline.requires_grad  # coordinate-only, so no autograd graph is kept alive for it
 
