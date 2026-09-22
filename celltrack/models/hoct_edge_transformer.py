@@ -40,6 +40,13 @@ _NEG_INF = -1.0e9  # additive mask value for out-of-gate / out-of-neighbourhood 
 _EPS = 1e-9  # degenerate-segment guard in the parametric min-distance solve
 _UNBATCHED_NDIM = 2  # a bare (N, D) feature tensor, promoted to (1, N, D) for the batched path
 
+# Budget for ONE edge-attention score tile. The dense-crowd regime this head exists for gates ~10k candidate
+# edges per frame pair, and a full (heads, e, e) score matrix there is 3.3GB in fp32 — the allocation that
+# OOMed the detected-node arm at batch 1 with 8.4GB free. The block therefore attends a slice of query rows at
+# a time, sized so one tile stays an order of magnitude under that headroom while the dense case still needs
+# only ~13 slices. Below the budget the arithmetic yields a single slice, so small frames keep the flat path.
+_SCORE_TILE_BYTES = 256 * 1024**2
+
 
 class HoctEdgeTransformer(nn.Module):
     """Two-stage association head: RoPE node self-attention, then line-to-line edge-to-edge self-attention.
@@ -148,6 +155,11 @@ class HoctEdgeTransformer(nn.Module):
                 nn.Dropout(dropout),
             )
 
+        @staticmethod
+        def attention_rows(count: int, n_heads: int, itemsize: int) -> int:
+            """Query rows whose ``(n_heads, rows, count)`` score tile fits the budget — at least one, at most all."""
+            return max(1, min(count, _SCORE_TILE_BYTES // max(1, n_heads * count * itemsize)))
+
         @override
         def forward(
             self, edges: Float[Tensor, "e d"], dline: Float[Tensor, "e e"], neighbour: Float[Tensor, "e e"]
@@ -156,11 +168,15 @@ class HoctEdgeTransformer(nn.Module):
             count, _ = edges.shape
             qkv = self.qkv(self.norm1(edges)).view(count, 3, self.n_heads, self.head_dim)
             q, k, v = qkv.permute(1, 2, 0, 3)  # each (h, e, head_dim)
-            scores = torch.einsum("hid,hjd->hij", q, k) / self.head_dim**0.5
             sign = cast(Tensor, self.sign)  # a registered buffer is Tensor | Module to the checker
-            bias = sign.squeeze(0) * torch.nn.functional.softplus(self.alpha.squeeze(0)) * dline.unsqueeze(0)
-            scores = scores + bias + neighbour.unsqueeze(0)
-            attended = torch.einsum("hij,hjd->hid", scores.softmax(dim=-1), v)
+            magnitude = sign.squeeze(0) * torch.nn.functional.softplus(self.alpha.squeeze(0))  # (h, 1, 1)
+            attended = torch.empty_like(q)
+            rows = self.attention_rows(count, self.n_heads, q.element_size())
+            for lo in range(0, count, rows):
+                hi = min(lo + rows, count)
+                scores = torch.einsum("hid,hjd->hij", q[:, lo:hi], k) / self.head_dim**0.5
+                scores = scores + magnitude * dline[lo:hi].unsqueeze(0) + neighbour[lo:hi].unsqueeze(0)
+                attended[:, lo:hi] = torch.einsum("hij,hjd->hid", scores.softmax(dim=-1), v)
             attended = attended.transpose(0, 1).reshape(count, -1)
             edges = edges + self.out(attended)
             return edges + self.mlp(self.norm2(edges))

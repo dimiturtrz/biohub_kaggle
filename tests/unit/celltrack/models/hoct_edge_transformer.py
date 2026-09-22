@@ -16,8 +16,10 @@ would pass a membership check and fail this one.
 
 from pathlib import Path
 
+import pytest
 import torch
 
+from celltrack.models import hoct_edge_transformer
 from celltrack.models.edge_transformer import EdgeTransformerScorer
 from celltrack.models.hoct_edge_transformer import _NEG_INF, HoctEdgeTransformer
 from celltrack.models.joint_model import _N_BLOCKS, _N_HEADS, JointModel
@@ -31,6 +33,7 @@ _SMALL_HEADS = 4
 _SMALL_BLOCKS = 2
 _TOL = 1e-4
 _ROPE_DIM = 12
+_rows = HoctEdgeTransformer._EdgeAttentionBlock.attention_rows
 
 
 def _head() -> HoctEdgeTransformer:
@@ -92,6 +95,34 @@ def test_edge_attention_block_forward() -> None:
     neighbour = torch.zeros(n_edges, n_edges)
     out = block.forward(edges, dline, neighbour)
     assert out.shape == (n_edges, _SMALL_HIDDEN)
+
+
+def test_edge_attention_tiling_matches_untiled(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A score tile small enough to force several slices must reproduce the single-slice result exactly.
+
+    The block attends a slice of query rows at a time so the dense-crowd regime never allocates a whole
+    (heads, e, e) score matrix. Tiling is a memory layout, not a model change, so the two paths are the same
+    function: shrinking the budget until the same input needs multiple slices must not move the output.
+    """
+    torch.manual_seed(0)
+    block = HoctEdgeTransformer._EdgeAttentionBlock(_SMALL_HIDDEN, _SMALL_HEADS, 2.0, 0.0)
+    n_edges = 16
+    edges = torch.randn(n_edges, _SMALL_HIDDEN)
+    dline = torch.rand(n_edges, n_edges)
+    neighbour = torch.where(torch.rand(n_edges, n_edges) < 0.5, 0.0, _NEG_INF)
+    untiled = block.forward(edges, dline, neighbour)
+
+    one_row = _SMALL_HEADS * n_edges * edges.element_size()
+    monkeypatch.setattr(hoct_edge_transformer, "_SCORE_TILE_BYTES", one_row * 3)
+    assert _rows(n_edges, _SMALL_HEADS, edges.element_size()) == 3
+    torch.testing.assert_close(block.forward(edges, dline, neighbour), untiled)
+
+
+def test_attention_rows() -> None:
+    """A frame far under the tile budget takes one slice; a budget under one row still takes a whole row."""
+    assert HoctEdgeTransformer._EdgeAttentionBlock.attention_rows(8, _SMALL_HEADS, 4) == 8
+    over_budget = hoct_edge_transformer._SCORE_TILE_BYTES  # one row of this many edges exceeds the whole budget
+    assert _rows(over_budget, _SMALL_HEADS, 4) == 1
 
 
 def test_segment_distance() -> None:
