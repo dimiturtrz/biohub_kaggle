@@ -12,6 +12,71 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-22 14:04Z — every finer-grid refutation was read through a threshold that is wrong by construction
+
+Three warm arms at `--downsample 1 2 2` all collapsed the same way inside one 500-step window: node count
+5–10× while node recall stayed flat. Arm 2 (`--det-weight 0.1`) refuted the gradient-magnitude explanation —
+raw det loss still 9.1223, ratio still +7.95. Arm 3 (`--lora`, pack base frozen **including BN affine**)
+refuted the BN-affine explanation — counts 16946/34685/28426/33387 → 177984/156555/173923/191878. Three
+freeze configurations, one signature. That rules out the training and points at the read-out.
+
+Neither the target nor the decode is buggy, and that is the finding:
+
+- `targets.py:50` — `sigma = spacing.anisotropic_radius(scale_um)`. A **physical** radius, so at (1,2,2) the
+  Gaussian is 2× wider in y/x and covers **4× the in-plane positive voxels**. Correct, and self-consistent.
+- `peaks.py` — `radius = rint(2.0 * spacing.anisotropic_radius(scale_um)) // 2`. The NMS window uses the
+  *same* physical conversion. Also correct.
+- `tunet.py:186` — `_logit_floor(threshold)` turns a **fixed probability constant** into the floor, **with no
+  grid term at all.**
+
+So a head trained at (1,2,2) learns a target whose positive fraction is 4× higher, its output prior
+recalibrates upward to match, and the same physical confidence then clears a constant fitted to a (1,4,4)
+head in 4× more voxels. Flat recall, exploding count, immune to loss weighting, immune to freezing the base —
+every symptom follows, and none of them is about the grid being hard.
+
+Swept on arm 1's trained state (`finer122_warm_coadapt.resume.pt`) via `celltrack.eval.joint_eval
+--threshold`, **no training at all**:
+
+| threshold | faithful | node recall | ratio |
+|---|---|---|---|
+| 0.96875 (shipped) | 0.3598 | 0.9745 | +2.700 |
+| 0.99 | 0.3597 | 0.9731 | +2.519 |
+| **0.999** | **0.5241** | 0.8605 | **+0.382** |
+| 0.9999 | 0.0915 | 0.0921 | −0.960 |
+
+**+0.164 from one constant.** At 0.999 the density ratio lands at +0.382 — init's +0.42 — which is the
+prediction the mechanism makes, not a fitted point. Note also that the trained head's node recall at the
+shipped threshold is **0.9745 against init's 0.948**: the finer grid *improves* cell-finding, which is the
+axis the tree says we need. What it costs is peaks, and peaks are a threshold question.
+
+**SETTLED 14:11Z — the optimum is 0.9985 and the seat still loses to not training.** The refined sweep on the
+same trained state closes the bracket:
+
+| threshold | faithful | node recall | ratio |
+|---|---|---|---|
+| 0.995 | 0.3675 | 0.9722 | +1.984 |
+| 0.997 | 0.4364 | 0.9736 | +1.630 |
+| **0.9985** | **0.5303** | 0.9412 | **+0.868** |
+| 0.999 | 0.5241 | 0.8605 | +0.382 |
+| 0.9995 | 0.3866 | 0.5499 | −0.410 |
+
+A clean single-peaked curve, **0.5303 at 0.9985**, cliff on both sides. So read at its *own* operating point,
+warm co-adapt training at (1,2,2) tops out **below the untrained warm init's 0.6408** — the training makes the
+seat worse, and that is now a statement about the recipe rather than about a mis-set constant. The two are no
+longer confounded, which is the whole value of the correction. (The init number is itself being re-swept, since
+0.6408 was also read at 0.96875; if it rises, the gap only widens.)
+
+**What this does NOT claim.** The finer seat reads 0.53–0.64 against a champion at **~0.9375 on this same
+proxy**. Fixing the threshold makes the seat *measurable* for the first time; it does not make it competitive,
+and nothing here is a submission path. The claim is narrower and stronger than a win:
+**the finer seat has never once been measured on its own operating point**, so none of its recorded kills
+mean what they say. Standing rule earned the hard way — [[celltrack-constant-audit-faithful-maxgap2-lever]],
+[[celltrack-donor-constants-dont-transplant-without-their-component]] — now has a third instance: **a
+constant fitted at one grid is not a constant at another, and reading an arm through it is a harness fault,
+not a result.**
+
+---
+
 ## NEWS 2026-09-22 13:52Z — the public ceiling is BELOW us, and the LB top is not reachable from any kernel
 
 The LB moved while the loop optimised knobs. Top 12 on 2026-09-22: **0.974 / 0.973 / 0.970 / 0.968 / 0.968 /
