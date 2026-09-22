@@ -2660,3 +2660,35 @@ answered — and it is still not competitive. That is the honest end of this thr
 through a bad constant, the constant is now known and transferable, and fixing it does not produce a seat.
 
 Final-2 unchanged: `0947` + `v1329f`.
+
+### ADDENDUM 19:03Z — the coupling arm ran, and the third seat closes empty
+
+`finer122_hoct_slack_coadapt` finished clean (2/2 epochs, 1.16h, best 0.6801 vs init 0.6422). Re-swept
+before reading it, per the standing rule that no (1,2,2) arm may be read through a (1,4,4)-fitted
+threshold:
+
+| VAL thr | faithful | node recall | ratio |
+|---|---|---|---|
+| 0.99 | 0.6094 | 0.9076 | +0.824 |
+| 0.995 | 0.6487 | 0.8885 | +0.347 |
+| **0.997** | **0.6839** | 0.8469 | **+0.029** |
+| 0.999 | 0.6206 | 0.7100 | −0.450 |
+
+TEST @0.997 → **0.7601** (ratio +0.007).
+
+**What it settles.** 0.997 is confirmed a fourth time, and for the first time on an arm whose *objective*
+differs (`--slack-links`). Optimum and principled operating point coincide on both sets. The constant is a
+property of the grid, not of any one recipe.
+
+**What it refutes.** The arm loses to plain finer co-adapt at the same corrected threshold — VAL 0.6839 vs
+0.6993, TEST 0.7601 vs 0.7950. Same sign on both sets, both clear of the 0.01 floor. Coupling HOCT and
+slack while co-adapting rescues neither component.
+
+**Consequence for the lever list.** This was the one named expensive un-run thing. The 0.945 argument rested
+on variable-appearance and finer decode being *jointly* necessary and only ever tested solo;
+variable-appearance IS SlackRow, refuted solo, meaningful only coupled to HOCT — and that coupling now reads
+NO-GO at head-only/frozen (`rzvw`) AND at co-adapt. The third seat is not empty-because-untested any more.
+It is empty because it was tested. The joint-necessity argument is void on measurement, and the finer seat
+stands at 0.7935 against a champion ~0.9375 with no remaining un-run leg.
+
+Final-2 unchanged: `0947` + `v1329f`.
