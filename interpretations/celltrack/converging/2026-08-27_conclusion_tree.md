@@ -12,6 +12,41 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-22 08:23Z — the detected-crowd arm scored its FIRST epoch for two runs; fixing that bought +0.0988
+
+Once the memory work let the arm run ten epochs, it scored **0.3765**. That number is not a ten-epoch
+number — `edge_predictor_best.pth` had an mtime five minutes after launch. The donor trainer
+(`$PACK/scripts/train_unet_transformer.py:1165`) selects on `score = test_acc * test_recall`, a **detection**
+metric, and this arm freezes the UNet: across all ten epochs `best` printed **0.9957 to four digits**.
+`is_best` fires once, there is no `_last` file, and epochs 2-9 were trained and discarded.
+
+`_edge_selected` in `scratchpad/pmkf_detected_swap.py` now wraps `evaluate` and writes its own checkpoint
+whenever the **edge** loss improves — the only quantity a frozen-detector arm can move. The donor's file is
+left intact so the two selections stay comparable; `pmkf_leg.sh` resumes from the edge-selected one, because
+resuming from the detection-selected one silently discards the previous leg's training.
+
+| | 0.3765 leg | edge-selected leg |
+|---|---|---|
+| MICRO score | 0.3765 | **0.4753** |
+| `44b6_ddf577ad` | 0.1439 | 0.3238 |
+| `6bba_57b7cc1e` | 0.1383 | 0.2388 |
+| scored epoch | 1 | 4 (`test_loss` 0.00343) |
+
+Both matched rows move on the **same denominator**, so this is not a row-count artefact, and +0.0988 is ~5x
+the noise floor. The confound is stated rather than hidden: the leg fixed selection **and** added ~2400 steps
+on top of the 0.3765 weights, so +0.0988 is not attributable to selection alone. The reading both stories
+share is the actionable one — **more steps still buy score; the arm is compute-bound, not data-bound.**
+
+Two things to carry. **A "best checkpoint" ranks the metric the DONOR chose, for the donor's setup** — change
+what trains (freeze, head swap, partial finetune) and that metric may no longer be movable, at which point the
+selector is ranking eval noise. It fails silently: the epoch table looks healthy the whole way. **Check the
+checkpoint's mtime against the launch time before believing a score is the end-of-run number.** Division is
+dead from this arm regardless: `division_jaccard=0.0088`, divFP 19-67 per movie against divTP 0-1.
+
+Leg 3 launched 08:23:43Z on the same config, resuming from the edge-selected weights. Gap to the champion is
+**0.371**; at +0.099/leg that is ~4 legs if the curve held linear, which it will not — the per-leg delta
+halving is the signal to stop buying epochs.
+
 ## NEWS 2026-09-22 07:20Z — the detected-crowd arm was never too big for the card; the head was `e**2` four times
 
 No score in this entry — an ENABLING fix. `vutl` (the HOCT edge head trained on DETECTED candidate nodes
