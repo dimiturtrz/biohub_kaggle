@@ -14,10 +14,15 @@ REPO=external/frontier_ds/biohub-tracking-support-pack-50ep-v1/repo
 METHOD=${METHOD:-synth_real60_bf16}
 PRE=$REPO/weights/${PRE_METHOD:-synth_pre80}/split_0/edge_predictor_best.pth
 LOG=logs/frontier/$METHOD.log
-export USER=local PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True PYTHONWARNINGS=ignore
+export USER=local PYTHONWARNINGS=ignore
+# This arm runs within ~600MiB of the card's 32.6GB, so it is sensitive to its own footprint rather than to the
+# allocator: an earlier read blamed PYTORCH_CUDA_ALLOC_CONF, and the matched control refuted that (the default
+# allocator was slower still, 3.15 s/batch against expandable_segments' 2.3). Set ALLOC to opt back in.
+[[ -z "${ALLOC:-}" ]] || export PYTORCH_CUDA_ALLOC_CONF="$ALLOC"
 
 mkdir -p "$(dirname "$LOG")"
-.venv/Scripts/python tools/frontier_train.py --frontier-repo "$REPO" --init-unet "$PRE" --resume \
+# shellcheck disable=SC2086 # FLAGS carries whitespace-separated passthrough flags, e.g. FLAGS=--no-bf16
+.venv/Scripts/python tools/frontier_train.py --frontier-repo "$REPO" --init-unet "$PRE" --resume ${FLAGS:-} \
   --method "$METHOD" --data-dir D:/data/volumetric/microscopy/raw/biohub_cell_tracking/train \
   --splits D:/data/volumetric/microscopy/processed/real_holdout6_splits.json \
   --split 0 --epochs "${EPOCHS:-60}" --batch-size 8 --single-gpu --num-workers 8 >> "$LOG" 2>&1
