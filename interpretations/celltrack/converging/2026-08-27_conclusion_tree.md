@@ -12,6 +12,37 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-22 10:48Z — the two-pass ILP lever is two-thirds already-refuted, and the live third was never the plan
+
+The tree names **two-pass tracklet ILP** as one of the three jointly-necessary 0.945 levers, and `wfh5` is the
+bead that would build it. Auditing that bead's own build plan before writing a line: pass-2 is specified as
+*"solve gap/division edges over the contracted graph"*, and both of those legs are closed already.
+
+- **gap leg — dead by construction.** E55: every GT edge is **dt=1**. A contracted `t-1 → t+1` bridge cannot
+  MATCH a GT edge at any weight, so no amount of solver quality makes it score. Not a tuning question.
+- **division leg — dead.** E61 + `hq93`: division recall is unreachable from post-processing. `division_cost`
+  produced the first non-`fp` movement ever (fn 24 → 21) and still cost −0.0027 / −0.0018 on sets where
+  `div_jac = 0.0000` in every arm.
+- **dt=1 re-selection leg — LIVE, and the bead never named it.** Contracting a high-confidence tracklet to a
+  meta-node changes what a dt=1 association *costs*: a swap that reads as one edge locally gets priced against
+  a 60-frame tracklet once contracted. That is a selection change on dt=1 edges, so it is metric-visible — and
+  it is exactly where the local signal points (native inverted-fraction 1.00 → 0.61 with selection **flat at
+  0.6081**: the discrimination exists and selection does not spend it).
+
+Two things fall out. First, the donor's 0.926 → 0.950 carry leans on multi-frame gaps **its** GT has and ours
+does not — the same shape as *donor constants don't transplant without their component*, one level up: a donor
+*mechanism* doesn't transplant without the donor's GT topology. Second, the solve is not in anything we
+control — `champion_submission.py:1467` only does `IndexedRXGraph.from_geff`, there is no solver call in the
+extract — so pass-1 stays library-internal and pass-2 can only act on the output graph.
+
+`wfh5` re-scoped accordingly: contraction + dt=1 re-selection only, and the first kernel run is an
+**instrument** (counters for tracklets contracted, meta-nodes, and dt=1 edges whose selection *flipped* vs
+single-pass, with a no-op fallback) rather than a scoring attempt. If zero edges flip, the axis closes on one
+run instead of on a number nobody can read. Cost of this audit: zero runs; it saved a blind 3-4h kernel run
+aimed at two dead legs.
+
+---
+
 ## NEWS 2026-09-22 10:12Z — E67: the hedge's decorrelation is 0.861 node-Jaccard, and it was measured, not argued
 
 Full write-up: [E67](../2026-09-22_hedge_decorrelation_measured.md). Three findings, in the order they came:
