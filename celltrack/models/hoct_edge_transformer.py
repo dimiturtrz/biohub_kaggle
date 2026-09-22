@@ -33,6 +33,7 @@ from typing import cast, override
 import torch
 from jaxtyping import Float
 from torch import Tensor, nn
+from torch.utils.checkpoint import checkpoint
 
 _AXES = 3  # RoPE rotates the head dimension over (z, y, x)
 _ROPE_PAIR = 2  # a rotary "pair" is two feature dims rotated together
@@ -46,6 +47,9 @@ _UNBATCHED_NDIM = 2  # a bare (N, D) feature tensor, promoted to (1, N, D) for t
 # a time, sized so one tile stays an order of magnitude under that headroom while the dense case still needs
 # only ~13 slices. Below the budget the arithmetic yields a single slice, so small frames keep the flat path.
 _SCORE_TILE_BYTES = 256 * 1024**2
+# Dense planes the clamped parametric segment-distance solve holds live at once (a, e, f, b, c, denom, s, t,
+# t_clamped and the where's zeros): the tile budget is per-plane, so the bias build asks for this many.
+_BIAS_TEMPORARIES = 10
 
 
 class HoctEdgeTransformer(nn.Module):
@@ -156,28 +160,53 @@ class HoctEdgeTransformer(nn.Module):
             )
 
         @staticmethod
-        def attention_rows(count: int, n_heads: int, itemsize: int) -> int:
-            """Query rows whose ``(n_heads, rows, count)`` score tile fits the budget — at least one, at most all."""
-            return max(1, min(count, _SCORE_TILE_BYTES // max(1, n_heads * count * itemsize)))
+        def attention_rows(count: int, planes: int, itemsize: int) -> int:
+            """Rows whose ``(planes, rows, count)`` tile fits the budget — at least one, at most all.
+
+            ``planes`` is how many ``(rows, count)`` matrices are live at once: the head count for an
+            attention tile, the temporary count for the pairwise-bias solve that feeds it.
+            """
+            return max(1, min(count, _SCORE_TILE_BYTES // max(1, planes * count * itemsize)))
+
+        def _attend(  # noqa: PLR0913 — the checkpointed tile takes its whole closure as arguments
+            self,
+            q: Float[Tensor, "h r dh"],
+            k: Float[Tensor, "h e dh"],
+            v: Float[Tensor, "h e dh"],
+            magnitude: Float[Tensor, "h 1 1"],
+            dline: Float[Tensor, "r e"],
+            neighbour: Float[Tensor, "r e"],
+        ) -> Float[Tensor, "h r dh"]:
+            """One tile of query rows attended over every edge — the unit the backward pass recomputes."""
+            scores = torch.einsum("hid,hjd->hij", q, k) / self.head_dim**0.5
+            scores = scores + magnitude * dline.unsqueeze(0) + neighbour.unsqueeze(0)
+            return torch.einsum("hij,hjd->hid", scores.softmax(dim=-1), v)
 
         @override
         def forward(
             self, edges: Float[Tensor, "e d"], dline: Float[Tensor, "e e"], neighbour: Float[Tensor, "e e"]
         ) -> Float[Tensor, "e d"]:
-            """Attend each edge to its spatial neighbours, biased by the segment distance to each one."""
+            """Attend each edge to its spatial neighbours, biased by the segment distance to each one.
+
+            The ``(h, e, e)`` score matrix is the whole memory story of this block: at the ~21k gated edges of
+            the dense-crowd regime it is 14 GiB, and the backward pass would hold the softmax of it. So the
+            rows are attended a tile at a time AND each tile is recomputed in backward rather than stored —
+            trading roughly a third more attention compute for a peak that no longer scales with ``e**2``.
+            """
             count, _ = edges.shape
             qkv = self.qkv(self.norm1(edges)).view(count, 3, self.n_heads, self.head_dim)
             q, k, v = qkv.permute(1, 2, 0, 3)  # each (h, e, head_dim)
             sign = cast(Tensor, self.sign)  # a registered buffer is Tensor | Module to the checker
             magnitude = sign.squeeze(0) * torch.nn.functional.softplus(self.alpha.squeeze(0))  # (h, 1, 1)
-            attended = torch.empty_like(q)
             rows = self.attention_rows(count, self.n_heads, q.element_size())
+            recompute = torch.is_grad_enabled() and edges.requires_grad
+            tiles: list[Tensor] = []
             for lo in range(0, count, rows):
                 hi = min(lo + rows, count)
-                scores = torch.einsum("hid,hjd->hij", q[:, lo:hi], k) / self.head_dim**0.5
-                scores = scores + magnitude * dline[lo:hi].unsqueeze(0) + neighbour[lo:hi].unsqueeze(0)
-                attended[:, lo:hi] = torch.einsum("hij,hjd->hid", scores.softmax(dim=-1), v)
-            attended = attended.transpose(0, 1).reshape(count, -1)
+                args = (q[:, lo:hi], k, v, magnitude, dline[lo:hi], neighbour[lo:hi])
+                tile = checkpoint(self._attend, *args, use_reentrant=False) if recompute else self._attend(*args)
+                tiles.append(cast(Tensor, tile))
+            attended = torch.cat(tiles, dim=1).transpose(0, 1).reshape(count, -1)
             edges = edges + self.out(attended)
             return edges + self.mlp(self.norm2(edges))
 
@@ -208,6 +237,29 @@ class HoctEdgeTransformer(nn.Module):
         s = ((b * t_clamped - c) / a.clamp_min(_EPS)).clamp(0.0, 1.0)
         closest = (p0 + s.unsqueeze(-1) * d1) - (q0 + t_clamped.unsqueeze(-1) * d2)
         return closest.norm(dim=-1)
+
+    def _edge_biases(
+        self, p0: Float[Tensor, "e 3"], p1: Float[Tensor, "e 3"]
+    ) -> tuple[Float[Tensor, "e e"], Float[Tensor, "e e"]]:
+        """The two ``(e, e)`` pairwise biases the edge blocks read: segment distance, and the locality mask.
+
+        Both are functions of the COORDINATES alone — no parameter feeds them, so they carry no gradient and
+        the parametric solve's dozen temporaries have no reason to stay alive. Built one row tile at a time
+        under ``no_grad``, the peak is the two results plus a single tile, instead of a dozen dense planes
+        (which is the 1.70 GiB allocation that OOMed the detected-crowd arm at ~21k gated edges).
+        """
+        count = p0.shape[0]
+        midpoint = 0.5 * (p0 + p1)
+        dline = p0.new_empty((count, count))
+        neighbour = p0.new_empty((count, count))
+        rows = self._EdgeAttentionBlock.attention_rows(count, _BIAS_TEMPORARIES, p0.element_size())
+        with torch.no_grad():
+            for lo in range(0, count, rows):
+                hi = min(lo + rows, count)
+                dline[lo:hi] = self._segment_distance(p0[lo:hi], p1[lo:hi], p0, p1)
+                gap = torch.cdist(midpoint[lo:hi], midpoint)
+                neighbour[lo:hi] = torch.where(gap <= self.neighbour_um, 0.0, _NEG_INF)
+        return dline, neighbour
 
     def __init__(  # noqa: PLR0913 — mirrors SimpleNodeTransformer's constructor kwargs; a drop-in must match them
         self,
@@ -318,9 +370,7 @@ class HoctEdgeTransformer(nn.Module):
             return out
         edges = self.edge_in(torch.cat([node_t[src_idx], node_t1[tgt_idx]], dim=-1))  # (e, hidden)
         p0, p1 = phys_t[src_idx], phys_t1[tgt_idx]  # segment start = source, end = target, in micrometres
-        dline = self._segment_distance(p0, p1, p0, p1)  # (e, e)
-        midpoint = 0.5 * (p0 + p1)
-        neighbour = torch.where(torch.cdist(midpoint, midpoint) <= self.neighbour_um, 0.0, _NEG_INF)
+        dline, neighbour = self._edge_biases(p0, p1)
         for block in self.edge_blocks:
             edges = block(edges, dline, neighbour)
         # out holds float32 _NEG_INF sentinels (from float32 coords); under AMP the head computes in bf16, so

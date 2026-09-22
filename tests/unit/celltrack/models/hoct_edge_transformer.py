@@ -21,7 +21,7 @@ import torch
 
 from celltrack.models import hoct_edge_transformer
 from celltrack.models.edge_transformer import EdgeTransformerScorer
-from celltrack.models.hoct_edge_transformer import _NEG_INF, HoctEdgeTransformer
+from celltrack.models.hoct_edge_transformer import _BIAS_TEMPORARIES, _NEG_INF, HoctEdgeTransformer
 from celltrack.models.joint_model import _N_BLOCKS, _N_HEADS, JointModel
 from celltrack.models.temporal_unet_detector import TemporalUNetDetector
 from celltrack.training.joint_checkpoint import JointCheckpoint
@@ -123,6 +123,22 @@ def test_attention_rows() -> None:
     assert HoctEdgeTransformer._EdgeAttentionBlock.attention_rows(8, _SMALL_HEADS, 4) == 8
     over_budget = hoct_edge_transformer._SCORE_TILE_BYTES  # one row of this many edges exceeds the whole budget
     assert _rows(over_budget, _SMALL_HEADS, 4) == 1
+
+
+def test_edge_biases(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The tiled, no-grad bias build must equal the dense one it replaces — including across several tiles."""
+    torch.manual_seed(0)
+    head = _head()
+    p0, p1 = torch.rand(12, 3) * 20, torch.rand(12, 3) * 20
+    expected_dline = HoctEdgeTransformer._segment_distance(p0, p1, p0, p1)
+    midpoint = 0.5 * (p0 + p1)
+    expected_neighbour = torch.where(torch.cdist(midpoint, midpoint) <= head.neighbour_um, 0.0, _NEG_INF)
+
+    monkeypatch.setattr(hoct_edge_transformer, "_SCORE_TILE_BYTES", _BIAS_TEMPORARIES * 12 * 4 * 5)  # 5 rows/tile
+    dline, neighbour = head._edge_biases(p0, p1)
+    torch.testing.assert_close(dline, expected_dline)
+    torch.testing.assert_close(neighbour, expected_neighbour)
+    assert not dline.requires_grad  # coordinate-only, so no autograd graph is kept alive for it
 
 
 def test_segment_distance() -> None:
