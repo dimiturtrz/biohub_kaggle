@@ -54,10 +54,21 @@ _SLOW_MATCH = """            order = min_d.argsort()
 _FAST_MATCH = "            matched = greedy_unique_match(min_d, min_i, n_gt, max_match_distance)\n"
 
 _ENCODE = "        unet_out, det_logits = model.encode(imgs)\n"
+# unet_out is (B, W, C, *spatial) and dwarfs the W single-channel det_logits, so recasting it to fp32 kept a
+# second copy of the run's largest tensor live and pushed the arm into the card's wall. It is only ever read by
+# _index_features, a gather that is happy in bf16; the fp32 boundary moves down to the small indexed features.
 _ENCODE_BF16 = """        with torch.autocast("cuda", dtype=torch.bfloat16, enabled=imgs.is_cuda):
             unet_out, det_logits = model.encode(imgs)
-        unet_out = unet_out.float()
         det_logits = [logit.float() for logit in det_logits]
+"""
+
+_INDEX = """            unet_feat = model._index_features(
+                unet_out[:, i], det_c, det_m,
+            )
+"""
+_INDEX_BF16 = """            unet_feat = model._index_features(
+                unet_out[:, i], det_c, det_m,
+            ).float()
 """
 
 _UNGUARDED_STEP = """        optimizer.zero_grad()
@@ -160,7 +171,7 @@ def patch_step_guard(trainer: ModuleType, *, bf16: bool) -> None:
     source = inspect.getsource(trainer.train_epoch)
     replacements = [(_UNGUARDED_STEP, _GUARDED_STEP), (_TIMING, _TIMING_SKIPPED)]
     if bf16:
-        replacements.append((_ENCODE, _ENCODE_BF16))
+        replacements.extend([(_ENCODE, _ENCODE_BF16), (_INDEX, _INDEX_BF16)])
     for old, new in replacements:
         if old not in source:
             raise RuntimeError(f"frontier train_epoch changed; this patch no longer applies:\n{old}")
