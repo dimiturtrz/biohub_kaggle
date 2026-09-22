@@ -64,6 +64,35 @@ center-offset head, which a CPU cannot reach.
 Cost of this audit: **zero runs**, and it retired a P1 build plus the blind 3-4h kernel run it would have
 opened with.
 
+### removing one seat voids the joint-necessity argument, in both directions
+
+The 0.945 stack was never three toppers: the donor's ablation says two-pass tracklet ILP + variable-appearance
++ finer decode are **jointly necessary**, and we have only ever tested them solo. That framing is what kept
+three solo refutations from closing the campaign. Pull one seat out and the argument stops working *as an
+argument* — it cannot be silently renumbered to "two remaining levers".
+
+Worth stating what the other two actually are, because the list flattered them:
+
+- **variable-appearance IS SlackRow** (parental softmax `1 + Σexp`), already **REFUTED SOLO** at −0.0107,
+  i.e. inside the noise floor. It is not a separate topper at all: its stated mechanism is the *recall-cost
+  escape* for a sharp edge head, so it only means anything **coupled** to HOCT.
+- That coupling has been tested once — `rzvw`, head-only on a frozen finer122 detector — and it read
+  **NO-GO** (train flat at proxy 0.6187, faithful 0.767 against champion 0.921). Head-only/frozen is a
+  harness-limited test, so the coupling is *not* refuted outright; it is untested at co-adapt.
+
+Two readings, and honesty requires carrying both. (a) The donor's carry leans on a leg our corpus does not
+have, so their 0.945 is not reachable by their route here — the campaign is closed as a *replication*.
+(b) Alternatively our corpus is simply *easier* on the solver axis (dt=1-only GT, wrong-association = 0),
+which would mean the remaining weight sits on finer decode and the HOCT×slack coupling, not that the ceiling
+moved. Nothing measured so far distinguishes these, and the only experiment that would is the co-adapt
+coupling arm — which needs the card and a real training budget, neither of which is available or justified
+at 7 days out with 0.947 banked.
+
+**Practical consequence: no GPU arm is justified right now, and that is a finding, not an idleness.** The
+shipped 0.947 stands, the remaining spend goes to the graded LB pair already in flight and the final-2
+selection. The lever list should be read as *empty of cheap moves*, with the co-adapt coupling arm as the
+one named, expensive, un-run thing — not as two levers waiting to be picked up.
+
 ---
 
 ## NEWS 2026-09-22 10:12Z — E67: the hedge's decorrelation is 0.861 node-Jaccard, and it was measured, not argued
