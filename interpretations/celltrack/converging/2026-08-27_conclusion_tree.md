@@ -12,6 +12,31 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-22 09:33Z — the harvest diff was reading half a kernel, and six E66 constants were fallbacks
+
+Every kernel carries each constant **twice** — an `os.environ[KEY] = value` pin and the default of the
+`os.environ.get(KEY, default)` that consumes it — and the pin wins. `tools/kernel_env_diff.py` parsed only
+pins. Consequences, both now fixed in `7c6326e`:
+
+- **A donor that ships its method as consumer defaults looked empty.** `biohub-v1-infer` reads ~70 keys
+  while assigning 8, and reported `theirs=8`, one delta, "no harvest". Parsing both layers: our own visible
+  surface **64 → 113** keys, v1-infer's constant deltas **1 → 31**.
+- **E66 quoted six fallbacks as though they were the champion's pins.** `SAFE_DIV_MAX_UM` 4.7 vs the pinned
+  **9.0**, sister 7.2 vs **14.0**, symmetry tau 0.0 vs **0.6**, `PP_SELECT_MARGIN` 0.002 vs **0.001**. The
+  counters and the in-flight arms are untouched (counters are measured; arms write pins). The mechanism
+  gets *stronger*: the geometry gates are already wide, and the champion pinned the deepcenter veto
+  **above** its own consumer fallback (0.12 → 0.20), so the 0.15 arm walks back toward the library's value
+  instead of inventing one.
+- The tool now prints `PIN SHADOWS A DIFFERENT FALLBACK` — **41 keys** in the champion shadow this way.
+  Never quote a `get` default as what ran.
+
+**What did NOT change: evg0942 re-run through the fixed parser still shows zero candidate elements.** The
+repeated "public kernels are our champion downgraded" verdict (E60, E66) was real, not a tool artifact.
+v1-infer's 31 deltas are not donor information either — it speaks our own vocabulary (`SECONDARY_LINK_MODE`,
+`GAP2_*`), so it is an *ancestor of ours*, and its constants are our own older settings.
+
+---
+
 ## NEWS 2026-09-22 09:22Z — E66: the safe-division axis is GATE-bound not budget-bound, and two graded LB arms are flying
 
 `kaggle kernels output` on the banked champion hands over `run_stats.csv` — every safe-division counter,
