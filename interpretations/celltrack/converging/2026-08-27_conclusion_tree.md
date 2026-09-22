@@ -12,6 +12,33 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-22 10:12Z — E67: the hedge's decorrelation is 0.861 node-Jaccard, and it was measured, not argued
+
+Full write-up: [E67](../2026-09-22_hedge_decorrelation_measured.md). Three findings, in the order they came:
+
+- **The hedge was invisible to the settings diff** — `celltrack-public-v1329f.ipynb` is a 68k wrapper that
+  base64+gunzips a **175k payload** and shells out. `theirs=0`, guard refused (correctly). Decoded, the diff
+  is small: they add only plumbing keys, `SAFE_DIV_THRESHOLD` 0.20 vs **0.25**, and we add
+  `DEEPCENTER_TTA` / `SECONDARY_EDGE_FEATURE_TTA` / `VALIDATOR_*` / `PPSWEEP_*`. **Decode a blob kernel
+  before concluding anything about it.**
+- **The foreign graft is real but guarded off on a quarter of the corpus.** v1329f mounts
+  `josephadamski91/biohub-v1327-w3-real-model` with frame-local mean/std alignment and clamp [0.5, 2.0]; a
+  retention guard (`minimum_retention 0.9`, count-based) falls back to `untouched_v1290_primary_d4`. Movie
+  `44b6_0b24845f`: **98/100 frames fell back**. Other three: 0 fallbacks, median retention 0.987–1.002. Where
+  the graft moved the count, it was vetoed; where allowed, it barely moved the count — and a *count* ratio
+  near 1.0 does not prove the sets match, so the graft's real share stays unresolved.
+- **The overlap number I first computed was my own harness artefact.** Exact-coordinate matching gave node
+  J **0.547** / edge J **0.207**, stable under rounding — and wrong, because detections are *displaced*
+  (recall 0.824 @2.87µm vs 0.9863 @7µm). With µm tolerance: node J **0.7274 @1µm · 0.8610 @2.87µm ·
+  0.9299 @7µm**. The edge 0.207 was the same artefact squared (0.547² ≈ 0.30).
+
+**Net: final-2 stays `0947` + `v1329f`** — a genuinely different detection field (~7% of nodes unshared at
+7µm, ~14% at 2.87µm), not a near-duplicate that dies with the champion. But the decorrelation is
+**detector + inference stack jointly**, with the graft confounded against the TTA/validator/ppsweep deltas.
+**Never measure node overlap on exact coordinates in this project — always a µm tolerance.**
+
+---
+
 ## NEWS 2026-09-22 09:33Z — the harvest diff was reading half a kernel, and six E66 constants were fallbacks
 
 Every kernel carries each constant **twice** — an `os.environ[KEY] = value` pin and the default of the
