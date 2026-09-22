@@ -2626,3 +2626,37 @@ is the selector's own ruler. (`--downsample` is rejected by `joint_eval` — the
 
 The seat's bound is untouched by all of this: still ~0.14 short of the champion, still not a submission path,
 final-2 still `0947` + `v1329f`.
+
+### ADDENDUM 20:50Z — 0.997 is a grid constant; correcting the selector buys a validation number, not a seat
+
+Warm arm `finer122_coadapt_thr997` ran the obvious follow-up: train the finer seat with `--eval-threshold
+0.997` so the checkpoint selector reads the arm's own operating point instead of a (1,4,4)-fitted one. It
+peaked at proxy **0.7003** at epoch 1.33 and then declined for six evals — the same peak-early-then-decline
+shape this family showed twice before — and early-stopped with the peak saved.
+
+Free re-sweep of that peak checkpoint, both movie sets, zero training:
+
+| threshold | VALIDATION (dense four) | ratio |
+|---|---|---|
+| 0.99 | 0.6190 | +0.973 |
+| 0.995 | 0.6606 | +0.500 |
+| **0.997** | **0.6993** | **+0.124** |
+| 0.999 | 0.6918 | −0.289 |
+
+TEST (sparse four) @0.997: **0.7950** (node recall 0.9580, ratio +0.052).
+
+**What this settles.** The optimum is 0.997 on *both* movie sets and in *both* states — the untrained graft's
+successor at init (0.6567 VAL / 0.7935 TEST) and this trained peak. So 0.997 is a property of the **(1,2,2)
+grid**, not something the training fitted to itself; it transfers, and it is the right constant to carry into
+any future arm on this grid. The density ratio at the optimum moves only +0.102 → +0.124, i.e. once the
+threshold is right the head does not recalibrate further.
+
+**What it refuses.** The gain is **split across the two sets**: +0.0426 on the validation four (the set the
+selector reads) and **+0.0015 on the test four** — inside the noise floor. Training through a corrected ruler
+bought a validation number. It did not move the seat: 0.7950 vs the champion's ~0.9375 on the same proxy, the
+same ~0.14 as before. The finer seat has now been measured at its own operating point, in its own converged
+state, selected through its own ruler — every harness objection I raised against its recorded kills has been
+answered — and it is still not competitive. That is the honest end of this thread: the kills were read
+through a bad constant, the constant is now known and transferable, and fixing it does not produce a seat.
+
+Final-2 unchanged: `0947` + `v1329f`.
