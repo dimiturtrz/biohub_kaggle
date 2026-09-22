@@ -12,6 +12,46 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-22 07:20Z — the detected-crowd arm was never too big for the card; the head was `e**2` four times
+
+No score in this entry — an ENABLING fix. `vutl` (the HOCT edge head trained on DETECTED candidate nodes
+rather than the GT-sparse ~17/frame it had been getting) OOMed three times in a row, and each traceback was a
+different allocation. The block turns out to hold **four separate `e**2` terms**, each invisible until the
+one in front of it was fixed:
+
+| term | fix | commit |
+|---|---|---|
+| the `(h, e, e)` score matrix | attend a tile of query rows at a time | `fa7b61d` |
+| the tiles' **retained softmax** — tiling alone does NOT help, every tile's output is kept | recompute each tile in backward (`torch.utils.checkpoint`) | `74cc438` |
+| the parametric segment-distance solve's ~10 dense planes | row-tiled under `no_grad` — both biases are functions of the COORDINATES alone, so no gradient flows through them | `74cc438` |
+| the two `(e, e)` **results**, 3.64 GiB each in fp32 | store each at the width its consumer reads: `dline` fp16 (a µm distance scaling a learned bias), `neighbour` **bool** (a hard in/out test, not a plane of `0.0`/`-1e9`); widen inside `_attend` at tile size | `95e31dd` |
+
+One block forward+backward at the true edge count: **7.3 GiB of biases alone → 3.21**, block peak **3.93 GiB**.
+The arm now sits at **12507 MiB** of the 15.92 GiB allowed and trains at 1.05 s/it.
+
+**The tracebacks also re-priced the regime.** The 3.64 GiB allocation is `count**2 * 4`, so the detected-crowd
+pass gates **~31,200 candidate edges per frame pair**, not the ~21k the tiling budget had been sized against —
+**1.5x low**. That number was free, printed in an error message, and it is the honest measure of what
+"detected-crowd" means next to the ~17 GT nodes/frame the head used to train on
+(`celltrack-pmkf-trains-gt-sparse-not-detected-crowd`).
+
+Two lessons worth carrying past this arm. **An OOM traceback names ONE allocation site — it is not a size
+budget for the layer.** An `e**2` layer has an `e**2` term per tensor it builds, and each is a separate fix;
+stopping after the first one only moves the traceback. And **three of the four needed no layout change at
+all** — only the observation that memory was being kept for a backward pass that did not want it, or at a
+width the consumer never reads. Checking what the BACKWARD retains, and whether the tensor carries a gradient
+at all, was worth more here than any tiling arithmetic.
+
+**Still open, and it is a compute lever as well as a memory one:** `neighbour` is a HARD local mask, so the
+dense `(e, e)` attention is mostly wasted work in exactly the regime this head exists for. Tiling + recompute
++ narrow storage is the stopgap; local/blocked attention is the fix.
+
+Arm is running (10 epochs x 600 iters, resumed from step 1200 — `pmkf_leg.sh` does export `PMKF_RESUME`; the
+bead's "no resume support" note was scoped to a different script). Gate is the script's own: if the dense-row
+`edge_jac` lifts off at all, commit full.
+
+---
+
 ## NEWS 2026-09-22 00:05Z — the three pending arms scored, and two of them are EXACT ties
 
 | submission | public LB | vs base 0.947 |
