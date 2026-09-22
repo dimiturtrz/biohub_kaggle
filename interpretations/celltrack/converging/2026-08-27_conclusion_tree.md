@@ -96,6 +96,43 @@ mean what they say. Standing rule earned the hard way — [[celltrack-constant-a
 constant fitted at one grid is not a constant at another, and reading an arm through it is a harness fault,
 not a result.**
 
+### ADDENDUM 15:20Z — the audit is complete, and the selector that stopped these runs was the same constant
+
+Every finer-grid checkpoint on disk, re-read at a grid-correct threshold. **Nothing beats the converged
+co-adapt arm**, and HOCT does not help at (1,2,2) — every HOCT-finer variant reads below plain co-adapt:
+
+| checkpoint | best | at |
+|---|---|---|
+| `finer122_coadapt_long` | **0.7935** | 0.997 |
+| `finer122_hoct_headonly` | 0.7738 | 0.997 (0.7228 @0.99 — still rising at the swept edge) |
+| `finer122_coadapt_v3` | 0.7528 | 0.99 |
+| `hoct_finer122_nce` | 0.6960 | 0.99 |
+| `finer122_hoct_confusor` | 0.6903 | 0.99 |
+| `hoct_finer122_converge` | 0.5935 | 0.99 |
+| `finer122_joint_nce` | 0.0602 | 0.99 — **dead run**, node recall 0.065 (collapsed supervision, not a weak arm) |
+
+**And the mis-calibrated constant did not only distort the read-out — it ended the runs.** The converged
+arm's log tail: `early stop: 6 evals no gain (step 78104, best 0.6150)`, at **epoch 4.33 of 8**, with 1.78h
+of schedule left. That selection metric is the proxy read at the shipped 0.96875, which is exactly where
+this arm's curve is flat (0.6442 @0.96875 → 0.6530 @0.98 — a whole grid step for +0.009). The selector
+could not see the arm improving, so it called six windows of real progress "no gain" and stopped. The flag
+to avoid this already exists — `--eval-threshold`, `joint_cli.py:182` — and defaults to
+`TrackerConfig.shipped().threshold`. **The whole finer family was both selected and early-stopped through a
+blind ruler.** Same class as [[celltrack-checkpoint-selection-read-a-frozen-metric]]: freeze or blind the
+selection metric and the run optimises something the checkpoint never records.
+
+Resuming that arm under `--eval-threshold 0.997` needed a one-line gap closed first: the *warm* load paths
+already tolerate a snapshot predating the center-point `embed_head` (`joint_model.py:161`,
+`temporal_unet_detector.py:302,320`) but the *resume* path loaded strict, so no pre-`embed_head` snapshot
+could be continued at all. `joint_checkpoint._restore_head` now grants the same tolerance, one-directional:
+a missing key keeps the live head's own init, an **unexpected** key still raises, because that one means a
+different architecture rather than an older snapshot.
+
+**The bound is unchanged and this does not move it.** The resumed arm is an **instrument**, not a ship
+candidate: 0.7935 vs ~0.9375 is 0.14, and ~1.8h of training does not close 0.14. It answers one question —
+whether the finer seat's history was truncated by the blind selector, or whether the arm had genuinely
+converged. Final-2 stays `0947` + `v1329f`.
+
 ---
 
 ## NEWS 2026-09-22 13:52Z — the public ceiling is BELOW us, and the LB top is not reachable from any kernel

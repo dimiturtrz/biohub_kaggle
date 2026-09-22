@@ -12,16 +12,21 @@ Both carry the SAME model payload — both heads plus the shape needed to rebuil
 does not: the optimiser, the projection head, the step reached and the best score so far.
 """
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
 import torch
-from torch import nn
+from torch import Tensor, nn
 
 from celltrack.models.joint_model import JointModel
 
 RESUME_SUFFIX = ".resume.pt"
+
+_LOGGER = logging.getLogger(__name__)
+
+_UNEXPECTED_KEYS = "snapshot carries keys %s has no place for: %s"
 
 
 @dataclass(frozen=True)
@@ -100,6 +105,23 @@ class JointCheckpoint:
             path,
         )
 
+    def _restore_head(self, module: nn.Module, state: dict[str, Tensor]) -> None:
+        """Load a snapshot that may predate one of the module's own heads, keeping that head's fresh init.
+
+        The same tolerance the warm-start paths already grant (`JointModel.from_checkpoint`,
+        `TemporalUNetDetector.from_pack`): the center-point `embed_head` was added after some snapshots were
+        written, and a run resuming one of those must keep that head's initialisation rather than refuse the
+        snapshot outright. The tolerance is one-directional — a key the snapshot carries and the module has
+        no place for means the two are different architectures, and that still raises.
+        """
+        incompatible = module.load_state_dict(state, strict=False)
+        if incompatible.unexpected_keys:
+            raise RuntimeError(_UNEXPECTED_KEYS % (type(module).__name__, sorted(incompatible.unexpected_keys)))
+        if incompatible.missing_keys:
+            _LOGGER.info(
+                "resume: %s keeps its own init for %s", type(module).__name__, sorted(incompatible.missing_keys)
+            )
+
     def restore(
         self, path: Path, model: JointModel, trained: dict[str, nn.Module], optimization: OptimizationState
     ) -> RunProgress:
@@ -110,8 +132,9 @@ class JointCheckpoint:
         # eager). `align_state_to` remaps the snapshot onto whatever wrapping the target now has — the fix is
         # direction-agnostic, unlike a blind strip which only served an eager target.
         align = JointModel._align_state_to  # noqa: SLF001 — the pack's own key-remap, shared with from_checkpoint
-        model.detector.load_state_dict(align(model.detector, state["detector_state"]))
-        model.transformer.load_state_dict(align(model.transformer, state["transformer_state"]))
+        detector, transformer = model.detector, model.transformer
+        self._restore_head(detector, align(detector, state["detector_state"]))
+        self._restore_head(transformer, align(transformer, state["transformer_state"]))
         # A snapshot written before an auxiliary module existed (the contrastive head, the link objective) or by
         # a parameter-free form carries no entry or an empty one; a run resuming it keeps that module's own init
         # — projecting nothing, or a fresh slack scalar that re-calibrates on its first batch.

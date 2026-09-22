@@ -3,6 +3,7 @@
 from pathlib import Path
 from typing import cast
 
+import pytest
 import torch
 from torch import Tensor, nn
 
@@ -91,3 +92,35 @@ def test_restore(tmp_path: Path):
     assert progress == RunProgress(done=500, best=0.9)
     assert into.value == 7.0
     assert torch.equal(cast(Tensor, restored.detector.weight), cast(Tensor, saved.detector.weight))
+
+
+def test_restore_keeps_own_init_for_a_head_the_snapshot_predates(tmp_path: Path):
+    """A snapshot written before one of the module's heads existed resumes, keeping that head's fresh init.
+
+    The center-point `embed_head` was added after some snapshots were written; refusing those would strand
+    every run that predates it, so the missing key falls back to the live module's own initialisation.
+    """
+    path = tmp_path / "run.resume.pt"
+    _checkpoint().save_snapshot(path, _model(), {}, _Optimization(), RunProgress(done=10, best=0.5))
+    state = torch.load(path, weights_only=False)
+    dropped = state["detector_state"].pop("bias")
+    torch.save(state, path)
+
+    restored = _model()
+    kept = cast(Tensor, restored.detector.bias).clone()
+    _checkpoint().restore(path, restored, {}, _Optimization())
+
+    assert not torch.equal(kept, dropped)
+    assert torch.equal(cast(Tensor, restored.detector.bias), kept)
+
+
+def test_restore_rejects_a_snapshot_from_a_different_architecture(tmp_path: Path):
+    """A key the module has no place for is a mismatch, not an older snapshot, and still raises."""
+    path = tmp_path / "run.resume.pt"
+    _checkpoint().save_snapshot(path, _model(), {}, _Optimization(), RunProgress(done=10, best=0.5))
+    state = torch.load(path, weights_only=False)
+    state["detector_state"]["head_from_another_arch"] = torch.zeros(2)
+    torch.save(state, path)
+
+    with pytest.raises(RuntimeError, match="no place for"):
+        _checkpoint().restore(path, _model(), {}, _Optimization())
