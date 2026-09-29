@@ -1,4 +1,4 @@
-"""Fork the 0947 champion kernel with an additive cytokinesis-rescue post-link cell.
+"""Fork a public kernel with an additive cytokinesis-rescue post-link cell.
 
 The donor element is step 2 of the V50 post-link layer carried (and discarded) by
 `celltrack-public-v1329f`: a physically gated cytokinesis detector that proposes a second
@@ -10,6 +10,9 @@ transplanted: existing edges, including existing forks, are never touched.
 `min_nodes` is the donor's density precondition, fitted to the donor's films. It is not one
 of the physical gates; on the 0947 output it admits one movie of four (70290 nodes) and
 yields 13 proposals, against 43 with the precondition dropped.
+
+The rescue reads and rewrites `/kaggle/working/submission.csv`, so it composes with any base
+kernel that writes one: `--base` names the base kernel directory under `kaggle/kernels/`.
 """
 
 from __future__ import annotations
@@ -20,7 +23,7 @@ import json
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-BASE_KERNEL = REPO / "kaggle" / "kernels" / "celltrack-public-0947"
+KERNELS = REPO / "kaggle" / "kernels"
 
 RESCUE_CELL = """
 # ==============================================================================
@@ -144,9 +147,10 @@ print(f'CYTOKINESIS RESCUE: added {{_added_total}} edges (MIN_NODES={{MIN_NODES}
 """
 
 
-def build(tag: str, min_nodes: int) -> Path:
-    notebook = json.loads((BASE_KERNEL / "celltrack-public-0947.ipynb").read_text(encoding="utf-8"))
-    metadata = json.loads((BASE_KERNEL / "kernel-metadata.json").read_text(encoding="utf-8"))
+def build(base: str, tag: str, min_nodes: int) -> Path:
+    base_dir = KERNELS / base
+    metadata = json.loads((base_dir / "kernel-metadata.json").read_text(encoding="utf-8"))
+    notebook = json.loads((base_dir / metadata["code_file"]).read_text(encoding="utf-8"))
 
     forked = copy.deepcopy(notebook)
     forked["cells"].append(
@@ -159,12 +163,12 @@ def build(tag: str, min_nodes: int) -> Path:
         }
     )
 
-    slug = f"celltrack-public-0947-{tag}"
+    slug = f"{base}-{tag}"
     metadata["id"] = f"dimiturnt/{slug}"
     metadata["title"] = slug
     metadata["code_file"] = f"{slug}.ipynb"
 
-    out_dir = REPO / "kaggle" / "kernels" / slug
+    out_dir = KERNELS / slug
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / f"{slug}.ipynb").write_text(json.dumps(forked), encoding="utf-8")
     (out_dir / "kernel-metadata.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
@@ -173,10 +177,11 @@ def build(tag: str, min_nodes: int) -> Path:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--base", default="celltrack-public-0947", help="base kernel directory under kaggle/kernels")
     parser.add_argument("--tag", required=True)
     parser.add_argument("--min-nodes", type=int, required=True)
     args = parser.parse_args()
-    print(build(args.tag, args.min_nodes))
+    print(build(args.base, args.tag, args.min_nodes))
 
 
 if __name__ == "__main__":
