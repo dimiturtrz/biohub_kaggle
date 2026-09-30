@@ -125,12 +125,103 @@ The block above was written from two writeups (3rd place, zephyr). Six more land
   time = **+0.008 public / +0.005 private** (GT coords are integer voxel indices); `core/data/submission.py`
   already declares `pl.Int64` for `t/z/y/x` (:23–26, 43, 87) so we captured it, but the float→int cast
   **truncates rather than rounds** — a silent, unvalidated ~−0.5-voxel-per-axis bias (~−0.81 µm in z) that
-  12th place's writer avoids. Still unfixed; one `.round()`. Per-embryo z convention (6bba +0.675 plane, 44b6
+  12th place's writer avoids. **Fixed 2026-09-30 in `c9e791a`** (`np.rint` before the cast, unit-tested), and
+  the price is now corroborated by **three** teams — 213th measured −0.008 public / −0.007 private for
+  `round(v,3)` vs `int(round(v))` on a byte-identical graph, hjyact +0.002 locally but **−0.007 on the LB**,
+  and 213th **posted the warning to the forum on 2026-09-28**, a day before the deadline. Per-embryo z convention (6bba +0.675 plane, 44b6
   +0.115): a one-plane lift read −0.001 public, **+0.004 private**. **947 frames in 114 of 128 6bba videos
   are byte-identical to their predecessor**, and those videos hold **100 of the 151 divisions**; 80 pairs
   of 44b6 crops are byte-identical — **video-level folds can leak**. And **external data was legal and
   load-bearing**: Linajea, Zebrahub, OrganoidTracker 2, CELLECT, DINOv2, TabPFN 3.5 — the only route to a
   division witness from 151 positives, and we never evaluated it.
+
+### REVISION 2026-09-30 11:00Z — second forum sweep: the survivor E61 named is priced at +0.024 private
+
+Five more write-ups, none read for either block above: 5th place, 89th (Katsumata), hjyact (from scratch,
+private **0.939**), 14th in full, and the coordinate-head axis across five teams. Full accounting in the
+[post-mortem](2026-09-30_private_lb_post_mortem.md) §7 and five new files in
+[`research/solutions/`](../../../research/solutions/). Nothing below contradicts the two blocks above.
+
+- **Third seat: OPEN → BUILT BY SOMEONE ELSE AND PRICED.** 5th place's **division and new-cell heads inside
+  the linker** (transformer, self-attn in frame + cross-attn t↔t+1, link score + 16-dim identity embedding +
+  new-cell + division, higher loss weight on division examples) is **+0.024 private / +0.020 public** — their
+  largest stage, and *larger on private than on public*. That is verbatim what E61 named. Second row on the
+  same ledger: **detection confidence as the ILP cell cost, +0.020 private** for what is plumbing. Their
+  staged ILP is worth stealing outright: ILP1 at p≥0.9 = trusted divisions, ILP2 at p≥0.6 fills gaps, **every
+  division ILP1 lacked is then removed**, ILP3 re-links only — and **weak links at 0.2–0.3 help during the
+  solve and are deleted before output**, a candidate set that differs between solve and output, which we never
+  tried.
+- **Division post-processing: BANK on the knob, PARTLY REFUTED on the selector.** 89th made the division term
+  pay **on our own `frontier947-readmit` chassis** with no new detector and no new linker: an **18-feature L2
+  logistic regression on 157 candidates (31 positive)**, worth **+0.008 private**. The lever is the *labels* —
+  **replay the official scorer with and without each candidate**. That catches divisions predicted **one frame
+  early**, a TP for the metric, which were **20–30% of the available positives** and which any geometric or
+  annotation-derived label calls wrong. Their derived break-even is ours: **`p* = J/(1+J)`**, `J = 0.214 →
+  τ ≈ 0.18`, and **the derived threshold was the private optimum while public rewarded pushing past it**.
+  Their oracle says the axis holds ~5× what they took.
+- **The division MODEL, in its most transferable form (14th).** Do not classify — **regress correspondence**:
+  every voxel of frame t+1 predicts the displacement back to its parent, so a division is two distance tests
+  (**convergence in parent space < 4 µm** AND **separation in observed space 3–16 µm**) and 121 annotated
+  events become dense per-voxel regression. **Balance by voxel mass, not cell count**, or negatives take 94%
+  of the gradient.
+- **`dense-regime model gap` → the cheap fix is ONE INPUT CHANNEL.** hjyact: *"Missed cells weren't dark. They
+  were in crowded areas with brighter background."* A **local-contrast 4th channel** alongside t−1/t/t+1 took
+  missed cells' local maxima **4.2% → 14.2%**. We read the crowded-region miss as a *resolution* limit; it is a
+  **normalisation** limit. Their private **0.939** is +0.015 above the entire fork line's ceiling, from scratch.
+- **Six of this tree's leaves independently reproduced.** hjyact, different architecture and harness, arrives at
+  `E54c` (every FP edge joins two real cells, only one end mis-matched — unfixable one edge at a time), `E36`/
+  `E57` (over half the "missed" cells are a node ~3.35 µm off), the GT-NN floor (real nearest-neighbour ≈
+  **5.8 µm**; their 7 µm dedup radius was deleting real neighbours), `E48`/`E49` (extra-node classifier: AUC
+  **0.9999 synthetic, 0.59 real**), `E56`/`E58` (bad-edge classifier AUC ~0.57) and `E61` (the bound is the
+  division model missing parents). **Our failure-mode diagnoses were correct.**
+- **Post-processing ceiling: the boundary is now exact, stated by both sides.** hjyact: *"36 post-processing
+  ideas on a fixed graph: zero wins. The ceiling I measured was about **+0.003**."* 12th's +0.013 private came
+  from stages that **change the node set**. So: fixed graph, edge surgery only ≈ +0.003 (our verdict, confirmed
+  with a bigger sample); node-set-changing stages +0.013 (our verdict wrong to generalise).
+- **`linker is the gap` → SCOPED, not refuted.** hjyact: with perfect detections even a trivial distance linker
+  gets **98%** of edges, and none of ~nine fancier linkers beat it. Our +0.022 from the global ILP was real
+  *and* was a measurement of our detector's deficit. **Linker sophistication is worth exactly as much as the
+  detector is wrong** — 14th holds both facts at once, shipping a 6-layer GraphSAGE rescorer *and* a per-video
+  circuit breaker keyed on `hole_fraction`.
+- **External data: SPLIT BY TARGET.** Pretraining the **linker** on ZebraHub = **+0.016 private** (5th);
+  pretraining the **detector** on it = nothing (hjyact). The linker is the data-starved component. And a **CC0
+  synthetic set with 165,267 labelled divisions** (≈**540×** the competition's mitosis supervision) was posted
+  **to this competition's own forum on 2026-08-01**, 65 votes — two teams reported it net-negative via domain
+  shift, and the author's "0.960" has no leaderboard row.
+- **Confusor: `pairwise-unresolvable` is correct ABOUT PAIRWISE METHODS.** 14th's **FlowSeg** gives every voxel
+  a vector pointing at its own cell centre and separates touching nuclei by a **discontinuity in field
+  direction** rather than by contrast. A per-voxel field is not a pairwise cue, and we never built one.
+- **Synth generator: a new HARNESS suspect, alongside `confusor_rate = 0.0`.** The CC0 author matches the
+  evaluator's pooling exactly — *"`vol[:, ::4, ::4]`, a **stride**, not a block mean; a block mean averages
+  noise away and would hand you data cleaner than what your detector really sees."* Ours does neither:
+  `celltrack/data/synthetic_scene.py` renders analytic Gaussians **directly on the post-stride 64³ grid**, so
+  every synthetic volume we trained on is band-limited by construction and carries none of the aliasing a
+  stride of an under-blurred native field produces — the high-frequency in-plane structure that makes a
+  *crowded* field ambiguous, i.e. the axis the whole confusor campaign depended on. Noise is faithful (added on
+  the read grid; striding a native noise field preserves per-voxel amplitude); shape is not, and every
+  appearance-diversity knob defaults to **0.0**, so the shipped default *is* the identical-noise-free-blob
+  regime that module's own docstring warns does not transfer. Filed `biohub_kaggle-2msk`.
+- **Fuse before the discretising decision** — three teams, three objects: probability maps averaged before
+  peak-picking = **+0.006**, while merging coordinates after it *always* hurt (hjyact); 14th fuse folds by
+  elementwise logit mean before peak-finding; 303rd's blend of two correlated coordinate estimates scored
+  **below both parents**.
+- **E57/E59 coordinate head: the axis prices at ≈+0.007 private**, three independent measurements, and the
+  three apparent contradictions between teams all resolve by mechanism — a **constant** shift helps the scorer
+  and hurts the graph (+0.01116 / −0.00573) while a **learned per-detection** shift helps both and belongs
+  **before linking** (0.951 vs 0.946 at output only); the head learns an **absolute per-embryo offset**
+  (+0.17 µm z for 44b6, +0.84 µm for 6bba) so de-meaning the targets scores *worse*; and blending two heads
+  **shrinks** the displacement, making **×1.15** the only change that improved 213th's private (0.923). Node
+  count after linking falls monotonically as the shift grows — the shift is a **node-count** knob acting
+  through the uncapped ρ.
+- **The metric, written out (303rd), and its corollary.** `score = adjEJ + 0.1·divJ`, `adjEJ = Σ w_i·EJ_i·(1 −
+  0.1·ρ_i)/Σ w_i`, `ρ` **unclipped**, edges matched one-to-one per frame at **7 µm**, only `dt == 1` counted,
+  and an edge between two unmatched nodes is **free**. Hence, explicitly: *"the metric actually rewards mild
+  under-detection."* Plus two facts both in the data description we never read: the four visible test movies
+  are **placeholders copied from train** (so local public-split scoring predicts nothing), and train/test are
+  **embryo-disjoint** (so leave-one-embryo-out is the only sensible proxy).
+- **Public fraction still unresolved: 21% (ours, by detection count) vs Kaggle's stated 29% (89th's split
+  arithmetic).** Reconcilable if the split is 29% of *videos* while the private embryo is denser in videos than
+  in detections. Flag it wherever either number is used.
 
 ---
 

@@ -48,6 +48,32 @@ These documents carry the substance, and they are the point of this repo for an 
   cheapest path in the field: ~9 MB of LightGBM / CatBoost / TabPFN heads over a frozen public detector,
   external zebrafish data for the division model, and labels defined as *every edge the official metric can
   judge* rather than only the GT edges.
+- **[5th place — a division head *inside* the linker](research/solutions/2026-09-30_5th_place_division_head_in_the_linker.md)**
+  — the measured price of the one mechanism our own division campaign left standing and never ran:
+  **+0.024 private**, the largest single stage in a gold solution, plus detection confidence as the ILP cell
+  cost (+0.020 private) and a staged ILP whose candidate set differs between the solve and the output.
+- **[89th place — label the candidates with the official metric](research/solutions/2026-09-30_katsumata_89th_metric_labelled_divisions.md)**
+  — the one team that made the division term pay **on the same public chassis we forked**, with no new
+  detector and no new linker: an 18-feature logistic regression on 157 candidates, labelled by *replaying the
+  official scorer*, worth **+0.008 private**. Includes the break-even algebra (`p* = J/(1+J)`) and the
+  cleanest published demonstration that a mechanism transfers while the knob fitted to the public board does
+  not.
+- **[hjyact — from scratch to private 0.939](research/solutions/2026-09-30_hjyact_from_scratch_private_0939.md)**
+  — the most useful document for auditing our own conclusions: it independently reproduces **six** of our
+  refutations from a different architecture and harness, contradicts exactly one (and the contradiction
+  resolves), and names the cheap detector fix we never tried — a **local-contrast input channel**, which took
+  missed cells' local maxima from 4.2% to 14.2%.
+- **[14th place — vibes and edges](research/solutions/2026-09-30_vibes_and_edges_14th_place.md)** — a
+  per-voxel flow field for segmentation (`FlowSeg`), correspondence *regression* as the division model
+  (`divflow`), a GraphSAGE edge rescorer, and a per-video circuit breaker keyed on detector health. Also the
+  arithmetic proving the public ILP cannot fork, independently of the three teams in the post-mortem.
+- **[The coordinate-head axis](research/solutions/2026-09-30_the_coordinate_head_axis.md)** — five teams, one
+  ≈**+0.007 private** lever, and three genuine contradictions between them resolved by mechanism: constant
+  versus learned shifts, in-sample replay versus the board, and why averaging two heads under-corrects.
+- **[External data — what each source was actually worth](research/solutions/2026-09-30_external_data_and_what_it_was_worth.md)**
+  — it splits by *which component you pretrain* (linker +0.016 private, detector nil), the highest-yield
+  transfer in the field was an **architecture** rather than a dataset, and a CC0 set with **165,267 labelled
+  divisions** sat on this competition's own forum for two months.
 - **[The fork-and-tune line](research/solutions/2026-09-30_the_fork_and_tune_line.md)** — the line we were
   actually on, measured by two other teams: its 0.924-private ceiling, the three switches worth +0.002
   private each, the reproduction of the 0.953 notebook's "private" coordinate head, and six silent harness
