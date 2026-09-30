@@ -42,6 +42,7 @@ from celltrack.affinity import EdgeAffinity
 from celltrack.eval.proxy import TestMovieProxy
 from celltrack.eval.proxy_eval import ConfigOverride
 from celltrack.operating_point import TrackerConfig
+from celltrack.reference_mount import ReferenceMount
 from celltrack.tracker import CellTracker
 from core.data.tracks import Adjacency, TrackGraph
 from core.geometry import Spacing
@@ -530,14 +531,7 @@ class DenseDiagnosis:
         the config a sweep arm ran answers "did the arm's score move for the reason claimed". The second needs
         the arm's whole config, not just its threshold, so the mount takes one.
         """
-        proc = root.processed("biohub_cell_tracking")
-        return CellTracker.from_packs(
-            proc / "reference/pilkwang/split_0",
-            proc / "reference/pilkwang/seed2/weights/unet_transformer/split_0",
-            proc / "cache/responses",
-            device,
-            config,
-        )
+        return ReferenceMount.pilkwang(root.processed("biohub_cell_tracking"), device, config)
 
     @staticmethod
     def shipped(root: DataRoot, device: str, threshold: float | None = None) -> CellTracker:

@@ -18,7 +18,6 @@ from celltrack.training.joint_cli import JointCli
 from celltrack.training.joint_config import WARM_PACKS, JointTrainConfig
 from core.paths import DataRoot
 
-_CONFIG = Path(__file__).parents[0] / "paths.yaml"  # unused; real path below
 DATASET = "biohub_cell_tracking"
 DEVICE = "cuda"
 THRESHOLDS = (0.97, 0.98, 0.985, 0.99, 0.993, 0.995, 0.997, 0.998)

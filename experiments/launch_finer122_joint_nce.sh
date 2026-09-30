@@ -2,7 +2,7 @@
 # THE correctly-specified never-run cell: finer122 detector, JOINT (trunk trainable), contrastive ON,
 # trained on the DETECTED corpus.
 #
-# Why this and not launch_hoct_finer122_nce.sh (2026-09-20, failed 0.6239 vs a 0.6877 gate):
+# Why this and not experiments/launch_hoct_finer122_nce.sh (2026-09-20, failed 0.6239 vs a 0.6877 gate):
 #   That arm froze the detector. Under a frozen trunk the contrastive term is INERT — at the default
 #   FEATURES site it builds no projection and holds ZERO parameters (contrastive_term.py:59-63), and
 #   info_nce.py contrasts backbone features directly, so its gradient reaches nothing trainable.
@@ -42,6 +42,7 @@
 # finer122 in the joint regime and REOPENS the finer-decode leg. Below 0.70 = the substrate is the bound,
 # not the objective, and the finer122 axis closes for good. NOT a submission arm either way: 0.947 is banked.
 set -euo pipefail
+cd "$(dirname "$0")/.."  # the arm runs from the repo root, wherever it is launched from
 LOG="logs/finer122_joint_nce.log"
 uv run python -m celltrack.training.joint_detector \
   --init-weights finer122_coadapt_long.pt \

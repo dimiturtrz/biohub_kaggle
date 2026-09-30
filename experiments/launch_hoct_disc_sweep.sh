@@ -8,7 +8,7 @@
 # top1 holds >> standard's 0.012. A config with faithful >= standard-finer 0.6877 AND top1 >> 0.012 is the
 # first B-driven pipeline-win candidate (paired with the oracle-justified finer-A axis = the submission thesis).
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."  # the arm runs from the repo root, wherever it is launched from
 LOG=logs/hoct_disc_sweep_upper.log
 : > "$LOG"
 for d in 3 6 10 20 40; do

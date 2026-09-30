@@ -26,6 +26,7 @@ from celltrack.eval.proxy import CV_MOVIES, TEST_MOVIES, TestMovieProxy
 from celltrack.eval.sweep_tracking import SweepTracking
 from celltrack.operating_point import TrackerConfig
 from celltrack.postproc.gap_closer import ReuseConfig, SyntheticGap
+from celltrack.reference_mount import PILKWANG_PRIMARY, PILKWANG_SECONDARY, ReferenceMount
 from celltrack.tracker import CellTracker
 from core.metrics.divisions import DivisionReach
 from core.metrics.score import SplitScore, VideoMetrics
@@ -45,10 +46,11 @@ _ACQUISITION_PREFIX = 4
 # how a diagnosis ends up characterising a different mount than the sweep it is diagnosing.
 RANKER_ARTIFACT = "reference/association_ranker"
 
-# The primary edge+detector pack and the default secondary, relative to the processed root. The secondary is
-# pilkwang's own seed 2 unless `--secondary-pack` re-points it at an independently trained seed for the fusion.
-PRIMARY_PACK = Path("reference/pilkwang/split_0")
-SECONDARY_PACK_DEFAULT = Path("reference/pilkwang/seed2/weights/unet_transformer/split_0")
+# The primary edge+detector pack and the default secondary, relative to the processed root — the champion pair,
+# named once in `reference_mount` and re-exported here under the spelling the sweep's CLI and its readers use.
+# The secondary is pilkwang's own seed 2 unless `--secondary-pack` re-points it at an independently trained seed.
+PRIMARY_PACK = PILKWANG_PRIMARY
+SECONDARY_PACK_DEFAULT = PILKWANG_SECONDARY
 
 # The calibrated fusion's detection-side mix: the SECONDARY seed carries this weight (the frontier's 0.475), so
 # the primary — the value `detector_blend` (seed 1's share) actually holds — is its complement.
@@ -161,13 +163,7 @@ class TrackerProxyEval:
         # must land on the detector recipe here, since the per-cell `with_config` sweep reuses this detector and
         # only re-points the post-detection stages. The swept coordinates are re-applied per cell regardless.
         base = self.config_at(self.thresholds[0], self.disappearance_costs[0])
-        pipeline = CellTracker.from_packs(
-            proc / PRIMARY_PACK,
-            proc / self.secondary_pack,
-            proc / "cache/responses",
-            self.device,
-            base,
-        )
+        pipeline = ReferenceMount.packs(proc, PRIMARY_PACK, self.secondary_pack, self.device, base)
         if self.config_at(self.thresholds[0], self.disappearance_costs[0]).linker.needs_ranker:
             pipeline = pipeline.with_ranker(proc / RANKER_ARTIFACT)
         # Mount DeepCenter's centre prior like the ranker — a caller-supplied pack directory under the data root,

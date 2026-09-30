@@ -30,7 +30,7 @@ from celltrack.data.synthetic_pairs import POOLED_BY, SyntheticPairs
 from celltrack.data.synthetic_scene import SceneCorpus
 from celltrack.eval.proxy import CV_MOVIES, TEST_MOVIES, VALIDATION_MOVIES, TestMovieProxy
 from celltrack.operating_point import TrackerConfig
-from celltrack.tracker import CellTracker
+from celltrack.reference_mount import ReferenceMount
 from celltrack.training.joint_config import WARM_PACKS, JointTrainConfig
 from celltrack.training.run_tracking import TrainingSplit
 from core.data.tracks import AnnotatedTracks
@@ -147,13 +147,7 @@ class PairSplit:
             return []
         proc = root.processed(_DATASET)
         operating = TrackerConfig.shipped()
-        tracker = CellTracker.from_packs(
-            proc / WARM_PACKS["seed1"],
-            proc / WARM_PACKS["seed2"],
-            proc / "cache/responses",
-            config.runtime.device,
-            operating,
-        )
+        tracker = ReferenceMount.packs(proc, WARM_PACKS["seed1"], WARM_PACKS["seed2"], config.runtime.device, operating)
         targets: list[PairTarget] = []
         chosen = PairSplit._across_acquisitions(train_paths, videos)
         with Obs.timed(log, f"detecting over {len(chosen)} train videos for the detected-pair corpus"):

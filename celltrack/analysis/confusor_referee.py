@@ -36,9 +36,11 @@ which an affinity-USING submission linker (tracksdata ILPSolver) would convert i
 `motion`/`flow` are bonus-readers, so their inv/pTrue are valid; read ilp's COUNT + ranks only.
 
 Run (GPU-if-available; on a cold logit cache the affinity recompute is the cost — put it on CUDA):
-    uv run python _confusor_referee.py --source pack
-    uv run python _confusor_referee.py --source joint --checkpoint armB_warmdet.pt --linkers ilp --gate
-    uv run python _confusor_referee.py --source joint --checkpoint finer122_coadapt_long.pt --linkers motion ilp flow
+    uv run python -m celltrack.analysis.confusor_referee --source pack
+    uv run python -m celltrack.analysis.confusor_referee --source joint --checkpoint armB_warmdet.pt \
+        --linkers ilp --gate
+    uv run python -m celltrack.analysis.confusor_referee --source joint --checkpoint finer122_coadapt_long.pt \
+        --linkers motion ilp flow
 """
 
 from __future__ import annotations
@@ -48,6 +50,7 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+from typing import override
 
 import numpy as np
 import torch
@@ -55,9 +58,8 @@ import torch
 from celltrack.eval.dense_diagnosis import AffinityIndex, MislinkSignal
 from celltrack.eval.proxy import CV_MOVIES, TestMovieProxy
 from celltrack.linkers.linkers import LinkerConfig
-from celltrack.models.joint_model import JointModel
-from celltrack.models.temporal_unet_detector import DetectorRecipe
 from celltrack.operating_point import TrackerConfig
+from celltrack.reference_mount import ReferenceMount
 from celltrack.tracker import CellTracker
 from core.metrics.matching import DistanceMatcher
 from core.paths import DataRoot
@@ -81,6 +83,13 @@ class AffinitySource(ABC):
     def tracker_for(self, proc: Path, cfg: TrackerConfig) -> CellTracker:
         """Return the shipped tracker carrying this source's affinity, configured for `cfg`'s linker."""
 
+    @staticmethod
+    def build(args: argparse.Namespace, proc: Path) -> AffinitySource:
+        """The source the `--source` flag names, its joint checkpoint stem resolved under `proc`."""
+        if args.source == "pack":
+            return PackAffinity()
+        return JointAffinity(checkpoint=proc / args.checkpoint)
+
 
 @dataclass
 class PackAffinity(AffinitySource):
@@ -89,15 +98,10 @@ class PackAffinity(AffinitySource):
 
     _pipeline: CellTracker | None = field(default=None, repr=False)
 
+    @override
     def tracker_for(self, proc: Path, cfg: TrackerConfig) -> CellTracker:
         if self._pipeline is None:
-            self._pipeline = CellTracker.from_packs(
-                proc / "reference/pilkwang/split_0",
-                proc / "reference/pilkwang/seed2/weights/unet_transformer/split_0",
-                proc / "cache/responses",
-                DEVICE,
-                TrackerConfig.shipped(),
-            )
+            self._pipeline = ReferenceMount.pilkwang(proc, DEVICE, TrackerConfig.shipped())
         return self._pipeline.with_config(cfg)
 
 
@@ -109,10 +113,9 @@ class JointAffinity(AffinitySource):
 
     checkpoint: Path
 
+    @override
     def tracker_for(self, proc: Path, cfg: TrackerConfig) -> CellTracker:
-        model = JointModel.from_checkpoint(self.checkpoint, DEVICE)
-        recipe = DetectorRecipe(downsample=model.downsample)
-        return CellTracker.from_joint(self.checkpoint, recipe, DEVICE, config=cfg, responses=proc / "cache/responses")
+        return ReferenceMount.joint(self.checkpoint, proc, DEVICE, cfg)
 
 
 @dataclass
@@ -185,12 +188,6 @@ class RefereeRow:
         )
 
 
-def build_source(args: argparse.Namespace, proc: Path) -> AffinitySource:
-    if args.source == "pack":
-        return PackAffinity()
-    return JointAffinity(checkpoint=proc / args.checkpoint)
-
-
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser(description="Confusor-restricted proxy referee (pack or joint affinity).")
@@ -204,7 +201,7 @@ def main() -> None:
     proc = root.processed(DATASET)
     proxy = TestMovieProxy.load(root, CV_MOVIES)
     matcher = DistanceMatcher(spacing=proxy.spacing)
-    source = build_source(args, proc)
+    source = AffinitySource.build(args, proc)
     linkers = args.linkers or (["motion", "ilp"] if args.source == "pack" else ["ilp"])
 
     if args.gate:

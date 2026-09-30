@@ -25,6 +25,12 @@ dependencies = [
     # submission kernel — whose wheel set is fixed — keep running the identical linker.
     "ortools>=9.15",
     "tqdm",        # progress bars in core/obs.py
+    # The organizers' graph/format library: what the official ruler, the fork reports and the synth->trainer
+    # converter speak to read GEFF track graphs and run the competition metric. Imported directly by our own
+    # eval code, so it is declared rather than inherited from whatever pulled it in. Pre-release upstream —
+    # the spec names the rc so the resolver admits it, and PINNED to the version every recorded official-ruler
+    # number was produced under (a floating pre-release would move the metric under us).
+    "tracksdata==0.1.0rc8",
     # torch.compile's inductor BACKEND. The joint trainer compiles the backbone UNCONDITIONALLY
     # (joint_detector.py: "a crash is a bug to fix at its root, not a reason to run eager"), so Triton is a
     # HARD runtime dep, not opt-in — a plain `uv sync` that dropped it crashed every joint run (bd lpkr).
@@ -86,7 +92,9 @@ extend_exclude = ["noxfile.py", "tools/oracle", "kaggle"]
 [tool.deptry.per_rule_ignores]
 # `tracking_cellmot`/`biohub_tracking` are the pinned external/ checkout (gitignored, imported lazily by the
 # detector backbone + edge scorer), not a declared/published dependency — the external-deps convention.
-DEP001 = ["tracking_cellmot", "biohub_tracking"]
+# `predict_unet_transformer` (the donor trainer's own predict module) and `evaluate` (the organizers' metric
+# entrypoint) are likewise modules OF those checkouts, imported by path-insertion in tools/, not packages.
+DEP001 = ["tracking_cellmot", "biohub_tracking", "predict_unet_transformer", "evaluate"]
 # >>> LOCAL-SLOT: deptry-unused — PRUNE a starter once you wire it (keep pytest/pytest-cov/sdlc-devtools)
 # `kaggle` is the submit-extra CLI (`.venv/Scripts/kaggle.exe`), invoked never imported -> reads as unused.
 # `triton`/`triton-windows` are torch.compile's inductor BACKEND: torch loads them by name at compile time and

@@ -34,6 +34,7 @@ from celltrack.losses.hard_negative_margin import HardNegativeMargin
 from celltrack.losses.softmax_focal_bce import SoftmaxFocalBCE
 from celltrack.models.edge_transformer import EdgeGap, EdgeTransformerScorer
 from celltrack.models.temporal_unet_detector import TemporalUNetDetector, _VideoSource
+from celltrack.reference_mount import ReferenceMount
 from celltrack.tracker import CellTracker
 from core.data.tracks import TrackGraph
 from core.metrics.matching import UNMATCHED, DistanceMatcher
@@ -192,12 +193,7 @@ class EdgeHardNegativeFinetuner:
         """The training proxy and the shipped tracker mounted once — the tracker is finetuned in place, then scored."""
         proc = root.processed("biohub_cell_tracking")
         proxy = TestMovieProxy.load(root, _TRAIN_STEMS)
-        tracker = CellTracker.from_packs(
-            proc / "reference/pilkwang/split_0",
-            proc / "reference/pilkwang/seed2/weights/unet_transformer/split_0",
-            proc / "cache/responses",
-            device,
-        )
+        tracker = ReferenceMount.pilkwang(proc, device)
         return proxy, tracker
 
     @staticmethod

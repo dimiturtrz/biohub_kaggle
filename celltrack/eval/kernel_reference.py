@@ -31,6 +31,10 @@ REFERENCE_ROOT = Path(__file__).resolve().parents[2] / "research" / "frontier_ke
 DIVSUB_REFERENCE = REFERENCE_ROOT / "rockerritesh_0-926-biohub-divsub" / "0-926-biohub-divsub_code.py"
 MOTION_REFERENCE = REFERENCE_ROOT / "evgendvorkin_biohub-0-927-lb" / "biohub-0-927-lb_code.py"
 
+# A reference is ANOTHER COMPETITOR's published notebook: it carries no licence field, so it is fetched into
+# the gitignored donor tree and never redistributed here. Absent on a fresh clone -- hence the fetch command.
+_FETCH = "uv run kaggle kernels pull <owner>/<slug> -p research/frontier_kernels/<dir> --metadata"
+
 
 class KernelReference:
     """Extract-and-exec bridge to a flattened Kaggle kernel: run the kernel's OWN function bytes without
@@ -38,6 +42,13 @@ class KernelReference:
 
     Every method here transcribes NOTHING but the constants the kernel sets — the functions themselves are
     exec'd from the reference file, so the diff runs the frontier's actual decision logic."""
+
+    @staticmethod
+    def require(path: Path) -> Path:
+        """The donor reference file, or an error naming how to fetch it (see research/frontier_kernels/README.md)."""
+        if not path.is_file():
+            raise FileNotFoundError(f"donor reference not fetched: {path}\nfetch it with:  {_FETCH}")
+        return path
 
     @staticmethod
     def kernel_namespace(path: Path, function_names: list[str], constants: dict[str, object]) -> dict[str, object]:
@@ -48,7 +59,7 @@ class KernelReference:
         `constants` and the standard scientific libs — so the kernel's own decision logic runs while none of its
         notebook scaffolding does, and nothing but the constants is transcribed.
         """
-        source = path.read_text(encoding="utf-8")
+        source = KernelReference.require(path).read_text(encoding="utf-8")
         tree = ast.parse(source)
         namespace: dict[str, object] = {
             "np": np,

@@ -5,7 +5,10 @@ artifacts, so a later re-download can be checked against what was actually here.
 this list is model weights: no checkpoint over 100 MB existed anywhere under the data root or
 the repo at the time of writing.
 
-## `D:\data\volumetric\microscopy\raw`
+`<data root>` is the `data:` entry of the gitignored `paths.yaml` (`core.paths.DataRoot`); on the
+authoring machine that was a local drive, deliberately not spelled here.
+
+## `<data root>/raw`
 
 Total 81,70 GB across 24 915 files.
 
@@ -13,7 +16,7 @@ Total 81,70 GB across 24 915 files.
 |---|---:|---:|
 | `biohub_cell_tracking` | 81,70 | 24 915 |
 
-## `D:\data\volumetric\microscopy\valuable_other`
+## `<data root>/valuable_other`
 
 Total 14,69 GB across 1 840 files.
 
@@ -21,7 +24,7 @@ Total 14,69 GB across 1 840 files.
 |---|---:|---:|
 | `biohub_cell_tracking` | 14,69 | 1 840 |
 
-## `D:\data\volumetric\microscopy\synthetic`
+## `<data root>/synthetic`
 
 Total 11,34 GB across 2 800 files.
 
@@ -29,7 +32,7 @@ Total 11,34 GB across 2 800 files.
 |---|---:|---:|
 | `biohub_synthetic` | 11,34 | 2 800 |
 
-## `D:\data\volumetric\microscopy\processed`
+## `<data root>/processed`
 
 Total 3,16 GB across 25 124 files.
 

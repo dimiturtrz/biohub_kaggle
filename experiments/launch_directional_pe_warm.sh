@@ -9,6 +9,7 @@
 #   disambiguator (zero-init warm may null ambiguously) or no-submit. A flat P_true = mechanism OR no confusor
 #   gradient in the data; --detected-videos exposes the confusor negatives so the directional term gets signal.
 set -euo pipefail
+cd "$(dirname "$0")/.."  # the arm runs from the repo root, wherever it is launched from
 
 # LoRA freezes the pilkwang base -> floor ~= champion 0.900 (no threshold/recall drift like dw0's -0.028);
 # the zero-init directional bias is an installed (kept-trainable) param, so it + the low-rank adapters learn

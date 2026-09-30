@@ -1,11 +1,25 @@
+from pathlib import Path
+
+import pytest
+
 from celltrack.eval.fidelity_oracle import FidelityOracle
-from celltrack.eval.kernel_reference import (
-    DIVSUB_REFERENCE,
-    MOTION_REFERENCE,
-    KernelReference,
+from celltrack.eval.kernel_reference import DIVSUB_REFERENCE, MOTION_REFERENCE, KernelReference
+
+# The donor references are other competitors' notebooks: fetched into the gitignored donor tree, never
+# vendored (research/frontier_kernels/README.md), so they are absent on a fresh clone and in CI. Every test
+# that runs their actual bytes skips without them — the rest of the bridge is exercised on our own state.
+needs_references = pytest.mark.skipif(
+    not (DIVSUB_REFERENCE.is_file() and MOTION_REFERENCE.is_file()),
+    reason="donor kernel references not fetched (see research/frontier_kernels/README.md)",
 )
 
 
+def test_require(tmp_path: Path):
+    with pytest.raises(FileNotFoundError, match="kaggle kernels pull"):
+        KernelReference.require(tmp_path / "absent_code.py")
+
+
+@needs_references
 def test_kernel_namespace():
     # Extracts a named top-level function out of a reference file without importing the notebook module...
     namespace = KernelReference.kernel_namespace(MOTION_REFERENCE, ["motion_relink_edges"], {})
@@ -32,6 +46,7 @@ def test_edge_dicts():
     assert first["distance_um"] == 0.0  # nodes 0 and 1 share (z, y, x), differ only in t
 
 
+@needs_references
 def test_divsub_helpers():
     helpers = KernelReference.divsub_helpers()
     assert callable(helpers["edge_distance_um"])

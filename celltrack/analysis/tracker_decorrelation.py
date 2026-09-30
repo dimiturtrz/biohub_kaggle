@@ -19,14 +19,12 @@ import logging
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from celltrack.detectors.tunet import DetectorRecipe
 from celltrack.edges.blended_edge_scoring import EdgeBlendOptions
 from celltrack.eval.proxy import CV_MOVIES, TestMovieProxy
 from celltrack.linkers.linkers import LinkerConfig
-from celltrack.models.joint_model import JointModel
 from celltrack.operating_point import TrackerConfig
 from celltrack.postproc.gap_closer import ReuseConfig
-from celltrack.tracker import CellTracker
+from celltrack.reference_mount import ReferenceMount
 from core.data.tracks import TrackGraph
 from core.metrics.edges import EdgeCounts
 from core.metrics.matching import DistanceMatcher
@@ -65,13 +63,7 @@ class DecorrelationRun:
         """Each config's per-movie track graph, the tracker mounted once and re-pointed per config."""
         proc = root.processed("biohub_cell_tracking")
         proxy = TestMovieProxy.load(root, CV_MOVIES)
-        pipeline = CellTracker.from_packs(
-            proc / "reference/pilkwang/split_0",
-            proc / "reference/pilkwang/seed2/weights/unet_transformer/split_0",
-            proc / "cache/responses",
-            self.device,
-            TrackerConfig.shipped(),
-        )
+        pipeline = ReferenceMount.pilkwang(proc, self.device, TrackerConfig.shipped())
         graphs: dict[str, dict[str, TrackGraph]] = {}
         for name, config in self.configs(TrackerConfig.shipped()).items():
             configured = pipeline.with_config(config)
@@ -93,14 +85,10 @@ class DecorrelationRun:
         if checkpoint is None:
             raise ValueError("_finer_graphs needs a finer_checkpoint; the caller must guard on it")
         resolved = checkpoint if checkpoint.is_absolute() else proc / checkpoint
-        model = JointModel.from_checkpoint(resolved, self.device)
-        recipe = DetectorRecipe(downsample=model.downsample)
         config = TrackerConfig.shipped()
         if self.finer_linker is not None:
             config = replace(config, linker=LinkerConfig(name=self.finer_linker, gate_um=config.linker.gate_um))
-        tracker = CellTracker.from_joint(
-            resolved, recipe, self.device, config=config, responses=proc / "cache/responses"
-        )
+        tracker = ReferenceMount.joint(resolved, proc, self.device, config)
         graphs = {path.stem: tracker.run(path.name, path) for path in proxy.paths}
         logger.info("ran finer122 joint (%s linker) over %d movies", config.linker.name, len(proxy.paths))
         return graphs

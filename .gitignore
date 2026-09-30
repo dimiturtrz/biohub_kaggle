@@ -82,6 +82,8 @@ kaggle/_*/
 
 # ephemeral agent worktrees (isolated; not part of tracked tree)
 .claude/worktrees/
+# Per-machine agent settings: absolute working-directory paths, never portable.
+.claude/settings.local.json
 
 # Cross-agent mailbox: inbox/ dir is tracked (.gitkeep), the dropped messages are transient.
 /inbox/*

@@ -11,6 +11,7 @@
 # (1,4,4) the two confusor cells collide in one voxel so B is unlearnable there. So this arm trains on REAL GT
 # pairs only; the HOCT line-to-line bias is what attacks the confusor. Inversion-at-(1,2,2) is filed separately.
 set -euo pipefail
+cd "$(dirname "$0")/.."  # the arm runs from the repo root, wherever it is launched from
 LOG="logs/hoct_real_converge.log"
 uv run python -m celltrack.training.joint_detector \
   --head hoct --norm group --downsample 1 2 2 \

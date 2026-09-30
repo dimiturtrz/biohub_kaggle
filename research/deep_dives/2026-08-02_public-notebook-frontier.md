@@ -86,7 +86,7 @@ Ranked by (expected gain) / (cost), all CPU-side and doable without the GPU box:
 5. **Learned bonus in the linker** — needs the edge transformer we have not grafted.
 6. **DeepCenter veto** — a third model to mount; largest change, most machinery.
 
-One caveat, and it is not the one to expect. **Borrowing is not a rules problem** — `rules.txt` §2.6(b)
+One caveat, and it is not the one to expect. **Borrowing is not a rules problem** — the [competition rules](https://www.kaggle.com/competitions/biohub-cell-tracking-during-development/rules) §2.6(b)
 makes external models "acceptable unless specifically prohibited by the Host", no such prohibition exists,
 and all four pilkwang packs are **CC0**, compatible with the MIT winner licence. There is no from-scratch
 requirement. A pretrained model is a dependency.

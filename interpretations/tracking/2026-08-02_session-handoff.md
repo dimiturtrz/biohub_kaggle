@@ -55,7 +55,7 @@ and the "3rd place no-hack" notebook share an identical 102-constant config bloc
 Reading one reads all of them. Full recipe in
 [`research/deep_dives/2026-08-02_public-notebook-frontier.md`](../../research/deep_dives/2026-08-02_public-notebook-frontier.md).
 
-**4. Borrowing is settled, and it is not a rules problem.** `rules.txt` §2.6(b) makes external models
+**4. Borrowing is settled, and it is not a rules problem.** The [competition rules](https://www.kaggle.com/competitions/biohub-cell-tracking-during-development/rules) §2.6(b) makes external models
 "acceptable unless specifically prohibited by the Host"; there is no such prohibition. All four pilkwang
 packs are **CC0**, compatible with the MIT winner licence (§1.6). No from-scratch requirement exists —
 §2.8's carve-out lets a winner *identify* rather than deliver third-party components procurable without

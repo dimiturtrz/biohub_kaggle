@@ -1,9 +1,19 @@
 import numpy as np
+import pytest
 
 from celltrack.eval.fidelity_oracle import (
     _CAPS_LIFTED,
     FidelityOracle,
     FidelityReport,
+)
+from celltrack.eval.kernel_reference import DIVSUB_REFERENCE, MOTION_REFERENCE
+
+# Every report here diffs our stage against the donor kernel's OWN bytes, so it needs the donor references —
+# other competitors' notebooks, fetched into the gitignored donor tree and never vendored (see
+# research/frontier_kernels/README.md). Absent on a fresh clone and in CI: those tests skip, the rest run.
+needs_references = pytest.mark.skipif(
+    not (DIVSUB_REFERENCE.is_file() and MOTION_REFERENCE.is_file()),
+    reason="donor kernel references not fetched (see research/frontier_kernels/README.md)",
 )
 
 
@@ -14,6 +24,7 @@ def test_synthetic_state():
     assert len(graph.node_ids) == len(graph.coordinates)
 
 
+@needs_references
 def test_divsub_report():
     oracle = FidelityOracle()
     state = FidelityOracle.synthetic_state()
@@ -31,6 +42,7 @@ def test_divsub_report():
     assert shipped.ours == set()
 
 
+@needs_references
 def test_divsub_faithful_report():
     # The SHIPPED divsub arm (kernel_faithful=True) runs the kernel's own gate bracket + C1 + internal two-cap,
     # so it emits exactly the kernel's fork {1->4} (mid-track division admitted, track-start decoy 30->32
@@ -41,6 +53,7 @@ def test_divsub_faithful_report():
     assert report.agreement() == 1.0
 
 
+@needs_references
 def test_motion_relink_report():
     report = FidelityOracle().motion_relink_report(FidelityOracle.synthetic_state())
     ours_only, kernel_only = report.divergent()
@@ -55,6 +68,7 @@ def test_dispatch():
     assert all(callable(builder) for builder in dispatch.values())
 
 
+@needs_references
 def test_run():
     reports = FidelityOracle().run(FidelityOracle.synthetic_state(), ["divsub_faithful", "motion_relink"])
     assert [report.name for report in reports] == ["divsub_faithful", "motion_relink"]

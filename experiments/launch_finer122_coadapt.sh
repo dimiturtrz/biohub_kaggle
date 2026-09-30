@@ -23,6 +23,7 @@
 #   drains -> the finer grid un-merges REAL cells. CONFOUNDED (inflation) or NO-signal -> do not ship.
 #   Only a PASS + a recall axis the champion structurally lacks earns the one held submission.
 set -euo pipefail
+cd "$(dirname "$0")/.."  # the arm runs from the repo root, wherever it is launched from
 
 # NO --warm-start / NO --lora: full co-adapt so the detector learns to place TWO centres where (1,4,4)
 # placed one. det-weight left at default (detection MUST train -- it is the grid that merges).

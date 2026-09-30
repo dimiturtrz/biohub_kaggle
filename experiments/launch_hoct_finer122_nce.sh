@@ -2,7 +2,7 @@
 # THE never-run cell: finer122 detector + HOCT edge head + CONTRASTIVE (nce) ON.
 #
 # Finding (2026-08-28): the entire finer122 head family was trained with contrastive OFF.
-#   - launch_hoct_real_converge.sh (HOCT) omits --contrastive-weight / --hard-negative-weight
+#   - experiments/launch_hoct_real_converge.sh (HOCT) omits --contrastive-weight / --hard-negative-weight
 #   - finer122_coadapt_long (the "standard" A/B control) likewise: nce 0.0000 hn 0.0000 for 144k steps
 #   - LossCfg defaults both weights to 0.0 (joint_config.py:288,298), so an omitted flag = dark term
 #   Both plateau proxy ~0.61 with inv 0.97-0.99 (P_true 0.07 vs chosen 0.39) = the degenerate
@@ -33,6 +33,7 @@
 # batches (the documented BN-pollution trap). Verify in the log that the warm load reports 76
 # detector tensors before trusting any number this produces.
 set -euo pipefail
+cd "$(dirname "$0")/.."  # the arm runs from the repo root, wherever it is launched from
 LOG="logs/hoct_finer122_nce.log"
 uv run python -m celltrack.training.joint_detector \
   --head hoct --norm batch --downsample 1 2 2 \
