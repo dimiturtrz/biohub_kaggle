@@ -3,7 +3,39 @@
 [![ci](https://github.com/dimiturtrz/biohub_kaggle/actions/workflows/ci.yml/badge.svg)](https://github.com/dimiturtrz/biohub_kaggle/actions/workflows/ci.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-One-line description of celltrack. (Replace me.)
+3D cell tracking in developing embryos — detection, association and lineage reconstruction over
+100-frame light-sheet volumes. Built for the Kaggle **Biohub Cell Tracking During Development**
+competition (closed 2026-09-29).
+
+## Result
+
+**Public 0.953 · private 0.918 · rank 562 / ~4000.** Winner 0.977, bronze cut ~0.955.
+
+The private board shook hard: the public top was one open notebook plus several hundred forks of it,
+and on the private embryo the whole fork field collapsed into 0.917–0.923 — four hundred ranks inside
+five thousandths. Our own seven submissions spanned 0.945–0.953 public and landed in **0.916–0.918**
+private, a 0.002 spread, i.e. our own noise floor. The cause is that the two test embryos differ in
+cell density by 2–3× at the median, the public one being the dense one and worth only 21% of the data.
+
+Two documents carry the substance, and they are the point of this repo for an outside reader:
+
+- **[Post-mortem](interpretations/celltrack/converging/2026-09-30_private_lb_post_mortem.md)** — what we
+  got right, what we got wrong, and why. Every division verdict we filed was true *for what it tested*
+  (post-processing, constant sweeps, global ILP without a model) and the axis worth +0.054 of score was
+  the one thing none of them tested. Includes a line-by-line grid of our kill list against the
+  3rd-place ablation, plus the denominator and self-selected-ceiling traps that produced our two worst
+  calls.
+- **[3rd-place solution, written up faithfully](research/solutions/2026-09-30_yu4u_3rd_place.md)** —
+  yu4u's private-0.967 pipeline in full: cross-architecture detector ensemble with a DoG-based
+  sparse-annotation loss mask, self-supervised dense flow, a learned matcher, three division CNNs, and
+  a joint link/division LP whose objective is a linearised surrogate of the competition metric itself.
+  Their published A0→A7 ablation is the cleanest external ruler we have for our own conclusions.
+
+Method development, refutations and dead ends live in `interpretations/celltrack/` (ours, with
+[`converging/2026-08-27_conclusion_tree.md`](interpretations/celltrack/converging/2026-08-27_conclusion_tree.md)
+as the single living synthesis), external/field synthesis in `research/`, and the study ramp in
+`learning/`. Datasets, weights and run outputs are out of git by policy —
+[`docs/data_manifest.md`](docs/data_manifest.md) records what the data root held and how to rebuild it.
 
 ## Layout
 

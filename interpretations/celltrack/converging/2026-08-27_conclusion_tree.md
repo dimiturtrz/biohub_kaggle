@@ -12,6 +12,71 @@ Verdict tags: **BANK** (shipped/true) · **REFUTED** (killed on real board or so
 
 ---
 
+## NEWS 2026-09-30 — COMPETITION CLOSED. private 0.918, rank 562/~4000. The whole knob search was flat.
+
+Full write-up: [`2026-09-30_private_lb_post_mortem.md`](2026-09-30_private_lb_post_mortem.md). The
+frontier pipeline it grades us against:
+[`research/solutions/2026-09-30_yu4u_3rd_place.md`](../../../research/solutions/2026-09-30_yu4u_3rd_place.md).
+
+Public 0.953 → private 0.918. Winner 0.977, 3rd place 0.967. Our **seven** submissions spanned
+0.945–0.953 public and landed in **0.916–0.918** private — a 0.002 spread, our own noise floor. The
+public-notebook fork field (several hundred teams) all finished 0.917–0.923. Everything this tree
+debated in the last two weeks was invisible on the embryo that was graded.
+
+**Cause — the split, probed by 3rd place with their own detector:** public test `fdad` median
+**160–260** detections/frame, private test `ea36` median **60–100**, and private is **79%** of the data
+(public fraction is **21%**, per zephyr — not the 29% we never sourced). We tuned on the dense embryo
+and were graded on the sparse one.
+
+Leaf verdicts changed by the private board and the published ablation:
+
+- **`dense-regime model gap` → amend, do not delete.** Real, but it was the **public** embryo. A whole
+  axis family (finer decode, detection-merge, confusor separation, crowding) was justified by a thesis
+  derived from a 21% slice. The split itself was never probed. One detector pass would have done it.
+- **E55 gap repair: premise BANK, conclusion REFUTED.** "All GT edges are dt=1, so a t−1→t+1 bridge can
+  never be a GT edge" is *true* — and is exactly why 3rd place **inserts the interpolated node**, making
+  both resulting edges dt=1. Their A4 = **+0.0051**. `gaploose`'s 925 edges for zero were 925 of the
+  wrong object.
+- **E54b motion: REFUTED → HARNESS.** ORACLE velocity recovered 10/61 broken edges — measured on the 61
+  edges *our own champion broke*, a set pre-filtered by the pipeline whose failures lie elsewhere. Their
+  A1 dense self-supervised flow = **+0.0117**, second-largest row, because it is a **field that
+  redefines the candidate set** upstream of matching, not a cue added to a ranker.
+- **Third seat: restore as OPEN — division model + joint link/division LP.** Deleted from this tree on
+  09-22 as "the donor's lever, doesn't transplant". Their A3 = **+0.0625** (division Jaccard 0 → 0.535,
+  worth **+0.054** of total at 0.1× weight) and it is precisely what E61 named — *"remaining lever =
+  re-parenting inside the LINKER"* — before we priced its three legs at zero runs. Every division
+  verdict we filed was correct **in scope** (post-processing, constant sweeps, global ILP *without a
+  model*); none of them tested a trained division model. `div_jac = 0.0000` in every arm read as "the
+  proxy is blind"; it also read "we have no division model", and we only ever wrote down the first.
+- **E52 component prune: BANK, exactly confirmed.** Their A5 = +0.0017 and their own constant is
+  **< 6 nodes** — same choice, same size.
+- **E57/E59 localization: HARNESS, magnitude right, method wrong.** A6+A7 = **+0.0065** from a *global
+  affine motion field* per frame pair with probability-weighted links and a quadratic trade-off against
+  the original detection. A per-cell snap oracle structurally cannot price a field-level fix.
+- **E67 cyto rescue: drop "dose-dependently harmful".** Private reverses the dose ordering at the same
+  ±0.001 (13 edges → 0.916, 43 edges → 0.917 vs public 0.947 / 0.945). It is a **tie**; the conclusion
+  (edge proposal is not a lever) survives, the mechanism claim does not.
+- **Ensemble axis: BANK in scope, AUDIT-FLAT beyond it.** "A pool from one recipe saturates" stands.
+  Theirs is cross-*architecture* — EffNetV2-L 2.5D U-Net 0.3 + EffNet-B7 2.5D U-Net 0.4 + MONAI
+  SegResNet **3D** 0.3 — which we never ran.
+- **pmkf sparse-supervision diagnosis: BANK, cure never built.** Their fix: low-threshold DoG
+  candidates, **exclude ±6 µm around *unmatched* candidates from the loss**, DoG within 2 µm of a GT
+  centre = duplicate (no exclusion), positives stay supervised inside exclusion zones, pos/background
+  MSE averaged separately with background weight 0.5. We named "~17/fr GT vs ~980 FP/fr" and wrote no
+  mask.
+- **E53 unannotated FPs are metric-invisible: BANK, and they monetised it.** Per candidate: `a` =
+  P(evaluated), `q` = P(correct | evaluated); expected TP `a·q`, expected FP `a·(1−q)`. Sparse
+  annotation moved **into the objective** instead of worked around.
+- **Proxy discipline: BANK, understated.** The public **board** was the saturated proxy, for everyone —
+  including the 400 teams inside 0.005 of us.
+
+Two operational notes: **autoselection beat our judgment** (keeping the two best public scorers picked
+our best private arm; the composed arm staged for the final slot scored **0.892**, our only submission
+outside the band), and forking the top public notebook bought **+0.006 of public for free** and
+separated nothing on private.
+
+---
+
 ## NEWS 2026-09-22 14:04Z — every finer-grid refutation was read through a threshold that is wrong by construction
 
 Three warm arms at `--downsample 1 2 2` all collapsed the same way inside one 500-step window: node count
