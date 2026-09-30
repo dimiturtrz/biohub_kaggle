@@ -10,6 +10,11 @@ Nothing below is a licence grant. Each notebook's licence is whatever its author
 can be assumed permissive. Read them on Kaggle, under their own terms. The repo's own `LICENSE` (MIT) covers
 only code written here.
 
+Commits before `04e7000` still contain the notebook files: they were untracked, not purged from history, because
+every one of them is a *publicly published* Kaggle kernel and rewriting the branch would cost the whole build
+log for ~15 MB. If an author would rather their kernel not be reachable here at all, say so on the repo's issues
+and it will be removed from history (`git filter-repo --path research/frontier_kernels/ --invert-paths`).
+
 ## Fetching
 
 ```bash
