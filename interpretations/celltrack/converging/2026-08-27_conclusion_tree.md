@@ -75,6 +75,60 @@ our best private arm; the composed arm staged for the final slot scored **0.892*
 outside the band), and forking the top public notebook bought **+0.006 of public for free** and
 separated nothing on private.
 
+### REVISION 2026-09-30 07:00Z — six more solutions posted; three verdicts above are wrong
+
+The block above was written from two writeups (3rd place, zephyr). Six more landed the same day — 12th
+(private **0.946**, gold), 18th (**0.942**), 288th's 22 leaderboard probes, Nikolce's V1284 reproduction,
+14th — and they overturn three of the verdicts above. Full accounting in the
+[post-mortem](2026-09-30_private_lb_post_mortem.md) §1b–2c and the four files in
+[`research/solutions/`](../../../research/solutions/).
+
+- **`dense-regime model gap` → REFUTED as *our* binding constraint.** 12th reached **0.946 by tuning
+  pilkwang's public models** (no retraining) plus repair stages; 18th reached **0.942** with **~9 MB of
+  LightGBM/CatBoost/TabPFN heads** on Harmonic Fusion v30. Two existence proofs that ~0.024–0.028 private
+  sat *downstream* of the public detector. Our own line's ceiling (288th, Nikolce) is **0.924 private /
+  rank 161** — we left **~0.006** on it: re-admit 0.965→0.90, veto 0.25→0.15, detection 0.965→0.955 (all
+  CPU, each +0.002 private), plus the 7.3k-param V1284 head trainable from the notebook's own `capture`
+  mode.
+- **Division constant sweeps: REFUTED → HARNESS. The knob had NO CONSUMER.** Three teams independently:
+  at the shipped `division_weight` with `appearance_weight=0`, **the public ILP produces zero forks** —
+  12th (all 352 divisions are geometric grafts, 199 videos), 288th (zero forks in all 36 raw ILP graphs),
+  14th. `tracksdata` minimises cost and a free track appearance makes a fork never pay. Lowering it to 0.6
+  costs −0.013 public (473 new, mostly wrong forks). The division lever was a **witness**, never the cost:
+  12th's exact joint MILP found the right fork for 22 of 96 missed divisions vs **67 with oracle cues**.
+- **CPU post-processing axis (E58/E37): CLOSED → REFUTED on the private embryo.** 12th's stages *after*
+  their base champion read **+0.006 public and +0.013 private** — double on the graded embryo. We priced
+  that axis champion-relative on the wrong embryo.
+- **E57/E59 localization: the field's most-replicated lever.** Four teams built a coordinate corrector —
+  yu4u's global affine field (+0.0065), 18th's per-axis LightGBM (86 features, shift = 0.5 × prediction
+  capped 3 µm, **+0.020 CV**), 12th's recentring 3D CNN (+0.003 private), and **V1284 was already inside
+  the 0.953 notebook we forked**. Our snap oracle priced per-edge correction and could see none of them.
+- **Metric currency: one division = 74 edges.** 12th replay the host scorer to 1e-12: one edge = 7.47e-6,
+  one division = **5.5e-4**, and divisions were **51%** of their base deficit. Our "1.5% bar ≈ 35 edges"
+  was edge-currency only — in division currency 1.5% ≈ **27 divisions**. Break-even precision for an added
+  division: **32% public / ~25% private** (J/(1+J)), or ~11% by TP/(2TP+FP+FN). We never computed it.
+- **E52 prune: BANK, confirmed three more times — and the reverse is a trap with an ORDERING lesson.**
+  18th: deleting 10% of nodes raised CV, cost **−0.015 public / ~−0.06 private**. 12th's < 6-node filter
+  erased **279 real cells and 9 of the 28 absent daughters of GT divisions**, and their repair ran *after*
+  it. 288th lost 0.002 raising min length 6→10. **Run repair before the filter.**
+- **E54/E57 wrong-association ≈ 0: BANK, independently reproduced.** 288th on the public pipeline's own
+  validator movies: 95.6% GT edges recovered, **2.4% fragmented, 2.0% lost to detection, ~zero wrong
+  associations.**
+- **HOCT as an association head: REFUTED stands — as a FEATURE it is untested.** 18th feeds HOCT `ctc_v0`
+  / `general_v1` **and Trackastra `ctc` as columns** into a 341-feature LightGBM edge rescorer, +0.021 CV.
+- **Proxy discipline: BANK, now quantified.** 18th over 34 late submissions: public↔private **r = 0.09**
+  (ρ −0.23), CV↔private 0.34. 12th: in-sample bench over-read private by **~0.03**, OOF under-read by
+  ~0.06, out-of-fold >7 µm position errors grow **×3.8**, one change read +0.0143 in-sample / −0.012
+  public / −0.003 private. 288th: *"public differences ≤ 0.002 did not predict private ones, in either
+  direction."*
+- **Four free things we never looked for.** Integer coordinates at write time = **+0.008 public / +0.005
+  private** (GT coords are integer voxel indices). Per-embryo z convention (6bba +0.675 plane, 44b6
+  +0.115): a one-plane lift read −0.001 public, **+0.004 private**. **947 frames in 114 of 128 6bba videos
+  are byte-identical to their predecessor**, and those videos hold **100 of the 151 divisions**; 80 pairs
+  of 44b6 crops are byte-identical — **video-level folds can leak**. And **external data was legal and
+  load-bearing**: Linajea, Zebrahub, OrganoidTracker 2, CELLECT, DINOv2, TabPFN 3.5 — the only route to a
+  division witness from 151 positives, and we never evaluated it.
+
 ---
 
 ## NEWS 2026-09-22 14:04Z — every finer-grid refutation was read through a threshold that is wrong by construction

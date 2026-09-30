@@ -17,19 +17,41 @@ five thousandths. Our own seven submissions spanned 0.945–0.953 public and lan
 private, a 0.002 spread, i.e. our own noise floor. The cause is that the two test embryos differ in
 cell density by 2–3× at the median, the public one being the dense one and worth only 21% of the data.
 
-Two documents carry the substance, and they are the point of this repo for an outside reader:
+But flatness was not the whole story, and the honest version is less flattering. **Two teams reached
+private 0.942 and 0.946 (gold) starting from the same public notebooks we forked, with no new detector** —
+one by adding ~9 MB of gradient-boosted tabular heads, the other by *tuning* the public models and adding
+repair stages. Our own fork-and-tune line has a measured ceiling of **0.924 private / rank 161**, so
+~0.006 was available inside it from three CPU-only switches and one 7.3k-parameter head. Our central
+thesis — that the gap was a dense-regime detector we could not train — was an existence-proof away from
+being wrong, and we never ran the cheap experiment that would have shown it.
+
+These documents carry the substance, and they are the point of this repo for an outside reader:
 
 - **[Post-mortem](interpretations/celltrack/converging/2026-09-30_private_lb_post_mortem.md)** — what we
-  got right, what we got wrong, and why. Every division verdict we filed was true *for what it tested*
-  (post-processing, constant sweeps, global ILP without a model) and the axis worth +0.054 of score was
-  the one thing none of them tested. Includes a line-by-line grid of our kill list against the
-  3rd-place ablation, plus the denominator and self-selected-ceiling traps that produced our two worst
-  calls.
-- **[3rd-place solution, written up faithfully](research/solutions/2026-09-30_yu4u_3rd_place.md)** —
-  yu4u's private-0.967 pipeline in full: cross-architecture detector ensemble with a DoG-based
-  sparse-annotation loss mask, self-supervised dense flow, a learned matcher, three division CNNs, and
-  a joint link/division LP whose objective is a linearised surrogate of the competition metric itself.
-  Their published A0→A7 ablation is the cleanest external ruler we have for our own conclusions.
+  got right, what we got wrong, and why: a line-by-line grid of our kill list against four published
+  solutions, the exact metric currency (one missed division costs as much as **74 edges**, and divisions
+  were **51%** of the deficit we were not measuring), the division knob that turned out to have **no
+  consumer** (the public ILP cannot form a fork at its shipped weights — found independently by three
+  teams), and the denominator and self-selected-ceiling traps that produced our worst calls.
+- **[3rd place — yu4u, private 0.967](research/solutions/2026-09-30_yu4u_3rd_place.md)** —
+  cross-architecture detector ensemble with a DoG-based sparse-annotation loss mask, self-supervised dense
+  flow, a learned matcher, three division CNNs, and a joint link/division LP whose objective is a
+  linearised surrogate of the competition metric itself. Their published A0→A7 ablation is the cleanest
+  external ruler we have for our own conclusions.
+- **[12th place — Corwin, private 0.946, gold](research/solutions/2026-09-30_corwin_12th_place.md)** — no
+  new detector: tuned public models plus consolidation, a mitosis specialist, a nine-rule repair engine and
+  a learned recentring CNN. They restored the host scorer and replay it to 1e-12, which makes theirs the
+  most forensically useful document in the field — every event priced exactly, plus five dataset artefacts
+  (copied frames, duplicated crops, per-embryo z conventions, integer coordinates, whole-stack frame jumps)
+  nobody else published.
+- **[18th place — ymg_aq, private 0.942](research/solutions/2026-09-30_ymg_aq_18th_place.md)** — the
+  cheapest path in the field: ~9 MB of LightGBM / CatBoost / TabPFN heads over a frozen public detector,
+  external zebrafish data for the division model, and labels defined as *every edge the official metric can
+  judge* rather than only the GT edges.
+- **[The fork-and-tune line](research/solutions/2026-09-30_the_fork_and_tune_line.md)** — the line we were
+  actually on, measured by two other teams: its 0.924-private ceiling, the three switches worth +0.002
+  private each, the reproduction of the 0.953 notebook's "private" coordinate head, and six silent harness
+  bugs each worth more than any hyper-parameter.
 
 Method development, refutations and dead ends live in `interpretations/celltrack/` (ours, with
 [`converging/2026-08-27_conclusion_tree.md`](interpretations/celltrack/converging/2026-08-27_conclusion_tree.md)
