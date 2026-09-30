@@ -121,8 +121,11 @@ The block above was written from two writeups (3rd place, zephyr). Six more land
   ~0.06, out-of-fold >7 µm position errors grow **×3.8**, one change read +0.0143 in-sample / −0.012
   public / −0.003 private. 288th: *"public differences ≤ 0.002 did not predict private ones, in either
   direction."*
-- **Four free things we never looked for.** Integer coordinates at write time = **+0.008 public / +0.005
-  private** (GT coords are integer voxel indices). Per-embryo z convention (6bba +0.675 plane, 44b6
+- **Four free things we never looked for** — one of which we had by accident. Integer coordinates at write
+  time = **+0.008 public / +0.005 private** (GT coords are integer voxel indices); `core/data/submission.py`
+  already declares `pl.Int64` for `t/z/y/x` (:23–26, 43, 87) so we captured it, but the float→int cast
+  **truncates rather than rounds** — a silent, unvalidated ~−0.5-voxel-per-axis bias (~−0.81 µm in z) that
+  12th place's writer avoids. Still unfixed; one `.round()`. Per-embryo z convention (6bba +0.675 plane, 44b6
   +0.115): a one-plane lift read −0.001 public, **+0.004 private**. **947 frames in 114 of 128 6bba videos
   are byte-identical to their predecessor**, and those videos hold **100 of the 151 divisions**; 80 pairs
   of 44b6 crops are byte-identical — **video-level folds can leak**. And **external data was legal and

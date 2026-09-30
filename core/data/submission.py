@@ -2,6 +2,10 @@
 
 One flat table across all videos: `row_type` is `node` or `edge`, and every column a row does not use
 holds `-1`. Node ids are per-video, so the graph identity is `(dataset, node_id)`.
+
+Coordinates are written as integer voxel indices, which is what the ground truth holds and what the scorer
+compares against — floats cost ~0.008 of score. They are ROUNDED, not truncated: an integer cast alone
+biases every axis half a voxel toward zero.
 """
 
 from dataclasses import dataclass
@@ -58,15 +62,16 @@ class Submission:
 
     @staticmethod
     def _video_rows(dataset: str, graph: TrackGraph) -> pl.DataFrame:
+        voxels = np.rint(graph.coordinates)
         nodes = pl.DataFrame(
             {
                 "dataset": dataset,
                 "row_type": _NODE,
                 "node_id": graph.node_ids,
-                "t": graph.coordinates[:, 0],
-                "z": graph.coordinates[:, 1],
-                "y": graph.coordinates[:, 2],
-                "x": graph.coordinates[:, 3],
+                "t": voxels[:, 0],
+                "z": voxels[:, 1],
+                "y": voxels[:, 2],
+                "x": voxels[:, 3],
                 "source_id": _UNUSED,
                 "target_id": _UNUSED,
             }

@@ -232,7 +232,15 @@ the cleanest external ruler we will get for our own kill list.
    entire field and it was open to us for the whole competition.
 8. **[REVISED] Integer coordinates.** GT coordinates are integer voxel indices. 12th: the same world
    scored **0.950 with integers vs 0.942 with floats** public (private 0.911 vs 0.906) — **free
-   +0.008/+0.005 at write time.** *Check whether our submission rounded.*
+   +0.008/+0.005 at write time.** **Checked: we captured it, but by truncation.**
+   `core/data/submission.py` declares `pl.Int64` for `t/z/y/x` (lines 23–26) and casts on the way out
+   (line 87, again line 43), so our writer never emitted floats — the +0.008/+0.005 was already ours.
+   But a polars float→`Int64` cast **truncates toward zero, silently, with no rounding and no
+   validation**, so every coordinate carries a systematic sub-voxel downward bias (mean −0.5 voxel per
+   axis for uniformly distributed fractions, i.e. ~−0.81 µm in z at 1.625 µm planes). 12th place's
+   writer rounds. Residual, unpriced, and free to fix: one `.round()` before the cast. Note the shipped
+   0.918 came from the notebook fork, not this writer, so the bias did not cost us the final number —
+   it would have cost every submission our own pipeline wrote.
 9. **[REVISED] Per-embryo annotation conventions and dataset artefacts.** 6bba GT sits **+0.675 plane**
    above the nucleus z centre, 44b6 **+0.115**; a one-plane z lift of ~23% of nodes read −0.001 public and
    **+0.004 private** — *"the convention depends on the embryo: hedge it, do not tune it on the public."*
@@ -307,4 +315,6 @@ the cleanest external ruler we will get for our own kill list.
 - **[REVISED]** New entry needed: **external data was legal and load-bearing** (Linajea, Zebrahub,
   OrganoidTracker 2, CELLECT, DINOv2, TabPFN 3.5). We never evaluated it.
 - **[REVISED]** New entry needed: **integer coordinates at write time** (+0.008 public / +0.005 private).
-  Verify whether our submission rounded.
+  Verified: our writer *does* emit integers (`core/data/submission.py`:23–26, 43, 87 — `pl.Int64`), so the
+  gain was captured. It **truncates rather than rounds**, though, leaving a ~−0.5-voxel-per-axis bias that
+  12th place's writer avoids. Not a missed mechanism — a latent bug in a shipped component, still unfixed.
