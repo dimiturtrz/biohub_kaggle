@@ -44,6 +44,11 @@ htmlcov/
 .dolt/
 .beads/*.db
 .beads-credential-key
+# bd points core.hooksPath at .beads/hooks, so `pre-commit install` writes its generated shims there.
+# Those two carry an absolute uv-cache interpreter path, so they are per-machine: regenerate them with
+# `pre-commit install --hook-type pre-commit --hook-type pre-push`. bd's own hooks stay tracked.
+.beads/hooks/pre-commit
+.beads/hooks/pre-push
 
 # jscpd (node) — pulled transiently by npx for the duplication gate
 node_modules/
