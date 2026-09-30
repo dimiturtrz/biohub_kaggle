@@ -296,6 +296,12 @@
     },
     {
       "kind": "import",
+      "source": "celltrack.analysis.merge_referee",
+      "target": "core.paths",
+      "weight": 1
+    },
+    {
+      "kind": "import",
       "source": "celltrack.analysis.mitotic_appearance",
       "target": "celltrack.affinity",
       "weight": 1

@@ -6,10 +6,11 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 GRID=$(realpath "$1"); shift
 ARMS=("${@:-real_from_synth real_scratch}")
+source tools/data_root.sh
 REPO=$PWD/external/frontier_ds/biohub-tracking-support-pack-50ep-v1/repo
-REAL=D:/data/volumetric/microscopy/raw/biohub_cell_tracking/train
-SPLITS=D:/data/volumetric/microscopy/processed/real_holdout20_splits.json
-CACHE_ROOT=D:/data/volumetric/microscopy/processed/frontier_cache
+REAL=$DATA_RAW/biohub_cell_tracking/train
+SPLITS=$DATA_PROCESSED/real_holdout20_splits.json
+CACHE_ROOT=$DATA_PROCESSED/frontier_cache
 export USER=local PYTHONWARNINGS=ignore
 
 for arm in ${ARMS[@]}; do

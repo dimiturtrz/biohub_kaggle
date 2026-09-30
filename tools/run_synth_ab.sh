@@ -3,10 +3,11 @@
 # pretrain on synthetic sequences, then R1 = real fine-tune warm from that pretrain, then R0 = real from scratch.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+source tools/data_root.sh
 REPO=external/frontier_ds/biohub-tracking-support-pack-50ep-v1/repo
-REAL=D:/data/volumetric/microscopy/raw/biohub_cell_tracking/train
-SPLITS=D:/data/volumetric/microscopy/processed/real_holdout20_splits.json
-SYNTH=D:/data/volumetric/microscopy/processed/synth_trainer_600
+REAL=$DATA_RAW/biohub_cell_tracking/train
+SPLITS=$DATA_PROCESSED/real_holdout20_splits.json
+SYNTH=$DATA_PROCESSED/synth_trainer_600
 PRE_METHOD=${PRE_METHOD:-synth_pre20}
 PRE=$REPO/weights/$PRE_METHOD/split_0/edge_predictor_best.pth
 EPOCHS=${EPOCHS:-40}

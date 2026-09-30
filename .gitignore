@@ -82,3 +82,19 @@ kaggle/_*/
 /inbox/*
 !/inbox/.gitkeep
 research/frontier_kernels/*/output/
+
+# Donor kernels are OTHER COMPETITORS' published notebooks, pulled locally to read. Their Kaggle
+# metadata carries no licence field, so none of them may be assumed permissive and none is
+# redistributed here. research/frontier_kernels/README.md is the manifest (owner, slug, fetch
+# command); everything it points at is fetched, never vendored.
+research/frontier_kernels/*/
+!research/frontier_kernels/README.md
+!research/frontier_kernels/SYNTHESIS_*.md
+!research/frontier_kernels/_donor_weights/
+research/frontier_kernels/_donor_weights/*
+!research/frontier_kernels/_donor_weights/*.json
+
+# Our own predictions over the competition test set — a reproducible pipeline output.
+/submission.csv
+# Corrupt MLflow store, kept on disk only in case a run id is ever needed again.
+/mlflow.db*

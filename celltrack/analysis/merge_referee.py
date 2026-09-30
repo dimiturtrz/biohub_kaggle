@@ -27,9 +27,10 @@ import numpy as np
 from jaxtyping import Float
 from scipy import ndimage
 
+from core.paths import DataRoot
+
 logger = logging.getLogger(__name__)
 
-_CACHE = Path("D:/data/volumetric/microscopy/processed/biohub_cell_tracking/cache/responses")
 # full-res pixels spanned by one decoded voxel in y,x for each downsample grid (z is 1:1 both).
 _YX_PIXELS = {"ds1x4x4": 4, "ds1x2x2": 2}
 _CONNECTIVITY = ndimage.generate_binary_structure(3, 1)  # 6-connected, no diagonal bleed
@@ -195,14 +196,16 @@ def main() -> None:  # pragma: no cover
     )
     parser.add_argument("--video-key", default="44b6_e57ff5c6.zarr")
     parser.add_argument("--floor", type=float, default=0.5)
+    parser.add_argument("--config", type=Path, default=Path("paths.yaml"), help="paths.yaml locating the data root")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
+    cache = DataRoot.from_config(args.config).processed("biohub_cell_tracking") / "cache/responses"
     key_by_grid: dict[str, str] = dict.fromkeys(_YX_PIXELS, str(args.weights_key))
     if args.fine_key:
         key_by_grid = {"ds1x4x4": str(args.coarse_key), "ds1x2x2": str(args.fine_key)}
     logit_by_grid = {
-        grid: np.load(_CACHE / key_by_grid[grid] / f"{args.video_key}.logit.{grid}_tta1_pc0.npy") for grid in _YX_PIXELS
+        grid: np.load(cache / key_by_grid[grid] / f"{args.video_key}.logit.{grid}_tta1_pc0.npy") for grid in _YX_PIXELS
     }
     result = MergeReferee.analyse(logit_by_grid, args.floor)
     coarse, fine = result["ds1x4x4"], result["ds1x2x2"]
